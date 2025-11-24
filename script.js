@@ -153,6 +153,7 @@ const MANAGER_PROMPT_TEMPLATE = `Ты — профессиональный ме�
 // State
 let conversationHistory = [];
 let isProcessing = false;
+let lastRating = null; // Хранит последнюю оценку диалога
 
 // Configure marked.js
 if (typeof marked !== 'undefined') {
@@ -504,6 +505,12 @@ function exportChat() {
         }
     });
     
+    // Добавляем оценку диалога, если она есть
+    if (lastRating) {
+        chatText += '\n\n\n========================================\nОЦЕНКА ДИАЛОГА:\n========================================\n\n';
+        chatText += lastRating;
+    }
+    
     const dataBlob = new Blob([chatText], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement('a');
@@ -625,6 +632,9 @@ async function rateChat() {
         
         // Remove loading message
         loadingMsg.remove();
+        
+        // Save rating for export
+        lastRating = ratingMessage;
         
         // Add rating as special rating message (centered, orange)
         addMessage(ratingMessage, 'rating', true);
