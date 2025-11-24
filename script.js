@@ -505,18 +505,77 @@ exportRaterPromptBtn.addEventListener('click', exportRaterPrompt);
 rateChatBtn.addEventListener('click', rateChat);
 
 // Start conversation button
-startBtn.addEventListener('click', () => {
+startBtn.addEventListener('click', async () => {
     const greetingMessage = 'Здравствуйте. Вас приветствует Кирилл, менеджер ГК "Традиция". Чем могу помочь?';
     
     // Hide start button
     startConversation.style.display = 'none';
     
-    // Add greeting as user message (from manager's perspective, it's "user" in this simulator)
+    // Add greeting as user message
     addMessage(greetingMessage, 'user', false);
     conversationHistory.push({
         role: 'user',
         content: greetingMessage
     });
+    
+    // Send to webhook and get client response
+    const loadingMsg = addMessage('', 'loading');
+    
+    try {
+        const systemPrompt = systemPromptInput.value.trim();
+        
+        const requestBody = {
+            chatInput: greetingMessage,
+            systemPrompt: systemPrompt || 'Вы — клиент.',
+            history: []
+        };
+        
+        const response = await fetch(WEBHOOK_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        let assistantMessage = '';
+        if (typeof data === 'string') {
+            assistantMessage = data;
+        } else if (data.response) {
+            assistantMessage = data.response;
+        } else if (data.message) {
+            assistantMessage = data.message;
+        } else if (data.output) {
+            assistantMessage = data.output;
+        } else if (data.text) {
+            assistantMessage = data.text;
+        } else {
+            assistantMessage = JSON.stringify(data, null, 2);
+        }
+        
+        if (!assistantMessage) {
+            throw new Error('Пустой ответ от сервера');
+        }
+        
+        loadingMsg.remove();
+        
+        addMessage(assistantMessage, 'assistant', true);
+        conversationHistory.push({
+            role: 'assistant',
+            content: assistantMessage
+        });
+        
+    } catch (error) {
+        console.error('Error:', error);
+        loadingMsg.remove();
+        addMessage(`Ошибка: ${error.message}`, 'error', false);
+    }
 });
 
 // Export chat
