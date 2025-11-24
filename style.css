@@ -18,6 +18,53 @@ body {
     gap: 0;
     background: #0F0F0F;
     position: relative;
+    flex-direction: column;
+}
+
+.mobile-tabs {
+    display: none;
+    background: #0F0F0F;
+    padding: 10px;
+    gap: 8px;
+    border-bottom: 1px solid #2a2a2a;
+    flex-shrink: 0;
+}
+
+.mobile-tab {
+    flex: 1;
+    padding: 10px 16px;
+    background: #252525;
+    border: 1px solid #333333;
+    color: #e0e0e0;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.mobile-tab:hover {
+    background: #333333;
+}
+
+.mobile-tab.active {
+    background: #7F96FF;
+    border-color: #7F96FF;
+    color: #fff;
+}
+
+.panels-container {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    gap: 0;
+}
+
+/* На широких экранах все панели видимы */
+@media (min-width: 1025px) {
+    .panel {
+        display: flex !important;
+    }
 }
 
 .resize-handle {
@@ -518,6 +565,35 @@ body {
     }
 }
 
+/* Узкие экраны - одна колонка с табами */
+@media (max-width: 1024px) {
+    .mobile-tabs {
+        display: flex;
+    }
+    
+    .panels-container {
+        position: relative;
+    }
+    
+    .panel {
+        display: none;
+        width: 100%;
+        flex: none !important;
+    }
+    
+    .panel.active {
+        display: flex;
+    }
+    
+    .resize-handle {
+        display: none;
+    }
+    
+    .chat-panel, .prompt-panel {
+        min-width: 0;
+    }
+}
+
 @media (max-width: 768px) {
     .panel-header {
         padding: 12px 15px;
@@ -528,8 +604,13 @@ body {
     }
     
     .btn-rate {
+        font-size: 11px;
+        padding: 6px 10px;
+    }
+    
+    .mobile-tab {
         font-size: 12px;
-        padding: 6px 12px;
+        padding: 8px 12px;
     }
 }
 

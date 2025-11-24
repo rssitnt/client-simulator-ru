@@ -613,6 +613,33 @@ voiceBtn.addEventListener('click', () => {
     }
 });
 
+// Mobile tabs functionality
+const mobileTabs = document.querySelectorAll('.mobile-tab');
+const panels = document.querySelectorAll('.panel');
+
+mobileTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+        const panelName = tab.dataset.panel;
+        
+        // Remove active class from all tabs and panels
+        mobileTabs.forEach(t => t.classList.remove('active'));
+        panels.forEach(p => p.classList.remove('active'));
+        
+        // Add active class to clicked tab and corresponding panel
+        tab.classList.add('active');
+        const activePanel = document.querySelector(`.panel[data-panel="${panelName}"]`);
+        if (activePanel) {
+            activePanel.classList.add('active');
+        }
+    });
+});
+
+// Set initial active panel
+if (window.innerWidth <= 1024) {
+    panels.forEach(p => p.classList.remove('active'));
+    document.querySelector('.panel[data-panel="chat"]').classList.add('active');
+}
+
 // Initialize
 loadSavedData();
 initSpeechRecognition();

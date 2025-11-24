@@ -12,8 +12,16 @@
 </head>
 <body>
     <div class="container">
+        <!-- Tabs для мобильных устройств -->
+        <div class="mobile-tabs">
+            <button class="mobile-tab active" data-panel="chat">Чат</button>
+            <button class="mobile-tab" data-panel="client">Клиент</button>
+            <button class="mobile-tab" data-panel="rater">Оценщик</button>
+        </div>
+        
+        <div class="panels-container">
         <!-- Левая панель - Чат -->
-        <div class="chat-panel" id="chatPanel">
+        <div class="chat-panel panel" id="chatPanel" data-panel="chat">
             <div class="panel-header">
                 <h2>Чат</h2>
                 <div class="header-buttons">
@@ -58,7 +66,7 @@
         <div class="resize-handle" id="resizeHandle1"></div>
 
         <!-- Средняя панель - Промпт клиента -->
-        <div class="prompt-panel" id="clientPromptPanel">
+        <div class="prompt-panel panel" id="clientPromptPanel" data-panel="client">
             <div class="panel-header">
                 <h2>Инструкция клиента</h2>
                 <div class="header-buttons">
@@ -80,7 +88,7 @@
         <div class="resize-handle" id="resizeHandle2"></div>
 
         <!-- Правая панель - Промпт оценщика -->
-        <div class="prompt-panel" id="raterPromptPanel">
+        <div class="prompt-panel panel" id="raterPromptPanel" data-panel="rater">
             <div class="panel-header">
                 <h2>Инструкция оценщика</h2>
                 <div class="header-buttons">
@@ -96,6 +104,7 @@
 
 Например:
 Оцените качество диалога по следующим критериям: вежливость, компетентность, решение проблемы."></textarea>
+        </div>
         </div>
     </div>
 
