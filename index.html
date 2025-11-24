@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Agent Studio</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Левая панель - Чат -->
+        <div class="chat-panel">
+            <div class="panel-header">
+                <h2>Тестирование агента</h2>
+                <button id="clearChat" class="btn-clear">Очистить</button>
+            </div>
+            <div id="chatMessages" class="chat-messages"></div>
+            <div class="chat-input-container">
+                <textarea id="userInput" placeholder="Введите сообщение..." rows="3"></textarea>
+                <button id="sendBtn" class="btn-send">Отправить</button>
+            </div>
+        </div>
+
+        <!-- Правая панель - Промпт -->
+        <div class="prompt-panel">
+            <div class="panel-header">
+                <h2>Системный промпт</h2>
+                <button id="savePrompt" class="btn-save">Сохранить</button>
+            </div>
+            <textarea id="systemPrompt" class="prompt-editor" placeholder="Введите системный промпт для вашего AI-агента...
+
+Например:
+Вы — полезный ассистент, который помогает пользователям решать их задачи. Отвечайте кратко и по существу."></textarea>
+        </div>
+    </div>
+
+    <script src="script.js?v=3"></script>
+</body>
+</html>
+
