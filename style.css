@@ -146,6 +146,16 @@ body {
     height: 100%;
 }
 
+/* Hide export buttons by default, show on header hover */
+.btn-export {
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.panel-header:hover .btn-export {
+    opacity: 1;
+}
+
 .char-count {
     font-size: 12px;
     color: #888;
