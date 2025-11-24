@@ -112,7 +112,7 @@ body {
     padding: 0 8px;
 }
 
-.btn-clear, .btn-save {
+.btn-save {
     padding: 8px 16px;
     background: #252525;
     border: 1px solid #333333;
@@ -141,7 +141,7 @@ body {
     width: 32px;
 }
 
-.btn-clear:hover, .btn-save:hover, .btn-icon:hover {
+.btn-save:hover, .btn-icon:hover {
     background: #333333;
     border-color: #444444;
 }
