@@ -615,17 +615,14 @@ body {
 }
 
 @media (max-width: 480px) {
-    .chat-input-container {
-        flex-direction: column;
+    .btn-rate {
+        font-size: 10px;
+        padding: 6px 8px;
     }
     
-    .btn-send {
-        width: 100%;
-        justify-content: center;
-    }
-    
-    #userInput {
-        min-height: 80px;
+    .btn-icon {
+        width: 28px;
+        height: 28px;
     }
 }
 

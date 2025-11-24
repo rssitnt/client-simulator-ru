@@ -554,7 +554,6 @@ function initSpeechRecognition() {
     recognition.onstart = () => {
         isRecording = true;
         voiceBtn.classList.add('recording');
-        userInput.placeholder = 'Говорите...';
         userInput.style.paddingRight = '40px';
     };
     
@@ -567,9 +566,7 @@ function initSpeechRecognition() {
     
     recognition.onerror = (event) => {
         console.error('Speech recognition error:', event.error);
-        if (event.error === 'no-speech') {
-            userInput.placeholder = 'Введите сообщение...';
-        } else if (event.error === 'not-allowed') {
+        if (event.error === 'not-allowed') {
             alert('Доступ к микрофону запрещён. Разрешите доступ в настройках браузера.');
         }
         stopRecording();
@@ -600,7 +597,6 @@ function stopRecording() {
     }
     isRecording = false;
     voiceBtn.classList.remove('recording');
-    userInput.placeholder = 'Введите сообщение...';
     userInput.style.paddingRight = '';
 }
 
