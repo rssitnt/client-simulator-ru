@@ -56,6 +56,13 @@ function updateCharCount() {
     charCount.textContent = `${count} символов`;
 }
 
+// Auto-resize textarea
+function autoResizeTextarea(textarea) {
+    textarea.style.height = 'auto';
+    const newHeight = Math.min(textarea.scrollHeight, 300); // Максимум 300px
+    textarea.style.height = newHeight + 'px';
+}
+
 // Save prompt to localStorage
 function savePrompt() {
     localStorage.setItem('systemPrompt', systemPromptInput.value);
@@ -184,6 +191,7 @@ async function sendMessage() {
     
     // Clear input
     userInput.value = '';
+    userInput.style.height = 'auto'; // Сброс высоты
     
     // Show loading indicator
     const loadingMsg = addMessage('', 'loading');
@@ -282,6 +290,11 @@ userInput.addEventListener('keydown', (e) => {
     }
 });
 
+// Auto-resize on input
+userInput.addEventListener('input', () => {
+    autoResizeTextarea(userInput);
+});
+
 clearChatBtn.addEventListener('click', () => {
     if (confirm('Очистить весь чат?')) {
         clearChat();
@@ -368,4 +381,5 @@ document.addEventListener('mouseup', () => {
 // Initialize
 loadSavedData();
 userInput.focus();
+autoResizeTextarea(userInput); // Установить начальную высоту
 

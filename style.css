@@ -319,7 +319,10 @@ body {
     font-family: inherit;
     resize: none;
     outline: none;
-    transition: border-color 0.2s;
+    transition: border-color 0.2s, height 0.1s ease;
+    min-height: 60px;
+    max-height: 300px;
+    overflow-y: auto;
 }
 
 #userInput:focus {
