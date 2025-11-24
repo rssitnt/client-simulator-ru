@@ -163,19 +163,12 @@ body {
     display: flex;
     flex-direction: column;
     gap: 16px;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
 }
 
 .chat-messages::-webkit-scrollbar {
-    width: 8px;
-}
-
-.chat-messages::-webkit-scrollbar-track {
-    background: #0F0F0F;
-}
-
-.chat-messages::-webkit-scrollbar-thumb {
-    background: #333333;
-    border-radius: 4px;
+    display: none;
 }
 
 .message {
@@ -497,6 +490,8 @@ body {
     outline: none;
     line-height: 1.6;
     transition: background 0.2s;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
 }
 
 .prompt-editor:focus {
@@ -508,36 +503,9 @@ body {
 }
 
 .prompt-editor::-webkit-scrollbar {
-    width: 8px;
+    display: none;
 }
 
-.prompt-editor::-webkit-scrollbar-track {
-    background: #0F0F0F;
-}
-
-.prompt-editor::-webkit-scrollbar-thumb {
-    background: #333333;
-    border-radius: 4px;
-}
-
-/* Scrollbar styling for all elements */
-::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-
-::-webkit-scrollbar-track {
-    background: #0F0F0F;
-}
-
-::-webkit-scrollbar-thumb {
-    background: #333333;
-    border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: #444444;
-}
 
 /* Responsive design */
 @media (max-width: 1024px) {
