@@ -208,30 +208,32 @@ body {
 
 .btn-start {
     padding: 14px 28px;
-    background: linear-gradient(135deg, #7F96FF, #a855f7, #6366f1);
-    background-size: 200% 200%;
+    background: linear-gradient(135deg, #7F96FF, #a855f7, #6366f1, #7F96FF);
+    background-size: 300% 300%;
+    background-position: 0% 50%;
     border: none;
     color: #fff;
     border-radius: 10px;
     cursor: pointer;
     font-size: 15px;
     font-weight: 500;
-    transition: transform 0.4s ease, box-shadow 0.4s ease, background-position 0.4s ease;
-    animation: gradient-idle 4s ease infinite;
-}
-
-@keyframes gradient-idle {
-    0%, 100% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
+    transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.5s ease-out;
 }
 
 .btn-start:hover {
-    transform: scale(1.05);
-    box-shadow: 0 8px 25px rgba(127, 150, 255, 0.4);
+    transform: scale(1.08);
+    box-shadow: 0 12px 35px rgba(127, 150, 255, 0.5);
+    animation: gradient-burst 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes gradient-burst {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 100% 50%; }
 }
 
 .btn-start:active {
-    transform: scale(1.02);
+    transform: scale(1.03);
+    transition: transform 0.1s ease-out;
 }
 
 .message {
