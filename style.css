@@ -207,36 +207,20 @@ body {
 }
 
 .btn-start {
-    position: relative;
     padding: 14px 28px;
-    background: #7F96FF;
+    background: linear-gradient(135deg, #7F96FF, #a855f7, #6366f1);
+    background-size: 200% 200%;
     border: none;
     color: #fff;
     border-radius: 10px;
     cursor: pointer;
     font-size: 15px;
     font-weight: 500;
-    transition: transform 0.4s ease, box-shadow 0.4s ease;
-    z-index: 1;
+    transition: transform 0.4s ease, box-shadow 0.4s ease, background-position 0.4s ease;
+    animation: gradient-idle 4s ease infinite;
 }
 
-.btn-start::before {
-    content: '';
-    position: absolute;
-    top: -4px;
-    left: -4px;
-    right: -4px;
-    bottom: -4px;
-    background: linear-gradient(135deg, #7F96FF, #a855f7, #7F96FF, #6366f1);
-    background-size: 300% 300%;
-    border-radius: 14px;
-    z-index: -1;
-    opacity: 0;
-    transition: opacity 0.4s ease;
-    animation: gradient-shift 3s ease infinite;
-}
-
-@keyframes gradient-shift {
+@keyframes gradient-idle {
     0%, 100% { background-position: 0% 50%; }
     50% { background-position: 100% 50%; }
 }
@@ -244,10 +228,6 @@ body {
 .btn-start:hover {
     transform: scale(1.05);
     box-shadow: 0 8px 25px rgba(127, 150, 255, 0.4);
-}
-
-.btn-start:hover::before {
-    opacity: 1;
 }
 
 .btn-start:active {
