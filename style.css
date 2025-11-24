@@ -170,11 +170,9 @@ body {
 
 .btn-rate:hover {
     background: #7F96FF;
-    transform: translateY(-1px);
 }
 
 .btn-rate:active {
-    transform: translateY(0);
 }
 
 .btn-rate:disabled {
@@ -230,8 +228,6 @@ body {
 }
 
 .message:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 @keyframes slideIn {
@@ -286,15 +282,11 @@ body {
 
 .message-footer {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
     margin-top: 6px;
     font-size: 11px;
     color: #cccccc;
-}
-
-.message-time {
-    opacity: 1;
 }
 
 .message-actions {

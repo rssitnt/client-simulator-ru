@@ -156,18 +156,12 @@ function addMessage(content, role, isMarkdown = false) {
     
     messageDiv.appendChild(contentDiv);
     
-    // Footer with time and actions
+    // Footer with actions (no time)
     if (role !== 'loading') {
         const footerDiv = document.createElement('div');
         footerDiv.className = 'message-footer';
         
-        const time = new Date().toLocaleTimeString('ru-RU', { 
-            hour: '2-digit', 
-            minute: '2-digit' 
-        });
-        
         footerDiv.innerHTML = `
-            <span class="message-time">${time}</span>
             <div class="message-actions">
                 <button class="btn-copy" data-content="${escapeHtml(content)}">Копировать</button>
             </div>
