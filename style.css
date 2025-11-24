@@ -373,34 +373,36 @@ body {
 }
 
 .btn-send {
-    padding: 12px 24px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
     background: #7F96FF;
     border: none;
     color: #fff;
     border-radius: 6px;
     cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
     transition: all 0.2s;
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
+    flex-shrink: 0;
 }
 
-.btn-send-shortcut {
-    font-size: 11px;
-    opacity: 0.6;
-    padding: 2px 6px;
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 3px;
+.btn-send svg {
+    transform: rotate(0deg);
+    transition: transform 0.2s;
 }
 
 .btn-send:hover {
     background: #99AAFF;
 }
 
+.btn-send:hover svg {
+    transform: rotate(15deg);
+}
+
 .btn-send:active {
-    transform: scale(0.98);
+    transform: scale(0.95);
 }
 
 .btn-send:disabled {
