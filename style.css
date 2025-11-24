@@ -348,6 +348,12 @@ body {
     line-height: 1.4;
     box-sizing: border-box;
     width: 100%;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+#userInput::-webkit-scrollbar {
+    display: none;
 }
 
 #userInput:focus {
@@ -362,8 +368,7 @@ body {
 .btn-voice-inline {
     position: absolute;
     right: 8px;
-    top: 50%;
-    transform: translateY(-50%);
+    top: 8px;
     width: 28px;
     height: 28px;
     padding: 0;
