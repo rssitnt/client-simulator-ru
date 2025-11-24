@@ -47,7 +47,11 @@
                     </button>
                 </div>
             </div>
-            <div id="chatMessages" class="chat-messages"></div>
+            <div id="chatMessages" class="chat-messages">
+                <div id="startConversation" class="start-conversation">
+                    <button id="startBtn" class="btn-start">Начать беседу</button>
+                </div>
+            </div>
             <div class="chat-input-container">
                 <div class="input-wrapper">
                     <textarea id="userInput" placeholder=""></textarea>
@@ -90,7 +94,7 @@
         <!-- Средняя панель - Промпт клиента -->
         <div class="prompt-panel panel" id="clientPromptPanel" data-panel="client">
             <div class="panel-header">
-                <h2>Инструкция клиента</h2>
+                <h2>Клиент</h2>
                 <div class="header-buttons">
                     <button id="exportPrompt" class="btn-icon btn-export" title="Экспорт инструкции">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -112,7 +116,7 @@
         <!-- Панель - Промпт оценщика -->
         <div class="prompt-panel panel" id="raterPromptPanel" data-panel="rater">
             <div class="panel-header">
-                <h2>Инструкция оценщика</h2>
+                <h2>Оценщик</h2>
                 <div class="header-buttons">
                     <button id="exportRaterPrompt" class="btn-icon btn-export" title="Экспорт инструкции оценщика">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -134,7 +138,7 @@
         <!-- Панель - Промпт менеджера -->
         <div class="prompt-panel panel" id="managerPromptPanel" data-panel="manager">
             <div class="panel-header">
-                <h2>Инструкция менеджера</h2>
+                <h2>Менеджер</h2>
                 <div class="header-buttons">
                     <button id="exportManagerPrompt" class="btn-icon btn-export" title="Экспорт инструкции менеджера">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">

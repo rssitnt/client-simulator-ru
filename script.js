@@ -19,6 +19,8 @@ const exportManagerPromptBtn = document.getElementById('exportManagerPrompt');
 const voiceBtn = document.getElementById('voiceBtn');
 const aiAssistBtn = document.getElementById('aiAssistBtn');
 const rateChatBtn = document.getElementById('rateChat');
+const startBtn = document.getElementById('startBtn');
+const startConversation = document.getElementById('startConversation');
 
 // Default Manager Prompt Template
 const DEFAULT_MANAGER_PROMPT = `Ты — профессиональный менеджер по продажам навесного оборудования (гидромолоты, гидробуры, ковши, ножницы, сваерезки, вибропогружатели) компании "Традиция-К".
@@ -368,6 +370,11 @@ async function sendMessage() {
     sendBtn.disabled = true;
     userInput.disabled = true;
     
+    // Hide start button if visible
+    if (startConversation) {
+        startConversation.style.display = 'none';
+    }
+    
     // Add user message to chat
     addMessage(userMessage, 'user', false);
     conversationHistory.push({
@@ -484,6 +491,8 @@ userInput.addEventListener('input', () => {
 clearChatBtn.addEventListener('click', () => {
     if (confirm('Очистить весь чат?')) {
         clearChat();
+        // Show start button again
+        startConversation.style.display = 'flex';
     }
 });
 
@@ -494,6 +503,21 @@ exportPromptBtn.addEventListener('click', exportPrompt);
 exportRaterPromptBtn.addEventListener('click', exportRaterPrompt);
 
 rateChatBtn.addEventListener('click', rateChat);
+
+// Start conversation button
+startBtn.addEventListener('click', () => {
+    const greetingMessage = 'Здравствуйте. Вас приветствует Кирилл, менеджер ГК "Традиция". Чем могу помочь?';
+    
+    // Hide start button
+    startConversation.style.display = 'none';
+    
+    // Add greeting as user message (from manager's perspective, it's "user" in this simulator)
+    addMessage(greetingMessage, 'user', false);
+    conversationHistory.push({
+        role: 'user',
+        content: greetingMessage
+    });
+});
 
 // Export chat
 function exportChat() {
