@@ -1,6 +1,6 @@
 // n8n Webhook Configuration
 const WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/1f0629dc-22be-496b-bf2b-2d7090578a3c';
-const RATE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook-test/client-simulator-rate';
+const RATE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/client-simulator-rate';
 
 // DOM Elements
 const chatMessages = document.getElementById('chatMessages');
