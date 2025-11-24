@@ -1,5 +1,6 @@
 // n8n Webhook Configuration
 const WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/1f0629dc-22be-496b-bf2b-2d7090578a3c';
+const RATE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook-test/client-simulator-rate';
 
 // DOM Elements
 const chatMessages = document.getElementById('chatMessages');
@@ -7,9 +8,12 @@ const userInput = document.getElementById('userInput');
 const sendBtn = document.getElementById('sendBtn');
 const clearChatBtn = document.getElementById('clearChat');
 const systemPromptInput = document.getElementById('systemPrompt');
+const raterPromptInput = document.getElementById('raterPrompt');
 const exportChatBtn = document.getElementById('exportChat');
 const exportPromptBtn = document.getElementById('exportPrompt');
+const exportRaterPromptBtn = document.getElementById('exportRaterPrompt');
 const voiceBtn = document.getElementById('voiceBtn');
+const rateChatBtn = document.getElementById('rateChat');
 
 // State
 let conversationHistory = [];
@@ -36,9 +40,14 @@ if (typeof marked !== 'undefined') {
 // Load saved data from localStorage
 function loadSavedData() {
     const savedPrompt = localStorage.getItem('systemPrompt');
+    const savedRaterPrompt = localStorage.getItem('raterPrompt');
     
     if (savedPrompt) {
         systemPromptInput.value = savedPrompt;
+    }
+    
+    if (savedRaterPrompt) {
+        raterPromptInput.value = savedRaterPrompt;
     }
     
     // Load saved panel size
@@ -291,6 +300,10 @@ exportChatBtn.addEventListener('click', exportChat);
 
 exportPromptBtn.addEventListener('click', exportPrompt);
 
+exportRaterPromptBtn.addEventListener('click', exportRaterPrompt);
+
+rateChatBtn.addEventListener('click', rateChat);
+
 // Export chat
 function exportChat() {
     if (conversationHistory.length === 0) {
@@ -327,7 +340,7 @@ function exportPrompt() {
     const promptText = systemPromptInput.value.trim();
     
     if (!promptText) {
-        alert('Инструкция пуста');
+        alert('Инструкция клиента пуста');
         return;
     }
     
@@ -335,11 +348,128 @@ function exportPrompt() {
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `system-prompt-${Date.now()}.txt`;
+    link.download = `client-prompt-${Date.now()}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+}
+
+// Export rater prompt
+function exportRaterPrompt() {
+    const promptText = raterPromptInput.value.trim();
+    
+    if (!promptText) {
+        alert('Инструкция оценщика пуста');
+        return;
+    }
+    
+    const dataBlob = new Blob([promptText], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `rater-prompt-${Date.now()}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+// Rate chat dialog
+async function rateChat() {
+    if (conversationHistory.length === 0) {
+        alert('Нет диалога для оценки');
+        return;
+    }
+    
+    // Disable button while processing
+    rateChatBtn.disabled = true;
+    const originalText = rateChatBtn.textContent;
+    rateChatBtn.textContent = 'Оценка...';
+    
+    // Show loading indicator
+    const loadingMsg = addMessage('', 'loading');
+    
+    try {
+        // Format dialog as text
+        let dialogText = '';
+        conversationHistory.forEach((msg) => {
+            const role = msg.role === 'user' ? 'Клиент' : 'Менеджер';
+            dialogText += `${role}: ${msg.content}\n\n`;
+        });
+        
+        const raterPrompt = raterPromptInput.value.trim() || 'Оцените качество диалога.';
+        
+        const requestBody = {
+            dialog: dialogText.trim(),
+            raterPrompt: raterPrompt
+        };
+        
+        // Make webhook request
+        const response = await fetch(RATE_WEBHOOK_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        // Extract rating response
+        let ratingMessage = '';
+        
+        if (typeof data === 'string') {
+            ratingMessage = data;
+        } else if (data.response) {
+            ratingMessage = data.response;
+        } else if (data.message) {
+            ratingMessage = data.message;
+        } else if (data.rating) {
+            ratingMessage = data.rating;
+        } else if (data.output) {
+            ratingMessage = data.output;
+        } else if (data.text) {
+            ratingMessage = data.text;
+        } else {
+            ratingMessage = JSON.stringify(data, null, 2);
+        }
+        
+        if (!ratingMessage) {
+            throw new Error('Пустой ответ от сервера оценки');
+        }
+        
+        // Remove loading message
+        loadingMsg.remove();
+        
+        // Add rating as assistant message
+        addMessage(ratingMessage, 'assistant', true);
+        conversationHistory.push({
+            role: 'assistant',
+            content: ratingMessage
+        });
+        
+    } catch (error) {
+        console.error('Rating error:', error);
+        loadingMsg.remove();
+        
+        let errorMessage = 'Ошибка при оценке диалога';
+        
+        if (error.message.includes('Failed to fetch')) {
+            errorMessage = 'Ошибка соединения с сервисом оценки.';
+        } else {
+            errorMessage = `Ошибка оценки: ${error.message}`;
+        }
+        
+        addMessage(errorMessage, 'error', false);
+    } finally {
+        rateChatBtn.disabled = false;
+        rateChatBtn.textContent = originalText;
+    }
 }
 
 // Auto-save prompt on change (with debounce)
@@ -348,6 +478,15 @@ systemPromptInput.addEventListener('input', () => {
     clearTimeout(saveTimeout);
     saveTimeout = setTimeout(() => {
         localStorage.setItem('systemPrompt', systemPromptInput.value);
+    }, 1000);
+});
+
+// Auto-save rater prompt on change (with debounce)
+let saveRaterTimeout;
+raterPromptInput.addEventListener('input', () => {
+    clearTimeout(saveRaterTimeout);
+    saveRaterTimeout = setTimeout(() => {
+        localStorage.setItem('raterPrompt', raterPromptInput.value);
     }, 1000);
 });
 
