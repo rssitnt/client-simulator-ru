@@ -313,18 +313,24 @@ function exportChat() {
         return;
     }
     
-    const exportData = {
-        timestamp: new Date().toISOString(),
-        systemPrompt: systemPromptInput.value,
-        conversation: conversationHistory
-    };
+    // Формируем текст диалога
+    let chatText = '';
     
-    const dataStr = JSON.stringify(exportData, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    conversationHistory.forEach((msg, index) => {
+        const role = msg.role === 'user' ? 'Клиент' : 'Менеджер';
+        chatText += `${role}: ${msg.content}`;
+        
+        // Добавляем пустую строку между сообщениями, но не после последнего
+        if (index < conversationHistory.length - 1) {
+            chatText += '\n\n';
+        }
+    });
+    
+    const dataBlob = new Blob([chatText], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `chat-export-${Date.now()}.json`;
+    link.download = `chat-export-${Date.now()}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

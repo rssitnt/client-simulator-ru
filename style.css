@@ -83,7 +83,6 @@ body {
 .panel-header {
     padding: 16px 20px;
     background: #0F0F0F;
-    border-bottom: 1px solid #2a2a2a;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -341,7 +340,6 @@ body {
 .chat-input-container {
     padding: 20px;
     background: #0F0F0F;
-    border-top: 1px solid #2a2a2a;
     display: flex;
     gap: 12px;
     flex-shrink: 0;
@@ -366,8 +364,8 @@ body {
 }
 
 #userInput:focus {
-    border-color: #7F96FF;
-    box-shadow: 0 0 0 2px rgba(127, 150, 255, 0.2);
+    border-color: #333333;
+    box-shadow: none;
 }
 
 #userInput::placeholder {
