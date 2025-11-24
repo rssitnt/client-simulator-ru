@@ -1,6 +1,5 @@
-// Gemini API Configuration
-const API_KEY = 'AIzaSyApWhyf3mik_iQvQ08yZ_ErCKmCODHyd6g';
-const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent';
+// n8n Webhook Configuration
+const WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook-test/1f0629dc-22be-496b-bf2b-2d7090578a3c';
 
 // DOM Elements
 const chatMessages = document.getElementById('chatMessages');
@@ -9,10 +8,30 @@ const sendBtn = document.getElementById('sendBtn');
 const clearChatBtn = document.getElementById('clearChat');
 const systemPromptInput = document.getElementById('systemPrompt');
 const savePromptBtn = document.getElementById('savePrompt');
+const exportChatBtn = document.getElementById('exportChat');
+const charCount = document.getElementById('charCount');
 
 // State
 let conversationHistory = [];
 let isProcessing = false;
+
+// Configure marked.js
+if (typeof marked !== 'undefined') {
+    marked.setOptions({
+        breaks: true,
+        gfm: true,
+        highlight: function(code, lang) {
+            if (typeof hljs !== 'undefined' && lang && hljs.getLanguage(lang)) {
+                try {
+                    return hljs.highlight(code, { language: lang }).value;
+                } catch (e) {
+                    console.error('Highlight error:', e);
+                }
+            }
+            return code;
+        }
+    });
+}
 
 // Load saved data from localStorage
 function loadSavedData() {
@@ -20,7 +39,14 @@ function loadSavedData() {
     
     if (savedPrompt) {
         systemPromptInput.value = savedPrompt;
+        updateCharCount();
     }
+}
+
+// Update character count
+function updateCharCount() {
+    const count = systemPromptInput.value.length;
+    charCount.textContent = `${count} символов`;
 }
 
 // Save prompt to localStorage
@@ -39,13 +65,88 @@ function savePrompt() {
 }
 
 // Add message to chat
-function addMessage(content, role) {
+function addMessage(content, role, isMarkdown = false) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
-    messageDiv.textContent = content;
+    
+    // Content
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+    
+    if (role === 'loading') {
+        contentDiv.innerHTML = `
+            <div class="typing-indicator">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+        `;
+    } else if (isMarkdown && typeof marked !== 'undefined') {
+        contentDiv.innerHTML = marked.parse(content);
+        // Apply syntax highlighting
+        if (typeof hljs !== 'undefined') {
+            contentDiv.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+        }
+    } else {
+        contentDiv.textContent = content;
+    }
+    
+    messageDiv.appendChild(contentDiv);
+    
+    // Footer with time and actions
+    if (role !== 'loading') {
+        const footerDiv = document.createElement('div');
+        footerDiv.className = 'message-footer';
+        
+        const time = new Date().toLocaleTimeString('ru-RU', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+        });
+        
+        footerDiv.innerHTML = `
+            <span class="message-time">${time}</span>
+            <div class="message-actions">
+                <button class="btn-copy" data-content="${escapeHtml(content)}">Копировать</button>
+            </div>
+        `;
+        
+        messageDiv.appendChild(footerDiv);
+        
+        // Add copy functionality
+        const copyBtn = footerDiv.querySelector('.btn-copy');
+        copyBtn.addEventListener('click', () => copyToClipboard(content, copyBtn));
+    }
+    
     chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
     return messageDiv;
+}
+
+// Escape HTML for attributes
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Copy to clipboard
+async function copyToClipboard(text, button) {
+    try {
+        await navigator.clipboard.writeText(text);
+        const originalText = button.textContent;
+        button.textContent = '✓ Скопировано';
+        setTimeout(() => {
+            button.textContent = originalText;
+        }, 1500);
+    } catch (err) {
+        console.error('Failed to copy:', err);
+        button.textContent = '✗ Ошибка';
+        setTimeout(() => {
+            button.textContent = 'Копировать';
+        }, 1500);
+    }
 }
 
 // Clear chat
@@ -54,7 +155,7 @@ function clearChat() {
     chatMessages.innerHTML = '';
 }
 
-// Send message to Gemini API
+// Send message to n8n webhook
 async function sendMessage() {
     const userMessage = userInput.value.trim();
     
@@ -68,53 +169,30 @@ async function sendMessage() {
     userInput.disabled = true;
     
     // Add user message to chat
-    addMessage(userMessage, 'user');
+    addMessage(userMessage, 'user', false);
     conversationHistory.push({
         role: 'user',
-        parts: [{ text: userMessage }]
+        content: userMessage
     });
     
     // Clear input
     userInput.value = '';
     
     // Show loading indicator
-    const loadingMsg = addMessage('Генерация ответа...', 'loading');
+    const loadingMsg = addMessage('', 'loading');
     
     try {
         // Prepare request body
         const systemPrompt = systemPromptInput.value.trim();
-        const temperature = 1.0; // Default temperature
-        const maxTokens = 2000; // Default max tokens
-        
-        const contents = [];
-        
-        // Add system prompt as first user message if exists and conversation is starting
-        if (systemPrompt && conversationHistory.length === 1) {
-            contents.push({
-                role: 'user',
-                parts: [{ text: `Системные инструкции: ${systemPrompt}\n\nТеперь ответь на следующее сообщение пользователя.` }]
-            });
-            contents.push({
-                role: 'model',
-                parts: [{ text: 'Понял. Я готов помочь согласно заданным инструкциям.' }]
-            });
-        }
-        
-        // Add conversation history
-        contents.push(...conversationHistory);
         
         const requestBody = {
-            contents: contents,
-            generationConfig: {
-                temperature: temperature,
-                maxOutputTokens: maxTokens,
-                topP: 0.95,
-                topK: 40
-            }
+            prompt: systemPrompt || 'Вы — полезный ассистент.',
+            message: userMessage,
+            history: conversationHistory.slice(0, -1) // История без последнего сообщения
         };
         
-        // Make API request
-        const response = await fetch(`${API_URL}?key=${API_KEY}`, {
+        // Make webhook request
+        const response = await fetch(WEBHOOK_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -123,27 +201,42 @@ async function sendMessage() {
         });
         
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error?.message || 'API request failed');
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
         const data = await response.json();
         
         // Extract assistant response
-        const assistantMessage = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        let assistantMessage = '';
+        
+        // Пробуем разные варианты структуры ответа от n8n
+        if (typeof data === 'string') {
+            assistantMessage = data;
+        } else if (data.response) {
+            assistantMessage = data.response;
+        } else if (data.message) {
+            assistantMessage = data.message;
+        } else if (data.output) {
+            assistantMessage = data.output;
+        } else if (data.text) {
+            assistantMessage = data.text;
+        } else {
+            // Если структура неизвестна, показываем весь JSON
+            assistantMessage = JSON.stringify(data, null, 2);
+        }
         
         if (!assistantMessage) {
-            throw new Error('No response from API');
+            throw new Error('Пустой ответ от сервера');
         }
         
         // Remove loading message
         loadingMsg.remove();
         
-        // Add assistant message to chat
-        addMessage(assistantMessage, 'assistant');
+        // Add assistant message to chat (with markdown support)
+        addMessage(assistantMessage, 'assistant', true);
         conversationHistory.push({
-            role: 'model',
-            parts: [{ text: assistantMessage }]
+            role: 'assistant',
+            content: assistantMessage
         });
         
     } catch (error) {
@@ -177,9 +270,37 @@ clearChatBtn.addEventListener('click', () => {
 
 savePromptBtn.addEventListener('click', savePrompt);
 
+exportChatBtn.addEventListener('click', exportChat);
+
+// Export chat
+function exportChat() {
+    if (conversationHistory.length === 0) {
+        alert('Нет сообщений для экспорта');
+        return;
+    }
+    
+    const exportData = {
+        timestamp: new Date().toISOString(),
+        systemPrompt: systemPromptInput.value,
+        conversation: conversationHistory
+    };
+    
+    const dataStr = JSON.stringify(exportData, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `chat-export-${Date.now()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
 // Auto-save prompt on change (with debounce)
 let saveTimeout;
 systemPromptInput.addEventListener('input', () => {
+    updateCharCount();
     clearTimeout(saveTimeout);
     saveTimeout = setTimeout(() => {
         localStorage.setItem('systemPrompt', systemPromptInput.value);
@@ -189,11 +310,4 @@ systemPromptInput.addEventListener('input', () => {
 // Initialize
 loadSavedData();
 userInput.focus();
-
-// Welcome message
-setTimeout(() => {
-    if (conversationHistory.length === 0) {
-        addMessage('Добро пожаловать в AI Agent Studio! Настройте системный промпт справа и начните тестирование вашего агента.', 'assistant');
-    }
-}, 500);
 

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Agent Studio</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,12 +13,23 @@
         <div class="chat-panel">
             <div class="panel-header">
                 <h2>Тестирование агента</h2>
-                <button id="clearChat" class="btn-clear">Очистить</button>
+                <div class="header-buttons">
+                    <button id="exportChat" class="btn-icon" title="Экспорт диалога">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M8.5 1a.5.5 0 00-1 0v8.793L5.354 7.646a.5.5 0 10-.708.708l3 3a.5.5 0 00.708 0l3-3a.5.5 0 00-.708-.708L8.5 9.793V1z"/>
+                            <path d="M3 12v2a1 1 0 001 1h8a1 1 0 001-1v-2h1v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2h1z"/>
+                        </svg>
+                    </button>
+                    <button id="clearChat" class="btn-clear">Очистить</button>
+                </div>
             </div>
             <div id="chatMessages" class="chat-messages"></div>
             <div class="chat-input-container">
                 <textarea id="userInput" placeholder="Введите сообщение..." rows="3"></textarea>
-                <button id="sendBtn" class="btn-send">Отправить</button>
+                <button id="sendBtn" class="btn-send">
+                    <span class="btn-send-text">Отправить</span>
+                    <span class="btn-send-shortcut">Enter</span>
+                </button>
             </div>
         </div>
 
@@ -25,7 +37,10 @@
         <div class="prompt-panel">
             <div class="panel-header">
                 <h2>Системный промпт</h2>
-                <button id="savePrompt" class="btn-save">Сохранить</button>
+                <div class="header-buttons">
+                    <span id="charCount" class="char-count">0 символов</span>
+                    <button id="savePrompt" class="btn-save">Сохранить</button>
+                </div>
             </div>
             <textarea id="systemPrompt" class="prompt-editor" placeholder="Введите системный промпт для вашего AI-агента...
 
@@ -34,7 +49,8 @@
         </div>
     </div>
 
-    <script src="script.js?v=3"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/11.1.1/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
-
