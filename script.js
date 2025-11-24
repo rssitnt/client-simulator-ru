@@ -342,6 +342,7 @@ async function copyToClipboard(text, button) {
 // Clear chat
 function clearChat() {
     conversationHistory = [];
+    lastRating = null;
     chatMessages.innerHTML = '';
 }
 
