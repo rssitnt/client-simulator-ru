@@ -406,9 +406,18 @@ body {
     align-items: center;
 }
 
+.input-actions {
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    display: flex;
+    gap: 4px;
+    z-index: 10;
+}
+
 #userInput {
     flex: 1;
-    padding: 8px 40px 8px 12px;
+    padding: 8px 80px 8px 12px;
     background: #1f1f1f;
     border: 1px solid #333333;
     border-radius: 6px;
@@ -441,10 +450,7 @@ body {
     color: #777;
 }
 
-.btn-voice-inline {
-    position: absolute;
-    right: 8px;
-    top: 8px;
+.btn-input-action {
     width: 28px;
     height: 28px;
     padding: 0;
@@ -456,16 +462,27 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 10;
+    border-radius: 4px;
 }
 
-.btn-voice-inline:hover {
+.btn-input-action:hover {
     color: #cccccc;
+    background: rgba(255, 255, 255, 0.05);
 }
 
-.btn-voice-inline.recording {
+.btn-input-action.recording {
     color: #ff4444;
     animation: pulse 1.5s ease-in-out infinite;
+}
+
+.btn-input-action.loading {
+    color: #7F96FF;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }
 
 @keyframes pulse {

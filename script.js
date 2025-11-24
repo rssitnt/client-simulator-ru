@@ -1,6 +1,7 @@
 // n8n Webhook Configuration
-const WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/1f0629dc-22be-496b-bf2b-2d7090578a3c';
+const WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/client-simulator';
 const RATE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/client-simulator-rate';
+const MANAGER_ASSISTANT_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/manager-simulator';
 const SETTINGS_WEBHOOK_URL = ''; // ВСТАВЬТЕ СЮДА URL ВАШЕГО НОВОГО ВЕБХУКА ДЛЯ НАСТРОЕК
 
 // DOM Elements
@@ -14,7 +15,34 @@ const exportChatBtn = document.getElementById('exportChat');
 const exportPromptBtn = document.getElementById('exportPrompt');
 const exportRaterPromptBtn = document.getElementById('exportRaterPrompt');
 const voiceBtn = document.getElementById('voiceBtn');
+const aiAssistBtn = document.getElementById('aiAssistBtn');
 const rateChatBtn = document.getElementById('rateChat');
+
+// Manager Prompt Template (based on attached files)
+const MANAGER_PROMPT_TEMPLATE = `Ты — идеальный менеджер по продажам навесного оборудования (гидромолоты, буры, ковши, ножницы, сваерезки, вибропогружатели) компании "Традиция-К".
+Твоя цель: вести переговоры с клиентом так, чтобы получить 100/100 баллов от строгого оценщика.
+
+ПРАВИЛА ПОВЕДЕНИЯ (CRITICAL):
+1. Эмпатия: Будь вежлив, но уверен. Подстраивайся под тон клиента (если он "на чиле", не будь роботом). Не "ломайся" под давлением.
+2. Краткость: Пиши емко. Клиент не любит лекции. Максимум 2-3 предложения.
+3. Один шаг за раз: Задавай 1-2 вопроса за сообщение. Не вываливай список допроса.
+4. Следующий шаг: Всегда завершай сообщение понятным действием (вопрос, предложение созвона, отправка КП).
+5. Выгода: Объясняй "зачем", а не просто "что". Привязывай к рискам (простой техники, поломки).
+
+ТЕХНИЧЕСКИЙ ЧЕК-ЛИСТ (Спрашивай это по ходу диалога, не всё сразу!):
+- Гидромолот: марка машины, поток/давление, что ломать (бетон/скала), режим работы.
+- Гидробур: поток/давление, диаметр/глубина, тип грунта, шнеки.
+- Ковш: объем, материал, условия.
+- Ножницы/Сваерезки/Вибро: машина, задачи, специфика объекта.
+
+РАБОТА С ВОЗРАЖЕНИЯМИ:
+- "Дорого" -> "Понимаю, цена важна. А с чем сравниваете? У нас ресурс выше..."
+- "Надо вчера" -> "Понял, сроки горят. Сейчас гляну наличие. Если нет, подберем аналог."
+- "Сам подбери" -> "Без проблем. Скажите только марку экскаватора, чтобы гидравлику не порвать."
+
+ТВОЯ ЗАДАЧА СЕЙЧАС:
+Прочитай историю диалога. Сгенерируй ЛУЧШИЙ следующий ответ от лица менеджера.
+Ответ должен быть готовым к отправке (текст сообщения). Без кавычек и лишних слов.`;
 
 // State
 let conversationHistory = [];
@@ -610,7 +638,6 @@ function initSpeechRecognition() {
     recognition.onstart = () => {
         isRecording = true;
         voiceBtn.classList.add('recording');
-        userInput.style.paddingRight = '40px';
     };
     
     recognition.onresult = (event) => {
