@@ -11,15 +11,17 @@ const sendBtn = document.getElementById('sendBtn');
 const clearChatBtn = document.getElementById('clearChat');
 const systemPromptInput = document.getElementById('systemPrompt');
 const raterPromptInput = document.getElementById('raterPrompt');
+const managerPromptInput = document.getElementById('managerPrompt');
 const exportChatBtn = document.getElementById('exportChat');
 const exportPromptBtn = document.getElementById('exportPrompt');
 const exportRaterPromptBtn = document.getElementById('exportRaterPrompt');
+const exportManagerPromptBtn = document.getElementById('exportManagerPrompt');
 const voiceBtn = document.getElementById('voiceBtn');
 const aiAssistBtn = document.getElementById('aiAssistBtn');
 const rateChatBtn = document.getElementById('rateChat');
 
-// Manager Prompt Template (based on attached files)
-const MANAGER_PROMPT_TEMPLATE = `Ты — профессиональный менеджер по продажам навесного оборудования (гидромолоты, гидробуры, ковши, ножницы, сваерезки, вибропогружатели) компании "Традиция-К".
+// Default Manager Prompt Template
+const DEFAULT_MANAGER_PROMPT = `Ты — профессиональный менеджер по продажам навесного оборудования (гидромолоты, гидробуры, ковши, ножницы, сваерезки, вибропогружатели) компании "Традиция-К".
 
 ТВОЯ ЦЕЛЬ: Вести диалог так, чтобы получить максимальный балл (100/100) от строгого оценщика по всем критериям.
 
@@ -240,6 +242,7 @@ const savePromptsToServer = debounce(async () => {
 function loadSavedData() {
     const savedPrompt = localStorage.getItem('systemPrompt');
     const savedRaterPrompt = localStorage.getItem('raterPrompt');
+    const savedManagerPrompt = localStorage.getItem('managerPrompt');
     
     if (savedPrompt) {
         systemPromptInput.value = savedPrompt;
@@ -249,6 +252,12 @@ function loadSavedData() {
         raterPromptInput.value = savedRaterPrompt;
     }
     
+    // Load manager prompt or use default
+    if (savedManagerPrompt) {
+        managerPromptInput.value = savedManagerPrompt;
+    } else {
+        managerPromptInput.value = DEFAULT_MANAGER_PROMPT;
+    }
 }
 
 // Auto-resize textarea
@@ -674,12 +683,41 @@ raterPromptInput.addEventListener('input', () => {
     savePromptsToServer();
 });
 
+// Auto-save manager prompt on change
+managerPromptInput.addEventListener('input', () => {
+    localStorage.setItem('managerPrompt', managerPromptInput.value);
+});
+
+// Export manager prompt
+exportManagerPromptBtn.addEventListener('click', exportManagerPrompt);
+
+function exportManagerPrompt() {
+    const promptText = managerPromptInput.value.trim();
+    
+    if (!promptText) {
+        alert('Инструкция менеджера пуста');
+        return;
+    }
+    
+    const dataBlob = new Blob([promptText], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `manager-prompt-${Date.now()}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
 // Resize panels functionality
 const resizeHandle1 = document.getElementById('resizeHandle1');
 const resizeHandle2 = document.getElementById('resizeHandle2');
+const resizeHandle3 = document.getElementById('resizeHandle3');
 const chatPanel = document.getElementById('chatPanel');
 const clientPromptPanel = document.getElementById('clientPromptPanel');
 const raterPromptPanel = document.getElementById('raterPromptPanel');
+const managerPromptPanel = document.getElementById('managerPromptPanel');
 let isResizing = false;
 let currentHandle = null;
 
@@ -698,6 +736,10 @@ resizeHandle2.addEventListener('mousedown', (e) => {
     startResize(2);
 });
 
+resizeHandle3.addEventListener('mousedown', (e) => {
+    startResize(3);
+});
+
 document.addEventListener('mousemove', (e) => {
     if (!isResizing) return;
     
@@ -709,17 +751,27 @@ document.addEventListener('mousemove', (e) => {
         // Resizing between chat and client prompt
         const chatWidth = (mouseX / containerWidth) * 100;
         
-        if (chatWidth >= 20 && chatWidth <= 60) {
+        if (chatWidth >= 15 && chatWidth <= 50) {
             chatPanel.style.flex = `0 0 ${chatWidth}%`;
         }
     } else if (currentHandle === 2) {
         // Resizing between client prompt and rater prompt
-        const chatWidth = parseFloat(chatPanel.style.flex?.split(' ')[2]) || 33.33;
-        const clientPromptStart = (chatWidth / 100) * containerWidth + 8; // +8 для разделителя
+        const chatWidth = parseFloat(chatPanel.style.flex?.split(' ')[2]) || 25;
+        const clientPromptStart = (chatWidth / 100) * containerWidth + 8;
         const clientPromptWidth = ((mouseX - clientPromptStart) / containerWidth) * 100;
         
-        if (clientPromptWidth >= 20 && clientPromptWidth <= 60) {
+        if (clientPromptWidth >= 15 && clientPromptWidth <= 40) {
             clientPromptPanel.style.flex = `0 0 ${clientPromptWidth}%`;
+        }
+    } else if (currentHandle === 3) {
+        // Resizing between rater prompt and manager prompt
+        const chatWidth = parseFloat(chatPanel.style.flex?.split(' ')[2]) || 25;
+        const clientWidth = parseFloat(clientPromptPanel.style.flex?.split(' ')[2]) || 25;
+        const raterPromptStart = ((chatWidth + clientWidth) / 100) * containerWidth + 16;
+        const raterPromptWidth = ((mouseX - raterPromptStart) / containerWidth) * 100;
+        
+        if (raterPromptWidth >= 15 && raterPromptWidth <= 40) {
+            raterPromptPanel.style.flex = `0 0 ${raterPromptWidth}%`;
         }
     }
 });
@@ -829,7 +881,7 @@ async function generateAIResponse() {
         
         // Prepare request body
         const requestBody = {
-            systemPrompt: MANAGER_PROMPT_TEMPLATE,
+            systemPrompt: managerPromptInput.value.trim() || DEFAULT_MANAGER_PROMPT,
             userMessage: `История диалога:\n\n${dialogText}\n\nСгенерируй следующий ответ менеджера:`
         };
         

@@ -109,7 +109,7 @@ body {
     display: flex;
     flex-direction: column;
     background: #0F0F0F;
-    min-width: 300px;
+    min-width: 250px;
 }
 
 .prompt-panel {
@@ -117,7 +117,7 @@ body {
     display: flex;
     flex-direction: column;
     background: #0F0F0F;
-    min-width: 250px;
+    min-width: 200px;
 }
 
 .panel-header {
@@ -621,8 +621,8 @@ body {
     }
     
     .mobile-tab {
-        font-size: 12px;
-        padding: 8px 12px;
+        font-size: 11px;
+        padding: 6px 8px;
     }
     
     .chat-input-container {
@@ -651,14 +651,14 @@ body {
 }
 
 @media (max-width: 480px) {
-    .btn-rate {
-        font-size: 10px;
-        padding: 6px 8px;
-    }
-    
     .btn-icon {
         width: 28px;
         height: 28px;
+    }
+    
+    .mobile-tab {
+        font-size: 10px;
+        padding: 5px 6px;
     }
 }
 
