@@ -223,11 +223,12 @@ body {
 .btn-start:hover {
     transform: scale(1.08);
     box-shadow: 0 12px 35px rgba(127, 150, 255, 0.5);
-    animation: gradient-burst 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: gradient-flow 2s ease-in-out infinite;
 }
 
-@keyframes gradient-burst {
+@keyframes gradient-flow {
     0% { background-position: 0% 50%; }
+    30% { background-position: 70% 50%; }
     100% { background-position: 100% 50%; }
 }
 
