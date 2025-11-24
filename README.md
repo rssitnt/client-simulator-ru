@@ -44,8 +44,8 @@ npx http-server -p 3001
 
 ```json
 {
-  "prompt": "Системный промпт из правого окна",
-  "message": "Сообщение пользователя из чата",
+  "chatInput": "Сообщение пользователя из чата",
+  "systemPrompt": "Системный промпт из правого окна",
   "history": [
     {
       "role": "user",
@@ -58,6 +58,8 @@ npx http-server -p 3001
   ]
 }
 ```
+
+**Примечание:** Поле `chatInput` является обязательным для n8n Chat Trigger node.
 
 ## Формат ответа от webhook
 

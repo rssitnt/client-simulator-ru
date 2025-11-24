@@ -139,6 +139,12 @@ body {
     word-wrap: break-word;
     position: relative;
     animation: slideIn 0.3s ease-out;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.message:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 @keyframes slideIn {
@@ -373,6 +379,11 @@ body {
     resize: none;
     outline: none;
     line-height: 1.6;
+    transition: background 0.2s;
+}
+
+.prompt-editor:focus {
+    background: #2d2d2d;
 }
 
 .prompt-editor::placeholder {

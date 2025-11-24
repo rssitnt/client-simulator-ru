@@ -41,6 +41,13 @@ function loadSavedData() {
         systemPromptInput.value = savedPrompt;
         updateCharCount();
     }
+    
+    // Load saved panel size
+    const savedPanelSize = localStorage.getItem('chatPanelSize');
+    if (savedPanelSize) {
+        chatPanel.style.maxWidth = savedPanelSize;
+        chatPanel.style.flex = `0 0 ${savedPanelSize}`;
+    }
 }
 
 // Update character count
@@ -186,8 +193,8 @@ async function sendMessage() {
         const systemPrompt = systemPromptInput.value.trim();
         
         const requestBody = {
-            prompt: systemPrompt || 'Вы — полезный ассистент.',
-            message: userMessage,
+            chatInput: userMessage,  // Основное поле для n8n Chat Trigger
+            systemPrompt: systemPrompt || 'Вы — полезный ассистент.',
             history: conversationHistory.slice(0, -1) // История без последнего сообщения
         };
         
@@ -242,7 +249,20 @@ async function sendMessage() {
     } catch (error) {
         console.error('Error:', error);
         loadingMsg.remove();
-        addMessage(`Ошибка: ${error.message}`, 'error');
+        
+        let errorMessage = 'Произошла ошибка при обработке запроса';
+        
+        if (error.message.includes('Failed to fetch')) {
+            errorMessage = 'Ошибка соединения. Проверьте подключение к интернету и доступность webhook.';
+        } else if (error.message.includes('HTTP 4')) {
+            errorMessage = `Ошибка запроса (${error.message}). Проверьте корректность URL webhook.`;
+        } else if (error.message.includes('HTTP 5')) {
+            errorMessage = `Ошибка сервера (${error.message}). Попробуйте позже.`;
+        } else {
+            errorMessage = `Ошибка: ${error.message}`;
+        }
+        
+        addMessage(errorMessage, 'error', false);
     } finally {
         // Re-enable input
         isProcessing = false;
@@ -305,6 +325,44 @@ systemPromptInput.addEventListener('input', () => {
     saveTimeout = setTimeout(() => {
         localStorage.setItem('systemPrompt', systemPromptInput.value);
     }, 1000);
+});
+
+// Resize panels functionality
+const resizeHandle = document.getElementById('resizeHandle');
+const chatPanel = document.getElementById('chatPanel');
+let isResizing = false;
+
+resizeHandle.addEventListener('mousedown', (e) => {
+    isResizing = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!isResizing) return;
+    
+    const containerWidth = document.querySelector('.container').offsetWidth;
+    const newWidth = (e.clientX / containerWidth) * 100;
+    
+    // Limit between 30% and 70%
+    if (newWidth >= 30 && newWidth <= 70) {
+        chatPanel.style.maxWidth = `${newWidth}%`;
+        chatPanel.style.flex = `0 0 ${newWidth}%`;
+    }
+});
+
+document.addEventListener('mouseup', () => {
+    if (isResizing) {
+        isResizing = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        
+        // Save panel size
+        const currentSize = chatPanel.style.maxWidth;
+        if (currentSize) {
+            localStorage.setItem('chatPanelSize', currentSize);
+        }
+    }
 });
 
 // Initialize
