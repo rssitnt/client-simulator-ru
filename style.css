@@ -550,41 +550,18 @@ body {
     }
 }
 
-@media (max-width: 1200px) {
-    .container {
-        flex-direction: column;
-    }
-    
-    .chat-panel, .prompt-panel {
-        width: 100% !important;
-        max-width: 100% !important;
-        flex: 1 !important;
-        min-height: 33vh;
-        min-width: 0;
-    }
-    
-    .resize-handle {
-        display: none;
-    }
-    
-    .message {
-        max-width: 95%;
-    }
-    
+@media (max-width: 768px) {
     .panel-header {
-        padding: 15px;
+        padding: 12px 15px;
     }
     
     .panel-header h2 {
         font-size: 16px;
     }
     
-    .btn-send-shortcut {
-        display: none;
-    }
-    
-    .char-count {
-        font-size: 11px;
+    .btn-rate {
+        font-size: 12px;
+        padding: 6px 12px;
     }
 }
 
