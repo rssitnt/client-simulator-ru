@@ -207,31 +207,23 @@ body {
 }
 
 .btn-start {
-    padding: 14px 28px;
-    background: linear-gradient(90deg, #7F96FF, #a855f7, #6366f1, #a855f7, #7F96FF);
-    background-size: 400% 100%;
-    border: none;
-    color: #fff;
-    border-radius: 10px;
+    padding: 12px 24px;
+    background: #333333;
+    border: 1px solid #444444;
+    color: #e0e0e0;
+    border-radius: 8px;
     cursor: pointer;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 500;
-    transition: transform 0.35s ease-out, box-shadow 0.35s ease-out;
 }
 
 .btn-start:hover {
-    transform: scale(1.06);
-    box-shadow: 0 10px 30px rgba(127, 150, 255, 0.45);
-    animation: gradient-smooth 3s linear infinite;
-}
-
-@keyframes gradient-smooth {
-    0% { background-position: 0% 50%; }
-    100% { background-position: 100% 50%; }
+    background: #404040;
+    border-color: #555555;
 }
 
 .btn-start:active {
-    transform: scale(1.02);
+    background: #2a2a2a;
 }
 
 .message {
