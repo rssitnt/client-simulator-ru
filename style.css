@@ -306,6 +306,18 @@ body {
     max-width: 90%;
 }
 
+.message.rating {
+    align-self: center;
+    background: #F25F5C;
+    color: #fff;
+    max-width: 95%;
+}
+
+.message.rating .message-content :not(pre) > code {
+    background: rgba(0, 0, 0, 0.2);
+    border-color: rgba(0, 0, 0, 0.3);
+}
+
 .message.loading {
     align-self: flex-start;
     background: #252525;

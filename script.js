@@ -446,12 +446,8 @@ async function rateChat() {
         // Remove loading message
         loadingMsg.remove();
         
-        // Add rating as assistant message
-        addMessage(ratingMessage, 'assistant', true);
-        conversationHistory.push({
-            role: 'assistant',
-            content: ratingMessage
-        });
+        // Add rating as special rating message (centered, orange)
+        addMessage(ratingMessage, 'rating', true);
         
     } catch (error) {
         console.error('Rating error:', error);
