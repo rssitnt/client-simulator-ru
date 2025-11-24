@@ -207,24 +207,51 @@ body {
 }
 
 .btn-start {
-    padding: 12px 24px;
+    position: relative;
+    padding: 14px 28px;
     background: #7F96FF;
     border: none;
     color: #fff;
-    border-radius: 8px;
+    border-radius: 10px;
     cursor: pointer;
     font-size: 15px;
     font-weight: 500;
-    transition: all 0.2s;
+    transition: transform 0.4s ease, box-shadow 0.4s ease;
+    z-index: 1;
+}
+
+.btn-start::before {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: -4px;
+    right: -4px;
+    bottom: -4px;
+    background: linear-gradient(135deg, #7F96FF, #a855f7, #7F96FF, #6366f1);
+    background-size: 300% 300%;
+    border-radius: 14px;
+    z-index: -1;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    animation: gradient-shift 3s ease infinite;
+}
+
+@keyframes gradient-shift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
 }
 
 .btn-start:hover {
-    background: #6b82e6;
-    transform: translateY(-2px);
+    transform: scale(1.05);
+    box-shadow: 0 8px 25px rgba(127, 150, 255, 0.4);
+}
+
+.btn-start:hover::before {
+    opacity: 1;
 }
 
 .btn-start:active {
-    transform: translateY(0);
+    transform: scale(1.02);
 }
 
 .message {
