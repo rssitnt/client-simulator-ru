@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Студия для создания и тестирования AI-агентов с интеграцией n8n">
-    <meta name="theme-color" content="#1a1a1a">
+    <meta name="theme-color" content="#0F0F0F">
     <meta name="color-scheme" content="dark">
     <title>AI Agent Studio</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
@@ -15,7 +15,7 @@
         <!-- Левая панель - Чат -->
         <div class="chat-panel" id="chatPanel">
             <div class="panel-header">
-                <h2>Тестирование агента</h2>
+                <h2>Чат</h2>
                 <div class="header-buttons">
                     <button id="exportChat" class="btn-icon" title="Экспорт диалога">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -40,11 +40,10 @@
         <div class="resize-handle" id="resizeHandle"></div>
 
         <!-- Правая панель - Промпт -->
-        <div class="prompt-panel">
+        <div class="prompt-panel" id="promptPanel">
             <div class="panel-header">
-                <h2>Системный промпт</h2>
+                <h2>Инструкция</h2>
                 <div class="header-buttons">
-                    <span id="charCount" class="char-count">0 символов</span>
                     <button id="savePrompt" class="btn-save">Сохранить</button>
                 </div>
             </div>

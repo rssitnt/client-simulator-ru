@@ -9,7 +9,6 @@ const clearChatBtn = document.getElementById('clearChat');
 const systemPromptInput = document.getElementById('systemPrompt');
 const savePromptBtn = document.getElementById('savePrompt');
 const exportChatBtn = document.getElementById('exportChat');
-const charCount = document.getElementById('charCount');
 
 // State
 let conversationHistory = [];
@@ -39,21 +38,20 @@ function loadSavedData() {
     
     if (savedPrompt) {
         systemPromptInput.value = savedPrompt;
-        updateCharCount();
     }
     
     // Load saved panel size
     const savedPanelSize = localStorage.getItem('chatPanelSize');
     if (savedPanelSize) {
+        const chatWidth = parseFloat(savedPanelSize);
+        const promptWidth = 100 - chatWidth;
+        
         chatPanel.style.maxWidth = savedPanelSize;
         chatPanel.style.flex = `0 0 ${savedPanelSize}`;
+        
+        promptPanel.style.maxWidth = `${promptWidth}%`;
+        promptPanel.style.flex = `0 0 ${promptWidth}%`;
     }
-}
-
-// Update character count
-function updateCharCount() {
-    const count = systemPromptInput.value.length;
-    charCount.textContent = `${count} символов`;
 }
 
 // Auto-resize textarea
@@ -333,7 +331,6 @@ function exportChat() {
 // Auto-save prompt on change (with debounce)
 let saveTimeout;
 systemPromptInput.addEventListener('input', () => {
-    updateCharCount();
     clearTimeout(saveTimeout);
     saveTimeout = setTimeout(() => {
         localStorage.setItem('systemPrompt', systemPromptInput.value);
@@ -343,6 +340,7 @@ systemPromptInput.addEventListener('input', () => {
 // Resize panels functionality
 const resizeHandle = document.getElementById('resizeHandle');
 const chatPanel = document.getElementById('chatPanel');
+const promptPanel = document.getElementById('promptPanel');
 let isResizing = false;
 
 resizeHandle.addEventListener('mousedown', (e) => {
@@ -359,8 +357,13 @@ document.addEventListener('mousemove', (e) => {
     
     // Limit between 30% and 70%
     if (newWidth >= 30 && newWidth <= 70) {
+        const promptWidth = 100 - newWidth;
+        
         chatPanel.style.maxWidth = `${newWidth}%`;
         chatPanel.style.flex = `0 0 ${newWidth}%`;
+        
+        promptPanel.style.maxWidth = `${promptWidth}%`;
+        promptPanel.style.flex = `0 0 ${promptWidth}%`;
     }
 });
 
