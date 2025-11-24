@@ -50,18 +50,6 @@ function loadSavedData() {
         raterPromptInput.value = savedRaterPrompt;
     }
     
-    // Load saved panel size
-    const savedPanelSize = localStorage.getItem('chatPanelSize');
-    if (savedPanelSize) {
-        const chatWidth = parseFloat(savedPanelSize);
-        const promptWidth = 100 - chatWidth;
-        
-        chatPanel.style.maxWidth = savedPanelSize;
-        chatPanel.style.flex = `0 0 ${savedPanelSize}`;
-        
-        promptPanel.style.maxWidth = `${promptWidth}%`;
-        promptPanel.style.flex = `0 0 ${promptWidth}%`;
-    }
 }
 
 // Auto-resize textarea
@@ -487,46 +475,61 @@ raterPromptInput.addEventListener('input', () => {
 });
 
 // Resize panels functionality
-const resizeHandle = document.getElementById('resizeHandle');
+const resizeHandle1 = document.getElementById('resizeHandle1');
+const resizeHandle2 = document.getElementById('resizeHandle2');
 const chatPanel = document.getElementById('chatPanel');
-const promptPanel = document.getElementById('promptPanel');
+const clientPromptPanel = document.getElementById('clientPromptPanel');
+const raterPromptPanel = document.getElementById('raterPromptPanel');
 let isResizing = false;
+let currentHandle = null;
 
-resizeHandle.addEventListener('mousedown', (e) => {
+function startResize(handle) {
     isResizing = true;
+    currentHandle = handle;
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
+}
+
+resizeHandle1.addEventListener('mousedown', (e) => {
+    startResize(1);
+});
+
+resizeHandle2.addEventListener('mousedown', (e) => {
+    startResize(2);
 });
 
 document.addEventListener('mousemove', (e) => {
     if (!isResizing) return;
     
-    const containerWidth = document.querySelector('.container').offsetWidth;
-    const newWidth = (e.clientX / containerWidth) * 100;
+    const container = document.querySelector('.container');
+    const containerWidth = container.offsetWidth;
+    const mouseX = e.clientX;
     
-    // Limit between 30% and 70%
-    if (newWidth >= 30 && newWidth <= 70) {
-        const promptWidth = 100 - newWidth;
+    if (currentHandle === 1) {
+        // Resizing between chat and client prompt
+        const chatWidth = (mouseX / containerWidth) * 100;
         
-        chatPanel.style.maxWidth = `${newWidth}%`;
-        chatPanel.style.flex = `0 0 ${newWidth}%`;
+        if (chatWidth >= 20 && chatWidth <= 60) {
+            chatPanel.style.flex = `0 0 ${chatWidth}%`;
+        }
+    } else if (currentHandle === 2) {
+        // Resizing between client prompt and rater prompt
+        const chatWidth = parseFloat(chatPanel.style.flex?.split(' ')[2]) || 33.33;
+        const clientPromptStart = (chatWidth / 100) * containerWidth + 8; // +8 для разделителя
+        const clientPromptWidth = ((mouseX - clientPromptStart) / containerWidth) * 100;
         
-        promptPanel.style.maxWidth = `${promptWidth}%`;
-        promptPanel.style.flex = `0 0 ${promptWidth}%`;
+        if (clientPromptWidth >= 20 && clientPromptWidth <= 60) {
+            clientPromptPanel.style.flex = `0 0 ${clientPromptWidth}%`;
+        }
     }
 });
 
 document.addEventListener('mouseup', () => {
     if (isResizing) {
         isResizing = false;
+        currentHandle = null;
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
-        
-        // Save panel size
-        const currentSize = chatPanel.style.maxWidth;
-        if (currentSize) {
-            localStorage.setItem('chatPanelSize', currentSize);
-        }
     }
 });
 

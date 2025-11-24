@@ -55,45 +55,47 @@
         </div>
 
         <!-- Разделитель для изменения размера -->
-        <div class="resize-handle" id="resizeHandle"></div>
+        <div class="resize-handle" id="resizeHandle1"></div>
 
-        <!-- Правая панель - Промпты -->
-        <div class="prompt-panel" id="promptPanel">
-            <div class="prompt-section">
-                <div class="panel-header">
-                    <h2>Инструкция клиента</h2>
-                    <div class="header-buttons">
-                        <button id="exportPrompt" class="btn-icon" title="Экспорт инструкции">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                                <path d="M8.5 1a.5.5 0 00-1 0v8.793L5.354 7.646a.5.5 0 10-.708.708l3 3a.5.5 0 00.708 0l3-3a.5.5 0 00-.708-.708L8.5 9.793V1z"/>
-                                <path d="M3 12v2a1 1 0 001 1h8a1 1 0 001-1v-2h1v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2h1z"/>
-                            </svg>
-                        </button>
-                    </div>
+        <!-- Средняя панель - Промпт клиента -->
+        <div class="prompt-panel" id="clientPromptPanel">
+            <div class="panel-header">
+                <h2>Инструкция клиента</h2>
+                <div class="header-buttons">
+                    <button id="exportPrompt" class="btn-icon" title="Экспорт инструкции">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M8.5 1a.5.5 0 00-1 0v8.793L5.354 7.646a.5.5 0 10-.708.708l3 3a.5.5 0 00.708 0l3-3a.5.5 0 00-.708-.708L8.5 9.793V1z"/>
+                            <path d="M3 12v2a1 1 0 001 1h8a1 1 0 001-1v-2h1v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2h1z"/>
+                        </svg>
+                    </button>
                 </div>
-                <textarea id="systemPrompt" class="prompt-editor" placeholder="Введите инструкцию для клиента...
+            </div>
+            <textarea id="systemPrompt" class="prompt-editor" placeholder="Введите инструкцию для клиента...
 
 Например:
 Вы — клиент, который общается с менеджером компании."></textarea>
-            </div>
-            
-            <div class="prompt-section">
-                <div class="panel-header">
-                    <h2>Инструкция оценщика</h2>
-                    <div class="header-buttons">
-                        <button id="exportRaterPrompt" class="btn-icon" title="Экспорт инструкции оценщика">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                                <path d="M8.5 1a.5.5 0 00-1 0v8.793L5.354 7.646a.5.5 0 10-.708.708l3 3a.5.5 0 00.708 0l3-3a.5.5 0 00-.708-.708L8.5 9.793V1z"/>
-                                <path d="M3 12v2a1 1 0 001 1h8a1 1 0 001-1v-2h1v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2h1z"/>
-                            </svg>
-                        </button>
-                    </div>
+        </div>
+
+        <!-- Разделитель для изменения размера -->
+        <div class="resize-handle" id="resizeHandle2"></div>
+
+        <!-- Правая панель - Промпт оценщика -->
+        <div class="prompt-panel" id="raterPromptPanel">
+            <div class="panel-header">
+                <h2>Инструкция оценщика</h2>
+                <div class="header-buttons">
+                    <button id="exportRaterPrompt" class="btn-icon" title="Экспорт инструкции оценщика">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M8.5 1a.5.5 0 00-1 0v8.793L5.354 7.646a.5.5 0 10-.708.708l3 3a.5.5 0 00.708 0l3-3a.5.5 0 00-.708-.708L8.5 9.793V1z"/>
+                            <path d="M3 12v2a1 1 0 001 1h8a1 1 0 001-1v-2h1v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2h1z"/>
+                        </svg>
+                    </button>
                 </div>
-                <textarea id="raterPrompt" class="prompt-editor" placeholder="Введите инструкцию для оценщика диалогов...
+            </div>
+            <textarea id="raterPrompt" class="prompt-editor" placeholder="Введите инструкцию для оценщика диалогов...
 
 Например:
 Оцените качество диалога по следующим критериям: вежливость, компетентность, решение проблемы."></textarea>
-            </div>
         </div>
     </div>
 
