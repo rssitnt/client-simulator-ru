@@ -172,9 +172,6 @@ body {
     background: #7F96FF;
 }
 
-.btn-rate:active {
-}
-
 .btn-rate:disabled {
     background: #555555;
     cursor: not-allowed;
@@ -225,9 +222,6 @@ body {
     position: relative;
     animation: slideIn 0.3s ease-out;
     transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.message:hover {
 }
 
 @keyframes slideIn {
