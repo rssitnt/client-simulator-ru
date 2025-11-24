@@ -218,11 +218,11 @@ body {
     align-items: center;
     margin-top: 6px;
     font-size: 11px;
-    color: #888;
+    color: #cccccc;
 }
 
 .message-time {
-    opacity: 0.7;
+    opacity: 1;
 }
 
 .message-actions {
@@ -239,7 +239,7 @@ body {
 .btn-copy {
     background: none;
     border: none;
-    color: #888;
+    color: #cccccc;
     cursor: pointer;
     padding: 2px 6px;
     border-radius: 3px;
@@ -249,7 +249,7 @@ body {
 
 .btn-copy:hover {
     background: rgba(255, 255, 255, 0.1);
-    color: #ccc;
+    color: #ffffff;
 }
 
 .message.user {
@@ -404,7 +404,7 @@ body {
 }
 
 .prompt-editor:focus {
-    background: #141414;
+    background: #0F0F0F;
 }
 
 .prompt-editor::placeholder {
