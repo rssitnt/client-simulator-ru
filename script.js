@@ -1,6 +1,7 @@
 // n8n Webhook Configuration
 const WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/1f0629dc-22be-496b-bf2b-2d7090578a3c';
 const RATE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/client-simulator-rate';
+const SETTINGS_WEBHOOK_URL = ''; // ВСТАВЬТЕ СЮДА URL ВАШЕГО НОВОГО ВЕБХУКА ДЛЯ НАСТРОЕК
 
 // DOM Elements
 const chatMessages = document.getElementById('chatMessages');
@@ -36,6 +37,69 @@ if (typeof marked !== 'undefined') {
         }
     });
 }
+
+// Debounce function to limit API calls
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// Load prompts from Server (or localStorage as fallback)
+async function loadPrompts() {
+    if (SETTINGS_WEBHOOK_URL) {
+        try {
+            const response = await fetch(SETTINGS_WEBHOOK_URL, { method: 'GET' });
+            if (response.ok) {
+                const data = await response.json();
+                
+                // Expecting { "client_prompt": "...", "rater_prompt": "..." }
+                if (data.client_prompt) {
+                    systemPromptInput.value = data.client_prompt;
+                    localStorage.setItem('systemPrompt', data.client_prompt);
+                }
+                if (data.rater_prompt) {
+                    raterPromptInput.value = data.rater_prompt;
+                    localStorage.setItem('raterPrompt', data.rater_prompt);
+                }
+                console.log('Prompts loaded from server');
+                return;
+            }
+        } catch (e) {
+            console.warn('Failed to load from server, using localStorage:', e);
+        }
+    }
+    
+    // Fallback to localStorage
+    loadSavedData();
+}
+
+// Save prompts to Server
+const savePromptsToServer = debounce(async () => {
+    if (!SETTINGS_WEBHOOK_URL) return;
+
+    const payload = {
+        client_prompt: systemPromptInput.value,
+        rater_prompt: raterPromptInput.value
+    };
+
+    try {
+        await fetch(SETTINGS_WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        console.log('Prompts saved to server');
+    } catch (e) {
+        console.error('Failed to save prompts to server:', e);
+    }
+}, 2000); // Save after 2 seconds of no typing
 
 // Load saved data from localStorage
 function loadSavedData() {
@@ -457,21 +521,19 @@ async function rateChat() {
 }
 
 // Auto-save prompt on change (with debounce)
-let saveTimeout;
 systemPromptInput.addEventListener('input', () => {
-    clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(() => {
-        localStorage.setItem('systemPrompt', systemPromptInput.value);
-    }, 1000);
+    // Local save (immediate)
+    localStorage.setItem('systemPrompt', systemPromptInput.value);
+    // Server save (debounced)
+    savePromptsToServer();
 });
 
 // Auto-save rater prompt on change (with debounce)
-let saveRaterTimeout;
 raterPromptInput.addEventListener('input', () => {
-    clearTimeout(saveRaterTimeout);
-    saveRaterTimeout = setTimeout(() => {
-        localStorage.setItem('raterPrompt', raterPromptInput.value);
-    }, 1000);
+    // Local save (immediate)
+    localStorage.setItem('raterPrompt', raterPromptInput.value);
+    // Server save (debounced)
+    savePromptsToServer();
 });
 
 // Resize panels functionality
@@ -637,7 +699,7 @@ if (window.innerWidth <= 1024) {
 }
 
 // Initialize
-loadSavedData();
+loadPrompts();
 initSpeechRecognition();
 userInput.focus();
 autoResizeTextarea(userInput); // Установить начальную высоту
