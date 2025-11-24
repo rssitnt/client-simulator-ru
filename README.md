@@ -82,6 +82,6 @@ npx http-server -p 3001
 ## Webhook URL
 
 ```
-https://n8n-api.tradicia-k.ru/webhook-test/1f0629dc-22be-496b-bf2b-2d7090578a3c
+https://n8n-api.tradicia-k.ru/webhook/1f0629dc-22be-496b-bf2b-2d7090578a3c
 ```
 
