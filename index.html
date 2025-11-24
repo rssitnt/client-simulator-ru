@@ -32,7 +32,6 @@
             <div class="panel-header">
                 <h2>Чат</h2>
                 <div class="header-buttons">
-                    <button id="rateChat" class="btn-rate" title="Оценить диалог">Оценить диалог</button>
                     <button id="clearChat" class="btn-icon" title="Очистить чат">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                             <path d="M5.5 5.5A.5.5 0 016 6v6a.5.5 0 01-1 0V6a.5.5 0 01.5-.5zm2.5 0a.5.5 0 01.5.5v6a.5.5 0 01-1 0V6a.5.5 0 01.5-.5zm3 .5a.5.5 0 00-1 0v6a.5.5 0 001 0V6z"/>
@@ -52,6 +51,11 @@
                 <div class="input-wrapper">
                     <textarea id="userInput" placeholder=""></textarea>
                     <div class="input-actions">
+                        <button id="rateChat" class="btn-input-action" title="Оценить диалог">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                            </svg>
+                        </button>
                         <button id="aiAssistBtn" class="btn-input-action" title="Сгенерировать ответ (AI)">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>

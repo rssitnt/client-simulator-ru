@@ -572,8 +572,7 @@ async function rateChat() {
     
     // Disable button while processing
     rateChatBtn.disabled = true;
-    const originalText = rateChatBtn.textContent;
-    rateChatBtn.textContent = 'Оценка...';
+    rateChatBtn.classList.add('loading');
     
     // Show loading indicator
     const loadingMsg = addMessage('', 'loading');
@@ -655,14 +654,14 @@ async function rateChat() {
         addMessage(errorMessage, 'error', false);
     } finally {
         rateChatBtn.disabled = false;
-        rateChatBtn.textContent = originalText;
+        rateChatBtn.classList.remove('loading');
     }
 }
 
 // Auto-save prompt on change (with debounce)
 systemPromptInput.addEventListener('input', () => {
     // Local save (immediate)
-    localStorage.setItem('systemPrompt', systemPromptInput.value);
+        localStorage.setItem('systemPrompt', systemPromptInput.value);
     // Server save (debounced)
     savePromptsToServer();
 });
