@@ -22,7 +22,7 @@ body {
 
 .resize-handle {
     width: 8px;
-    background: #555555;
+    background: #0F0F0F;
     cursor: col-resize;
     position: relative;
     transition: background 0.2s;
@@ -44,26 +44,17 @@ body {
     cursor: col-resize;
 }
 
-/* Визуальный индикатор (три точки) */
+/* Визуальный индикатор (три точки) - скрыт */
 .resize-handle::after {
-    content: '⋮';
-    font-size: 20px;
-    color: #888888;
-    position: relative;
-    z-index: 1;
-    pointer-events: none;
+    content: '';
 }
 
 .resize-handle:hover {
-    background: #7F96FF;
-}
-
-.resize-handle:hover::after {
-    color: #fff;
+    background: #1a1a1a;
 }
 
 .resize-handle:active {
-    background: #99AAFF;
+    background: #252525;
 }
 
 .chat-panel {
@@ -112,19 +103,6 @@ body {
     padding: 0 8px;
 }
 
-.btn-save {
-    padding: 8px 16px;
-    background: #252525;
-    border: 1px solid #333333;
-    color: #e0e0e0;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 13px;
-    transition: all 0.2s;
-    height: 32px;
-    display: flex;
-    align-items: center;
-}
 
 .btn-icon {
     padding: 8px;
@@ -141,7 +119,7 @@ body {
     width: 32px;
 }
 
-.btn-save:hover, .btn-icon:hover {
+.btn-icon:hover {
     background: #333333;
     border-color: #444444;
 }
