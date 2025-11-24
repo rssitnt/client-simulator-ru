@@ -7,7 +7,6 @@ const userInput = document.getElementById('userInput');
 const sendBtn = document.getElementById('sendBtn');
 const clearChatBtn = document.getElementById('clearChat');
 const systemPromptInput = document.getElementById('systemPrompt');
-const savePromptBtn = document.getElementById('savePrompt');
 const exportChatBtn = document.getElementById('exportChat');
 const exportPromptBtn = document.getElementById('exportPrompt');
 
@@ -62,20 +61,7 @@ function autoResizeTextarea(textarea) {
     textarea.style.height = newHeight + 'px';
 }
 
-// Save prompt to localStorage
-function savePrompt() {
-    localStorage.setItem('systemPrompt', systemPromptInput.value);
-    
-    // Visual feedback
-    const originalText = savePromptBtn.textContent;
-    savePromptBtn.textContent = '✓ Сохранено';
-    savePromptBtn.style.background = '#2a5a3a';
-    
-    setTimeout(() => {
-        savePromptBtn.textContent = originalText;
-        savePromptBtn.style.background = '';
-    }, 1500);
-}
+// Prompt is auto-saved via input event listener below
 
 // Add message to chat
 function addMessage(content, role, isMarkdown = false) {
@@ -299,8 +285,6 @@ clearChatBtn.addEventListener('click', () => {
         clearChat();
     }
 });
-
-savePromptBtn.addEventListener('click', savePrompt);
 
 exportChatBtn.addEventListener('click', exportChat);
 
