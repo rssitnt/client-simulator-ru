@@ -9,6 +9,7 @@ const clearChatBtn = document.getElementById('clearChat');
 const systemPromptInput = document.getElementById('systemPrompt');
 const savePromptBtn = document.getElementById('savePrompt');
 const exportChatBtn = document.getElementById('exportChat');
+const exportPromptBtn = document.getElementById('exportPrompt');
 
 // State
 let conversationHistory = [];
@@ -303,6 +304,8 @@ savePromptBtn.addEventListener('click', savePrompt);
 
 exportChatBtn.addEventListener('click', exportChat);
 
+exportPromptBtn.addEventListener('click', exportPrompt);
+
 // Export chat
 function exportChat() {
     if (conversationHistory.length === 0) {
@@ -322,6 +325,26 @@ function exportChat() {
     const link = document.createElement('a');
     link.href = url;
     link.download = `chat-export-${Date.now()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+// Export prompt
+function exportPrompt() {
+    const promptText = systemPromptInput.value.trim();
+    
+    if (!promptText) {
+        alert('Инструкция пуста');
+        return;
+    }
+    
+    const dataBlob = new Blob([promptText], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `system-prompt-${Date.now()}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
