@@ -208,33 +208,30 @@ body {
 
 .btn-start {
     padding: 14px 28px;
-    background: linear-gradient(135deg, #7F96FF, #a855f7, #6366f1, #7F96FF);
-    background-size: 300% 300%;
-    background-position: 0% 50%;
+    background: linear-gradient(90deg, #7F96FF, #a855f7, #6366f1, #a855f7, #7F96FF);
+    background-size: 400% 100%;
     border: none;
     color: #fff;
     border-radius: 10px;
     cursor: pointer;
     font-size: 15px;
     font-weight: 500;
-    transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.5s ease-out;
+    transition: transform 0.35s ease-out, box-shadow 0.35s ease-out;
 }
 
 .btn-start:hover {
-    transform: scale(1.08);
-    box-shadow: 0 12px 35px rgba(127, 150, 255, 0.5);
-    animation: gradient-flow 2s ease-in-out infinite;
+    transform: scale(1.06);
+    box-shadow: 0 10px 30px rgba(127, 150, 255, 0.45);
+    animation: gradient-smooth 3s linear infinite;
 }
 
-@keyframes gradient-flow {
+@keyframes gradient-smooth {
     0% { background-position: 0% 50%; }
-    30% { background-position: 70% 50%; }
     100% { background-position: 100% 50%; }
 }
 
 .btn-start:active {
-    transform: scale(1.03);
-    transition: transform 0.1s ease-out;
+    transform: scale(1.02);
 }
 
 .message {
