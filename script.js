@@ -13,9 +13,7 @@ const systemPromptInput = document.getElementById('systemPrompt');
 const raterPromptInput = document.getElementById('raterPrompt');
 const managerPromptInput = document.getElementById('managerPrompt');
 const exportChatBtn = document.getElementById('exportChat');
-const exportPromptBtn = document.getElementById('exportPrompt');
-const exportRaterPromptBtn = document.getElementById('exportRaterPrompt');
-const exportManagerPromptBtn = document.getElementById('exportManagerPrompt');
+const exportCurrentPromptBtn = document.getElementById('exportCurrentPrompt');
 const voiceBtn = document.getElementById('voiceBtn');
 const aiAssistBtn = document.getElementById('aiAssistBtn');
 const rateChatBtn = document.getElementById('rateChat');
@@ -498,9 +496,7 @@ clearChatBtn.addEventListener('click', () => {
 
 exportChatBtn.addEventListener('click', exportChat);
 
-exportPromptBtn.addEventListener('click', exportPrompt);
-
-exportRaterPromptBtn.addEventListener('click', exportRaterPrompt);
+exportCurrentPromptBtn.addEventListener('click', exportCurrentPrompt);
 
 rateChatBtn.addEventListener('click', rateChat);
 
@@ -615,12 +611,31 @@ function exportChat() {
     URL.revokeObjectURL(url);
 }
 
-// Export prompt
-function exportPrompt() {
-    const promptText = systemPromptInput.value.trim();
+// Export current active prompt
+function exportCurrentPrompt() {
+    const activeTab = document.querySelector('.instruction-tab.active');
+    const instructionType = activeTab ? activeTab.dataset.instruction : 'client';
+    
+    let promptText = '';
+    let fileName = '';
+    
+    switch (instructionType) {
+        case 'client':
+            promptText = systemPromptInput.value.trim();
+            fileName = 'client-prompt';
+            break;
+        case 'manager':
+            promptText = managerPromptInput.value.trim();
+            fileName = 'manager-prompt';
+            break;
+        case 'rater':
+            promptText = raterPromptInput.value.trim();
+            fileName = 'rater-prompt';
+            break;
+    }
     
     if (!promptText) {
-        alert('Инструкция клиента пуста');
+        alert('Инструкция пуста');
         return;
     }
     
@@ -628,27 +643,7 @@ function exportPrompt() {
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `client-prompt-${Date.now()}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-}
-
-// Export rater prompt
-function exportRaterPrompt() {
-    const promptText = raterPromptInput.value.trim();
-    
-    if (!promptText) {
-        alert('Инструкция оценщика пуста');
-        return;
-    }
-    
-    const dataBlob = new Blob([promptText], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `rater-prompt-${Date.now()}.txt`;
+    link.download = `${fileName}-${Date.now()}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -771,91 +766,53 @@ managerPromptInput.addEventListener('input', () => {
     localStorage.setItem('managerPrompt', managerPromptInput.value);
 });
 
-// Export manager prompt
-exportManagerPromptBtn.addEventListener('click', exportManagerPrompt);
+// Instruction tabs functionality
+const instructionTabs = document.querySelectorAll('.instruction-tab');
+const instructionEditors = document.querySelectorAll('.instruction-editor');
 
-function exportManagerPrompt() {
-    const promptText = managerPromptInput.value.trim();
-    
-    if (!promptText) {
-        alert('Инструкция менеджера пуста');
-        return;
-    }
-    
-    const dataBlob = new Blob([promptText], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `manager-prompt-${Date.now()}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-}
+instructionTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+        const instructionType = tab.dataset.instruction;
+        
+        // Update active tab
+        instructionTabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        
+        // Update active editor
+        instructionEditors.forEach(editor => {
+            editor.classList.remove('active');
+            if (editor.dataset.instruction === instructionType) {
+                editor.classList.add('active');
+            }
+        });
+    });
+});
 
 // Resize panels functionality
 const resizeHandle1 = document.getElementById('resizeHandle1');
-const resizeHandle2 = document.getElementById('resizeHandle2');
-const resizeHandle3 = document.getElementById('resizeHandle3');
 const chatPanel = document.getElementById('chatPanel');
-const clientPromptPanel = document.getElementById('clientPromptPanel');
-const raterPromptPanel = document.getElementById('raterPromptPanel');
-const managerPromptPanel = document.getElementById('managerPromptPanel');
+const instructionsPanel = document.getElementById('instructionsPanel');
 let isResizing = false;
-let currentHandle = null;
-
-function startResize(handle) {
-    isResizing = true;
-    currentHandle = handle;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-}
 
 resizeHandle1.addEventListener('mousedown', (e) => {
-    startResize(1);
-});
-
-resizeHandle2.addEventListener('mousedown', (e) => {
-    startResize(2);
-});
-
-resizeHandle3.addEventListener('mousedown', (e) => {
-    startResize(3);
+    isResizing = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
 });
 
 document.addEventListener('mousemove', (e) => {
     if (!isResizing) return;
     
-    const container = document.querySelector('.container');
+    const container = document.querySelector('.panels-container');
     const containerWidth = container.offsetWidth;
     const mouseX = e.clientX;
     
-    if (currentHandle === 1) {
-        // Resizing between chat and client prompt
-        const chatWidth = (mouseX / containerWidth) * 100;
-        
-        if (chatWidth >= 15 && chatWidth <= 50) {
-            chatPanel.style.flex = `0 0 ${chatWidth}%`;
-        }
-    } else if (currentHandle === 2) {
-        // Resizing between client prompt and rater prompt
-        const chatWidth = parseFloat(chatPanel.style.flex?.split(' ')[2]) || 25;
-        const clientPromptStart = (chatWidth / 100) * containerWidth + 8;
-        const clientPromptWidth = ((mouseX - clientPromptStart) / containerWidth) * 100;
-        
-        if (clientPromptWidth >= 15 && clientPromptWidth <= 40) {
-            clientPromptPanel.style.flex = `0 0 ${clientPromptWidth}%`;
-        }
-    } else if (currentHandle === 3) {
-        // Resizing between rater prompt and manager prompt
-        const chatWidth = parseFloat(chatPanel.style.flex?.split(' ')[2]) || 25;
-        const clientWidth = parseFloat(clientPromptPanel.style.flex?.split(' ')[2]) || 25;
-        const raterPromptStart = ((chatWidth + clientWidth) / 100) * containerWidth + 16;
-        const raterPromptWidth = ((mouseX - raterPromptStart) / containerWidth) * 100;
-        
-        if (raterPromptWidth >= 15 && raterPromptWidth <= 40) {
-            raterPromptPanel.style.flex = `0 0 ${raterPromptWidth}%`;
-        }
+    // Resizing between chat and instructions
+    const chatWidth = (mouseX / containerWidth) * 100;
+    
+    if (chatWidth >= 30 && chatWidth <= 70) {
+        chatPanel.style.flex = `0 0 ${chatWidth}%`;
+        instructionsPanel.style.flex = `0 0 ${100 - chatWidth - 1}%`;
     }
 });
 

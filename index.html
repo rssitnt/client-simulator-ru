@@ -22,9 +22,7 @@
         <!-- Tabs для мобильных устройств -->
         <div class="mobile-tabs">
             <button class="mobile-tab active" data-panel="chat">Чат</button>
-            <button class="mobile-tab" data-panel="client">Клиент</button>
-            <button class="mobile-tab" data-panel="manager">Менеджер</button>
-            <button class="mobile-tab" data-panel="rater">Оценщик</button>
+            <button class="mobile-tab" data-panel="instructions">Инструкция</button>
         </div>
         
         <div class="panels-container">
@@ -91,12 +89,12 @@
         <!-- Разделитель для изменения размера -->
         <div class="resize-handle" id="resizeHandle1"></div>
 
-        <!-- Средняя панель - Промпт клиента -->
-        <div class="prompt-panel panel" id="clientPromptPanel" data-panel="client">
+        <!-- Панель инструкций с табами -->
+        <div class="prompt-panel panel" id="instructionsPanel" data-panel="instructions">
             <div class="panel-header">
-                <h2>Клиент</h2>
+                <h2>Инструкция</h2>
                 <div class="header-buttons">
-                    <button id="exportPrompt" class="btn-icon btn-export" title="Экспорт инструкции">
+                    <button id="exportCurrentPrompt" class="btn-icon btn-export" title="Экспорт инструкции">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                             <path d="M8.5 1a.5.5 0 00-1 0v8.793L5.354 7.646a.5.5 0 10-.708.708l3 3a.5.5 0 00.708 0l3-3a.5.5 0 00-.708-.708L8.5 9.793V1z"/>
                             <path d="M3 12v2a1 1 0 001 1h8a1 1 0 001-1v-2h1v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2h1z"/>
@@ -104,53 +102,20 @@
                     </button>
                 </div>
             </div>
-            <textarea id="systemPrompt" class="prompt-editor" placeholder="Введите инструкцию для клиента...
-
-Например:
-Вы — клиент, который общается с менеджером компании."></textarea>
-        </div>
-
-        <!-- Разделитель для изменения размера -->
-        <div class="resize-handle" id="resizeHandle2"></div>
-
-        <!-- Панель - Промпт оценщика -->
-        <div class="prompt-panel panel" id="raterPromptPanel" data-panel="rater">
-            <div class="panel-header">
-                <h2>Оценщик</h2>
-                <div class="header-buttons">
-                    <button id="exportRaterPrompt" class="btn-icon btn-export" title="Экспорт инструкции оценщика">
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M8.5 1a.5.5 0 00-1 0v8.793L5.354 7.646a.5.5 0 10-.708.708l3 3a.5.5 0 00.708 0l3-3a.5.5 0 00-.708-.708L8.5 9.793V1z"/>
-                            <path d="M3 12v2a1 1 0 001 1h8a1 1 0 001-1v-2h1v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2h1z"/>
-                        </svg>
-                    </button>
-                </div>
+            
+            <!-- Табы для переключения между инструкциями -->
+            <div class="instruction-tabs">
+                <button class="instruction-tab active" data-instruction="client">Клиент</button>
+                <button class="instruction-tab" data-instruction="manager">Менеджер</button>
+                <button class="instruction-tab" data-instruction="rater">Оценщик</button>
             </div>
-            <textarea id="raterPrompt" class="prompt-editor" placeholder="Введите инструкцию для оценщика диалогов...
-
-Например:
-Оцените качество диалога по следующим критериям: вежливость, компетентность, решение проблемы."></textarea>
-        </div>
-
-        <!-- Разделитель для изменения размера -->
-        <div class="resize-handle" id="resizeHandle3"></div>
-
-        <!-- Панель - Промпт менеджера -->
-        <div class="prompt-panel panel" id="managerPromptPanel" data-panel="manager">
-            <div class="panel-header">
-                <h2>Менеджер</h2>
-                <div class="header-buttons">
-                    <button id="exportManagerPrompt" class="btn-icon btn-export" title="Экспорт инструкции менеджера">
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M8.5 1a.5.5 0 00-1 0v8.793L5.354 7.646a.5.5 0 10-.708.708l3 3a.5.5 0 00.708 0l3-3a.5.5 0 00-.708-.708L8.5 9.793V1z"/>
-                            <path d="M3 12v2a1 1 0 001 1h8a1 1 0 001-1v-2h1v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2h1z"/>
-                        </svg>
-                    </button>
-                </div>
+            
+            <!-- Контент инструкций -->
+            <div class="instruction-content">
+                <textarea id="systemPrompt" class="prompt-editor instruction-editor active" data-instruction="client" placeholder="Введите инструкцию для симулятора клиента..."></textarea>
+                <textarea id="managerPrompt" class="prompt-editor instruction-editor" data-instruction="manager" placeholder="Введите инструкцию для ИИ-ассистента менеджера..."></textarea>
+                <textarea id="raterPrompt" class="prompt-editor instruction-editor" data-instruction="rater" placeholder="Введите инструкцию для оценщика диалогов..."></textarea>
             </div>
-            <textarea id="managerPrompt" class="prompt-editor" placeholder="Введите инструкцию для ИИ-симулятора менеджера...
-
-Это промпт, который используется при нажатии на кнопку генерации ответа (🤖)."></textarea>
         </div>
         </div>
     </div>

@@ -542,6 +542,53 @@ body {
     opacity: 0.5;
 }
 
+/* Instruction tabs */
+.instruction-tabs {
+    display: flex;
+    gap: 0;
+    padding: 0 16px;
+    background: #0F0F0F;
+    border-bottom: 1px solid #252525;
+    flex-shrink: 0;
+}
+
+.instruction-tab {
+    padding: 10px 16px;
+    background: transparent;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+}
+
+.instruction-tab:hover {
+    color: #ccc;
+}
+
+.instruction-tab.active {
+    color: #7F96FF;
+    border-bottom-color: #7F96FF;
+}
+
+.instruction-content {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+}
+
+.instruction-editor {
+    display: none;
+}
+
+.instruction-editor.active {
+    display: block;
+    flex: 1;
+}
+
 .prompt-editor {
     flex: 1;
     padding: 16px 20px;
