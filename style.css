@@ -323,9 +323,16 @@ body {
     flex-shrink: 0;
 }
 
+.input-wrapper {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
 #userInput {
     flex: 1;
-    padding: 12px;
+    padding: 8px 40px 8px 12px;
     background: #1f1f1f;
     border: 1px solid #333333;
     border-radius: 6px;
@@ -335,10 +342,12 @@ body {
     resize: none;
     outline: none;
     transition: border-color 0.2s, height 0.1s ease;
-    min-height: 44px;
+    min-height: 26px;
     max-height: 300px;
     overflow-y: auto;
     line-height: 1.4;
+    box-sizing: border-box;
+    width: 100%;
 }
 
 #userInput:focus {
@@ -348,6 +357,43 @@ body {
 
 #userInput::placeholder {
     color: #777;
+}
+
+.btn-voice-inline {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: none;
+    border: none;
+    color: #888888;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+.btn-voice-inline:hover {
+    color: #cccccc;
+}
+
+.btn-voice-inline.recording {
+    color: #ff4444;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
 }
 
 .btn-send {
@@ -364,6 +410,7 @@ body {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    box-sizing: border-box;
 }
 
 .btn-send svg {

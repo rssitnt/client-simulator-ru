@@ -9,6 +9,7 @@ const clearChatBtn = document.getElementById('clearChat');
 const systemPromptInput = document.getElementById('systemPrompt');
 const exportChatBtn = document.getElementById('exportChat');
 const exportPromptBtn = document.getElementById('exportPrompt');
+const voiceBtn = document.getElementById('voiceBtn');
 
 // State
 let conversationHistory = [];
@@ -394,8 +395,89 @@ document.addEventListener('mouseup', () => {
     }
 });
 
+// Speech Recognition
+let recognition = null;
+let isRecording = false;
+
+// Initialize Speech Recognition
+function initSpeechRecognition() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+        voiceBtn.style.display = 'none';
+        return;
+    }
+    
+    recognition = new SpeechRecognition();
+    recognition.lang = 'ru-RU';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    
+    recognition.onstart = () => {
+        isRecording = true;
+        voiceBtn.classList.add('recording');
+        userInput.placeholder = 'Говорите...';
+        userInput.style.paddingRight = '40px';
+    };
+    
+    recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        const currentText = userInput.value;
+        userInput.value = currentText + (currentText ? ' ' : '') + transcript;
+        autoResizeTextarea(userInput);
+    };
+    
+    recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        if (event.error === 'no-speech') {
+            userInput.placeholder = 'Введите сообщение...';
+        } else if (event.error === 'not-allowed') {
+            alert('Доступ к микрофону запрещён. Разрешите доступ в настройках браузера.');
+        }
+        stopRecording();
+    };
+    
+    recognition.onend = () => {
+        stopRecording();
+    };
+}
+
+function startRecording() {
+    if (!recognition) {
+        alert('Распознавание речи не поддерживается в вашем браузере');
+        return;
+    }
+    
+    try {
+        recognition.start();
+    } catch (error) {
+        console.error('Error starting recognition:', error);
+        stopRecording();
+    }
+}
+
+function stopRecording() {
+    if (recognition && isRecording) {
+        recognition.stop();
+    }
+    isRecording = false;
+    voiceBtn.classList.remove('recording');
+    userInput.placeholder = 'Введите сообщение...';
+    userInput.style.paddingRight = '';
+}
+
+// Voice button event
+voiceBtn.addEventListener('click', () => {
+    if (isRecording) {
+        stopRecording();
+    } else {
+        startRecording();
+    }
+});
+
 // Initialize
 loadSavedData();
+initSpeechRecognition();
 userInput.focus();
 autoResizeTextarea(userInput); // Установить начальную высоту
 
