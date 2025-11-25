@@ -776,8 +776,11 @@ managerPromptInput.addEventListener('input', () => {
     localStorage.setItem('managerPrompt', managerPromptInput.value);
 });
 
-// Drag and drop txt files into prompt fields
+// Drag and drop files into prompt fields
 function setupDragAndDrop(textarea, storageKey) {
+    // Supported text file extensions
+    const textExtensions = ['.txt', '.md', '.json', '.xml', '.csv', '.html', '.htm', '.rtf', '.log'];
+    
     textarea.addEventListener('dragover', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -798,7 +801,26 @@ function setupDragAndDrop(textarea, storageKey) {
         const files = e.dataTransfer.files;
         if (files.length > 0) {
             const file = files[0];
-            if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+            const fileName = file.name.toLowerCase();
+            
+            // Check for .docx (Word)
+            if (fileName.endsWith('.docx')) {
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    try {
+                        const arrayBuffer = event.target.result;
+                        const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+                        textarea.value = result.value;
+                        localStorage.setItem(storageKey, textarea.value);
+                    } catch (err) {
+                        console.error('Error reading .docx:', err);
+                        alert('Ошибка чтения .docx файла');
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            }
+            // Check for text-based files
+            else if (file.type.startsWith('text/') || textExtensions.some(ext => fileName.endsWith(ext))) {
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     textarea.value = event.target.result;
@@ -806,7 +828,7 @@ function setupDragAndDrop(textarea, storageKey) {
                 };
                 reader.readAsText(file, 'UTF-8');
             } else {
-                alert('Пожалуйста, перетащите .txt файл');
+                alert('Поддерживаемые форматы: .txt, .md, .docx, .json, .xml, .csv, .html, .rtf');
             }
         }
     });
