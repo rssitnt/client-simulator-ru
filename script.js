@@ -781,22 +781,19 @@ function setupDragAndDrop(textarea, storageKey) {
     textarea.addEventListener('dragover', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        textarea.style.borderColor = '#7F96FF';
-        textarea.style.background = '#1a1a2e';
+        textarea.classList.add('drag-over');
     });
     
     textarea.addEventListener('dragleave', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        textarea.style.borderColor = '#333333';
-        textarea.style.background = '#1a1a1a';
+        textarea.classList.remove('drag-over');
     });
     
     textarea.addEventListener('drop', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        textarea.style.borderColor = '#333333';
-        textarea.style.background = '#1a1a1a';
+        textarea.classList.remove('drag-over');
         
         const files = e.dataTransfer.files;
         if (files.length > 0) {
@@ -806,7 +803,6 @@ function setupDragAndDrop(textarea, storageKey) {
                 reader.onload = (event) => {
                     textarea.value = event.target.result;
                     localStorage.setItem(storageKey, textarea.value);
-                    autoResizeTextarea(textarea);
                 };
                 reader.readAsText(file, 'UTF-8');
             } else {

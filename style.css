@@ -617,6 +617,11 @@ body {
     display: none;
 }
 
+.prompt-editor.drag-over {
+    border: 2px dashed #7F96FF !important;
+    background: #1a1a2e !important;
+}
+
 
 /* Responsive design */
 @media (max-width: 1024px) {
