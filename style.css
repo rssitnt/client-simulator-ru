@@ -761,14 +761,7 @@ body {
 .manager-name-container {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-left: 16px;
-}
-
-.manager-name-container label {
-    color: #888;
-    font-size: 13px;
-    font-weight: 400;
+    flex: 1;
 }
 
 .manager-name-container input {
