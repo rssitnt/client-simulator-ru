@@ -334,7 +334,14 @@ async function copyToClipboard(text, button) {
 function clearChat() {
     conversationHistory = [];
     lastRating = null;
-    chatMessages.innerHTML = '';
+    chatMessages.innerHTML = `
+        <div id="startConversation" class="start-conversation">
+            <button id="startBtn" class="btn-start">Начать диалог</button>
+        </div>
+    `;
+    // Re-attach event listener to new button
+    const newStartBtn = document.getElementById('startBtn');
+    newStartBtn.addEventListener('click', startConversationHandler);
 }
 
 // Send message to n8n webhook
@@ -471,8 +478,6 @@ userInput.addEventListener('input', () => {
 clearChatBtn.addEventListener('click', () => {
     if (confirm('Очистить весь чат?')) {
         clearChat();
-        // Show start button again
-        startConversation.style.display = 'flex';
     }
 });
 
@@ -483,11 +488,13 @@ exportCurrentPromptBtn.addEventListener('click', exportCurrentPrompt);
 rateChatBtn.addEventListener('click', rateChat);
 
 // Start conversation button
-startBtn.addEventListener('click', async () => {
+// Start conversation handler
+async function startConversationHandler() {
     const greetingMessage = 'Здравствуйте. Вас приветствует Кирилл, менеджер ГК "Традиция". Чем могу помочь?';
     
     // Hide start button
-    startConversation.style.display = 'none';
+    const startDiv = document.getElementById('startConversation');
+    if (startDiv) startDiv.style.display = 'none';
     
     // Add greeting as user message
     addMessage(greetingMessage, 'user', false);
@@ -554,7 +561,9 @@ startBtn.addEventListener('click', async () => {
         loadingMsg.remove();
         addMessage(`Ошибка: ${error.message}`, 'error', false);
     }
-});
+}
+
+startBtn.addEventListener('click', startConversationHandler);
 
 // Export chat
 function exportChat() {
