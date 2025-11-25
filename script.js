@@ -567,7 +567,7 @@ function exportChat() {
     let chatText = '';
     
     conversationHistory.forEach((msg, index) => {
-        const role = msg.role === 'user' ? 'Клиент' : 'Менеджер';
+        const role = msg.role === 'user' ? 'Менеджер' : 'Клиент';
         chatText += `${role}: ${msg.content}`;
         
         // Добавляем пустую строку между сообщениями, но не после последнего
@@ -650,7 +650,7 @@ async function rateChat() {
         // Format dialog as text
         let dialogText = '';
         conversationHistory.forEach((msg) => {
-            const role = msg.role === 'user' ? 'Клиент' : 'Менеджер';
+            const role = msg.role === 'user' ? 'Менеджер' : 'Клиент';
             dialogText += `${role}: ${msg.content}\n\n`;
         });
         
@@ -897,7 +897,7 @@ async function generateAIResponse() {
         // Format conversation history for the prompt
         let dialogText = '';
         conversationHistory.forEach((msg) => {
-            const role = msg.role === 'user' ? 'Клиент' : 'Менеджер';
+            const role = msg.role === 'user' ? 'Менеджер' : 'Клиент';
             dialogText += `${role}: ${msg.content}\n\n`;
         });
         
