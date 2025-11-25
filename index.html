@@ -20,6 +20,16 @@
     <link rel="shortcut icon" href="favicon/favicon.ico">
 </head>
 <body>
+    <!-- Модальное окно для ввода имени -->
+    <div id="nameModal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Добро пожаловать!</h3>
+            <p>Введите ваше имя для начала работы:</p>
+            <input type="text" id="modalNameInput" placeholder="Например: Кирилл" maxlength="50" autofocus>
+            <button id="modalNameSubmit" class="btn-modal-submit">Продолжить</button>
+        </div>
+    </div>
+
     <div class="container">
         <!-- Tabs для мобильных устройств -->
         <div class="mobile-tabs">
@@ -32,6 +42,10 @@
         <div class="chat-panel panel" id="chatPanel" data-panel="chat">
             <div class="panel-header">
                 <h2>Чат</h2>
+                <div class="manager-name-container">
+                    <label for="managerName">Имя:</label>
+                    <input type="text" id="managerName" placeholder="Имя менеджера" maxlength="50">
+                </div>
                 <div class="header-buttons">
                     <button id="clearChat" class="btn-icon btn-export" title="Очистить чат">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">

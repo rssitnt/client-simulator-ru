@@ -30,6 +30,10 @@ const aiAssistBtn = document.getElementById('aiAssistBtn');
 const rateChatBtn = document.getElementById('rateChat');
 const startBtn = document.getElementById('startBtn');
 const startConversation = document.getElementById('startConversation');
+const managerNameInput = document.getElementById('managerName');
+const nameModal = document.getElementById('nameModal');
+const modalNameInput = document.getElementById('modalNameInput');
+const modalNameSubmit = document.getElementById('modalNameSubmit');
 
 // Default Manager Prompt Template
 const DEFAULT_MANAGER_PROMPT = `Ты — профессиональный менеджер по продажам навесного оборудования (гидромолоты, гидробуры, ковши, ножницы, сваерезки, вибропогружатели) компании "Традиция-К".
@@ -254,6 +258,7 @@ function loadSavedData() {
     const savedPrompt = localStorage.getItem('systemPrompt');
     const savedRaterPrompt = localStorage.getItem('raterPrompt');
     const savedManagerPrompt = localStorage.getItem('managerPrompt');
+    const savedManagerName = localStorage.getItem('managerName');
     
     if (savedPrompt) {
         systemPromptInput.value = savedPrompt;
@@ -269,7 +274,69 @@ function loadSavedData() {
     } else {
         managerPromptInput.value = DEFAULT_MANAGER_PROMPT;
     }
+    
+    // Load manager name or show modal
+    if (savedManagerName) {
+        managerNameInput.value = savedManagerName;
+    } else {
+        // Show modal to ask for name
+        showNameModal();
+    }
 }
+
+// Show name modal
+function showNameModal() {
+    nameModal.classList.add('active');
+    setTimeout(() => {
+        modalNameInput.focus();
+    }, 100);
+}
+
+// Hide name modal
+function hideNameModal() {
+    nameModal.classList.remove('active');
+}
+
+// Get manager name
+function getManagerName() {
+    return managerNameInput.value.trim() || 'менеджер';
+}
+
+// Save manager name
+function saveManagerName(name) {
+    localStorage.setItem('managerName', name);
+    managerNameInput.value = name;
+}
+
+// Modal submit handler
+modalNameSubmit.addEventListener('click', () => {
+    const name = modalNameInput.value.trim();
+    if (name) {
+        saveManagerName(name);
+        hideNameModal();
+    } else {
+        modalNameInput.focus();
+        modalNameInput.style.borderColor = '#ff5555';
+        setTimeout(() => {
+            modalNameInput.style.borderColor = '';
+        }, 1000);
+    }
+});
+
+// Modal input enter key handler
+modalNameInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        modalNameSubmit.click();
+    }
+});
+
+// Manager name input change handler
+managerNameInput.addEventListener('input', () => {
+    const name = managerNameInput.value.trim();
+    if (name) {
+        localStorage.setItem('managerName', name);
+    }
+});
 
 // Auto-resize textarea
 function autoResizeTextarea(textarea) {
@@ -508,7 +575,8 @@ rateChatBtn.addEventListener('click', rateChat);
 // Start conversation button
 // Start conversation handler
 async function startConversationHandler() {
-    const greetingMessage = 'Здравствуйте. Вас приветствует Кирилл, менеджер ГК "Традиция". Чем могу помочь?';
+    const managerName = getManagerName();
+    const greetingMessage = `Здравствуйте. Вас приветствует ${managerName}, менеджер ГК "Традиция". Чем могу помочь?`;
     
     // Hide start button
     const startDiv = document.getElementById('startConversation');
