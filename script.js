@@ -922,10 +922,15 @@ async function generateAIResponse() {
     console.log('Starting AI generation...');
     
     try {
+        // Get last message from conversation (client's message)
+        const lastMessage = conversationHistory.length > 0 
+            ? conversationHistory[conversationHistory.length - 1].content 
+            : '';
+        
         // Prepare request body (history is handled by n8n Simple Memory via sessionId)
         const requestBody = {
             systemPrompt: managerPromptInput.value.trim() || DEFAULT_MANAGER_PROMPT,
-            userMessage: 'Сгенерируй следующий ответ менеджера',
+            userMessage: lastMessage,
             sessionId: managerSessionId
         };
         
