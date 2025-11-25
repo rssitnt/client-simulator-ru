@@ -105,7 +105,14 @@
 
         <!-- Панель инструкций с табами -->
         <div class="prompt-panel panel" id="instructionsPanel" data-panel="instructions">
-            <div class="panel-header">
+            <div class="panel-header" style="justify-content: space-between;">
+                <!-- Табы для переключения между инструкциями -->
+                <div class="instruction-tabs" style="background: transparent; padding: 0; border: none;">
+                    <button class="instruction-tab active" data-instruction="client">Клиент</button>
+                    <button class="instruction-tab" data-instruction="manager">Менеджер</button>
+                    <button class="instruction-tab" data-instruction="rater">Оценщик</button>
+                </div>
+                
                 <div class="header-buttons">
                     <button id="exportCurrentPrompt" class="btn-icon btn-export" title="Экспорт инструкции">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -114,13 +121,6 @@
                         </svg>
                     </button>
                 </div>
-            </div>
-            
-            <!-- Табы для переключения между инструкциями -->
-            <div class="instruction-tabs">
-                <button class="instruction-tab active" data-instruction="client">Клиент</button>
-                <button class="instruction-tab" data-instruction="manager">Менеджер</button>
-                <button class="instruction-tab" data-instruction="rater">Оценщик</button>
             </div>
             
             <!-- Контент инструкций -->
