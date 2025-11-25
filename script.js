@@ -776,6 +776,51 @@ managerPromptInput.addEventListener('input', () => {
     localStorage.setItem('managerPrompt', managerPromptInput.value);
 });
 
+// Drag and drop txt files into prompt fields
+function setupDragAndDrop(textarea, storageKey) {
+    textarea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        textarea.style.borderColor = '#7F96FF';
+        textarea.style.background = '#1a1a2e';
+    });
+    
+    textarea.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        textarea.style.borderColor = '#333333';
+        textarea.style.background = '#1a1a1a';
+    });
+    
+    textarea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        textarea.style.borderColor = '#333333';
+        textarea.style.background = '#1a1a1a';
+        
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            const file = files[0];
+            if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    textarea.value = event.target.result;
+                    localStorage.setItem(storageKey, textarea.value);
+                    autoResizeTextarea(textarea);
+                };
+                reader.readAsText(file, 'UTF-8');
+            } else {
+                alert('Пожалуйста, перетащите .txt файл');
+            }
+        }
+    });
+}
+
+// Setup drag and drop for all prompt fields
+setupDragAndDrop(systemPromptInput, 'systemPrompt');
+setupDragAndDrop(raterPromptInput, 'raterPrompt');
+setupDragAndDrop(managerPromptInput, 'managerPrompt');
+
 // Instruction tabs functionality
 const instructionTabs = document.querySelectorAll('.instruction-tab');
 const instructionEditors = document.querySelectorAll('.instruction-editor');
