@@ -353,6 +353,7 @@ body {
     background: #F25F5C;
     color: #fff;
     max-width: 95%;
+    padding: 16px 24px;
 }
 
 .message.rating .message-content :not(pre) > code {
