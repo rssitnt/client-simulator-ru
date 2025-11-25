@@ -394,8 +394,7 @@ async function sendMessage() {
         const requestBody = {
             chatInput: userMessage,  // Основное поле для n8n Chat Trigger
             systemPrompt: systemPrompt || 'Вы — полезный ассистент.',
-            sessionId: sessionId,
-            history: conversationHistory.slice(0, -1) // История без последнего сообщения
+            sessionId: sessionId
         };
         
         // Make webhook request
@@ -524,8 +523,7 @@ async function startConversationHandler() {
         const requestBody = {
             chatInput: greetingMessage,
             systemPrompt: systemPrompt || 'Вы — клиент.',
-            sessionId: sessionId,
-            history: []
+            sessionId: sessionId
         };
         
         const response = await fetch(WEBHOOK_URL, {
@@ -917,17 +915,10 @@ async function generateAIResponse() {
     console.log('Starting AI generation...');
     
     try {
-        // Format conversation history for the prompt
-        let dialogText = '';
-        conversationHistory.forEach((msg) => {
-            const role = msg.role === 'user' ? 'Менеджер' : 'Клиент';
-            dialogText += `${role}: ${msg.content}\n\n`;
-        });
-        
-        // Prepare request body
+        // Prepare request body (history is handled by n8n Simple Memory via sessionId)
         const requestBody = {
             systemPrompt: managerPromptInput.value.trim() || DEFAULT_MANAGER_PROMPT,
-            userMessage: `История диалога:\n\n${dialogText}\n\nСгенерируй следующий ответ менеджера:`,
+            userMessage: 'Сгенерируй следующий ответ менеджера',
             sessionId: sessionId
         };
         
