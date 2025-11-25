@@ -601,8 +601,9 @@ body {
     outline: none;
     line-height: 1.6;
     transition: background 0.2s;
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #444 #0F0F0F;
 }
 
 .prompt-editor:focus {
@@ -614,7 +615,20 @@ body {
 }
 
 .prompt-editor::-webkit-scrollbar {
-    display: none;
+    width: 8px;
+}
+
+.prompt-editor::-webkit-scrollbar-track {
+    background: #0F0F0F;
+}
+
+.prompt-editor::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 4px;
+}
+
+.prompt-editor::-webkit-scrollbar-thumb:hover {
+    background: #555;
 }
 
 .prompt-editor.drag-over {
