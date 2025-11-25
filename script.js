@@ -4,12 +4,16 @@ const RATE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/rate-manager';
 const MANAGER_ASSISTANT_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/manager-simulator';
 const SETTINGS_WEBHOOK_URL = ''; // ВСТАВЬТЕ СЮДА URL ВАШЕГО НОВОГО ВЕБХУКА ДЛЯ НАСТРОЕК
 
-// Generate unique session ID for n8n memory
-let sessionId = localStorage.getItem('sessionId');
-if (!sessionId) {
-    sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    localStorage.setItem('sessionId', sessionId);
+// Generate unique session ID for n8n memory (different for each agent type)
+let baseSessionId = localStorage.getItem('sessionId');
+if (!baseSessionId) {
+    baseSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem('sessionId', baseSessionId);
 }
+// Separate session IDs for different agents to avoid memory mixing
+let clientSessionId = baseSessionId + '_client';
+let managerSessionId = baseSessionId + '_manager';
+let raterSessionId = baseSessionId + '_rater';
 
 // DOM Elements
 const chatMessages = document.getElementById('chatMessages');
@@ -342,8 +346,11 @@ function clearChat() {
     conversationHistory = [];
     lastRating = null;
     // Generate new session ID for fresh conversation
-    sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    localStorage.setItem('sessionId', sessionId);
+    baseSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem('sessionId', baseSessionId);
+    clientSessionId = baseSessionId + '_client';
+    managerSessionId = baseSessionId + '_manager';
+    raterSessionId = baseSessionId + '_rater';
     
     chatMessages.innerHTML = `
         <div id="startConversation" class="start-conversation">
@@ -394,7 +401,7 @@ async function sendMessage() {
         const requestBody = {
             chatInput: userMessage,  // Основное поле для n8n Chat Trigger
             systemPrompt: systemPrompt || 'Вы — полезный ассистент.',
-            sessionId: sessionId
+            sessionId: clientSessionId
         };
         
         // Make webhook request
@@ -523,7 +530,7 @@ async function startConversationHandler() {
         const requestBody = {
             chatInput: greetingMessage,
             systemPrompt: systemPrompt || 'Вы — клиент.',
-            sessionId: sessionId
+            sessionId: clientSessionId
         };
         
         const response = await fetch(WEBHOOK_URL, {
@@ -679,7 +686,7 @@ async function rateChat() {
         const requestBody = {
             dialog: dialogText.trim(),
             raterPrompt: raterPrompt,
-            sessionId: sessionId
+            sessionId: raterSessionId
         };
         
         // Make webhook request
@@ -919,7 +926,7 @@ async function generateAIResponse() {
         const requestBody = {
             systemPrompt: managerPromptInput.value.trim() || DEFAULT_MANAGER_PROMPT,
             userMessage: 'Сгенерируй следующий ответ менеджера',
-            sessionId: sessionId
+            sessionId: managerSessionId
         };
         
         console.log('Sending request to:', MANAGER_ASSISTANT_WEBHOOK_URL);
