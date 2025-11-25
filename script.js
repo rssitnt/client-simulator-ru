@@ -699,15 +699,15 @@ function exportCurrentPrompt() {
     switch (instructionType) {
         case 'client':
             promptText = systemPromptInput.value.trim();
-            fileName = 'client-prompt';
+            fileName = 'промпт-клиента';
             break;
         case 'manager':
             promptText = managerPromptInput.value.trim();
-            fileName = 'manager-prompt';
+            fileName = 'промпт-менеджера';
             break;
         case 'rater':
             promptText = raterPromptInput.value.trim();
-            fileName = 'rater-prompt';
+            fileName = 'промпт-оценщика';
             break;
     }
     
