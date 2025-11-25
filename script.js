@@ -300,24 +300,6 @@ function addMessage(content, role, isMarkdown = false) {
     
     messageDiv.appendChild(contentDiv);
     
-    // Footer with actions (no time)
-    if (role !== 'loading') {
-        const footerDiv = document.createElement('div');
-        footerDiv.className = 'message-footer';
-        
-        footerDiv.innerHTML = `
-            <div class="message-actions">
-                <button class="btn-copy" data-content="${escapeHtml(content)}">Копировать</button>
-            </div>
-        `;
-        
-        messageDiv.appendChild(footerDiv);
-        
-        // Add copy functionality
-        const copyBtn = footerDiv.querySelector('.btn-copy');
-        copyBtn.addEventListener('click', () => copyToClipboard(content, copyBtn));
-    }
-    
     chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
     return messageDiv;
