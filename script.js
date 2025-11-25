@@ -4,6 +4,13 @@ const RATE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/rate-manager';
 const MANAGER_ASSISTANT_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/manager-simulator';
 const SETTINGS_WEBHOOK_URL = ''; // ВСТАВЬТЕ СЮДА URL ВАШЕГО НОВОГО ВЕБХУКА ДЛЯ НАСТРОЕК
 
+// Generate unique session ID for n8n memory
+let sessionId = localStorage.getItem('sessionId');
+if (!sessionId) {
+    sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem('sessionId', sessionId);
+}
+
 // DOM Elements
 const chatMessages = document.getElementById('chatMessages');
 const userInput = document.getElementById('userInput');
@@ -334,6 +341,10 @@ async function copyToClipboard(text, button) {
 function clearChat() {
     conversationHistory = [];
     lastRating = null;
+    // Generate new session ID for fresh conversation
+    sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem('sessionId', sessionId);
+    
     chatMessages.innerHTML = `
         <div id="startConversation" class="start-conversation">
             <button id="startBtn" class="btn-start">Начать диалог</button>
@@ -383,6 +394,7 @@ async function sendMessage() {
         const requestBody = {
             chatInput: userMessage,  // Основное поле для n8n Chat Trigger
             systemPrompt: systemPrompt || 'Вы — полезный ассистент.',
+            sessionId: sessionId,
             history: conversationHistory.slice(0, -1) // История без последнего сообщения
         };
         
@@ -512,6 +524,7 @@ async function startConversationHandler() {
         const requestBody = {
             chatInput: greetingMessage,
             systemPrompt: systemPrompt || 'Вы — клиент.',
+            sessionId: sessionId,
             history: []
         };
         
@@ -667,7 +680,8 @@ async function rateChat() {
         
         const requestBody = {
             dialog: dialogText.trim(),
-            raterPrompt: raterPrompt
+            raterPrompt: raterPrompt,
+            sessionId: sessionId
         };
         
         // Make webhook request
@@ -913,7 +927,8 @@ async function generateAIResponse() {
         // Prepare request body
         const requestBody = {
             systemPrompt: managerPromptInput.value.trim() || DEFAULT_MANAGER_PROMPT,
-            userMessage: `История диалога:\n\n${dialogText}\n\nСгенерируй следующий ответ менеджера:`
+            userMessage: `История диалога:\n\n${dialogText}\n\nСгенерируй следующий ответ менеджера:`,
+            sessionId: sessionId
         };
         
         console.log('Sending request to:', MANAGER_ASSISTANT_WEBHOOK_URL);
