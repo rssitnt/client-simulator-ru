@@ -776,6 +776,14 @@ managerPromptInput.addEventListener('input', () => {
     localStorage.setItem('managerPrompt', managerPromptInput.value);
 });
 
+// Set textarea value with undo support
+function setTextWithUndo(textarea, text) {
+    textarea.focus();
+    textarea.select();
+    // execCommand supports undo history
+    document.execCommand('insertText', false, text);
+}
+
 // Drag and drop files into prompt fields
 function setupDragAndDrop(textarea, storageKey) {
     // Supported text file extensions
@@ -810,7 +818,7 @@ function setupDragAndDrop(textarea, storageKey) {
                     try {
                         const arrayBuffer = event.target.result;
                         const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
-                        textarea.value = result.value;
+                        setTextWithUndo(textarea, result.value);
                         localStorage.setItem(storageKey, textarea.value);
                     } catch (err) {
                         console.error('Error reading .docx:', err);
@@ -823,7 +831,7 @@ function setupDragAndDrop(textarea, storageKey) {
             else if (file.type.startsWith('text/') || textExtensions.some(ext => fileName.endsWith(ext))) {
                 const reader = new FileReader();
                 reader.onload = (event) => {
-                    textarea.value = event.target.result;
+                    setTextWithUndo(textarea, event.target.result);
                     localStorage.setItem(storageKey, textarea.value);
                 };
                 reader.readAsText(file, 'UTF-8');
