@@ -312,6 +312,23 @@ const savePromptsToServer = debounce(async () => {
 }, 2000); // Save after 2 seconds of no typing
 
 // Load saved data from localStorage
+// Remove Turndown escape characters from markdown
+function unescapeMarkdown(text) {
+    if (!text) return text;
+    return text
+        .replace(/\\#/g, '#')
+        .replace(/\\\*/g, '*')
+        .replace(/\\-/g, '-')
+        .replace(/\\_/g, '_')
+        .replace(/\\`/g, '`')
+        .replace(/\\\[/g, '[')
+        .replace(/\\\]/g, ']')
+        .replace(/\\\(/g, '(')
+        .replace(/\\\)/g, ')')
+        .replace(/\\>/g, '>')
+        .replace(/\\!/g, '!');
+}
+
 function loadSavedData() {
     const savedPrompt = localStorage.getItem('systemPrompt');
     const savedRaterPrompt = localStorage.getItem('raterPrompt');
@@ -319,16 +336,30 @@ function loadSavedData() {
     const savedManagerName = localStorage.getItem('managerName');
     
     if (savedPrompt) {
-        systemPromptInput.value = savedPrompt;
+        // Clean up any escaped markdown from previous Turndown usage
+        const cleanedPrompt = unescapeMarkdown(savedPrompt);
+        systemPromptInput.value = cleanedPrompt;
+        // Save cleaned version back
+        if (cleanedPrompt !== savedPrompt) {
+            localStorage.setItem('systemPrompt', cleanedPrompt);
+        }
     }
     
     if (savedRaterPrompt) {
-        raterPromptInput.value = savedRaterPrompt;
+        const cleanedRaterPrompt = unescapeMarkdown(savedRaterPrompt);
+        raterPromptInput.value = cleanedRaterPrompt;
+        if (cleanedRaterPrompt !== savedRaterPrompt) {
+            localStorage.setItem('raterPrompt', cleanedRaterPrompt);
+        }
     }
     
     // Load manager prompt or use default
     if (savedManagerPrompt) {
-        managerPromptInput.value = savedManagerPrompt;
+        const cleanedManagerPrompt = unescapeMarkdown(savedManagerPrompt);
+        managerPromptInput.value = cleanedManagerPrompt;
+        if (cleanedManagerPrompt !== savedManagerPrompt) {
+            localStorage.setItem('managerPrompt', cleanedManagerPrompt);
+        }
     } else {
         managerPromptInput.value = DEFAULT_MANAGER_PROMPT;
     }
