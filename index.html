@@ -11,6 +11,9 @@
     <link rel="stylesheet" href="style.css">
     <!-- Mammoth.js for .docx support -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <!-- docx.js for exporting to .docx -->
+    <script src="https://unpkg.com/docx@7.1.0/build/index.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     
     <!-- Favicon -->
     <link rel="apple-touch-icon" sizes="180x180" href="favicon/apple-touch-icon.png">
@@ -51,12 +54,19 @@
                             <path fill-rule="evenodd" d="M14.5 3a1 1 0 01-1 1H13v9a2 2 0 01-2 2H5a2 2 0 01-2-2V4h-.5a1 1 0 01-1-1V2a1 1 0 011-1H6a1 1 0 011-1h2a1 1 0 011 1h3.5a1 1 0 011 1v1zM4.118 4L4 4.059V13a1 1 0 001 1h6a1 1 0 001-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
                         </svg>
                     </button>
-                    <button id="exportChat" class="btn-icon btn-export" title="Экспорт диалога">
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M8.5 1a.5.5 0 00-1 0v8.793L5.354 7.646a.5.5 0 10-.708.708l3 3a.5.5 0 00.708 0l3-3a.5.5 0 00-.708-.708L8.5 9.793V1z"/>
-                            <path d="M3 12v2a1 1 0 001 1h8a1 1 0 001-1v-2h1v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2h1z"/>
-                        </svg>
-                    </button>
+                    <div style="position: relative;">
+                        <button id="exportChat" class="btn-icon btn-export" title="Экспорт диалога">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M8.5 1a.5.5 0 00-1 0v8.793L5.354 7.646a.5.5 0 10-.708.708l3 3a.5.5 0 00.708 0l3-3a.5.5 0 00-.708-.708L8.5 9.793V1z"/>
+                                <path d="M3 12v2a1 1 0 001 1h8a1 1 0 001-1v-2h1v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2h1z"/>
+                            </svg>
+                        </button>
+                        <div id="exportMenu" class="dropdown-menu">
+                            <button class="dropdown-item" data-format="txt">TXT</button>
+                            <button class="dropdown-item" data-format="docx">DOCX</button>
+                            <button class="dropdown-item" data-format="rtf">RTF</button>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div id="chatMessages" class="chat-messages">

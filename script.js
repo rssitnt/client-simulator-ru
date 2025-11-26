@@ -223,6 +223,21 @@ function debounce(func, wait) {
     };
 }
 
+// Toggle chat input state
+function toggleInputState(enabled) {
+    userInput.disabled = !enabled;
+    sendBtn.disabled = !enabled;
+    voiceBtn.disabled = !enabled;
+    aiAssistBtn.disabled = !enabled;
+    
+    if (enabled) {
+        userInput.classList.remove('disabled');
+        // Restore placeholder if needed, or keep as is
+    } else {
+        userInput.classList.add('disabled');
+    }
+}
+
 // Load prompts from Server (or localStorage as fallback)
 async function loadPrompts() {
     if (SETTINGS_WEBHOOK_URL) {
@@ -453,6 +468,7 @@ async function copyToClipboard(text, button) {
 function clearChat() {
     conversationHistory = [];
     lastRating = null;
+    toggleInputState(true); // Разблокируем ввод при очистке
     // Generate new session ID for fresh conversation
     baseSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     localStorage.setItem('sessionId', baseSessionId);
@@ -615,7 +631,25 @@ clearChatBtn.addEventListener('click', () => {
     }
 });
 
-exportChatBtn.addEventListener('click', exportChat);
+exportChatBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const menu = document.getElementById('exportMenu');
+    if (menu) menu.classList.toggle('show');
+});
+
+// Close dropdown when clicking outside
+document.addEventListener('click', () => {
+    const menu = document.getElementById('exportMenu');
+    if (menu) menu.classList.remove('show');
+});
+
+// Handle export format selection
+document.querySelectorAll('.dropdown-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+        const format = e.target.dataset.format;
+        exportChat(format);
+    });
+});
 
 exportCurrentPromptBtn.addEventListener('click', exportCurrentPrompt);
 
@@ -632,6 +666,7 @@ async function startConversationHandler() {
     raterSessionId = baseSessionId + '_rater';
     conversationHistory = [];
     lastRating = null;
+    toggleInputState(true); // Разблокируем ввод для нового диалога
     
     // Hide start button
     const startDiv = document.getElementById('startConversation');
@@ -701,40 +736,131 @@ async function startConversationHandler() {
 startBtn.addEventListener('click', startConversationHandler);
 
 // Export chat
-function exportChat() {
+function exportChat(format = 'txt') {
     if (conversationHistory.length === 0) {
         alert('Нет сообщений для экспорта');
         return;
     }
+
+    const messages = conversationHistory.map(msg => ({
+        role: msg.role === 'user' ? 'Менеджер' : 'Клиент',
+        content: msg.content
+    }));
     
-    // Формируем текст диалога
+    if (lastRating) {
+        messages.push({
+            role: 'ОЦЕНКА ДИАЛОГА',
+            content: lastRating
+        });
+    }
+
+    const filename = `диалог ${new Date().toLocaleString().replace(/[:.]/g, '-')}`;
+
+    if (format === 'txt') {
+        exportToTxt(messages, filename);
+    } else if (format === 'docx') {
+        exportToDocx(messages, filename);
+    } else if (format === 'rtf') {
+        exportToRtf(messages, filename);
+    }
+}
+
+function exportToTxt(messages, filename) {
     let chatText = '';
-    
-    conversationHistory.forEach((msg, index) => {
-        const role = msg.role === 'user' ? 'Менеджер' : 'Клиент';
-        chatText += `${role}: ${msg.content}`;
-        
-        // Добавляем пустую строку между сообщениями, но не после последнего
-        if (index < conversationHistory.length - 1) {
-            chatText += '\n\n';
-        }
+    messages.forEach((msg, index) => {
+        chatText += `${msg.role}: ${msg.content}`;
+        if (index < messages.length - 1) chatText += '\n\n';
     });
     
-    // Добавляем оценку диалога, если она есть
-    if (lastRating) {
-        chatText += '\n\n\n========================================\nОЦЕНКА ДИАЛОГА:\n========================================\n\n';
-        chatText += lastRating;
+    const blob = new Blob([chatText], { type: 'text/plain;charset=utf-8' });
+    saveAs(blob, filename + '.txt');
+}
+
+function exportToDocx(messages, filename) {
+    if (typeof docx === 'undefined') {
+        alert('Библиотека docx не загружена');
+        return;
     }
+    const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = docx;
     
-    const dataBlob = new Blob([chatText], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `диалог ${Date.now()}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    const children = [];
+    
+    // Title
+    children.push(new Paragraph({
+        text: "История диалога",
+        heading: HeadingLevel.HEADING_1,
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 400 }
+    }));
+    
+    messages.forEach(msg => {
+        const isRating = msg.role === 'ОЦЕНКА ДИАЛОГА';
+        
+        // Role
+        children.push(new Paragraph({
+            children: [
+                new TextRun({
+                    text: msg.role + ":",
+                    bold: true,
+                    size: 24, // 12pt
+                    color: isRating ? "FF9900" : "2E74B5"
+                })
+            ],
+            spacing: { before: 200, after: 100 }
+        }));
+        
+        // Content
+        children.push(new Paragraph({
+            children: [
+                new TextRun({
+                    text: msg.content,
+                    size: 24 // 12pt
+                })
+            ],
+            spacing: { after: 200 }
+        }));
+    });
+
+    const doc = new Document({
+        sections: [{
+            properties: {},
+            children: children
+        }]
+    });
+
+    Packer.toBlob(doc).then(blob => {
+        saveAs(blob, filename + ".docx");
+    });
+}
+
+function exportToRtf(messages, filename) {
+    function escapeRtf(str) {
+        if (!str) return '';
+        return str.replace(/\\/g, '\\\\')
+                  .replace(/{/g, '\\{')
+                  .replace(/}/g, '\\}')
+                  .replace(/\n/g, '\\par ')
+                  .replace(/[^\x00-\x7F]/g, c => `\\u${c.charCodeAt(0)}?`);
+    }
+
+    // Header
+    let rtf = "{\\rtf1\\ansi\\deff0\\nouicompat{\\fonttbl{\\f0\\fnil\\fcharset0 Calibri;}{\\f1\\fnil\\fcharset204 Segoe UI;}}\n";
+    rtf += "{\\colortbl ;\\red46\\green116\\blue181;\\red255\\green153\\blue0;}\n";
+    rtf += "\\viewkind4\\uc1\n\\pard\\sa200\\sl276\\slmult1\\qc\\b\\f1\\fs32 История диалога\\par\n\\pard\\sa200\\sl276\\slmult1\\par\n";
+    
+    messages.forEach(msg => {
+        const isRating = msg.role === 'ОЦЕНКА ДИАЛОГА';
+        const colorIndex = isRating ? 2 : 1; 
+        
+        rtf += `\\pard\\sa200\\sl276\\slmult1\\cf${colorIndex}\\b\\fs24 ${escapeRtf(msg.role)}:\\cf0\\b0\\par\n`;
+        rtf += `\\pard\\sa200\\sl276\\slmult1 ${escapeRtf(msg.content)}\\par\n`;
+        rtf += "\\par\n";
+    });
+    
+    rtf += "}";
+    
+    const blob = new Blob([rtf], { type: "application/rtf" });
+    saveAs(blob, filename + ".rtf");
 }
 
 // Export current active prompt
@@ -788,10 +914,7 @@ async function rateChat() {
     rateChatBtn.classList.add('loading');
     
     // Disable inputs
-    userInput.disabled = true;
-    aiAssistBtn.disabled = true;
-    voiceBtn.disabled = true;
-    sendBtn.disabled = true;
+    toggleInputState(false);
     
     // Show loading indicator
     const loadingMsg = addMessage('', 'loading');
@@ -880,12 +1003,12 @@ async function rateChat() {
         rateChatBtn.disabled = false;
         rateChatBtn.classList.remove('loading');
         
-        // Enable inputs
-        userInput.disabled = false;
-        aiAssistBtn.disabled = false;
-        voiceBtn.disabled = false;
-        sendBtn.disabled = false;
-        userInput.focus();
+        // Если оценка не была получена (ошибка), разблокируем ввод
+        // Если оценка получена успешно (lastRating установлен), оставляем ввод заблокированным
+        if (!lastRating) {
+            toggleInputState(true);
+            userInput.focus();
+        }
     }
 }
 
