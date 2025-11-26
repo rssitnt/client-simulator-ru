@@ -708,7 +708,7 @@ body {
     flex: 1;
 }
 
-/* Edit-only mode: только редактор */
+/* Edit mode: только редактор (textarea) */
 .prompt-wrapper .prompt-editor {
     display: block;
     flex: 1;
@@ -719,30 +719,19 @@ body {
     display: none;
 }
 
-/* Preview mode: split-view - редактор слева, preview справа */
-.prompt-wrapper.preview-mode {
-    flex-direction: row;
-}
-
+/* Preview/WYSIWYG mode: только preview (contenteditable) */
 .prompt-wrapper.preview-mode .prompt-editor {
-    display: block;
-    flex: 1;
-    width: 50%;
-    border-right: 1px solid #333;
+    display: none;
 }
 
 .prompt-wrapper.preview-mode .prompt-preview {
     display: block;
     flex: 1;
-    width: 50%;
+    width: 100%;
+    cursor: text;
 }
 
-/* Разделитель между редактором и preview */
-.prompt-wrapper.preview-mode .prompt-editor {
-    border-right: 1px solid #2a2a2a;
-}
-
-/* Markdown Preview Styles */
+/* Markdown Preview Styles (WYSIWYG mode) */
 .prompt-preview {
     flex: 1;
     padding: 16px 20px;
@@ -753,6 +742,23 @@ body {
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: #444 #0F0F0F;
+    outline: none;
+    min-height: 100%;
+}
+
+/* WYSIWYG editing styles */
+.prompt-preview[contenteditable="true"] {
+    cursor: text;
+}
+
+.prompt-preview[contenteditable="true"]:focus {
+    background: #121212;
+}
+
+/* Selection styling in WYSIWYG */
+.prompt-preview::selection,
+.prompt-preview *::selection {
+    background: rgba(127, 150, 255, 0.3);
 }
 
 .prompt-preview::-webkit-scrollbar {

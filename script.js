@@ -190,6 +190,26 @@ if (typeof marked !== 'undefined') {
     });
 }
 
+// Configure Turndown (HTML to Markdown converter) for WYSIWYG editing
+let turndownService = null;
+if (typeof TurndownService !== 'undefined') {
+    turndownService = new TurndownService({
+        headingStyle: 'atx',
+        hr: '---',
+        bulletListMarker: '-',
+        codeBlockStyle: 'fenced',
+        emDelimiter: '*'
+    });
+    
+    // Custom rules for better markdown output
+    turndownService.addRule('strikethrough', {
+        filter: ['del', 's', 'strike'],
+        replacement: function (content) {
+            return '~~' + content + '~~';
+        }
+    });
+}
+
 // Debounce function to limit API calls
 function debounce(func, wait) {
     let timeout;
@@ -1032,36 +1052,89 @@ function updatePreview() {
     }
 }
 
-// Toggle preview mode
-// Toggle preview mode (split-view: editor + preview side by side)
+// Toggle preview mode (WYSIWYG: edit directly in formatted view)
 function togglePreviewMode() {
     const iconPreview = togglePreviewBtn.querySelector('.icon-preview');
     const iconEdit = togglePreviewBtn.querySelector('.icon-edit');
     
+    if (isPreviewMode) {
+        // Switching FROM preview mode TO edit mode
+        // First, sync any changes from WYSIWYG back to textarea
+        syncAllPreviewsToTextareas();
+    }
+    
     isPreviewMode = !isPreviewMode;
     
     if (isPreviewMode) {
-        // Enable split-view mode for all wrappers
+        // Enable WYSIWYG mode - show preview (contenteditable)
         document.querySelectorAll('.prompt-wrapper').forEach(wrapper => {
             wrapper.classList.add('preview-mode');
         });
         togglePreviewBtn.classList.add('active');
-        togglePreviewBtn.title = 'Скрыть preview';
+        togglePreviewBtn.title = 'Режим редактирования (код)';
         iconPreview.style.display = 'none';
         iconEdit.style.display = 'block';
         
-        // Update all previews
+        // Render markdown and make previews editable
         updateAllPreviews();
+        enableWYSIWYG();
     } else {
-        // Disable split-view mode - only editor visible
+        // Enable code edit mode - show textarea
         document.querySelectorAll('.prompt-wrapper').forEach(wrapper => {
             wrapper.classList.remove('preview-mode');
         });
         togglePreviewBtn.classList.remove('active');
-        togglePreviewBtn.title = 'Показать preview';
+        togglePreviewBtn.title = 'Режим Markdown (WYSIWYG)';
         iconPreview.style.display = 'block';
         iconEdit.style.display = 'none';
+        
+        // Disable WYSIWYG editing
+        disableWYSIWYG();
     }
+}
+
+// Enable WYSIWYG editing on preview elements
+function enableWYSIWYG() {
+    [systemPromptPreview, managerPromptPreview, raterPromptPreview].forEach(preview => {
+        preview.contentEditable = 'true';
+        preview.spellcheck = true;
+    });
+}
+
+// Disable WYSIWYG editing on preview elements
+function disableWYSIWYG() {
+    [systemPromptPreview, managerPromptPreview, raterPromptPreview].forEach(preview => {
+        preview.contentEditable = 'false';
+    });
+}
+
+// Convert HTML from preview back to Markdown and sync to textarea
+function syncPreviewToTextarea(previewElement, textareaElement, storageKey) {
+    if (!turndownService) {
+        console.warn('TurndownService not available');
+        return;
+    }
+    
+    const html = previewElement.innerHTML;
+    if (!html || html.includes('Промпт пустой...')) {
+        textareaElement.value = '';
+    } else {
+        const markdown = turndownService.turndown(html);
+        textareaElement.value = markdown;
+    }
+    
+    // Save to localStorage
+    localStorage.setItem(storageKey, textareaElement.value);
+    
+    // Trigger server save if needed
+    savePromptsToServer();
+}
+
+// Sync all previews to their respective textareas
+function syncAllPreviewsToTextareas() {
+    syncPreviewToTextarea(systemPromptPreview, systemPromptInput, 'systemPrompt');
+    syncPreviewToTextarea(managerPromptPreview, managerPromptInput, 'managerPrompt');
+    syncPreviewToTextarea(raterPromptPreview, raterPromptInput, 'raterPrompt');
 }
 
 // Update all preview contents
@@ -1078,27 +1151,51 @@ function updateAllPreviews() {
     }
 }
 
+// Debounced sync for WYSIWYG changes
+const debouncedSyncClient = debounce(() => {
+    syncPreviewToTextarea(systemPromptPreview, systemPromptInput, 'systemPrompt');
+}, 500);
+
+const debouncedSyncManager = debounce(() => {
+    syncPreviewToTextarea(managerPromptPreview, managerPromptInput, 'managerPrompt');
+}, 500);
+
+const debouncedSyncRater = debounce(() => {
+    syncPreviewToTextarea(raterPromptPreview, raterPromptInput, 'raterPrompt');
+}, 500);
+
 // Toggle preview button event
 togglePreviewBtn.addEventListener('click', togglePreviewMode);
 
-// Update preview on prompt text changes (for real-time preview)
-systemPromptInput.addEventListener('input', () => {
+// WYSIWYG input handlers - sync changes back to textarea
+systemPromptPreview.addEventListener('input', () => {
     if (isPreviewMode) {
-        systemPromptPreview.innerHTML = renderMarkdown(systemPromptInput.value);
+        debouncedSyncClient();
     }
 });
 
-managerPromptInput.addEventListener('input', () => {
+managerPromptPreview.addEventListener('input', () => {
     if (isPreviewMode) {
-        managerPromptPreview.innerHTML = renderMarkdown(managerPromptInput.value);
+        debouncedSyncManager();
     }
 });
 
-raterPromptInput.addEventListener('input', () => {
+raterPromptPreview.addEventListener('input', () => {
     if (isPreviewMode) {
-        raterPromptPreview.innerHTML = renderMarkdown(raterPromptInput.value);
+        debouncedSyncRater();
     }
 });
+
+// Handle paste in WYSIWYG - clean up HTML
+function handleWYSIWYGPaste(e) {
+    e.preventDefault();
+    const text = e.clipboardData.getData('text/plain');
+    document.execCommand('insertText', false, text);
+}
+
+systemPromptPreview.addEventListener('paste', handleWYSIWYGPaste);
+managerPromptPreview.addEventListener('paste', handleWYSIWYGPaste);
+raterPromptPreview.addEventListener('paste', handleWYSIWYGPaste);
 
 instructionTabs.forEach(tab => {
     tab.addEventListener('click', () => {
@@ -1380,8 +1477,16 @@ initSpeechRecognition();
 userInput.focus();
 autoResizeTextarea(userInput); // Установить начальную высоту
 
-// Initialize preview mode (default)
+// Initialize WYSIWYG preview mode (default)
 setTimeout(() => {
     updateAllPreviews();
+    enableWYSIWYG(); // Enable editing in preview mode
 }, 100);
+
+// Sync WYSIWYG changes before page unload
+window.addEventListener('beforeunload', () => {
+    if (isPreviewMode) {
+        syncAllPreviewsToTextareas();
+    }
+});
 
