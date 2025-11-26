@@ -594,6 +594,15 @@ rateChatBtn.addEventListener('click', rateChat);
 // Start conversation button
 // Start conversation handler
 async function startConversationHandler() {
+    // Generate new session IDs for fresh conversation
+    baseSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem('sessionId', baseSessionId);
+    clientSessionId = baseSessionId + '_client';
+    managerSessionId = baseSessionId + '_manager';
+    raterSessionId = baseSessionId + '_rater';
+    conversationHistory = [];
+    lastRating = null;
+    
     // Hide start button
     const startDiv = document.getElementById('startConversation');
     if (startDiv) startDiv.style.display = 'none';
