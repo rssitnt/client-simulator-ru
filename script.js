@@ -1929,18 +1929,10 @@ initSpeechRecognition();
 userInput.focus();
 autoResizeTextarea(userInput); // Установить начальную высоту
 
-// Initialize WYSIWYG preview mode (default)
+// Initialize preview mode (default)
 setTimeout(() => {
     updateAllPreviews();
-    enableWYSIWYG(); // Enable editing in preview mode
 }, 100);
-
-// Sync WYSIWYG changes before page unload
-window.addEventListener('beforeunload', () => {
-    if (isPreviewMode) {
-        syncAllPreviewsToTextareas();
-    }
-});
 
 // Setup drag and drop for preview elements (when in preview mode)
 setupDragAndDropForPreview(systemPromptPreview, systemPromptInput, 'systemPrompt');
