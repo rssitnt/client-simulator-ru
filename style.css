@@ -1217,6 +1217,21 @@ body {
     color: #fff;
 }
 
+.dropdown-item-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+}
+
+.dropdown-item-icon svg {
+    opacity: 0.8;
+}
+
+.dropdown-item-icon:hover svg {
+    opacity: 1;
+}
+
 .dropdown-divider {
     height: 1px;
     background: #444;

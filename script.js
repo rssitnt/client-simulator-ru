@@ -673,7 +673,8 @@ document.addEventListener('click', () => {
 // Handle export format selection (only for chat export menu)
 document.querySelectorAll('.dropdown-item[data-format]').forEach(item => {
     item.addEventListener('click', (e) => {
-        const format = e.target.dataset.format;
+        const btn = e.target.closest('.dropdown-item');
+        const format = btn ? btn.dataset.format : e.target.dataset.format;
         exportChat(format);
     });
 });
@@ -687,7 +688,8 @@ exportCurrentPromptBtn.addEventListener('click', (e) => {
 // Handle prompt export format selection
 document.querySelectorAll('.dropdown-item[data-prompt-format]').forEach(item => {
     item.addEventListener('click', (e) => {
-        const format = e.target.dataset.promptFormat;
+        const btn = e.target.closest('.dropdown-item');
+        const format = btn ? btn.dataset.promptFormat : e.target.dataset.promptFormat;
         exportCurrentPrompt(format);
     });
 });
