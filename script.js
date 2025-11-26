@@ -2094,8 +2094,15 @@ function applyFormat(action) {
                 selection.removeAllRanges();
                 selection.addRange(range);
             } else {
-                // Wrap selection in <code> tag
+                // Wrap selection in <code> tag only if there's selected text
                 const selection = window.getSelection();
+                const selectedText = selection.toString().trim();
+                
+                // Don't create empty code tags
+                if (!selectedText) {
+                    break;
+                }
+                
                 if (selection.rangeCount > 0) {
                     const range = selection.getRangeAt(0);
                     const code = document.createElement('code');
