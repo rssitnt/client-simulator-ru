@@ -670,8 +670,8 @@ document.addEventListener('click', () => {
     if (promptMenu) promptMenu.classList.remove('show');
 });
 
-// Handle export format selection
-document.querySelectorAll('.dropdown-item').forEach(item => {
+// Handle export format selection (only for chat export menu)
+document.querySelectorAll('.dropdown-item[data-format]').forEach(item => {
     item.addEventListener('click', (e) => {
         const format = e.target.dataset.format;
         exportChat(format);
