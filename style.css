@@ -692,9 +692,10 @@ body {
 
 /* Prompt wrapper for edit/preview modes */
 .prompt-wrapper {
-    flex-direction: column;
+    flex-direction: row;
     min-height: 0;
     position: relative;
+    gap: 0;
 }
 
 /* ВАЖНО: скрываем неактивные вкладки */
@@ -707,6 +708,7 @@ body {
     flex: 1;
 }
 
+/* Edit-only mode: только редактор */
 .prompt-wrapper .prompt-editor {
     display: block;
     flex: 1;
@@ -717,13 +719,27 @@ body {
     display: none;
 }
 
+/* Preview mode: split-view - редактор слева, preview справа */
+.prompt-wrapper.preview-mode {
+    flex-direction: row;
+}
+
 .prompt-wrapper.preview-mode .prompt-editor {
-    display: none;
+    display: block;
+    flex: 1;
+    width: 50%;
+    border-right: 1px solid #333;
 }
 
 .prompt-wrapper.preview-mode .prompt-preview {
     display: block;
     flex: 1;
+    width: 50%;
+}
+
+/* Разделитель между редактором и preview */
+.prompt-wrapper.preview-mode .prompt-editor {
+    border-right: 1px solid #2a2a2a;
 }
 
 /* Markdown Preview Styles */

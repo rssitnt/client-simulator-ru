@@ -1033,99 +1033,34 @@ function updatePreview() {
 }
 
 // Toggle preview mode
-// Get scroll percentage (0-1)
-function getScrollPercent(element) {
-    if (element.scrollHeight <= element.clientHeight) return 0;
-    return element.scrollTop / (element.scrollHeight - element.clientHeight);
-}
-
-// Set scroll to percentage (0-1)
-function setScrollPercent(element, percent) {
-    if (element.scrollHeight <= element.clientHeight) return;
-    element.scrollTop = percent * (element.scrollHeight - element.clientHeight);
-}
-
-// Get active prompt elements
-function getActivePromptElements() {
-    const activeWrapper = document.querySelector('.prompt-wrapper.instruction-editor.active');
-    if (!activeWrapper) return null;
-    
-    const instructionType = activeWrapper.dataset.instruction;
-    let textarea, preview;
-    
-    switch (instructionType) {
-        case 'client':
-            textarea = systemPromptInput;
-            preview = systemPromptPreview;
-            break;
-        case 'manager':
-            textarea = managerPromptInput;
-            preview = managerPromptPreview;
-            break;
-        case 'rater':
-            textarea = raterPromptInput;
-            preview = raterPromptPreview;
-            break;
-    }
-    
-    return { textarea, preview };
-}
-
+// Toggle preview mode (split-view: editor + preview side by side)
 function togglePreviewMode() {
     const iconPreview = togglePreviewBtn.querySelector('.icon-preview');
     const iconEdit = togglePreviewBtn.querySelector('.icon-edit');
     
-    // Get active elements and save scroll position before switching
-    const activeElements = getActivePromptElements();
-    let scrollPercent = 0;
-    
-    if (activeElements) {
-        if (isPreviewMode) {
-            // Switching from preview to edit - save preview scroll
-            scrollPercent = getScrollPercent(activeElements.preview);
-        } else {
-            // Switching from edit to preview - save textarea scroll
-            scrollPercent = getScrollPercent(activeElements.textarea);
-        }
-    }
-    
     isPreviewMode = !isPreviewMode;
     
     if (isPreviewMode) {
-        // Enable preview mode for all wrappers
+        // Enable split-view mode for all wrappers
         document.querySelectorAll('.prompt-wrapper').forEach(wrapper => {
             wrapper.classList.add('preview-mode');
         });
         togglePreviewBtn.classList.add('active');
-        togglePreviewBtn.title = 'Переключить на редактирование';
+        togglePreviewBtn.title = 'Скрыть preview';
         iconPreview.style.display = 'none';
         iconEdit.style.display = 'block';
         
         // Update all previews
         updateAllPreviews();
-        
-        // Restore scroll position in preview
-        if (activeElements) {
-            requestAnimationFrame(() => {
-                setScrollPercent(activeElements.preview, scrollPercent);
-            });
-        }
     } else {
-        // Disable preview mode
+        // Disable split-view mode - only editor visible
         document.querySelectorAll('.prompt-wrapper').forEach(wrapper => {
             wrapper.classList.remove('preview-mode');
         });
         togglePreviewBtn.classList.remove('active');
-        togglePreviewBtn.title = 'Переключить просмотр Markdown';
+        togglePreviewBtn.title = 'Показать preview';
         iconPreview.style.display = 'block';
         iconEdit.style.display = 'none';
-        
-        // Restore scroll position in textarea
-        if (activeElements) {
-            requestAnimationFrame(() => {
-                setScrollPercent(activeElements.textarea, scrollPercent);
-            });
-        }
     }
 }
 
