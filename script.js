@@ -171,22 +171,7 @@ const DEFAULT_MANAGER_PROMPT = `Ты — профессиональный мен
 let conversationHistory = [];
 let isProcessing = false;
 let lastRating = null; // Хранит последнюю оценку диалога
-let universalPromptAppendix = ''; // Текст из kniga_menedzhera.txt
-
-// Load universal prompt from file
-async function loadUniversalPrompt() {
-    try {
-        const response = await fetch('kniga_menedzhera.txt');
-        if (response.ok) {
-            universalPromptAppendix = await response.text();
-            console.log('Universal prompt loaded, length:', universalPromptAppendix.length);
-        } else {
-            console.warn('Failed to load kniga_menedzhera.txt');
-        }
-    } catch (e) {
-        console.error('Error loading kniga_menedzhera.txt:', e);
-    }
-}
+let isDialogRated = false; // Диалог уже оценён - блокировка ввода
 
 // Configure marked.js
 if (typeof marked !== 'undefined') {
@@ -252,6 +237,28 @@ function toggleInputState(enabled) {
     } else {
         userInput.classList.add('disabled');
     }
+}
+
+// Lock dialog input after rating
+function lockDialogInput() {
+    userInput.disabled = true;
+    sendBtn.disabled = true;
+    voiceBtn.disabled = true;
+    aiAssistBtn.disabled = true;
+    rateChatBtn.disabled = true;
+    userInput.placeholder = 'Диалог оценён. Нажмите "Очистить чат" для нового диалога.';
+    userInput.classList.add('disabled');
+}
+
+// Unlock dialog input
+function unlockDialogInput() {
+    userInput.disabled = false;
+    sendBtn.disabled = false;
+    voiceBtn.disabled = false;
+    aiAssistBtn.disabled = false;
+    rateChatBtn.disabled = false;
+    userInput.placeholder = '';
+    userInput.classList.remove('disabled');
 }
 
 // Load prompts from Server (or localStorage as fallback)
@@ -484,7 +491,8 @@ async function copyToClipboard(text, button) {
 function clearChat() {
     conversationHistory = [];
     lastRating = null;
-    toggleInputState(true); // Разблокируем ввод при очистке
+    isDialogRated = false; // Сбрасываем флаг оценки
+    unlockDialogInput(); // Разблокируем ввод при очистке
     // Generate new session ID for fresh conversation
     baseSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     localStorage.setItem('sessionId', baseSessionId);
@@ -506,7 +514,7 @@ function clearChat() {
 async function sendMessage() {
     const userMessage = userInput.value.trim();
     
-    if (!userMessage || isProcessing) {
+    if (!userMessage || isProcessing || isDialogRated) {
         return;
     }
     
@@ -546,7 +554,7 @@ async function sendMessage() {
         
         const requestBody = {
             chatInput: userMessage,  // Основное поле для n8n Chat Trigger
-            systemPrompt: (systemPrompt || 'Вы — полезный ассистент.') + (universalPromptAppendix ? '\n\n' + universalPromptAppendix : ''),
+            systemPrompt: systemPrompt || 'Вы — полезный ассистент.',
             dialogHistory: dialogHistory.trim(),
             sessionId: clientSessionId
         };
@@ -697,7 +705,7 @@ async function startConversationHandler() {
         
         const requestBody = {
             chatInput: '/start',  // Hidden command to start conversation
-            systemPrompt: (systemPrompt || 'Вы — клиент.') + (universalPromptAppendix ? '\n\n' + universalPromptAppendix : ''),
+            systemPrompt: systemPrompt || 'Вы — клиент.',
             dialogHistory: '',  // Empty for first message
             sessionId: clientSessionId
         };
@@ -952,7 +960,7 @@ async function rateChat() {
         
         const requestBody = {
             dialog: dialogText.trim(),
-            raterPrompt: raterPrompt + (universalPromptAppendix ? '\n\n' + universalPromptAppendix : ''),
+            raterPrompt: raterPrompt,
             sessionId: raterSessionId
         };
         
@@ -1002,6 +1010,10 @@ async function rateChat() {
         
         // Add rating as special rating message (centered, orange)
         addMessage(ratingMessage, 'rating', true);
+        
+        // Lock the dialog - no more input allowed
+        isDialogRated = true;
+        lockDialogInput();
         
     } catch (error) {
         console.error('Rating error:', error);
@@ -1551,6 +1563,10 @@ async function generateAIResponse() {
     console.log('generateAIResponse called');
     console.log('conversationHistory:', conversationHistory);
     
+    if (isDialogRated) {
+        return;
+    }
+    
     if (conversationHistory.length === 0) {
         alert('Нет истории диалога для генерации ответа. Сначала отправьте хотя бы одно сообщение.');
         return;
@@ -1582,7 +1598,7 @@ async function generateAIResponse() {
         // Prepare request body with full dialog history
         const managerName = getManagerName();
         const basePrompt = managerPromptInput.value.trim() || DEFAULT_MANAGER_PROMPT;
-        const fullPrompt = `Тебя зовут ${managerName}.\n\n${basePrompt}` + (universalPromptAppendix ? '\n\n' + universalPromptAppendix : '');
+        const fullPrompt = `Тебя зовут ${managerName}.\n\n${basePrompt}`;
         
         const requestBody = {
             systemPrompt: fullPrompt,
@@ -1696,7 +1712,6 @@ if (window.innerWidth <= 1024) {
 
 // Initialize
 loadPrompts();
-loadUniversalPrompt();
 initSpeechRecognition();
 userInput.focus();
 autoResizeTextarea(userInput); // Установить начальную высоту
