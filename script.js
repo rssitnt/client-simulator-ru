@@ -1700,16 +1700,40 @@ raterPromptPreview.addEventListener('input', () => {
     }
 });
 
-// Handle paste in WYSIWYG - clean up HTML
-function handleWYSIWYGPaste(e) {
+// Handle paste in WYSIWYG - render markdown
+function handleWYSIWYGPaste(e, textarea, previewElement) {
     e.preventDefault();
     const text = e.clipboardData.getData('text/plain');
-    document.execCommand('insertText', false, text);
+    
+    // Get current textarea value and append/replace with pasted text
+    const currentValue = textarea.value;
+    const newValue = currentValue ? currentValue + '\n\n' + text : text;
+    
+    // Update textarea
+    textarea.value = newValue;
+    
+    // Save to localStorage
+    const storageKey = textarea.id === 'systemPrompt' ? 'systemPrompt' : 
+                       textarea.id === 'managerPrompt' ? 'managerPrompt' : 'raterPrompt';
+    localStorage.setItem(storageKey, newValue);
+    
+    // Re-render preview
+    previewElement.innerHTML = renderMarkdown(newValue);
+    
+    // Apply syntax highlighting
+    if (typeof hljs !== 'undefined') {
+        previewElement.querySelectorAll('pre code').forEach((block) => {
+            hljs.highlightElement(block);
+        });
+    }
+    
+    // Scroll to bottom to show pasted content
+    previewElement.scrollTop = previewElement.scrollHeight;
 }
 
-systemPromptPreview.addEventListener('paste', handleWYSIWYGPaste);
-managerPromptPreview.addEventListener('paste', handleWYSIWYGPaste);
-raterPromptPreview.addEventListener('paste', handleWYSIWYGPaste);
+systemPromptPreview.addEventListener('paste', (e) => handleWYSIWYGPaste(e, systemPromptInput, systemPromptPreview));
+managerPromptPreview.addEventListener('paste', (e) => handleWYSIWYGPaste(e, managerPromptInput, managerPromptPreview));
+raterPromptPreview.addEventListener('paste', (e) => handleWYSIWYGPaste(e, raterPromptInput, raterPromptPreview));
 
 instructionTabs.forEach(tab => {
     tab.addEventListener('click', () => {
