@@ -365,12 +365,19 @@ function addMessage(content, role, isMarkdown = false) {
             </div>
         `;
     } else if (isMarkdown && typeof marked !== 'undefined') {
-        contentDiv.innerHTML = marked.parse(content);
-        // Apply syntax highlighting
-        if (typeof hljs !== 'undefined') {
-            contentDiv.querySelectorAll('pre code').forEach((block) => {
-                hljs.highlightElement(block);
-            });
+        try {
+            // marked.parse() for newer versions, marked() for older
+            const parsed = typeof marked.parse === 'function' ? marked.parse(content) : marked(content);
+            contentDiv.innerHTML = parsed;
+            // Apply syntax highlighting
+            if (typeof hljs !== 'undefined') {
+                contentDiv.querySelectorAll('pre code').forEach((block) => {
+                    hljs.highlightElement(block);
+                });
+            }
+        } catch (e) {
+            console.error('Markdown parse error:', e);
+            contentDiv.textContent = content;
         }
     } else {
         contentDiv.textContent = content;
@@ -465,9 +472,17 @@ async function sendMessage() {
         // Prepare request body
         const systemPrompt = systemPromptInput.value.trim();
         
+        // Format dialog history for context (exclude current message)
+        let dialogHistory = '';
+        conversationHistory.slice(0, -1).forEach((msg) => {
+            const role = msg.role === 'user' ? 'Менеджер' : 'Клиент';
+            dialogHistory += `${role}: ${msg.content}\n\n`;
+        });
+        
         const requestBody = {
             chatInput: userMessage,  // Основное поле для n8n Chat Trigger
             systemPrompt: systemPrompt || 'Вы — полезный ассистент.',
+            dialogHistory: dialogHistory.trim(),
             sessionId: clientSessionId
         };
         
@@ -598,6 +613,7 @@ async function startConversationHandler() {
         const requestBody = {
             chatInput: greetingMessage,
             systemPrompt: systemPrompt || 'Вы — клиент.',
+            dialogHistory: '',  // Empty for first message
             sessionId: clientSessionId
         };
         
