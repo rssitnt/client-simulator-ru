@@ -947,6 +947,40 @@ function exportPromptToTxt(text, filename) {
     saveAs(blob, filename + '.txt');
 }
 
+// Parse markdown inline formatting and return array of TextRuns
+function parseMarkdownInline(text, baseSize = 24) {
+    const runs = [];
+    // Regex to match **bold**, *italic*, or plain text
+    const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|([^*]+))/g;
+    let match;
+    
+    while ((match = regex.exec(text)) !== null) {
+        if (match[2]) {
+            // Bold text **...**
+            runs.push(new docx.TextRun({
+                text: match[2],
+                bold: true,
+                size: baseSize
+            }));
+        } else if (match[3]) {
+            // Italic text *...*
+            runs.push(new docx.TextRun({
+                text: match[3],
+                italics: true,
+                size: baseSize
+            }));
+        } else if (match[4]) {
+            // Plain text
+            runs.push(new docx.TextRun({
+                text: match[4],
+                size: baseSize
+            }));
+        }
+    }
+    
+    return runs.length > 0 ? runs : [new docx.TextRun({ text: text, size: baseSize })];
+}
+
 function exportPromptToDocx(text, filename, title) {
     if (typeof docx === 'undefined') {
         alert('Библиотека docx не загружена');
@@ -964,26 +998,68 @@ function exportPromptToDocx(text, filename, title) {
         spacing: { after: 400 }
     }));
     
-    // Split text by paragraphs and add
-    const paragraphs = text.split(/\n\n+/);
-    paragraphs.forEach(para => {
-        const lines = para.split('\n');
-        const textRuns = [];
+    // Split text by lines
+    const lines = text.split('\n');
+    
+    lines.forEach(line => {
+        const trimmedLine = line.trim();
         
-        lines.forEach((line, idx) => {
-            if (idx > 0) {
-                textRuns.push(new TextRun({ break: 1 }));
-            }
-            textRuns.push(new TextRun({
-                text: line,
-                size: 24 // 12pt
+        // Skip empty lines but add spacing
+        if (!trimmedLine) {
+            children.push(new Paragraph({ spacing: { after: 100 } }));
+            return;
+        }
+        
+        // Check for headers (## or **HEADER**)
+        const h2Match = trimmedLine.match(/^##\s+(.+)$/);
+        const h3Match = trimmedLine.match(/^###\s+(.+)$/);
+        const boldHeaderMatch = trimmedLine.match(/^\*\*([A-ZА-ЯЁ][A-ZА-ЯЁ\s\(\)«»\-:,0-9]+)\*\*$/);
+        
+        if (h2Match) {
+            children.push(new Paragraph({
+                text: h2Match[1],
+                heading: HeadingLevel.HEADING_2,
+                spacing: { before: 300, after: 150 }
             }));
-        });
-        
-        children.push(new Paragraph({
-            children: textRuns,
-            spacing: { after: 200 }
-        }));
+        } else if (h3Match) {
+            children.push(new Paragraph({
+                text: h3Match[1],
+                heading: HeadingLevel.HEADING_3,
+                spacing: { before: 200, after: 100 }
+            }));
+        } else if (boldHeaderMatch) {
+            // Bold uppercase text as header
+            children.push(new Paragraph({
+                children: [new TextRun({ text: boldHeaderMatch[1], bold: true, size: 26 })],
+                spacing: { before: 300, after: 150 }
+            }));
+        } else {
+            // Check for list items
+            const bulletMatch = trimmedLine.match(/^[-•]\s+(.+)$/);
+            const numberedMatch = trimmedLine.match(/^(\d+)\.\s+(.+)$/);
+            
+            if (bulletMatch) {
+                children.push(new Paragraph({
+                    children: parseMarkdownInline(bulletMatch[1]),
+                    bullet: { level: 0 },
+                    spacing: { after: 80 }
+                }));
+            } else if (numberedMatch) {
+                children.push(new Paragraph({
+                    children: [
+                        new TextRun({ text: numberedMatch[1] + '. ', size: 24 }),
+                        ...parseMarkdownInline(numberedMatch[2])
+                    ],
+                    spacing: { after: 80 }
+                }));
+            } else {
+                // Regular paragraph with inline formatting
+                children.push(new Paragraph({
+                    children: parseMarkdownInline(trimmedLine),
+                    spacing: { after: 120 }
+                }));
+            }
+        }
     });
 
     const doc = new Document({
@@ -999,21 +1075,65 @@ function exportPromptToDocx(text, filename, title) {
 }
 
 function exportPromptToRtf(text, filename, title) {
-    function escapeRtf(str) {
+    function escapeRtfChar(str) {
         if (!str) return '';
         return str.replace(/\\/g, '\\\\')
                   .replace(/{/g, '\\{')
                   .replace(/}/g, '\\}')
-                  .replace(/\n/g, '\\par ')
                   .replace(/[^\x00-\x7F]/g, c => `\\u${c.charCodeAt(0)}?`);
+    }
+    
+    // Parse markdown inline and return RTF formatted string
+    function parseMarkdownToRtf(line) {
+        let result = '';
+        const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|([^*]+))/g;
+        let match;
+        
+        while ((match = regex.exec(line)) !== null) {
+            if (match[2]) {
+                // Bold
+                result += '\\b ' + escapeRtfChar(match[2]) + '\\b0 ';
+            } else if (match[3]) {
+                // Italic
+                result += '\\i ' + escapeRtfChar(match[3]) + '\\i0 ';
+            } else if (match[4]) {
+                result += escapeRtfChar(match[4]);
+            }
+        }
+        
+        return result || escapeRtfChar(line);
     }
 
     // Header
     let rtf = "{\\rtf1\\ansi\\deff0\\nouicompat{\\fonttbl{\\f0\\fnil\\fcharset0 Calibri;}{\\f1\\fnil\\fcharset204 Segoe UI;}}\n";
     rtf += "{\\colortbl ;\\red46\\green116\\blue181;}\n";
-    rtf += "\\viewkind4\\uc1\n\\pard\\sa200\\sl276\\slmult1\\qc\\cf1\\b\\f1\\fs32 " + escapeRtf(title) + "\\cf0\\b0\\par\n\\pard\\sa200\\sl276\\slmult1\\par\n";
+    rtf += "\\viewkind4\\uc1\n\\pard\\sa200\\sl276\\slmult1\\qc\\cf1\\b\\f1\\fs32 " + escapeRtfChar(title) + "\\cf0\\b0\\par\n\\pard\\sa200\\sl276\\slmult1\\par\n";
     
-    rtf += `\\pard\\sa200\\sl276\\slmult1\\fs24 ${escapeRtf(text)}\\par\n`;
+    // Process each line
+    const lines = text.split('\n');
+    lines.forEach(line => {
+        const trimmedLine = line.trim();
+        
+        if (!trimmedLine) {
+            rtf += "\\par\n";
+            return;
+        }
+        
+        // Check for headers
+        const boldHeaderMatch = trimmedLine.match(/^\*\*([A-ZА-ЯЁ][A-ZА-ЯЁ\s\(\)«»\-:,0-9]+)\*\*$/);
+        const bulletMatch = trimmedLine.match(/^[-•]\s+(.+)$/);
+        const numberedMatch = trimmedLine.match(/^(\d+)\.\s+(.+)$/);
+        
+        if (boldHeaderMatch) {
+            rtf += "\\pard\\sa100\\sb200\\b\\fs26 " + escapeRtfChar(boldHeaderMatch[1]) + "\\b0\\fs24\\par\n";
+        } else if (bulletMatch) {
+            rtf += "\\pard\\fi-360\\li720\\sa50 \\bullet\\tab " + parseMarkdownToRtf(bulletMatch[1]) + "\\par\n";
+        } else if (numberedMatch) {
+            rtf += "\\pard\\fi-360\\li720\\sa50 " + numberedMatch[1] + ".\\tab " + parseMarkdownToRtf(numberedMatch[2]) + "\\par\n";
+        } else {
+            rtf += "\\pard\\sa100\\fs24 " + parseMarkdownToRtf(trimmedLine) + "\\par\n";
+        }
+    });
     
     rtf += "}";
     
