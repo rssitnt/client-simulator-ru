@@ -692,11 +692,19 @@ body {
 
 /* Prompt wrapper for edit/preview modes */
 .prompt-wrapper {
-    flex: 1;
-    display: flex;
     flex-direction: column;
     min-height: 0;
     position: relative;
+}
+
+/* ВАЖНО: скрываем неактивные вкладки */
+.prompt-wrapper.instruction-editor {
+    display: none;
+}
+
+.prompt-wrapper.instruction-editor.active {
+    display: flex;
+    flex: 1;
 }
 
 .prompt-wrapper .prompt-editor {
