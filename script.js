@@ -947,7 +947,7 @@ setupDragAndDrop(managerPromptInput, 'managerPrompt');
 const instructionTabs = document.querySelectorAll('.instruction-tab');
 const instructionEditors = document.querySelectorAll('.instruction-editor');
 const togglePreviewBtn = document.getElementById('togglePreviewBtn');
-let isPreviewMode = false;
+let isPreviewMode = true; // Preview mode включён по умолчанию
 
 // Preview elements
 const systemPromptPreview = document.getElementById('systemPromptPreview');
@@ -1378,4 +1378,9 @@ loadPrompts();
 initSpeechRecognition();
 userInput.focus();
 autoResizeTextarea(userInput); // Установить начальную высоту
+
+// Initialize preview mode (default)
+setTimeout(() => {
+    updateAllPreviews();
+}, 100);
 
