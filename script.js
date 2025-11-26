@@ -662,10 +662,12 @@ exportChatBtn.addEventListener('click', (e) => {
     if (menu) menu.classList.toggle('show');
 });
 
-// Close dropdown when clicking outside
+// Close dropdowns when clicking outside
 document.addEventListener('click', () => {
-    const menu = document.getElementById('exportMenu');
-    if (menu) menu.classList.remove('show');
+    const exportMenu = document.getElementById('exportMenu');
+    const promptMenu = document.getElementById('exportPromptMenu');
+    if (exportMenu) exportMenu.classList.remove('show');
+    if (promptMenu) promptMenu.classList.remove('show');
 });
 
 // Handle export format selection
@@ -676,7 +678,19 @@ document.querySelectorAll('.dropdown-item').forEach(item => {
     });
 });
 
-exportCurrentPromptBtn.addEventListener('click', exportCurrentPrompt);
+exportCurrentPromptBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const menu = document.getElementById('exportPromptMenu');
+    if (menu) menu.classList.toggle('show');
+});
+
+// Handle prompt export format selection
+document.querySelectorAll('.dropdown-item[data-prompt-format]').forEach(item => {
+    item.addEventListener('click', (e) => {
+        const format = e.target.dataset.promptFormat;
+        exportCurrentPrompt(format);
+    });
+});
 
 rateChatBtn.addEventListener('click', rateChat);
 
@@ -889,7 +903,7 @@ function exportToRtf(messages, filename) {
 }
 
 // Export current active prompt
-function exportCurrentPrompt() {
+function exportCurrentPrompt(format = 'txt') {
     const activeTab = document.querySelector('.instruction-tab.active');
     const instructionType = activeTab ? activeTab.dataset.instruction : 'client';
     
@@ -916,15 +930,95 @@ function exportCurrentPrompt() {
         return;
     }
     
-    const dataBlob = new Blob([promptText], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${fileName}-${Date.now()}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    const timestamp = new Date().toLocaleString().replace(/[:.]/g, '-');
+    const fullFileName = `${fileName} ${timestamp}`;
+    
+    if (format === 'txt') {
+        exportPromptToTxt(promptText, fullFileName);
+    } else if (format === 'docx') {
+        exportPromptToDocx(promptText, fullFileName, fileName);
+    } else if (format === 'rtf') {
+        exportPromptToRtf(promptText, fullFileName, fileName);
+    }
+}
+
+function exportPromptToTxt(text, filename) {
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    saveAs(blob, filename + '.txt');
+}
+
+function exportPromptToDocx(text, filename, title) {
+    if (typeof docx === 'undefined') {
+        alert('Библиотека docx не загружена');
+        return;
+    }
+    const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = docx;
+    
+    const children = [];
+    
+    // Title
+    children.push(new Paragraph({
+        text: title,
+        heading: HeadingLevel.HEADING_1,
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 400 }
+    }));
+    
+    // Split text by paragraphs and add
+    const paragraphs = text.split(/\n\n+/);
+    paragraphs.forEach(para => {
+        const lines = para.split('\n');
+        const textRuns = [];
+        
+        lines.forEach((line, idx) => {
+            if (idx > 0) {
+                textRuns.push(new TextRun({ break: 1 }));
+            }
+            textRuns.push(new TextRun({
+                text: line,
+                size: 24 // 12pt
+            }));
+        });
+        
+        children.push(new Paragraph({
+            children: textRuns,
+            spacing: { after: 200 }
+        }));
+    });
+
+    const doc = new Document({
+        sections: [{
+            properties: {},
+            children: children
+        }]
+    });
+
+    Packer.toBlob(doc).then(blob => {
+        saveAs(blob, filename + ".docx");
+    });
+}
+
+function exportPromptToRtf(text, filename, title) {
+    function escapeRtf(str) {
+        if (!str) return '';
+        return str.replace(/\\/g, '\\\\')
+                  .replace(/{/g, '\\{')
+                  .replace(/}/g, '\\}')
+                  .replace(/\n/g, '\\par ')
+                  .replace(/[^\x00-\x7F]/g, c => `\\u${c.charCodeAt(0)}?`);
+    }
+
+    // Header
+    let rtf = "{\\rtf1\\ansi\\deff0\\nouicompat{\\fonttbl{\\f0\\fnil\\fcharset0 Calibri;}{\\f1\\fnil\\fcharset204 Segoe UI;}}\n";
+    rtf += "{\\colortbl ;\\red46\\green116\\blue181;}\n";
+    rtf += "\\viewkind4\\uc1\n\\pard\\sa200\\sl276\\slmult1\\qc\\cf1\\b\\f1\\fs32 " + escapeRtf(title) + "\\cf0\\b0\\par\n\\pard\\sa200\\sl276\\slmult1\\par\n";
+    
+    rtf += `\\pard\\sa200\\sl276\\slmult1\\fs24 ${escapeRtf(text)}\\par\n`;
+    
+    rtf += "}";
+    
+    const blob = new Blob([rtf], { type: "application/rtf" });
+    saveAs(blob, filename + ".rtf");
 }
 
 // Rate chat dialog
