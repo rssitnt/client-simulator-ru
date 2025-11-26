@@ -787,6 +787,12 @@ async function rateChat() {
     rateChatBtn.disabled = true;
     rateChatBtn.classList.add('loading');
     
+    // Disable inputs
+    userInput.disabled = true;
+    aiAssistBtn.disabled = true;
+    voiceBtn.disabled = true;
+    sendBtn.disabled = true;
+    
     // Show loading indicator
     const loadingMsg = addMessage('', 'loading');
     
@@ -873,6 +879,13 @@ async function rateChat() {
     } finally {
         rateChatBtn.disabled = false;
         rateChatBtn.classList.remove('loading');
+        
+        // Enable inputs
+        userInput.disabled = false;
+        aiAssistBtn.disabled = false;
+        voiceBtn.disabled = false;
+        sendBtn.disabled = false;
+        userInput.focus();
     }
 }
 
