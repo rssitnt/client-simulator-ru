@@ -1,3 +1,22 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+import { firebaseConfig } from "./firebase-config.js";
+
+// Initialize Firebase
+let db = null;
+try {
+    // Check if config is real or placeholder
+    if (firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("EXAMPLE")) {
+        const app = initializeApp(firebaseConfig);
+        db = getDatabase(app);
+        console.log("Firebase initialized");
+    } else {
+        console.warn("Firebase config is using placeholders. Update firebase-config.js to enable real-time sync.");
+    }
+} catch (e) {
+    console.error("Firebase initialization failed:", e);
+}
+
 // n8n Webhook Configuration
 const WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/client-simulator';
 const RATE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/rate-manager';
@@ -143,53 +162,62 @@ function unlockDialogInput() {
     userInput.classList.remove('disabled');
 }
 
-// Load prompts from Server (or localStorage as fallback)
-async function loadPrompts() {
-    if (SETTINGS_WEBHOOK_URL) {
+// Load prompts from Firebase (real-time) or localStorage
+function loadPrompts() {
+    // Always load from localStorage first for instant render
+    loadSavedData();
+
+    // If Firebase is initialized, listen for real-time updates
+    if (db) {
         try {
-            const response = await fetch(SETTINGS_WEBHOOK_URL, { method: 'GET' });
-            if (response.ok) {
-                const data = await response.json();
-                
-                // Expecting { "client_prompt": "...", "rater_prompt": "..." }
-                if (data.client_prompt) {
-                    systemPromptInput.value = data.client_prompt;
-                    localStorage.setItem('systemPrompt', data.client_prompt);
+            const promptsRef = ref(db, 'prompts');
+            onValue(promptsRef, (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    // Update fields only if they are not focused (to avoid overwriting user input while typing)
+                    if (document.activeElement !== systemPromptInput && data.client_prompt) {
+                        systemPromptInput.value = data.client_prompt;
+                        localStorage.setItem('systemPrompt', data.client_prompt);
+                        if (typeof updatePreview === 'function') updatePreview(); // Update markdown preview
+                    }
+                    
+                    if (document.activeElement !== raterPromptInput && data.rater_prompt) {
+                        raterPromptInput.value = data.rater_prompt;
+                        localStorage.setItem('raterPrompt', data.rater_prompt);
+                        if (typeof updatePreview === 'function') updatePreview();
+                    }
+                    
+                    if (document.activeElement !== managerPromptInput && data.manager_prompt) {
+                        managerPromptInput.value = data.manager_prompt;
+                        localStorage.setItem('managerPrompt', data.manager_prompt);
+                        if (typeof updatePreview === 'function') updatePreview();
+                    }
                 }
-                if (data.rater_prompt) {
-                    raterPromptInput.value = data.rater_prompt;
-                    localStorage.setItem('raterPrompt', data.rater_prompt);
-                }
-                return;
-            }
+            });
+            console.log('Listening for prompt updates...');
         } catch (e) {
-            // Fallback to localStorage silently
+            console.error('Error setting up Firebase listener:', e);
         }
     }
-    
-    // Fallback to localStorage
-    loadSavedData();
 }
 
-// Save prompts to Server
-const savePromptsToServer = debounce(async () => {
-    if (!SETTINGS_WEBHOOK_URL) return;
+// Save prompts to Firebase
+const savePromptsToFirebase = debounce(() => {
+    if (!db) return;
 
     const payload = {
         client_prompt: systemPromptInput.value,
-        rater_prompt: raterPromptInput.value
+        rater_prompt: raterPromptInput.value,
+        manager_prompt: managerPromptInput.value
     };
 
     try {
-        await fetch(SETTINGS_WEBHOOK_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
+        set(ref(db, 'prompts'), payload);
+        // console.log('Prompts saved to Firebase');
     } catch (e) {
-        // Silent fail for server save
+        console.error('Failed to save to Firebase:', e);
     }
-}, 2000); // Save after 2 seconds of no typing
+}, 1000); // Save after 1 second of no typing
 
 // Load saved data from localStorage
 // Remove Turndown escape characters from markdown
@@ -1125,22 +1153,23 @@ async function rateChat() {
 // Auto-save prompt on change (with debounce)
 systemPromptInput.addEventListener('input', () => {
     // Local save (immediate)
-        localStorage.setItem('systemPrompt', systemPromptInput.value);
-    // Server save (debounced)
-    savePromptsToServer();
+    localStorage.setItem('systemPrompt', systemPromptInput.value);
+    // Firebase save (debounced)
+    savePromptsToFirebase();
 });
 
 // Auto-save rater prompt on change (with debounce)
 raterPromptInput.addEventListener('input', () => {
     // Local save (immediate)
     localStorage.setItem('raterPrompt', raterPromptInput.value);
-    // Server save (debounced)
-    savePromptsToServer();
+    // Firebase save (debounced)
+    savePromptsToFirebase();
 });
 
 // Auto-save manager prompt on change
 managerPromptInput.addEventListener('input', () => {
     localStorage.setItem('managerPrompt', managerPromptInput.value);
+    savePromptsToFirebase();
 });
 
 // Set textarea value with undo support
