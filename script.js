@@ -364,20 +364,36 @@ function addMessage(content, role, isMarkdown = false) {
                 <div class="typing-dot"></div>
             </div>
         `;
-    } else if (isMarkdown && typeof marked !== 'undefined') {
-        try {
-            // marked.parse() for newer versions, marked() for older
-            const parsed = typeof marked.parse === 'function' ? marked.parse(content) : marked(content);
-            contentDiv.innerHTML = parsed;
-            // Apply syntax highlighting
-            if (typeof hljs !== 'undefined') {
-                contentDiv.querySelectorAll('pre code').forEach((block) => {
-                    hljs.highlightElement(block);
-                });
+    } else if (isMarkdown) {
+        // Try to parse markdown
+        if (typeof marked !== 'undefined') {
+            try {
+                const parsed = typeof marked.parse === 'function' ? marked.parse(content) : marked(content);
+                contentDiv.innerHTML = parsed;
+                // Apply syntax highlighting
+                if (typeof hljs !== 'undefined') {
+                    contentDiv.querySelectorAll('pre code').forEach((block) => {
+                        hljs.highlightElement(block);
+                    });
+                }
+            } catch (e) {
+                console.error('Markdown parse error:', e);
+                // Fallback: simple markdown conversion
+                let html = content
+                    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                    .replace(/\n\n/g, '</p><p>')
+                    .replace(/\n/g, '<br>');
+                contentDiv.innerHTML = '<p>' + html + '</p>';
             }
-        } catch (e) {
-            console.error('Markdown parse error:', e);
-            contentDiv.textContent = content;
+        } else {
+            // Fallback: simple markdown conversion without marked library
+            let html = content
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                .replace(/\n\n/g, '</p><p>')
+                .replace(/\n/g, '<br>');
+            contentDiv.innerHTML = '<p>' + html + '</p>';
         }
     } else {
         contentDiv.textContent = content;
