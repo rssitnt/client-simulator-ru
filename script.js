@@ -1061,15 +1061,23 @@ async function generateAIResponse() {
     console.log('Starting AI generation...');
     
     try {
+        // Format full dialog history for context
+        let dialogHistory = '';
+        conversationHistory.forEach((msg) => {
+            const role = msg.role === 'user' ? 'Менеджер' : 'Клиент';
+            dialogHistory += `${role}: ${msg.content}\n\n`;
+        });
+        
         // Get last message from conversation (client's message)
         const lastMessage = conversationHistory.length > 0 
             ? conversationHistory[conversationHistory.length - 1].content 
             : '';
         
-        // Prepare request body (history is handled by n8n Simple Memory via sessionId)
+        // Prepare request body with full dialog history
         const requestBody = {
             systemPrompt: managerPromptInput.value.trim() || DEFAULT_MANAGER_PROMPT,
             userMessage: lastMessage,
+            dialogHistory: dialogHistory.trim(),
             sessionId: managerSessionId
         };
         
