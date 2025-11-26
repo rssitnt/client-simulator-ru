@@ -15,6 +15,9 @@ let clientSessionId = baseSessionId + '_client';
 let managerSessionId = baseSessionId + '_manager';
 let raterSessionId = baseSessionId + '_rater';
 
+// Supported text file extensions for drag & drop
+const TEXT_EXTENSIONS = ['.txt', '.md', '.json', '.xml', '.csv', '.html', '.htm', '.rtf', '.log'];
+
 // DOM Elements
 const chatMessages = document.getElementById('chatMessages');
 const userInput = document.getElementById('userInput');
@@ -334,29 +337,7 @@ function addMessage(content, role, isMarkdown = false) {
             </div>
         `;
     } else if (isMarkdown) {
-        // Simple markdown conversion (works reliably)
-        let html = content
-            // Headers: #### h4, ### h3, ## h2, # h1 (order matters - longest first)
-            .replace(/^####\s+(.+)$/gm, '<h4>$1</h4>')
-            .replace(/^###\s+(.+)$/gm, '<h3>$1</h3>')
-            .replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
-            .replace(/^#\s+(.+)$/gm, '<h1>$1</h1>')
-            // Horizontal rule: ---
-            .replace(/^---+$/gm, '<hr>')
-            // Bullet lists FIRST: * item or - item (at start of line, with space after)
-            .replace(/^\*\s+(.+)$/gm, '• $1')
-            .replace(/^-\s+(.+)$/gm, '• $1')
-            // Numbered lists: 1. item
-            .replace(/^(\d+)\.\s+(.+)$/gm, '$1. $2')
-            // Bold: **text** (multiline support with [\s\S])
-            .replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>')
-            // Italic: *text* (only when surrounded by non-space)
-            .replace(/(?<!\s)\*([^\*\n]+)\*(?!\s)/g, '<em>$1</em>')
-            // Paragraphs
-            .replace(/\n\n+/g, '</p><p>')
-            // Line breaks
-            .replace(/\n/g, '<br>');
-        contentDiv.innerHTML = '<p>' + html + '</p>';
+        contentDiv.innerHTML = renderMarkdown(content);
     } else {
         contentDiv.textContent = content;
     }
@@ -366,31 +347,6 @@ function addMessage(content, role, isMarkdown = false) {
     chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
     return messageDiv;
-}
-
-// Escape HTML for attributes
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-// Copy to clipboard
-async function copyToClipboard(text, button) {
-    try {
-        await navigator.clipboard.writeText(text);
-        const originalText = button.textContent;
-        button.textContent = '✓ Скопировано';
-        setTimeout(() => {
-            button.textContent = originalText;
-        }, 1500);
-    } catch (err) {
-        console.error('Failed to copy:', err);
-        button.textContent = '✗ Ошибка';
-        setTimeout(() => {
-            button.textContent = 'Копировать';
-        }, 1500);
-    }
 }
 
 // Clear chat
@@ -1197,9 +1153,6 @@ function setTextWithUndo(textarea, text) {
 
 // Drag and drop files into prompt fields
 function setupDragAndDrop(textarea, storageKey) {
-    // Supported text file extensions
-    const textExtensions = ['.txt', '.md', '.json', '.xml', '.csv', '.html', '.htm', '.rtf', '.log'];
-    
     textarea.addEventListener('dragover', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -1239,7 +1192,7 @@ function setupDragAndDrop(textarea, storageKey) {
                 reader.readAsArrayBuffer(file);
             }
             // Check for text-based files
-            else if (file.type.startsWith('text/') || textExtensions.some(ext => fileName.endsWith(ext))) {
+            else if (file.type.startsWith('text/') || TEXT_EXTENSIONS.some(ext => fileName.endsWith(ext))) {
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     setTextWithUndo(textarea, event.target.result);
@@ -1260,8 +1213,6 @@ setupDragAndDrop(managerPromptInput, 'managerPrompt');
 
 // Setup drag and drop for preview elements (when in preview mode)
 function setupDragAndDropForPreview(previewElement, textarea, storageKey) {
-    const textExtensions = ['.txt', '.md', '.json', '.xml', '.csv', '.html', '.htm', '.rtf', '.log'];
-    
     previewElement.addEventListener('dragover', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -1303,7 +1254,7 @@ function setupDragAndDropForPreview(previewElement, textarea, storageKey) {
                 reader.readAsArrayBuffer(file);
             }
             // Check for text-based files
-            else if (file.type.startsWith('text/') || textExtensions.some(ext => fileName.endsWith(ext))) {
+            else if (file.type.startsWith('text/') || TEXT_EXTENSIONS.some(ext => fileName.endsWith(ext))) {
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     textarea.value = event.target.result;
@@ -1899,63 +1850,19 @@ function applyFormat(action) {
     syncPreviewToTextarea();
 }
 
-// Sync preview HTML back to textarea as markdown (simplified)
+// Sync preview HTML back to textarea as markdown
 function syncPreviewToTextarea() {
     const preview = getActivePreview();
     const textarea = getActiveTextarea();
     if (!preview || !textarea) return;
     
-    // Convert HTML to simple text (preserve structure)
-    const html = preview.innerHTML;
-    let markdown = htmlToMarkdown(html);
-    
-    textarea.value = markdown;
-    localStorage.setItem(textarea.id, markdown);
+    // Use TurndownService to convert HTML to Markdown
+    if (turndownService) {
+        const markdown = turndownService.turndown(preview.innerHTML);
+        textarea.value = markdown;
+        localStorage.setItem(textarea.id, markdown);
+    }
 }
-
-// Simple HTML to Markdown converter
-function htmlToMarkdown(html) {
-    let md = html
-        // Headers
-        .replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, '# $1\n')
-        .replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, '## $1\n')
-        .replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, '### $1\n')
-        .replace(/<h4[^>]*>([\s\S]*?)<\/h4>/gi, '#### $1\n')
-        // Bold
-        .replace(/<(strong|b)[^>]*>([\s\S]*?)<\/(strong|b)>/gi, '**$2**')
-        // Italic  
-        .replace(/<(em|i)[^>]*>([\s\S]*?)<\/(em|i)>/gi, '*$2*')
-        // Strikethrough
-        .replace(/<(del|s|strike)[^>]*>([\s\S]*?)<\/(del|s|strike)>/gi, '~~$2~~')
-        // Code
-        .replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, '`$1`')
-        // Blockquote
-        .replace(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi, '> $1\n')
-        // Horizontal rule
-        .replace(/<hr[^>]*>/gi, '\n---\n')
-        // List items
-        .replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, '- $1\n')
-        // Remove list wrappers
-        .replace(/<\/?[uo]l[^>]*>/gi, '')
-        // Paragraphs
-        .replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, '$1\n\n')
-        // Line breaks
-        .replace(/<br\s*\/?>/gi, '\n')
-        // Remove other tags
-        .replace(/<[^>]+>/g, '')
-        // Decode HTML entities
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        // Clean up extra newlines
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
-    
-    return md;
-}
-
 
 // Toolbar button click handlers
 document.querySelectorAll('.toolbar-btn').forEach(btn => {
