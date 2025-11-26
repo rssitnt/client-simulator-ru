@@ -722,7 +722,7 @@ body {
     display: none;
 }
 
-/* Preview/WYSIWYG mode: только preview (contenteditable) */
+/* Preview mode: только preview (read-only) */
 .prompt-wrapper.preview-mode .prompt-editor {
     display: none;
 }
@@ -731,7 +731,6 @@ body {
     display: block;
     flex: 1;
     width: 100%;
-    cursor: text;
 }
 
 /* Markdown Preview Styles (WYSIWYG mode) */
@@ -749,17 +748,7 @@ body {
     min-height: 100%;
 }
 
-/* WYSIWYG editing styles */
-.prompt-preview[contenteditable="true"] {
-    cursor: text;
-}
-
-.prompt-preview[contenteditable="true"]:focus {
-    background: #0F0F0F;
-    outline: none;
-}
-
-/* Selection styling in WYSIWYG */
+/* Selection styling in preview */
 .prompt-preview::selection,
 .prompt-preview *::selection {
     background: rgba(127, 150, 255, 0.3);
