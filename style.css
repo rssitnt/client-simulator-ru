@@ -161,7 +161,7 @@ body {
 .btn-icon {
     padding: 8px;
     background: #252525;
-    border: 1px solid #333333;
+    border: none;
     color: #e0e0e0;
     border-radius: 4px;
     cursor: pointer;
@@ -175,7 +175,6 @@ body {
 
 .btn-icon:hover {
     background: #333333;
-    border-color: #444444;
 }
 
 .chat-messages {
@@ -1065,7 +1064,7 @@ body {
 
 .manager-name-container input {
     background: #1a1a1a;
-    border: 1px solid #333;
+    border: none;
     border-radius: 6px;
     color: #e0e0e0;
     padding: 6px 10px;
