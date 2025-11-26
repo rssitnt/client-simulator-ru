@@ -795,13 +795,53 @@ function exportChat(format = 'txt') {
 
     const filename = `диалог ${new Date().toLocaleString().replace(/[:.]/g, '-')}`;
 
-    if (format === 'txt') {
+    if (format === 'clipboard') {
+        copyMessagesToClipboard(messages);
+    } else if (format === 'txt') {
         exportToTxt(messages, filename);
     } else if (format === 'docx') {
         exportToDocx(messages, filename);
     } else if (format === 'rtf') {
         exportToRtf(messages, filename);
     }
+}
+
+// Copy messages to clipboard (plain text without markdown)
+async function copyMessagesToClipboard(messages) {
+    let chatText = '';
+    messages.forEach((msg, index) => {
+        chatText += `${msg.role}: ${msg.content}`;
+        if (index < messages.length - 1) chatText += '\n\n';
+    });
+    
+    try {
+        await navigator.clipboard.writeText(chatText);
+        showCopyNotification('Диалог скопирован в буфер обмена');
+    } catch (err) {
+        console.error('Failed to copy:', err);
+        alert('Ошибка копирования в буфер обмена');
+    }
+}
+
+// Show temporary notification
+function showCopyNotification(text) {
+    // Remove existing notification
+    const existing = document.querySelector('.copy-notification');
+    if (existing) existing.remove();
+    
+    const notification = document.createElement('div');
+    notification.className = 'copy-notification';
+    notification.textContent = text;
+    document.body.appendChild(notification);
+    
+    // Trigger animation
+    setTimeout(() => notification.classList.add('show'), 10);
+    
+    // Remove after 2 seconds
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 300);
+    }, 2000);
 }
 
 function exportToTxt(messages, filename) {
@@ -933,12 +973,25 @@ function exportCurrentPrompt(format = 'txt') {
     const timestamp = new Date().toLocaleString().replace(/[:.]/g, '-');
     const fullFileName = `${fileName} ${timestamp}`;
     
-    if (format === 'txt') {
+    if (format === 'clipboard') {
+        copyPromptToClipboard(promptText, fileName);
+    } else if (format === 'txt') {
         exportPromptToTxt(promptText, fullFileName);
     } else if (format === 'docx') {
         exportPromptToDocx(promptText, fullFileName, fileName);
     } else if (format === 'rtf') {
         exportPromptToRtf(promptText, fullFileName, fileName);
+    }
+}
+
+// Copy prompt to clipboard (plain text)
+async function copyPromptToClipboard(text, label) {
+    try {
+        await navigator.clipboard.writeText(text);
+        showCopyNotification(`${label} скопирован в буфер обмена`);
+    } catch (err) {
+        console.error('Failed to copy:', err);
+        alert('Ошибка копирования в буфер обмена');
     }
 }
 
