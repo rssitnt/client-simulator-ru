@@ -1,12 +1,11 @@
 // Firebase Configuration
-// REPLACE WITH YOUR OWN FIREBASE CONFIG FROM CONSOLE
 export const firebaseConfig = {
-    apiKey: "AIzaSyD-EXAMPLE-API-KEY",
-    authDomain: "your-project.firebaseapp.com",
-    databaseURL: "https://your-project-default-rtdb.firebaseio.com",
-    projectId: "your-project",
-    storageBucket: "your-project.appspot.com",
-    messagingSenderId: "1234567890",
-    appId: "1:1234567890:web:abcdef123456"
+    apiKey: "AIzaSyBebfOD3s51PMGJUKFwCrwkE5Nwvf8OyXY",
+    authDomain: "client-simulator.firebaseapp.com",
+    databaseURL: "https://client-simulator-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "client-simulator",
+    storageBucket: "client-simulator.firebasestorage.app",
+    messagingSenderId: "693043957358",
+    appId: "1:693043957358:web:12d8f5f181e6e8e5d5207f",
+    measurementId: "G-RSM1WK5QGX"
 };
-
