@@ -754,7 +754,8 @@ body {
 }
 
 .prompt-preview[contenteditable="true"]:focus {
-    background: #121212;
+    background: #0F0F0F;
+    outline: none;
 }
 
 /* Selection styling in WYSIWYG */
