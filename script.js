@@ -173,36 +173,46 @@ function loadPrompts() {
             const promptsRef = ref(db, 'prompts');
             onValue(promptsRef, (snapshot) => {
                 const data = snapshot.val();
+                
                 if (data) {
                     // Update fields only if they are not focused (to avoid overwriting user input while typing)
                     if (document.activeElement !== systemPromptInput && data.client_prompt) {
                         systemPromptInput.value = data.client_prompt;
                         localStorage.setItem('systemPrompt', data.client_prompt);
-                        if (typeof updatePreview === 'function') updatePreview(); // Update markdown preview
                     }
                     
                     if (document.activeElement !== raterPromptInput && data.rater_prompt) {
                         raterPromptInput.value = data.rater_prompt;
                         localStorage.setItem('raterPrompt', data.rater_prompt);
-                        if (typeof updatePreview === 'function') updatePreview();
                     }
                     
                     if (document.activeElement !== managerPromptInput && data.manager_prompt) {
                         managerPromptInput.value = data.manager_prompt;
                         localStorage.setItem('managerPrompt', data.manager_prompt);
-                        if (typeof updatePreview === 'function') updatePreview();
+                    }
+                    
+                    // Update previews after loading
+                    if (typeof updateAllPreviews === 'function') {
+                        updateAllPreviews();
+                    }
+                } else {
+                    // Firebase is empty - upload local data if exists
+                    const hasLocalData = systemPromptInput.value || raterPromptInput.value || managerPromptInput.value;
+                    if (hasLocalData) {
+                        console.log('Firebase empty, uploading local data...');
+                        savePromptsToFirebaseNow();
                     }
                 }
             });
-            console.log('Listening for prompt updates...');
+            console.log('Firebase connected, listening for updates...');
         } catch (e) {
             console.error('Error setting up Firebase listener:', e);
         }
     }
 }
 
-// Save prompts to Firebase
-const savePromptsToFirebase = debounce(() => {
+// Save prompts to Firebase immediately (no debounce)
+function savePromptsToFirebaseNow() {
     if (!db) return;
 
     const payload = {
@@ -211,12 +221,14 @@ const savePromptsToFirebase = debounce(() => {
         manager_prompt: managerPromptInput.value
     };
 
-    try {
-        set(ref(db, 'prompts'), payload);
-        // console.log('Prompts saved to Firebase');
-    } catch (e) {
-        console.error('Failed to save to Firebase:', e);
-    }
+    set(ref(db, 'prompts'), payload)
+        .then(() => console.log('Prompts synced to Firebase'))
+        .catch(e => console.error('Failed to sync to Firebase:', e));
+}
+
+// Save prompts to Firebase (debounced)
+const savePromptsToFirebase = debounce(() => {
+    savePromptsToFirebaseNow();
 }, 1000); // Save after 1 second of no typing
 
 // Load saved data from localStorage
