@@ -946,6 +946,158 @@ setupDragAndDrop(managerPromptInput, 'managerPrompt');
 // Instruction tabs functionality
 const instructionTabs = document.querySelectorAll('.instruction-tab');
 const instructionEditors = document.querySelectorAll('.instruction-editor');
+const togglePreviewBtn = document.getElementById('togglePreviewBtn');
+let isPreviewMode = false;
+
+// Preview elements
+const systemPromptPreview = document.getElementById('systemPromptPreview');
+const managerPromptPreview = document.getElementById('managerPromptPreview');
+const raterPromptPreview = document.getElementById('raterPromptPreview');
+
+// Render markdown to HTML
+function renderMarkdown(text) {
+    if (!text) return '<p style="color: #666; font-style: italic;">Промпт пустой...</p>';
+    
+    // Use marked.js if available
+    if (typeof marked !== 'undefined') {
+        return marked.parse(text);
+    }
+    
+    // Fallback: simple markdown conversion
+    let html = text
+        // Headers
+        .replace(/^####\s+(.+)$/gm, '<h4>$1</h4>')
+        .replace(/^###\s+(.+)$/gm, '<h3>$1</h3>')
+        .replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
+        .replace(/^#\s+(.+)$/gm, '<h1>$1</h1>')
+        // Horizontal rule
+        .replace(/^---+$/gm, '<hr>')
+        .replace(/^===+$/gm, '<hr>')
+        // Bullet lists
+        .replace(/^\*\s+(.+)$/gm, '<li>$1</li>')
+        .replace(/^-\s+(.+)$/gm, '<li>$1</li>')
+        // Numbered lists
+        .replace(/^(\d+)\.\s+(.+)$/gm, '<li>$2</li>')
+        // Bold
+        .replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>')
+        // Italic
+        .replace(/(?<!\*)\*([^\*\n]+)\*(?!\*)/g, '<em>$1</em>')
+        // Code blocks
+        .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+        // Inline code
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        // Blockquotes
+        .replace(/^>\s+(.+)$/gm, '<blockquote>$1</blockquote>')
+        // Paragraphs
+        .replace(/\n\n+/g, '</p><p>')
+        // Line breaks
+        .replace(/\n/g, '<br>');
+    
+    return '<p>' + html + '</p>';
+}
+
+// Update preview content for current active prompt
+function updatePreview() {
+    const activeWrapper = document.querySelector('.prompt-wrapper.instruction-editor.active');
+    if (!activeWrapper) return;
+    
+    const instructionType = activeWrapper.dataset.instruction;
+    let text = '';
+    let previewElement = null;
+    
+    switch (instructionType) {
+        case 'client':
+            text = systemPromptInput.value;
+            previewElement = systemPromptPreview;
+            break;
+        case 'manager':
+            text = managerPromptInput.value;
+            previewElement = managerPromptPreview;
+            break;
+        case 'rater':
+            text = raterPromptInput.value;
+            previewElement = raterPromptPreview;
+            break;
+    }
+    
+    if (previewElement) {
+        previewElement.innerHTML = renderMarkdown(text);
+        
+        // Apply syntax highlighting if available
+        if (typeof hljs !== 'undefined') {
+            previewElement.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+        }
+    }
+}
+
+// Toggle preview mode
+function togglePreviewMode() {
+    isPreviewMode = !isPreviewMode;
+    
+    const iconPreview = togglePreviewBtn.querySelector('.icon-preview');
+    const iconEdit = togglePreviewBtn.querySelector('.icon-edit');
+    
+    if (isPreviewMode) {
+        // Enable preview mode for all wrappers
+        document.querySelectorAll('.prompt-wrapper').forEach(wrapper => {
+            wrapper.classList.add('preview-mode');
+        });
+        togglePreviewBtn.classList.add('active');
+        togglePreviewBtn.title = 'Переключить на редактирование';
+        iconPreview.style.display = 'none';
+        iconEdit.style.display = 'block';
+        
+        // Update all previews
+        updateAllPreviews();
+    } else {
+        // Disable preview mode
+        document.querySelectorAll('.prompt-wrapper').forEach(wrapper => {
+            wrapper.classList.remove('preview-mode');
+        });
+        togglePreviewBtn.classList.remove('active');
+        togglePreviewBtn.title = 'Переключить просмотр Markdown';
+        iconPreview.style.display = 'block';
+        iconEdit.style.display = 'none';
+    }
+}
+
+// Update all preview contents
+function updateAllPreviews() {
+    systemPromptPreview.innerHTML = renderMarkdown(systemPromptInput.value);
+    managerPromptPreview.innerHTML = renderMarkdown(managerPromptInput.value);
+    raterPromptPreview.innerHTML = renderMarkdown(raterPromptInput.value);
+    
+    // Apply syntax highlighting if available
+    if (typeof hljs !== 'undefined') {
+        document.querySelectorAll('.prompt-preview pre code').forEach((block) => {
+            hljs.highlightElement(block);
+        });
+    }
+}
+
+// Toggle preview button event
+togglePreviewBtn.addEventListener('click', togglePreviewMode);
+
+// Update preview on prompt text changes (for real-time preview)
+systemPromptInput.addEventListener('input', () => {
+    if (isPreviewMode) {
+        systemPromptPreview.innerHTML = renderMarkdown(systemPromptInput.value);
+    }
+});
+
+managerPromptInput.addEventListener('input', () => {
+    if (isPreviewMode) {
+        managerPromptPreview.innerHTML = renderMarkdown(managerPromptInput.value);
+    }
+});
+
+raterPromptInput.addEventListener('input', () => {
+    if (isPreviewMode) {
+        raterPromptPreview.innerHTML = renderMarkdown(raterPromptInput.value);
+    }
+});
 
 instructionTabs.forEach(tab => {
     tab.addEventListener('click', () => {
@@ -962,6 +1114,11 @@ instructionTabs.forEach(tab => {
                 editor.classList.add('active');
             }
         });
+        
+        // Update preview if in preview mode
+        if (isPreviewMode) {
+            updatePreview();
+        }
     });
 });
 

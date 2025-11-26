@@ -635,8 +635,12 @@ body {
 }
 
 .instruction-editor.active {
-    display: block;
+    display: flex;
     flex: 1;
+}
+
+.prompt-wrapper.instruction-editor.active {
+    display: flex;
 }
 
 .prompt-editor {
@@ -684,6 +688,208 @@ body {
 .prompt-editor.drag-over {
     border: 2px dashed #7F96FF !important;
     background: #1a1a2e !important;
+}
+
+/* Prompt wrapper for edit/preview modes */
+.prompt-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    position: relative;
+}
+
+.prompt-wrapper .prompt-editor {
+    display: block;
+    flex: 1;
+    width: 100%;
+}
+
+.prompt-wrapper .prompt-preview {
+    display: none;
+}
+
+.prompt-wrapper.preview-mode .prompt-editor {
+    display: none;
+}
+
+.prompt-wrapper.preview-mode .prompt-preview {
+    display: block;
+    flex: 1;
+}
+
+/* Markdown Preview Styles */
+.prompt-preview {
+    flex: 1;
+    padding: 16px 20px;
+    background: #0F0F0F;
+    color: #e0e0e0;
+    font-size: 14px;
+    line-height: 1.7;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #444 #0F0F0F;
+}
+
+.prompt-preview::-webkit-scrollbar {
+    width: 8px;
+}
+
+.prompt-preview::-webkit-scrollbar-track {
+    background: #0F0F0F;
+}
+
+.prompt-preview::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 4px;
+}
+
+.prompt-preview::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+.prompt-preview h1 {
+    font-size: 1.6em;
+    font-weight: 600;
+    color: #fff;
+    margin: 0 0 16px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #333;
+}
+
+.prompt-preview h2 {
+    font-size: 1.35em;
+    font-weight: 600;
+    color: #f0f0f0;
+    margin: 24px 0 12px 0;
+}
+
+.prompt-preview h3 {
+    font-size: 1.15em;
+    font-weight: 600;
+    color: #e8e8e8;
+    margin: 20px 0 10px 0;
+}
+
+.prompt-preview h4 {
+    font-size: 1.05em;
+    font-weight: 600;
+    color: #ddd;
+    margin: 16px 0 8px 0;
+}
+
+.prompt-preview p {
+    margin: 0 0 12px 0;
+}
+
+.prompt-preview ul,
+.prompt-preview ol {
+    margin: 12px 0;
+    padding-left: 24px;
+}
+
+.prompt-preview li {
+    margin: 6px 0;
+}
+
+.prompt-preview li::marker {
+    color: #7F96FF;
+}
+
+.prompt-preview strong {
+    font-weight: 700;
+    color: #fff;
+}
+
+.prompt-preview em {
+    font-style: italic;
+    color: #ccc;
+}
+
+.prompt-preview code {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.9em;
+    background: #1a1a1a;
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid #333;
+    color: #7F96FF;
+}
+
+.prompt-preview pre {
+    margin: 16px 0;
+    padding: 16px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    overflow-x: auto;
+}
+
+.prompt-preview pre code {
+    display: block;
+    padding: 0;
+    background: none;
+    border: none;
+    color: #e0e0e0;
+}
+
+.prompt-preview blockquote {
+    margin: 16px 0;
+    padding: 12px 16px;
+    background: #1a1a1a;
+    border-left: 3px solid #7F96FF;
+    color: #bbb;
+    font-style: italic;
+}
+
+.prompt-preview hr {
+    border: none;
+    border-top: 1px solid #333;
+    margin: 24px 0;
+}
+
+.prompt-preview a {
+    color: #7F96FF;
+    text-decoration: none;
+}
+
+.prompt-preview a:hover {
+    text-decoration: underline;
+}
+
+.prompt-preview table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+}
+
+.prompt-preview th,
+.prompt-preview td {
+    border: 1px solid #333;
+    padding: 10px 12px;
+    text-align: left;
+}
+
+.prompt-preview th {
+    background: #1a1a1a;
+    color: #fff;
+    font-weight: 600;
+}
+
+.prompt-preview tr:nth-child(even) {
+    background: #141414;
+}
+
+/* Preview button active state */
+.btn-preview.active {
+    background: #7F96FF;
+    border-color: #7F96FF;
+    color: #fff;
+}
+
+.btn-preview.active:hover {
+    background: #6b82eb;
+    border-color: #6b82eb;
 }
 
 
