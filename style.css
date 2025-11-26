@@ -685,7 +685,8 @@ body {
     background: #555;
 }
 
-.prompt-editor.drag-over {
+.prompt-editor.drag-over,
+.prompt-preview.drag-over {
     border: 2px dashed #7F96FF !important;
     background: #1a1a2e !important;
 }

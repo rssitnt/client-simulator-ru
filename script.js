@@ -958,10 +958,71 @@ function setupDragAndDrop(textarea, storageKey) {
     });
 }
 
-// Setup drag and drop for all prompt fields
+// Setup drag and drop for all prompt fields (textareas)
 setupDragAndDrop(systemPromptInput, 'systemPrompt');
 setupDragAndDrop(raterPromptInput, 'raterPrompt');
 setupDragAndDrop(managerPromptInput, 'managerPrompt');
+
+// Setup drag and drop for preview elements (when in preview mode)
+function setupDragAndDropForPreview(previewElement, textarea, storageKey) {
+    const textExtensions = ['.txt', '.md', '.json', '.xml', '.csv', '.html', '.htm', '.rtf', '.log'];
+    
+    previewElement.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        previewElement.classList.add('drag-over');
+    });
+    
+    previewElement.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        previewElement.classList.remove('drag-over');
+    });
+    
+    previewElement.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        previewElement.classList.remove('drag-over');
+        
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            const file = files[0];
+            const fileName = file.name.toLowerCase();
+            
+            // Check for .docx (Word)
+            if (fileName.endsWith('.docx')) {
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    try {
+                        const arrayBuffer = event.target.result;
+                        const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+                        textarea.value = result.value;
+                        localStorage.setItem(storageKey, textarea.value);
+                        // Update preview
+                        previewElement.innerHTML = renderMarkdown(textarea.value);
+                    } catch (err) {
+                        console.error('Error reading .docx:', err);
+                        alert('Ошибка чтения .docx файла');
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            }
+            // Check for text-based files
+            else if (file.type.startsWith('text/') || textExtensions.some(ext => fileName.endsWith(ext))) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    textarea.value = event.target.result;
+                    localStorage.setItem(storageKey, textarea.value);
+                    // Update preview
+                    previewElement.innerHTML = renderMarkdown(textarea.value);
+                };
+                reader.readAsText(file, 'UTF-8');
+            } else {
+                alert('Поддерживаемые форматы: .txt, .md, .docx, .json, .xml, .csv, .html, .rtf');
+            }
+        }
+    });
+}
 
 // Instruction tabs functionality
 const instructionTabs = document.querySelectorAll('.instruction-tab');
@@ -1489,4 +1550,9 @@ window.addEventListener('beforeunload', () => {
         syncAllPreviewsToTextareas();
     }
 });
+
+// Setup drag and drop for preview elements (when in preview mode)
+setupDragAndDropForPreview(systemPromptPreview, systemPromptInput, 'systemPrompt');
+setupDragAndDropForPreview(managerPromptPreview, managerPromptInput, 'managerPrompt');
+setupDragAndDropForPreview(raterPromptPreview, raterPromptInput, 'raterPrompt');
 
