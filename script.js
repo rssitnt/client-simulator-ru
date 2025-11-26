@@ -2002,6 +2002,30 @@ function getActiveTextarea() {
 }
 
 // Apply formatting using execCommand (WYSIWYG)
+// Check if selection is inside a specific tag
+function isInsideTag(tagName) {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return false;
+    
+    let node = selection.anchorNode;
+    while (node && node !== document.body) {
+        if (node.nodeName && node.nodeName.toLowerCase() === tagName.toLowerCase()) {
+            return node;
+        }
+        node = node.parentNode;
+    }
+    return null;
+}
+
+// Unwrap element - move its contents outside and remove the tag
+function unwrapElement(element) {
+    const parent = element.parentNode;
+    while (element.firstChild) {
+        parent.insertBefore(element.firstChild, element);
+    }
+    parent.removeChild(element);
+}
+
 function applyFormat(action) {
     const preview = getActivePreview();
     if (!preview) return;
@@ -2011,13 +2035,26 @@ function applyFormat(action) {
     
     switch (action) {
         case 'h1':
-            document.execCommand('formatBlock', false, 'h1');
+            // Toggle: if already h1, convert back to paragraph
+            if (isInsideTag('h1')) {
+                document.execCommand('formatBlock', false, 'p');
+            } else {
+                document.execCommand('formatBlock', false, 'h1');
+            }
             break;
         case 'h2':
-            document.execCommand('formatBlock', false, 'h2');
+            if (isInsideTag('h2')) {
+                document.execCommand('formatBlock', false, 'p');
+            } else {
+                document.execCommand('formatBlock', false, 'h2');
+            }
             break;
         case 'h3':
-            document.execCommand('formatBlock', false, 'h3');
+            if (isInsideTag('h3')) {
+                document.execCommand('formatBlock', false, 'p');
+            } else {
+                document.execCommand('formatBlock', false, 'h3');
+            }
             break;
         case 'bold':
             document.execCommand('bold', false, null);
@@ -2035,20 +2072,40 @@ function applyFormat(action) {
             document.execCommand('insertOrderedList', false, null);
             break;
         case 'quote':
-            document.execCommand('formatBlock', false, 'blockquote');
+            // Toggle: if already in blockquote, convert back to paragraph
+            if (isInsideTag('blockquote')) {
+                document.execCommand('formatBlock', false, 'p');
+            } else {
+                document.execCommand('formatBlock', false, 'blockquote');
+            }
             break;
         case 'code':
-            // Wrap selection in <code> tag
-            const selection = window.getSelection();
-            if (selection.rangeCount > 0) {
+            // Toggle: if inside code, unwrap it
+            const codeElement = isInsideTag('code');
+            if (codeElement) {
+                // Save selection
+                const selection = window.getSelection();
                 const range = selection.getRangeAt(0);
-                const code = document.createElement('code');
-                code.appendChild(range.extractContents());
-                range.insertNode(code);
+                
+                // Unwrap the code element
+                unwrapElement(codeElement);
+                
+                // Restore selection
                 selection.removeAllRanges();
-                const newRange = document.createRange();
-                newRange.selectNodeContents(code);
-                selection.addRange(newRange);
+                selection.addRange(range);
+            } else {
+                // Wrap selection in <code> tag
+                const selection = window.getSelection();
+                if (selection.rangeCount > 0) {
+                    const range = selection.getRangeAt(0);
+                    const code = document.createElement('code');
+                    code.appendChild(range.extractContents());
+                    range.insertNode(code);
+                    selection.removeAllRanges();
+                    const newRange = document.createRange();
+                    newRange.selectNodeContents(code);
+                    selection.addRange(newRange);
+                }
             }
             break;
         case 'hr':
