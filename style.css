@@ -686,6 +686,69 @@ body {
     background: #1a1a2e !important;
 }
 
+/* Prompt preview mode */
+.prompt-preview {
+    display: none;
+    flex: 1;
+    padding: 16px 20px;
+    background: #0F0F0F;
+    color: #e0e0e0;
+    font-size: 14px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.6;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #444 #0F0F0F;
+}
+
+.prompt-preview.active {
+    display: block;
+}
+
+.prompt-preview h1,
+.prompt-preview h2,
+.prompt-preview h3,
+.prompt-preview h4 {
+    margin: 16px 0 8px 0;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.prompt-preview h1 { font-size: 1.5em; }
+.prompt-preview h2 { font-size: 1.3em; }
+.prompt-preview h3 { font-size: 1.15em; }
+.prompt-preview h4 { font-size: 1em; }
+
+.prompt-preview strong { font-weight: 700; }
+.prompt-preview em { font-style: italic; }
+
+.prompt-preview hr {
+    border: none;
+    border-top: 1px solid #444;
+    margin: 16px 0;
+}
+
+.prompt-preview p {
+    margin: 0 0 8px 0;
+}
+
+.preview-mode .prompt-editor {
+    display: none !important;
+}
+
+.preview-mode .prompt-preview {
+    display: block !important;
+}
+
+.preview-mode .prompt-preview:not(.active) {
+    display: none !important;
+}
+
+#togglePreview.active {
+    background: #7F96FF;
+    color: #fff;
+}
+
 
 /* Responsive design */
 @media (max-width: 1024px) {
