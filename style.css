@@ -456,7 +456,7 @@ body {
     display: flex;
     gap: 12px;
     flex-shrink: 0;
-    align-items: flex-end;
+    align-items: center;
 }
 
 .input-wrapper {
@@ -477,7 +477,7 @@ body {
 
 #userInput {
     flex: 1;
-    padding: 8px 100px 8px 12px;
+    padding: 12px 100px 12px 12px;
     background: #1f1f1f;
     border: 1px solid #333333;
     border-radius: 6px;
@@ -487,6 +487,7 @@ body {
     resize: none;
     outline: none;
     transition: border-color 0.2s, height 0.1s ease;
+    height: 44px;
     min-height: 44px;
     max-height: 300px;
     overflow-y: auto;
