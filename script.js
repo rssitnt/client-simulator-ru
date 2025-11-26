@@ -361,7 +361,7 @@ managerNameInput.addEventListener('input', () => {
 // Auto-resize textarea
 function autoResizeTextarea(textarea) {
     textarea.style.height = 'auto';
-    const newHeight = Math.min(textarea.scrollHeight, 300); // Максимум 300px
+    const newHeight = Math.max(44, Math.min(textarea.scrollHeight, 300)); // Минимум 44px, максимум 300px
     textarea.style.height = newHeight + 'px';
 }
 
@@ -492,7 +492,7 @@ async function sendMessage() {
     
     // Clear input
     userInput.value = '';
-    userInput.style.height = 'auto'; // Сброс высоты
+    userInput.style.height = '44px'; // Сброс высоты
     
     // Show loading indicator
     const loadingMsg = addMessage('', 'loading');
