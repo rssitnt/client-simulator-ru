@@ -1988,128 +1988,147 @@ setupDragAndDropForPreview(systemPromptPreview, systemPromptInput, 'systemPrompt
 setupDragAndDropForPreview(managerPromptPreview, managerPromptInput, 'managerPrompt');
 setupDragAndDropForPreview(raterPromptPreview, raterPromptInput, 'raterPrompt');
 
-// Markdown Toolbar functionality
-function getActivePromptTextarea() {
-    const activeEditor = document.querySelector('.instruction-editor.active');
-    if (!activeEditor) return null;
-    return activeEditor.querySelector('.prompt-editor');
-}
-
-function getActivePromptPreview() {
+// WYSIWYG Toolbar functionality (Google Docs style)
+function getActivePreview() {
     const activeEditor = document.querySelector('.instruction-editor.active');
     if (!activeEditor) return null;
     return activeEditor.querySelector('.prompt-preview');
 }
 
-function insertMarkdown(action) {
-    const textarea = getActivePromptTextarea();
-    const preview = getActivePromptPreview();
-    if (!textarea) return;
+function getActiveTextarea() {
+    const activeEditor = document.querySelector('.instruction-editor.active');
+    if (!activeEditor) return null;
+    return activeEditor.querySelector('.prompt-editor');
+}
+
+// Apply formatting using execCommand (WYSIWYG)
+function applyFormat(action) {
+    const preview = getActivePreview();
+    if (!preview) return;
     
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const text = textarea.value;
-    const selected = text.substring(start, end);
-    
-    let before = '';
-    let after = '';
-    let insert = '';
-    let cursorOffset = 0;
+    // Focus preview to ensure execCommand works
+    preview.focus();
     
     switch (action) {
         case 'h1':
-            before = start === 0 || text[start - 1] === '\n' ? '# ' : '\n# ';
-            insert = selected || 'Заголовок';
-            after = '\n';
-            cursorOffset = before.length;
+            document.execCommand('formatBlock', false, 'h1');
             break;
         case 'h2':
-            before = start === 0 || text[start - 1] === '\n' ? '## ' : '\n## ';
-            insert = selected || 'Заголовок';
-            after = '\n';
-            cursorOffset = before.length;
+            document.execCommand('formatBlock', false, 'h2');
             break;
         case 'h3':
-            before = start === 0 || text[start - 1] === '\n' ? '### ' : '\n### ';
-            insert = selected || 'Заголовок';
-            after = '\n';
-            cursorOffset = before.length;
+            document.execCommand('formatBlock', false, 'h3');
             break;
         case 'bold':
-            before = '**';
-            insert = selected || 'текст';
-            after = '**';
-            cursorOffset = 2;
+            document.execCommand('bold', false, null);
             break;
         case 'italic':
-            before = '*';
-            insert = selected || 'текст';
-            after = '*';
-            cursorOffset = 1;
+            document.execCommand('italic', false, null);
             break;
         case 'strike':
-            before = '~~';
-            insert = selected || 'текст';
-            after = '~~';
-            cursorOffset = 2;
+            document.execCommand('strikeThrough', false, null);
             break;
         case 'ul':
-            before = start === 0 || text[start - 1] === '\n' ? '- ' : '\n- ';
-            insert = selected || 'Пункт списка';
-            after = '\n';
-            cursorOffset = before.length;
+            document.execCommand('insertUnorderedList', false, null);
             break;
         case 'ol':
-            before = start === 0 || text[start - 1] === '\n' ? '1. ' : '\n1. ';
-            insert = selected || 'Пункт списка';
-            after = '\n';
-            cursorOffset = before.length;
+            document.execCommand('insertOrderedList', false, null);
             break;
         case 'quote':
-            before = start === 0 || text[start - 1] === '\n' ? '> ' : '\n> ';
-            insert = selected || 'Цитата';
-            after = '\n';
-            cursorOffset = before.length;
+            document.execCommand('formatBlock', false, 'blockquote');
             break;
         case 'code':
-            if (selected.includes('\n')) {
-                before = '```\n';
-                insert = selected;
-                after = '\n```\n';
-                cursorOffset = 4;
-            } else {
-                before = '`';
-                insert = selected || 'код';
-                after = '`';
-                cursorOffset = 1;
+            // Wrap selection in <code> tag
+            const selection = window.getSelection();
+            if (selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                const code = document.createElement('code');
+                code.appendChild(range.extractContents());
+                range.insertNode(code);
+                selection.removeAllRanges();
+                const newRange = document.createRange();
+                newRange.selectNodeContents(code);
+                selection.addRange(newRange);
             }
             break;
         case 'hr':
-            before = start === 0 || text[start - 1] === '\n' ? '\n---\n\n' : '\n\n---\n\n';
-            insert = '';
-            after = '';
-            cursorOffset = before.length;
+            document.execCommand('insertHorizontalRule', false, null);
             break;
-        default:
-            return;
     }
     
-    const newText = text.substring(0, start) + before + insert + after + text.substring(end);
-    textarea.value = newText;
+    // Sync changes back to textarea
+    syncPreviewToTextarea();
+}
+
+// Sync preview HTML back to textarea as markdown (simplified)
+function syncPreviewToTextarea() {
+    const preview = getActivePreview();
+    const textarea = getActiveTextarea();
+    if (!preview || !textarea) return;
     
-    // Save to localStorage
-    const storageKey = textarea.id;
-    localStorage.setItem(storageKey, newText);
+    // Convert HTML to simple text (preserve structure)
+    const html = preview.innerHTML;
+    let markdown = htmlToMarkdown(html);
     
-    // Update preview
-    if (preview) {
-        preview.innerHTML = renderMarkdown(newText);
-    }
+    textarea.value = markdown;
+    localStorage.setItem(textarea.id, markdown);
+}
+
+// Simple HTML to Markdown converter
+function htmlToMarkdown(html) {
+    let md = html
+        // Headers
+        .replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, '# $1\n')
+        .replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, '## $1\n')
+        .replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, '### $1\n')
+        .replace(/<h4[^>]*>([\s\S]*?)<\/h4>/gi, '#### $1\n')
+        // Bold
+        .replace(/<(strong|b)[^>]*>([\s\S]*?)<\/(strong|b)>/gi, '**$2**')
+        // Italic  
+        .replace(/<(em|i)[^>]*>([\s\S]*?)<\/(em|i)>/gi, '*$2*')
+        // Strikethrough
+        .replace(/<(del|s|strike)[^>]*>([\s\S]*?)<\/(del|s|strike)>/gi, '~~$2~~')
+        // Code
+        .replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, '`$1`')
+        // Blockquote
+        .replace(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi, '> $1\n')
+        // Horizontal rule
+        .replace(/<hr[^>]*>/gi, '\n---\n')
+        // List items
+        .replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, '- $1\n')
+        // Remove list wrappers
+        .replace(/<\/?[uo]l[^>]*>/gi, '')
+        // Paragraphs
+        .replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, '$1\n\n')
+        // Line breaks
+        .replace(/<br\s*\/?>/gi, '\n')
+        // Remove other tags
+        .replace(/<[^>]+>/g, '')
+        // Decode HTML entities
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        // Clean up extra newlines
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
     
-    // Set cursor position
-    const newCursorPos = start + before.length + insert.length;
-    textarea.focus();
-    textarea.setSelectionRange(selected ? start + before.length : newCursorPos, selected ? start + before.length + insert.length : newCursorPos);
+    return md;
+}
+
+// Make all previews contenteditable
+function enableWYSIWYG() {
+    [systemPromptPreview, managerPromptPreview, raterPromptPreview].forEach(preview => {
+        if (preview) {
+            preview.setAttribute('contenteditable', 'true');
+            
+            // Sync on input
+            preview.addEventListener('input', debounce(() => {
+                syncPreviewToTextarea();
+            }, 500));
+        }
+    });
 }
 
 // Toolbar button click handlers
@@ -2117,25 +2136,30 @@ document.querySelectorAll('.toolbar-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
         e.preventDefault();
         const action = btn.dataset.action;
-        insertMarkdown(action);
+        applyFormat(action);
     });
 });
 
-// Keyboard shortcuts for formatting
-document.querySelectorAll('.prompt-editor').forEach(textarea => {
-    textarea.addEventListener('keydown', (e) => {
+// Keyboard shortcuts for formatting in preview
+document.querySelectorAll('.prompt-preview').forEach(preview => {
+    preview.addEventListener('keydown', (e) => {
         if (e.ctrlKey || e.metaKey) {
             switch (e.key.toLowerCase()) {
                 case 'b':
                     e.preventDefault();
-                    insertMarkdown('bold');
+                    applyFormat('bold');
                     break;
                 case 'i':
                     e.preventDefault();
-                    insertMarkdown('italic');
+                    applyFormat('italic');
                     break;
             }
         }
     });
 });
+
+// Initialize WYSIWYG on load
+setTimeout(() => {
+    enableWYSIWYG();
+}, 150);
 
