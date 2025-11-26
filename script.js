@@ -171,6 +171,22 @@ const DEFAULT_MANAGER_PROMPT = `Ты — профессиональный мен
 let conversationHistory = [];
 let isProcessing = false;
 let lastRating = null; // Хранит последнюю оценку диалога
+let universalPromptAppendix = ''; // Текст из kniga_menedzhera.txt
+
+// Load universal prompt from file
+async function loadUniversalPrompt() {
+    try {
+        const response = await fetch('kniga_menedzhera.txt');
+        if (response.ok) {
+            universalPromptAppendix = await response.text();
+            console.log('Universal prompt loaded, length:', universalPromptAppendix.length);
+        } else {
+            console.warn('Failed to load kniga_menedzhera.txt');
+        }
+    } catch (e) {
+        console.error('Error loading kniga_menedzhera.txt:', e);
+    }
+}
 
 // Configure marked.js
 if (typeof marked !== 'undefined') {
@@ -496,8 +512,7 @@ async function sendMessage() {
     
     // Disable input while processing
     isProcessing = true;
-    sendBtn.disabled = true;
-    userInput.disabled = true;
+    toggleInputState(false);
     
     // Hide start button if visible
     if (startConversation) {
@@ -531,7 +546,7 @@ async function sendMessage() {
         
         const requestBody = {
             chatInput: userMessage,  // Основное поле для n8n Chat Trigger
-            systemPrompt: systemPrompt || 'Вы — полезный ассистент.',
+            systemPrompt: (systemPrompt || 'Вы — полезный ассистент.') + (universalPromptAppendix ? '\n\n' + universalPromptAppendix : ''),
             dialogHistory: dialogHistory.trim(),
             sessionId: clientSessionId
         };
@@ -604,9 +619,11 @@ async function sendMessage() {
     } finally {
         // Re-enable input
         isProcessing = false;
-        sendBtn.disabled = false;
-        userInput.disabled = false;
-        userInput.focus();
+        // Только если чат не заблокирован оценкой
+        if (!lastRating) {
+            toggleInputState(true);
+            userInput.focus();
+        }
     }
 }
 
@@ -680,7 +697,7 @@ async function startConversationHandler() {
         
         const requestBody = {
             chatInput: '/start',  // Hidden command to start conversation
-            systemPrompt: systemPrompt || 'Вы — клиент.',
+            systemPrompt: (systemPrompt || 'Вы — клиент.') + (universalPromptAppendix ? '\n\n' + universalPromptAppendix : ''),
             dialogHistory: '',  // Empty for first message
             sessionId: clientSessionId
         };
@@ -909,6 +926,10 @@ async function rateChat() {
         return;
     }
     
+    if (isProcessing) {
+        return;
+    }
+    
     // Disable button while processing
     rateChatBtn.disabled = true;
     rateChatBtn.classList.add('loading');
@@ -931,7 +952,7 @@ async function rateChat() {
         
         const requestBody = {
             dialog: dialogText.trim(),
-            raterPrompt: raterPrompt,
+            raterPrompt: raterPrompt + (universalPromptAppendix ? '\n\n' + universalPromptAppendix : ''),
             sessionId: raterSessionId
         };
         
@@ -1561,7 +1582,7 @@ async function generateAIResponse() {
         // Prepare request body with full dialog history
         const managerName = getManagerName();
         const basePrompt = managerPromptInput.value.trim() || DEFAULT_MANAGER_PROMPT;
-        const fullPrompt = `Тебя зовут ${managerName}.\n\n${basePrompt}`;
+        const fullPrompt = `Тебя зовут ${managerName}.\n\n${basePrompt}` + (universalPromptAppendix ? '\n\n' + universalPromptAppendix : '');
         
         const requestBody = {
             systemPrompt: fullPrompt,
@@ -1675,6 +1696,7 @@ if (window.innerWidth <= 1024) {
 
 // Initialize
 loadPrompts();
+loadUniversalPrompt();
 initSpeechRecognition();
 userInput.focus();
 autoResizeTextarea(userInput); // Установить начальную высоту
