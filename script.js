@@ -705,7 +705,7 @@ function exportChat() {
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `chat-export-${Date.now()}.txt`;
+    link.download = `диалог ${Date.now()}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
