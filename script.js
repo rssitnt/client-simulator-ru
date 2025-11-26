@@ -360,7 +360,12 @@ managerNameInput.addEventListener('input', () => {
 
 // Auto-resize textarea
 function autoResizeTextarea(textarea) {
-    textarea.style.height = 'auto';
+    // Если пустой - минимальная высота
+    if (!textarea.value.trim()) {
+        textarea.style.height = '44px';
+        return;
+    }
+    textarea.style.height = '44px'; // Сначала сбросим до минимума
     const newHeight = Math.max(44, Math.min(textarea.scrollHeight, 300)); // Минимум 44px, максимум 300px
     textarea.style.height = newHeight + 'px';
 }
