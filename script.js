@@ -594,28 +594,18 @@ rateChatBtn.addEventListener('click', rateChat);
 // Start conversation button
 // Start conversation handler
 async function startConversationHandler() {
-    const managerName = getManagerName();
-    const greetingMessage = `Здравствуйте. Вас приветствует ${managerName}, менеджер ГК "Традиция". Чем могу помочь?`;
-    
     // Hide start button
     const startDiv = document.getElementById('startConversation');
     if (startDiv) startDiv.style.display = 'none';
     
-    // Add greeting as user message
-    addMessage(greetingMessage, 'user', false);
-    conversationHistory.push({
-        role: 'user',
-        content: greetingMessage
-    });
-    
-    // Send to webhook and get client response
+    // Send /start to webhook (not shown in chat)
     const loadingMsg = addMessage('', 'loading');
     
     try {
         const systemPrompt = systemPromptInput.value.trim();
         
         const requestBody = {
-            chatInput: greetingMessage,
+            chatInput: '/start',  // Hidden command to start conversation
             systemPrompt: systemPrompt || 'Вы — клиент.',
             dialogHistory: '',  // Empty for first message
             sessionId: clientSessionId
