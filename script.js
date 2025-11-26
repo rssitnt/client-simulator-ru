@@ -1321,9 +1321,14 @@ function setupDragAndDrop(textarea, storageKey) {
                 reader.onload = async (event) => {
                     try {
                         const arrayBuffer = event.target.result;
-                        const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+                        // Use convertToMarkdown to preserve formatting (headers, bold, lists, etc.)
+                        const result = await mammoth.convertToMarkdown({ arrayBuffer: arrayBuffer });
                         setTextWithUndo(textarea, result.value);
                         localStorage.setItem(storageKey, textarea.value);
+                        // Log any warnings about conversion
+                        if (result.messages && result.messages.length > 0) {
+                            console.log('Mammoth conversion messages:', result.messages);
+                        }
                     } catch (err) {
                         console.error('Error reading .docx:', err);
                         alert('Ошибка чтения .docx файла');
@@ -1383,11 +1388,16 @@ function setupDragAndDropForPreview(previewElement, textarea, storageKey) {
                 reader.onload = async (event) => {
                     try {
                         const arrayBuffer = event.target.result;
-                        const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+                        // Use convertToMarkdown to preserve formatting (headers, bold, lists, etc.)
+                        const result = await mammoth.convertToMarkdown({ arrayBuffer: arrayBuffer });
                         textarea.value = result.value;
                         localStorage.setItem(storageKey, textarea.value);
                         // Update preview
                         previewElement.innerHTML = renderMarkdown(textarea.value);
+                        // Log any warnings about conversion
+                        if (result.messages && result.messages.length > 0) {
+                            console.log('Mammoth conversion messages:', result.messages);
+                        }
                     } catch (err) {
                         console.error('Error reading .docx:', err);
                         alert('Ошибка чтения .docx файла');
