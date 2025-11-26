@@ -365,36 +365,24 @@ function addMessage(content, role, isMarkdown = false) {
             </div>
         `;
     } else if (isMarkdown) {
-        // Try to parse markdown
-        if (typeof marked !== 'undefined') {
-            try {
-                const parsed = typeof marked.parse === 'function' ? marked.parse(content) : marked(content);
-                contentDiv.innerHTML = parsed;
-                // Apply syntax highlighting
-                if (typeof hljs !== 'undefined') {
-                    contentDiv.querySelectorAll('pre code').forEach((block) => {
-                        hljs.highlightElement(block);
-                    });
-                }
-            } catch (e) {
-                console.error('Markdown parse error:', e);
-                // Fallback: simple markdown conversion
-                let html = content
-                    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-                    .replace(/\n\n/g, '</p><p>')
-                    .replace(/\n/g, '<br>');
-                contentDiv.innerHTML = '<p>' + html + '</p>';
-            }
-        } else {
-            // Fallback: simple markdown conversion without marked library
-            let html = content
-                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\*(.+?)\*/g, '<em>$1</em>')
-                .replace(/\n\n/g, '</p><p>')
-                .replace(/\n/g, '<br>');
-            contentDiv.innerHTML = '<p>' + html + '</p>';
-        }
+        // Simple markdown conversion (works reliably)
+        let html = content
+            // Bold: **text** (multiline support with [\s\S])
+            .replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>')
+            // Italic: *text*
+            .replace(/\*([^\*\n]+)\*/g, '<em>$1</em>')
+            // Numbered lists: 1. item
+            .replace(/^(\d+)\.\s+(.+)$/gm, '<li>$2</li>')
+            // Bullet lists: - item or * item (at start of line)
+            .replace(/^[-\*]\s+(.+)$/gm, '<li>$1</li>')
+            // Wrap consecutive <li> in <ul>
+            .replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>')
+            .replace(/<\/ul>\s*<ul>/g, '')
+            // Paragraphs
+            .replace(/\n\n+/g, '</p><p>')
+            // Line breaks
+            .replace(/\n/g, '<br>');
+        contentDiv.innerHTML = '<p>' + html + '</p>';
     } else {
         contentDiv.textContent = content;
     }
