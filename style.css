@@ -773,7 +773,7 @@ body {
     flex: 1;
 }
 
-/* Edit mode: только редактор (textarea) */
+/* Edit-only mode: только редактор */
 .prompt-wrapper .prompt-editor {
     display: block;
     flex: 1;
@@ -784,15 +784,22 @@ body {
     display: none;
 }
 
-/* Preview mode: только preview (read-only) */
+/* Preview mode: split-view - редактор слева, preview справа */
+.prompt-wrapper.preview-mode {
+    flex-direction: row;
+}
+
 .prompt-wrapper.preview-mode .prompt-editor {
-    display: none;
+    display: block;
+    flex: 1;
+    width: 50%;
+    border-right: 1px solid #2a2a2a;
 }
 
 .prompt-wrapper.preview-mode .prompt-preview {
     display: block;
     flex: 1;
-    width: 100%;
+    width: 50%;
 }
 
 /* Markdown Preview Styles (WYSIWYG editable) */
