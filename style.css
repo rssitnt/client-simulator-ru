@@ -1,3 +1,19 @@
+:root {
+    --color-accent: #7F96FF;
+    --color-accent-hover: #6b82eb;
+    --color-bg-primary: #0F0F0F;
+    --color-bg-secondary: #1a1a1a;
+    --color-bg-tertiary: #252525;
+    --color-bg-input: #1f1f1f;
+    --color-border: #333;
+    --color-border-light: #444;
+    --color-text-primary: #e0e0e0;
+    --color-text-secondary: #888;
+    --color-text-muted: #666;
+    --color-error: #ff5555;
+    --color-success: #50fa7b;
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -6,8 +22,8 @@
 
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: #0F0F0F;
-    color: #e0e0e0;
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
     height: 100dvh;
     overflow: hidden;
 }
@@ -48,8 +64,8 @@ body {
 }
 
 .mobile-tab.active {
-    background: #7F96FF;
-    border-color: #7F96FF;
+    background: var(--color-accent);
+    border-color: var(--color-accent);
     color: #fff;
 }
 
@@ -381,13 +397,13 @@ body {
 
 .message.user {
     align-self: flex-end;
-    background: #7F96FF;
+    background: var(--color-accent);
     color: #fff;
 }
 
 .message.user .message-content :not(pre) > code {
     background: rgba(127, 150, 255, 0.3);
-    border-color: #7F96FF;
+    border-color: var(--color-accent);
 }
 
 .message.assistant {
@@ -542,7 +558,7 @@ body {
 }
 
 .btn-input-action.loading {
-    color: #7F96FF;
+    color: var(--color-accent);
     animation: spin 1s linear infinite;
 }
 
@@ -564,7 +580,7 @@ body {
     width: 44px;
     height: 44px;
     padding: 0;
-    background: #7F96FF;
+    background: var(--color-accent);
     border: none;
     color: #fff;
     border-radius: 6px;
@@ -583,7 +599,7 @@ body {
 }
 
 .btn-send:hover {
-    background: #7F96FF;
+    background: var(--color-accent);
 }
 
 .btn-send:hover svg {
@@ -628,8 +644,8 @@ body {
 }
 
 .instruction-tab.active {
-    color: #7F96FF;
-    border-bottom-color: #7F96FF;
+    color: var(--color-accent);
+    border-bottom-color: var(--color-accent);
 }
 
 .instruction-content {
@@ -751,7 +767,7 @@ body {
 
 .prompt-editor.drag-over,
 .prompt-preview.drag-over {
-    border: 2px dashed #7F96FF !important;
+    border: 2px dashed var(--color-accent) !important;
     background: #1a1a2e !important;
 }
 
@@ -816,7 +832,7 @@ body {
 /* Selection styling in preview */
 .prompt-preview::selection,
 .prompt-preview *::selection {
-    background: rgba(127, 150, 255, 0.3);
+    background: rgba(127, 150, 255, 0.3); /* Keep rgba for opacity */
 }
 
 .prompt-preview::-webkit-scrollbar {
@@ -881,7 +897,7 @@ body {
 }
 
 .prompt-preview li::marker {
-    color: #7F96FF;
+    color: var(--color-accent);
 }
 
 .prompt-preview strong {
@@ -897,11 +913,11 @@ body {
 .prompt-preview code {
     font-family: 'Consolas', 'Monaco', monospace;
     font-size: 0.9em;
-    background: #1a1a1a;
+    background: var(--color-bg-secondary);
     padding: 2px 6px;
     border-radius: 4px;
-    border: 1px solid #333;
-    color: #7F96FF;
+    border: 1px solid var(--color-border);
+    color: var(--color-accent);
 }
 
 .prompt-preview pre {
@@ -924,8 +940,8 @@ body {
 .prompt-preview blockquote {
     margin: 16px 0;
     padding: 12px 16px;
-    background: #1a1a1a;
-    border-left: 3px solid #7F96FF;
+    background: var(--color-bg-secondary);
+    border-left: 3px solid var(--color-accent);
     color: #bbb;
     font-style: italic;
 }
@@ -937,7 +953,7 @@ body {
 }
 
 .prompt-preview a {
-    color: #7F96FF;
+    color: var(--color-accent);
     text-decoration: none;
 }
 
@@ -1126,7 +1142,7 @@ body {
 
 .manager-name-container input:focus {
     outline: none;
-    border-color: #7F96FF;
+    border-color: var(--color-accent);
     background: #222;
 }
 
@@ -1200,7 +1216,7 @@ body {
 
 .modal-content input:focus {
     outline: none;
-    border-color: #7F96FF;
+    border-color: var(--color-accent);
 }
 
 .modal-content input::placeholder {
@@ -1209,7 +1225,7 @@ body {
 
 .btn-modal-submit {
     width: 100%;
-    background: #7F96FF;
+    background: var(--color-accent);
     color: #fff;
     border: none;
     border-radius: 8px;
@@ -1221,7 +1237,7 @@ body {
 }
 
 .btn-modal-submit:hover {
-    background: #6b82eb;
+    background: var(--color-accent-hover);
 }
 
 .btn-modal-submit:active {

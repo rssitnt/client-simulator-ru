@@ -35,138 +35,6 @@ const nameModal = document.getElementById('nameModal');
 const modalNameInput = document.getElementById('modalNameInput');
 const modalNameSubmit = document.getElementById('modalNameSubmit');
 
-// Default Manager Prompt Template
-const DEFAULT_MANAGER_PROMPT = `Ты — профессиональный менеджер по продажам навесного оборудования (гидромолоты, гидробуры, ковши, ножницы, сваерезки, вибропогружатели) компании "Традиция-К".
-
-ТВОЯ ЦЕЛЬ: Вести диалог так, чтобы получить максимальный балл (100/100) от строгого оценщика по всем критериям.
-
-=== КРИТЕРИИ ОЦЕНКИ (ОБЯЗАТЕЛЬНО СОБЛЮДАЙ) ===
-
-1. КОНТАКТ И ЭМПАТИЯ (10% веса):
-   - Подключайся к запросу клиента, будь уважителен.
-   - Не "ломайся" под жёстким тоном клиента — оставайся спокойным и профессиональным.
-   - Проявляй человеческое отношение, не будь роботом.
-   - Подстраивайся под стиль клиента: если он "на чиле" и прямолинеен, будь таким же.
-
-2. ВЫЯВЛЕНИЕ ПОТРЕБНОСТИ (30% веса — САМЫЙ ВАЖНЫЙ!):
-   - Задавай УМЕСТНЫЕ открытые вопросы, логичные уточнения.
-   - Собирай ключевые техмаркеры по продукту (см. карту ниже).
-   - НЕ "расстреливай" клиента длинным списком вопросов подряд.
-   - Если клиент говорит "подберите сами, да пофиг" — вытягивай информацию мягко, но настойчиво.
-   - Задавай 1-2 вопроса за сообщение, не больше.
-
-3. РАБОТА С ВОЗРАЖЕНИЯМИ (20% веса):
-   - Присоединяйся к возражению: "Понимаю", "Логично, что смотрите по цене", "Да, сроки важны".
-   - Выясняй причину/истинность возражения: "А с чем сравниваете?", "Что именно смущает?"
-   - "Расшатывай" возражение: показывай риски/альтернативы.
-   - Используй аргументы по сути, не общие фразы.
-   - Резюмируй и проверяй скрытые возражения.
-   - На жёсткий тон реагируй корректно — без споров и обидчивости.
-
-4. ПРЕЗЕНТАЦИЯ ЦЕННОСТИ (20% веса):
-   - Связка "характеристика → отличие → выгода".
-   - Привязывай к РЕАЛЬНЫМ рискам клиента: простой техники, сервис, ресурс, срок службы, риски поломок.
-   - НЕ просто "у нас качественно/надёжно" — давай конкретику и понятные выгоды.
-   - Объясняй "зачем", а не просто "что".
-
-5. СЛЕДУЮЩИЙ ШАГ (10% веса):
-   - Чётко завершай диалог: что делать, когда и кто.
-   - Примеры: "Отправляю КП сегодня до 18:00 на почту...", "Созваниваемся завтра в 11:00...", "Высылаю счёт после согласования комплектации...".
-
-6. КОММУНИКАЦИОННАЯ ГИГИЕНА (10% веса):
-   - Ясность и структура речи.
-   - Уверенный, спокойный тон.
-   - Без манипулятивных клише и пустых обещаний.
-   - Выдержка под давлением/наездами клиента.
-
-=== КАРТА ВОПРОСОВ ДЛЯ ВЫЯВЛЕНИЯ ПОТРЕБНОСТИ ===
-
-ГИДРОМОЛОТ:
-- Базовая машина (марка/модель)
-- Носитель/масса
-- Однопоточная линия
-- Поток (л/мин) / давление (бар)
-- Что ломать (бетон, гранит, надгабарит)
-- Режим работы (эпизодически/тяжёлый)
-- БСМ (быстросъём)
-- Монтажный комплект
-- Резьба концов линии
-
-ГИДРОБУР:
-- Поток / давление / реверс
-- Диаметр / глубина
-- Тип грунта (суглинок, глина, песок, скала, валуны)
-- БСМ
-- Монтажный комплект (БРС, кронштейн, удлинители)
-- Тип шнеков (под поточное или рейсовое бурение)
-
-КОВШ:
-- Объём
-- Условия работ (карьер, стройка, погрузка в самосвалы)
-- Материал (грунт, щебень, скала, лом)
-- БСМ
-- Монтажный комплект (кронштейн, пальцы, втулки)
-
-НОЖНИЦЫ:
-- Тип работ (первичное/вторичное разрушение, резка металлоконструкций)
-- Разводки (одна/две линии, давление/поток)
-- Удлинённое рабочее оборудование на машине
-- БСМ
-- Монтажный комплект
-
-СВАЕРЕЗКА:
-- Базовая машина (марка/модель)
-- Давление / расход по гидролинии
-- Сечение / форма свай
-- Расстояние между сваями
-- Требуемый вылет
-- Длина РВД
-
-ВИБРОПОГРУЖАТЕЛЬ:
-- Профиль / размер (шпунт, труба, балка)
-- Глубина погружения
-- Геология / регион (промерзание, сложный грунт)
-- Доступная техника (кран, экскаватор, генератор, свободный крюк)
-- Параметры гидролиний
-- Техограничения (предбурение, пропаривание, ограничения по вибрации)
-- Замки/соединения шпунта или профиля
-
-=== ПРАВИЛА ПОВЕДЕНИЯ КЛИЕНТА (УЧИТЫВАЙ) ===
-
-- Клиент — типичный мужчина 40+, "на чиле": спокойный, прагматичный, иногда ироничный.
-- Прямота и краткость. Говорит просто, без лишней теории.
-- Может использовать разговорный стиль и крепкое словцо.
-- Отвечает коротко: обычно 1-2 предложения, максимум 3.
-- Не сливает всё сразу — даёт детали только по запросу.
-- Может задавать встречные вопросы: про сроки, простой техники, сервис, гарантию, риски.
-- Встраивает 1-3 возражения: "дорого", "видел дешевле", "надо вчера", "не уверен, подойдёт ли".
-- Может быть жёстким, если менеджер игнорирует вопросы или обещает "с потолка".
-- Может начинать с нехватки информации: "Да пофиг, подберите, там разберёмся".
-
-=== ФОРМАТ ОТВЕТА ===
-
-- Всегда от первого лица: "я", "мы".
-- Ответы короткие и прямые: максимум 2-3 предложения.
-- Без лишней теории и лекций.
-- Можно использовать лёгкий сленг, но по делу.
-- Структура: вопрос/уточнение → краткий ответ/выгода → следующий шаг.
-
-=== ТВОЯ ЗАДАЧА ===
-
-Прочитай историю диалога выше. Проанализируй:
-- Что уже выяснено о потребности клиента?
-- Какие техмаркеры ещё не собраны?
-- Есть ли возражения, которые нужно обработать?
-- Какой следующий шаг логичен?
-
-Сгенерируй ЛУЧШИЙ следующий ответ от лица менеджера, который:
-- Продвигает диалог к закрытию сделки
-- Собирает недостающие техмаркеры (если нужно)
-- Работает с возражениями (если есть)
-- Предлагает чёткий следующий шаг
-
-Ответ должен быть готовым к отправке (чистый текст сообщения). БЕЗ кавычек, БЕЗ префиксов типа "Менеджер:", БЕЗ лишних слов. Просто текст ответа менеджера.`;
-
 // State
 let conversationHistory = [];
 let isProcessing = false;
@@ -214,6 +82,12 @@ if (typeof TurndownService !== 'undefined') {
             return '~~' + content + '~~';
         }
     });
+}
+
+// Extract response from various API formats
+function extractApiResponse(data) {
+    if (typeof data === 'string') return data;
+    return data.response || data.message || data.output || data.text || data.rating || JSON.stringify(data, null, 2);
 }
 
 // Debounce function to limit API calls
@@ -283,11 +157,10 @@ async function loadPrompts() {
                     raterPromptInput.value = data.rater_prompt;
                     localStorage.setItem('raterPrompt', data.rater_prompt);
                 }
-                console.log('Prompts loaded from server');
                 return;
             }
         } catch (e) {
-            console.warn('Failed to load from server, using localStorage:', e);
+            // Fallback to localStorage silently
         }
     }
     
@@ -310,9 +183,8 @@ const savePromptsToServer = debounce(async () => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-        console.log('Prompts saved to server');
     } catch (e) {
-        console.error('Failed to save prompts to server:', e);
+        // Silent fail for server save
     }
 }, 2000); // Save after 2 seconds of no typing
 
@@ -358,15 +230,13 @@ function loadSavedData() {
         }
     }
     
-    // Load manager prompt or use default
+    // Load manager prompt
     if (savedManagerPrompt) {
         const cleanedManagerPrompt = unescapeMarkdown(savedManagerPrompt);
         managerPromptInput.value = cleanedManagerPrompt;
         if (cleanedManagerPrompt !== savedManagerPrompt) {
             localStorage.setItem('managerPrompt', cleanedManagerPrompt);
         }
-    } else {
-        managerPromptInput.value = DEFAULT_MANAGER_PROMPT;
     }
     
     // Load manager name or show modal
@@ -609,25 +479,7 @@ async function sendMessage() {
         }
         
         const data = await response.json();
-        
-        // Extract assistant response
-        let assistantMessage = '';
-        
-        // Пробуем разные варианты структуры ответа от n8n
-        if (typeof data === 'string') {
-            assistantMessage = data;
-        } else if (data.response) {
-            assistantMessage = data.response;
-        } else if (data.message) {
-            assistantMessage = data.message;
-        } else if (data.output) {
-            assistantMessage = data.output;
-        } else if (data.text) {
-            assistantMessage = data.text;
-        } else {
-            // Если структура неизвестна, показываем весь JSON
-            assistantMessage = JSON.stringify(data, null, 2);
-        }
+        const assistantMessage = extractApiResponse(data);
         
         if (!assistantMessage) {
             throw new Error('Пустой ответ от сервера');
@@ -775,28 +627,13 @@ async function startConversationHandler() {
         }
         
         const data = await response.json();
-        
-        let assistantMessage = '';
-        if (typeof data === 'string') {
-            assistantMessage = data;
-        } else if (data.response) {
-            assistantMessage = data.response;
-        } else if (data.message) {
-            assistantMessage = data.message;
-        } else if (data.output) {
-            assistantMessage = data.output;
-        } else if (data.text) {
-            assistantMessage = data.text;
-        } else {
-            assistantMessage = JSON.stringify(data, null, 2);
-        }
+        const assistantMessage = extractApiResponse(data);
         
         if (!assistantMessage) {
             throw new Error('Пустой ответ от сервера');
         }
         
         loadingMsg.remove();
-        
         addMessage(assistantMessage, 'assistant', true);
         conversationHistory.push({
             role: 'assistant',
@@ -1283,25 +1120,7 @@ async function rateChat() {
         }
         
         const data = await response.json();
-        
-        // Extract rating response
-        let ratingMessage = '';
-        
-        if (typeof data === 'string') {
-            ratingMessage = data;
-        } else if (data.response) {
-            ratingMessage = data.response;
-        } else if (data.message) {
-            ratingMessage = data.message;
-        } else if (data.rating) {
-            ratingMessage = data.rating;
-        } else if (data.output) {
-            ratingMessage = data.output;
-        } else if (data.text) {
-            ratingMessage = data.text;
-        } else {
-            ratingMessage = JSON.stringify(data, null, 2);
-        }
+        const ratingMessage = extractApiResponse(data);
         
         if (!ratingMessage) {
             throw new Error('Пустой ответ от сервера оценки');
@@ -1321,9 +1140,6 @@ async function rateChat() {
         lockDialogInput();
         
     } catch (error) {
-        console.error('Rating error:', error);
-        console.error('Error name:', error.name);
-        console.error('Error message:', error.message);
         loadingMsg.remove();
         
         let errorMessage = 'Ошибка при оценке диалога';
@@ -1416,12 +1232,7 @@ function setupDragAndDrop(textarea, storageKey) {
                         const result = await mammoth.convertToMarkdown({ arrayBuffer: arrayBuffer });
                         setTextWithUndo(textarea, result.value);
                         localStorage.setItem(storageKey, textarea.value);
-                        // Log any warnings about conversion
-                        if (result.messages && result.messages.length > 0) {
-                            console.log('Mammoth conversion messages:', result.messages);
-                        }
                     } catch (err) {
-                        console.error('Error reading .docx:', err);
                         alert('Ошибка чтения .docx файла');
                     }
                 };
@@ -1485,12 +1296,7 @@ function setupDragAndDropForPreview(previewElement, textarea, storageKey) {
                         localStorage.setItem(storageKey, textarea.value);
                         // Update preview
                         previewElement.innerHTML = renderMarkdown(textarea.value);
-                        // Log any warnings about conversion
-                        if (result.messages && result.messages.length > 0) {
-                            console.log('Mammoth conversion messages:', result.messages);
-                        }
                     } catch (err) {
-                        console.error('Error reading .docx:', err);
                         alert('Ошибка чтения .docx файла');
                     }
                 };
@@ -1748,7 +1554,6 @@ document.addEventListener('mousemove', (e) => {
 document.addEventListener('mouseup', () => {
     if (isResizing) {
         isResizing = false;
-        currentHandle = null;
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
     }
@@ -1822,9 +1627,6 @@ function stopRecording() {
 
 // Generate AI response for manager
 async function generateAIResponse() {
-    console.log('generateAIResponse called');
-    console.log('conversationHistory:', conversationHistory);
-    
     if (isDialogRated) {
         return;
     }
@@ -1835,14 +1637,12 @@ async function generateAIResponse() {
     }
     
     if (isProcessing) {
-        console.log('isProcessing is true, returning');
         return;
     }
     
     // Disable button while processing
     aiAssistBtn.disabled = true;
     aiAssistBtn.classList.add('loading');
-    console.log('Starting AI generation...');
     
     try {
         // Format full dialog history for context
@@ -1859,7 +1659,7 @@ async function generateAIResponse() {
         
         // Prepare request body with full dialog history
         const managerName = getManagerName();
-        const basePrompt = managerPromptInput.value.trim() || DEFAULT_MANAGER_PROMPT;
+        const basePrompt = managerPromptInput.value.trim();
         const fullPrompt = `Тебя зовут ${managerName}.\n\n${basePrompt}`;
         
         const requestBody = {
@@ -1868,9 +1668,6 @@ async function generateAIResponse() {
             dialogHistory: dialogHistory.trim(),
             sessionId: managerSessionId
         };
-        
-        console.log('Sending request to:', MANAGER_ASSISTANT_WEBHOOK_URL);
-        console.log('Request body:', requestBody);
         
         // Make webhook request
         const response = await fetch(MANAGER_ASSISTANT_WEBHOOK_URL, {
@@ -1881,33 +1678,12 @@ async function generateAIResponse() {
             body: JSON.stringify(requestBody)
         });
         
-        console.log('Response status:', response.status);
-        
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
         const data = await response.json();
-        console.log('Response data:', data);
-        
-        // Extract AI response
-        let aiMessage = '';
-        
-        if (typeof data === 'string') {
-            aiMessage = data;
-        } else if (data.response) {
-            aiMessage = data.response;
-        } else if (data.message) {
-            aiMessage = data.message;
-        } else if (data.output) {
-            aiMessage = data.output;
-        } else if (data.text) {
-            aiMessage = data.text;
-        } else {
-            aiMessage = JSON.stringify(data, null, 2);
-        }
-        
-        console.log('Extracted aiMessage:', aiMessage);
+        let aiMessage = extractApiResponse(data);
         
         if (!aiMessage) {
             throw new Error('Пустой ответ от AI');
@@ -1922,7 +1698,6 @@ async function generateAIResponse() {
         userInput.value = aiMessage;
         autoResizeTextarea(userInput);
         userInput.focus();
-        console.log('AI response inserted into input field');
         
     } catch (error) {
         console.error('AI generation error:', error);
@@ -2181,19 +1956,6 @@ function htmlToMarkdown(html) {
     return md;
 }
 
-// Make all previews contenteditable
-function enableWYSIWYG() {
-    [systemPromptPreview, managerPromptPreview, raterPromptPreview].forEach(preview => {
-        if (preview) {
-            preview.setAttribute('contenteditable', 'true');
-            
-            // Sync on input
-            preview.addEventListener('input', debounce(() => {
-                syncPreviewToTextarea();
-            }, 500));
-        }
-    });
-}
 
 // Toolbar button click handlers
 document.querySelectorAll('.toolbar-btn').forEach(btn => {
@@ -2222,8 +1984,4 @@ document.querySelectorAll('.prompt-preview').forEach(preview => {
     });
 });
 
-// Initialize WYSIWYG on load
-setTimeout(() => {
-    enableWYSIWYG();
-}, 150);
 
