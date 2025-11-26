@@ -173,8 +173,10 @@ function loadPrompts() {
             const promptsRef = ref(db, 'prompts');
             onValue(promptsRef, (snapshot) => {
                 const data = snapshot.val();
+                console.log('Firebase data received:', data);
                 
                 if (data) {
+                    console.log('Loading prompts from Firebase...');
                     // Update fields only if they are not focused (to avoid overwriting user input while typing)
                     if (document.activeElement !== systemPromptInput && data.client_prompt) {
                         systemPromptInput.value = data.client_prompt;
@@ -195,11 +197,13 @@ function loadPrompts() {
                     if (typeof updateAllPreviews === 'function') {
                         updateAllPreviews();
                     }
+                    console.log('Prompts loaded from Firebase');
                 } else {
                     // Firebase is empty - upload local data if exists
                     const hasLocalData = systemPromptInput.value || raterPromptInput.value || managerPromptInput.value;
+                    console.log('Firebase is empty. Local data exists:', hasLocalData);
                     if (hasLocalData) {
-                        console.log('Firebase empty, uploading local data...');
+                        console.log('Uploading local data to Firebase...');
                         savePromptsToFirebaseNow();
                     }
                 }
