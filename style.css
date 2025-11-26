@@ -755,10 +755,6 @@ body {
     cursor: text;
 }
 
-.prompt-preview:focus {
-    background: #121212;
-    outline: 1px solid #333;
-}
 
 /* Selection styling in preview */
 .prompt-preview::selection,
