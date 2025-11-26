@@ -146,13 +146,8 @@ body {
     height: 100%;
 }
 
-/* Hide export buttons by default, show on header hover */
+/* Export buttons always visible */
 .btn-export {
-    opacity: 0;
-    transition: opacity 0.2s;
-}
-
-.panel-header:hover .btn-export {
     opacity: 1;
 }
 
