@@ -374,17 +374,15 @@ function addMessage(content, role, isMarkdown = false) {
             .replace(/^#\s+(.+)$/gm, '<h1>$1</h1>')
             // Horizontal rule: ---
             .replace(/^---+$/gm, '<hr>')
+            // Bullet lists FIRST: * item or - item (at start of line, with space after)
+            .replace(/^\*\s+(.+)$/gm, '• $1')
+            .replace(/^-\s+(.+)$/gm, '• $1')
+            // Numbered lists: 1. item
+            .replace(/^(\d+)\.\s+(.+)$/gm, '$1. $2')
             // Bold: **text** (multiline support with [\s\S])
             .replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>')
-            // Italic: *text*
-            .replace(/\*([^\*\n]+)\*/g, '<em>$1</em>')
-            // Numbered lists: 1. item
-            .replace(/^(\d+)\.\s+(.+)$/gm, '<li>$2</li>')
-            // Bullet lists: - item or * item (at start of line)
-            .replace(/^[-\*]\s+(.+)$/gm, '<li>$1</li>')
-            // Wrap consecutive <li> in <ul>
-            .replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>')
-            .replace(/<\/ul>\s*<ul>/g, '')
+            // Italic: *text* (only when surrounded by non-space)
+            .replace(/(?<!\s)\*([^\*\n]+)\*(?!\s)/g, '<em>$1</em>')
             // Paragraphs
             .replace(/\n\n+/g, '</p><p>')
             // Line breaks
