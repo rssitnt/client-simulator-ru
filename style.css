@@ -733,7 +733,7 @@ body {
     width: 100%;
 }
 
-/* Markdown Preview Styles (read-only) */
+/* Markdown Preview Styles (WYSIWYG editable) */
 .prompt-preview {
     flex: 1;
     padding: 16px 20px;
@@ -746,10 +746,12 @@ body {
     scrollbar-color: #444 #0F0F0F;
     outline: none;
     min-height: 100%;
-    /* Prevent editing - read-only mode */
-    -webkit-user-modify: read-only;
-    user-select: text;
-    cursor: default;
+    cursor: text;
+}
+
+.prompt-preview:focus {
+    background: #121212;
+    outline: 1px solid #333;
 }
 
 /* Selection styling in preview */

@@ -202,6 +202,11 @@ if (typeof TurndownService !== 'undefined') {
         emDelimiter: '*'
     });
     
+    // IMPORTANT: Disable escaping of markdown characters
+    turndownService.escape = function(string) {
+        return string; // Don't escape anything
+    };
+    
     // Custom rules for better markdown output
     turndownService.addRule('strikethrough', {
         filter: ['del', 's', 'strike'],
@@ -1512,12 +1517,68 @@ function setupDragAndDropForPreview(previewElement, textarea, storageKey) {
 const instructionTabs = document.querySelectorAll('.instruction-tab');
 const instructionEditors = document.querySelectorAll('.instruction-editor');
 const togglePreviewBtn = document.getElementById('togglePreviewBtn');
-let isPreviewMode = true; // Preview mode включён по умолчанию
 
-// Preview elements
+// Preview elements (WYSIWYG - always editable)
 const systemPromptPreview = document.getElementById('systemPromptPreview');
 const managerPromptPreview = document.getElementById('managerPromptPreview');
 const raterPromptPreview = document.getElementById('raterPromptPreview');
+
+// Debounced sync from WYSIWYG to textarea
+const syncWYSIWYGDebounced = debounce(function(previewElement, textarea, storageKey) {
+    if (turndownService && previewElement) {
+        const markdown = turndownService.turndown(previewElement.innerHTML);
+        textarea.value = markdown;
+        localStorage.setItem(storageKey, markdown);
+    }
+}, 300);
+
+// Setup WYSIWYG editing for a preview element
+function setupWYSIWYG(previewElement, textarea, storageKey) {
+    // Make preview editable
+    previewElement.setAttribute('contenteditable', 'true');
+    
+    // Sync changes back to textarea
+    previewElement.addEventListener('input', () => {
+        syncWYSIWYGDebounced(previewElement, textarea, storageKey);
+    });
+    
+    // Handle paste - insert as plain text, then re-render
+    previewElement.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const text = e.clipboardData.getData('text/plain');
+        
+        // Insert at cursor position
+        const selection = window.getSelection();
+        if (selection.rangeCount) {
+            const range = selection.getRangeAt(0);
+            range.deleteContents();
+            
+            // Check if pasted text looks like markdown
+            const hasMarkdown = /^#|^\*\*|\*\*$|^-\s|^\d+\.\s|^```|^>/.test(text);
+            
+            if (hasMarkdown) {
+                // Render markdown and insert
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = renderMarkdown(text);
+                const fragment = document.createDocumentFragment();
+                while (tempDiv.firstChild) {
+                    fragment.appendChild(tempDiv.firstChild);
+                }
+                range.insertNode(fragment);
+            } else {
+                // Insert as plain text
+                const textNode = document.createTextNode(text);
+                range.insertNode(textNode);
+            }
+            
+            // Move cursor to end
+            selection.collapseToEnd();
+        }
+        
+        // Sync to textarea
+        syncWYSIWYGDebounced(previewElement, textarea, storageKey);
+    });
+}
 
 // Render markdown to HTML
 function renderMarkdown(text) {
@@ -1597,35 +1658,25 @@ function updatePreview() {
     }
 }
 
-// Toggle preview mode (preview is read-only, editing only in textarea)
-function togglePreviewMode() {
-    const iconPreview = togglePreviewBtn.querySelector('.icon-preview');
-    const iconEdit = togglePreviewBtn.querySelector('.icon-edit');
+// Initialize WYSIWYG mode (always on - no toggle needed)
+function initWYSIWYGMode() {
+    // Always show preview mode
+    document.querySelectorAll('.prompt-wrapper').forEach(wrapper => {
+        wrapper.classList.add('preview-mode');
+    });
     
-    isPreviewMode = !isPreviewMode;
-    
-    if (isPreviewMode) {
-        // Show preview (read-only)
-        document.querySelectorAll('.prompt-wrapper').forEach(wrapper => {
-            wrapper.classList.add('preview-mode');
-        });
-        togglePreviewBtn.classList.add('active');
-        togglePreviewBtn.title = 'Переключить на редактирование';
-        iconPreview.style.display = 'none';
-        iconEdit.style.display = 'block';
-        
-        // Render markdown in previews
-        updateAllPreviews();
-    } else {
-        // Show textarea for editing
-        document.querySelectorAll('.prompt-wrapper').forEach(wrapper => {
-            wrapper.classList.remove('preview-mode');
-        });
-        togglePreviewBtn.classList.remove('active');
-        togglePreviewBtn.title = 'Переключить на просмотр';
-        iconPreview.style.display = 'block';
-        iconEdit.style.display = 'none';
+    // Hide toggle button - not needed anymore
+    if (togglePreviewBtn) {
+        togglePreviewBtn.style.display = 'none';
     }
+    
+    // Setup WYSIWYG for all preview elements
+    setupWYSIWYG(systemPromptPreview, systemPromptInput, 'systemPrompt');
+    setupWYSIWYG(managerPromptPreview, managerPromptInput, 'managerPrompt');
+    setupWYSIWYG(raterPromptPreview, raterPromptInput, 'raterPrompt');
+    
+    // Render initial content
+    updateAllPreviews();
 }
 
 // Update all preview contents
@@ -1642,8 +1693,8 @@ function updateAllPreviews() {
     }
 }
 
-// Toggle preview button event
-togglePreviewBtn.addEventListener('click', togglePreviewMode);
+// Toggle preview button event - disabled, WYSIWYG always on
+// togglePreviewBtn.addEventListener('click', togglePreviewMode);
 
 instructionTabs.forEach(tab => {
     tab.addEventListener('click', () => {
@@ -1661,10 +1712,8 @@ instructionTabs.forEach(tab => {
             }
         });
         
-        // Update preview if in preview mode
-        if (isPreviewMode) {
-            updatePreview();
-        }
+        // Update preview (WYSIWYG always on)
+        updatePreview();
     });
 });
 
@@ -1929,12 +1978,12 @@ initSpeechRecognition();
 userInput.focus();
 autoResizeTextarea(userInput); // Установить начальную высоту
 
-// Initialize preview mode (default)
+// Initialize WYSIWYG mode (always on)
 setTimeout(() => {
-    updateAllPreviews();
+    initWYSIWYGMode();
 }, 100);
 
-// Setup drag and drop for preview elements (when in preview mode)
+// Setup drag and drop for preview elements
 setupDragAndDropForPreview(systemPromptPreview, systemPromptInput, 'systemPrompt');
 setupDragAndDropForPreview(managerPromptPreview, managerPromptInput, 'managerPrompt');
 setupDragAndDropForPreview(raterPromptPreview, raterPromptInput, 'raterPrompt');
