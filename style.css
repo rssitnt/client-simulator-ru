@@ -179,6 +179,7 @@ body {
 }
 
 .btn-icon.btn-export:hover {
+    background: transparent;
     border-color: transparent;
     transform: scale(1.15);
 }
