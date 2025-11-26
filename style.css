@@ -178,6 +178,11 @@ body {
     border-color: #444;
 }
 
+.btn-icon.btn-export:hover {
+    border-color: transparent;
+    transform: scale(1.15);
+}
+
 .chat-messages {
     flex: 1;
     overflow-y: auto;
