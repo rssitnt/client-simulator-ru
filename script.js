@@ -246,7 +246,7 @@ function lockDialogInput() {
     voiceBtn.disabled = true;
     aiAssistBtn.disabled = true;
     rateChatBtn.disabled = true;
-    userInput.placeholder = 'Диалог оценён. Нажмите "Очистить чат" для нового диалога.';
+    userInput.placeholder = 'Очистите чат для нового диалога';
     userInput.classList.add('disabled');
 }
 
