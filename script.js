@@ -34,11 +34,6 @@ const managerNameInput = document.getElementById('managerName');
 const nameModal = document.getElementById('nameModal');
 const modalNameInput = document.getElementById('modalNameInput');
 const modalNameSubmit = document.getElementById('modalNameSubmit');
-const togglePreviewBtn = document.getElementById('togglePreview');
-const instructionsPanel = document.getElementById('instructionsPanel');
-const systemPromptPreview = document.getElementById('systemPromptPreview');
-const managerPromptPreview = document.getElementById('managerPromptPreview');
-const raterPromptPreview = document.getElementById('raterPromptPreview');
 
 // Default Manager Prompt Template
 const DEFAULT_MANAGER_PROMPT = `Ты — профессиональный менеджер по продажам навесного оборудования (гидромолоты, гидробуры, ковши, ножницы, сваерезки, вибропогружатели) компании "Традиция-К".
@@ -960,80 +955,14 @@ instructionTabs.forEach(tab => {
         instructionTabs.forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         
-        // Update active editor and preview
+        // Update active editor
         instructionEditors.forEach(editor => {
             editor.classList.remove('active');
             if (editor.dataset.instruction === instructionType) {
                 editor.classList.add('active');
             }
         });
-        
-        // Update preview content if in preview mode
-        if (instructionsPanel.classList.contains('preview-mode')) {
-            updatePreview();
-        }
     });
-});
-
-// Render markdown to HTML (for preview)
-function renderMarkdown(content) {
-    return content
-        // Headers
-        .replace(/^####\s+(.+)$/gm, '<h4>$1</h4>')
-        .replace(/^###\s+(.+)$/gm, '<h3>$1</h3>')
-        .replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
-        .replace(/^#\s+(.+)$/gm, '<h1>$1</h1>')
-        // Horizontal rule
-        .replace(/^---+$/gm, '<hr>')
-        // Bullet lists
-        .replace(/^\*\s+(.+)$/gm, '• $1')
-        .replace(/^-\s+(.+)$/gm, '• $1')
-        // Bold
-        .replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>')
-        // Italic
-        .replace(/(?<!\s)\*([^\*\n]+)\*(?!\s)/g, '<em>$1</em>')
-        // Paragraphs
-        .replace(/\n\n+/g, '</p><p>')
-        // Line breaks
-        .replace(/\n/g, '<br>');
-}
-
-// Update preview content
-function updatePreview() {
-    const activeTab = document.querySelector('.instruction-tab.active');
-    const instructionType = activeTab ? activeTab.dataset.instruction : 'client';
-    
-    let content = '';
-    let previewEl = null;
-    
-    switch (instructionType) {
-        case 'client':
-            content = systemPromptInput.value;
-            previewEl = systemPromptPreview;
-            break;
-        case 'manager':
-            content = managerPromptInput.value;
-            previewEl = managerPromptPreview;
-            break;
-        case 'rater':
-            content = raterPromptInput.value;
-            previewEl = raterPromptPreview;
-            break;
-    }
-    
-    if (previewEl) {
-        previewEl.innerHTML = '<p>' + renderMarkdown(content) + '</p>';
-    }
-}
-
-// Toggle preview mode
-togglePreviewBtn.addEventListener('click', () => {
-    const isPreviewMode = instructionsPanel.classList.toggle('preview-mode');
-    togglePreviewBtn.classList.toggle('active', isPreviewMode);
-    
-    if (isPreviewMode) {
-        updatePreview();
-    }
 });
 
 // Resize panels functionality

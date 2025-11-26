@@ -114,12 +114,6 @@
                 </div>
                 
                 <div class="header-buttons">
-                    <button id="togglePreview" class="btn-icon btn-export" title="Предпросмотр">
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/>
-                            <path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/>
-                        </svg>
-                    </button>
                     <button id="exportCurrentPrompt" class="btn-icon btn-export" title="Экспорт инструкции">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                             <path d="M8.5 1a.5.5 0 00-1 0v8.793L5.354 7.646a.5.5 0 10-.708.708l3 3a.5.5 0 00.708 0l3-3a.5.5 0 00-.708-.708L8.5 9.793V1z"/>
@@ -132,13 +126,8 @@
             <!-- Контент инструкций -->
             <div class="instruction-content">
                 <textarea id="systemPrompt" class="prompt-editor instruction-editor active" data-instruction="client" placeholder="Введите инструкцию для симулятора клиента..."></textarea>
-                <div id="systemPromptPreview" class="prompt-preview instruction-editor" data-instruction="client"></div>
-                
                 <textarea id="managerPrompt" class="prompt-editor instruction-editor" data-instruction="manager" placeholder="Введите инструкцию для ИИ-ассистента менеджера..."></textarea>
-                <div id="managerPromptPreview" class="prompt-preview instruction-editor" data-instruction="manager"></div>
-                
                 <textarea id="raterPrompt" class="prompt-editor instruction-editor" data-instruction="rater" placeholder="Введите инструкцию для оценщика диалогов..."></textarea>
-                <div id="raterPromptPreview" class="prompt-preview instruction-editor" data-instruction="rater"></div>
             </div>
         </div>
         </div>
