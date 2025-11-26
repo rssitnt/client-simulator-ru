@@ -1084,8 +1084,12 @@ async function generateAIResponse() {
             : '';
         
         // Prepare request body with full dialog history
+        const managerName = getManagerName();
+        const basePrompt = managerPromptInput.value.trim() || DEFAULT_MANAGER_PROMPT;
+        const fullPrompt = `Тебя зовут ${managerName}.\n\n${basePrompt}`;
+        
         const requestBody = {
-            systemPrompt: managerPromptInput.value.trim() || DEFAULT_MANAGER_PROMPT,
+            systemPrompt: fullPrompt,
             userMessage: lastMessage,
             dialogHistory: dialogHistory.trim(),
             sessionId: managerSessionId
