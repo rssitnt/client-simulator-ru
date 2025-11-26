@@ -367,6 +367,13 @@ function addMessage(content, role, isMarkdown = false) {
     } else if (isMarkdown) {
         // Simple markdown conversion (works reliably)
         let html = content
+            // Headers: #### h4, ### h3, ## h2, # h1 (order matters - longest first)
+            .replace(/^####\s+(.+)$/gm, '<h4>$1</h4>')
+            .replace(/^###\s+(.+)$/gm, '<h3>$1</h3>')
+            .replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
+            .replace(/^#\s+(.+)$/gm, '<h1>$1</h1>')
+            // Horizontal rule: ---
+            .replace(/^---+$/gm, '<hr>')
             // Bold: **text** (multiline support with [\s\S])
             .replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>')
             // Italic: *text*
