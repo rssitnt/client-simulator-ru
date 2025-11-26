@@ -165,6 +165,23 @@
             
             <!-- Контент инструкций -->
             <div class="instruction-content">
+                <!-- Markdown Toolbar -->
+                <div class="markdown-toolbar">
+                    <button class="toolbar-btn" data-action="h1" title="Заголовок 1">H1</button>
+                    <button class="toolbar-btn" data-action="h2" title="Заголовок 2">H2</button>
+                    <button class="toolbar-btn" data-action="h3" title="Заголовок 3">H3</button>
+                    <span class="toolbar-divider"></span>
+                    <button class="toolbar-btn" data-action="bold" title="Жирный (Ctrl+B)"><strong>B</strong></button>
+                    <button class="toolbar-btn" data-action="italic" title="Курсив (Ctrl+I)"><em>I</em></button>
+                    <button class="toolbar-btn" data-action="strike" title="Зачёркнутый"><s>S</s></button>
+                    <span class="toolbar-divider"></span>
+                    <button class="toolbar-btn" data-action="ul" title="Маркированный список">•</button>
+                    <button class="toolbar-btn" data-action="ol" title="Нумерованный список">1.</button>
+                    <button class="toolbar-btn" data-action="quote" title="Цитата">"</button>
+                    <button class="toolbar-btn" data-action="code" title="Код">&lt;/&gt;</button>
+                    <button class="toolbar-btn" data-action="hr" title="Горизонтальная линия">—</button>
+                </div>
+                
                 <div class="prompt-wrapper instruction-editor active preview-mode" data-instruction="client">
                     <textarea id="systemPrompt" class="prompt-editor" placeholder="Введите инструкцию для симулятора клиента..."></textarea>
                     <div id="systemPromptPreview" class="prompt-preview"></div>

@@ -1988,3 +1988,154 @@ setupDragAndDropForPreview(systemPromptPreview, systemPromptInput, 'systemPrompt
 setupDragAndDropForPreview(managerPromptPreview, managerPromptInput, 'managerPrompt');
 setupDragAndDropForPreview(raterPromptPreview, raterPromptInput, 'raterPrompt');
 
+// Markdown Toolbar functionality
+function getActivePromptTextarea() {
+    const activeEditor = document.querySelector('.instruction-editor.active');
+    if (!activeEditor) return null;
+    return activeEditor.querySelector('.prompt-editor');
+}
+
+function getActivePromptPreview() {
+    const activeEditor = document.querySelector('.instruction-editor.active');
+    if (!activeEditor) return null;
+    return activeEditor.querySelector('.prompt-preview');
+}
+
+function insertMarkdown(action) {
+    const textarea = getActivePromptTextarea();
+    const preview = getActivePromptPreview();
+    if (!textarea) return;
+    
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    const selected = text.substring(start, end);
+    
+    let before = '';
+    let after = '';
+    let insert = '';
+    let cursorOffset = 0;
+    
+    switch (action) {
+        case 'h1':
+            before = start === 0 || text[start - 1] === '\n' ? '# ' : '\n# ';
+            insert = selected || 'Заголовок';
+            after = '\n';
+            cursorOffset = before.length;
+            break;
+        case 'h2':
+            before = start === 0 || text[start - 1] === '\n' ? '## ' : '\n## ';
+            insert = selected || 'Заголовок';
+            after = '\n';
+            cursorOffset = before.length;
+            break;
+        case 'h3':
+            before = start === 0 || text[start - 1] === '\n' ? '### ' : '\n### ';
+            insert = selected || 'Заголовок';
+            after = '\n';
+            cursorOffset = before.length;
+            break;
+        case 'bold':
+            before = '**';
+            insert = selected || 'текст';
+            after = '**';
+            cursorOffset = 2;
+            break;
+        case 'italic':
+            before = '*';
+            insert = selected || 'текст';
+            after = '*';
+            cursorOffset = 1;
+            break;
+        case 'strike':
+            before = '~~';
+            insert = selected || 'текст';
+            after = '~~';
+            cursorOffset = 2;
+            break;
+        case 'ul':
+            before = start === 0 || text[start - 1] === '\n' ? '- ' : '\n- ';
+            insert = selected || 'Пункт списка';
+            after = '\n';
+            cursorOffset = before.length;
+            break;
+        case 'ol':
+            before = start === 0 || text[start - 1] === '\n' ? '1. ' : '\n1. ';
+            insert = selected || 'Пункт списка';
+            after = '\n';
+            cursorOffset = before.length;
+            break;
+        case 'quote':
+            before = start === 0 || text[start - 1] === '\n' ? '> ' : '\n> ';
+            insert = selected || 'Цитата';
+            after = '\n';
+            cursorOffset = before.length;
+            break;
+        case 'code':
+            if (selected.includes('\n')) {
+                before = '```\n';
+                insert = selected;
+                after = '\n```\n';
+                cursorOffset = 4;
+            } else {
+                before = '`';
+                insert = selected || 'код';
+                after = '`';
+                cursorOffset = 1;
+            }
+            break;
+        case 'hr':
+            before = start === 0 || text[start - 1] === '\n' ? '\n---\n\n' : '\n\n---\n\n';
+            insert = '';
+            after = '';
+            cursorOffset = before.length;
+            break;
+        default:
+            return;
+    }
+    
+    const newText = text.substring(0, start) + before + insert + after + text.substring(end);
+    textarea.value = newText;
+    
+    // Save to localStorage
+    const storageKey = textarea.id;
+    localStorage.setItem(storageKey, newText);
+    
+    // Update preview
+    if (preview) {
+        preview.innerHTML = renderMarkdown(newText);
+    }
+    
+    // Set cursor position
+    const newCursorPos = start + before.length + insert.length;
+    textarea.focus();
+    textarea.setSelectionRange(selected ? start + before.length : newCursorPos, selected ? start + before.length + insert.length : newCursorPos);
+}
+
+// Toolbar button click handlers
+document.querySelectorAll('.toolbar-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const action = btn.dataset.action;
+        insertMarkdown(action);
+    });
+});
+
+// Keyboard shortcuts for formatting
+document.querySelectorAll('.prompt-editor').forEach(textarea => {
+    textarea.addEventListener('keydown', (e) => {
+        if (e.ctrlKey || e.metaKey) {
+            switch (e.key.toLowerCase()) {
+                case 'b':
+                    e.preventDefault();
+                    insertMarkdown('bold');
+                    break;
+                case 'i':
+                    e.preventDefault();
+                    insertMarkdown('italic');
+                    break;
+            }
+        }
+    });
+});
+
