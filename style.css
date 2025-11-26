@@ -480,7 +480,7 @@ body {
     flex: 1;
     padding: 12px 100px 12px 12px;
     background: #1f1f1f;
-    border: 1px solid #333333;
+    border: none;
     border-radius: 6px;
     color: #e0e0e0;
     font-size: 14px;
