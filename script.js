@@ -458,8 +458,8 @@ async function sendMessage() {
         startConversation.style.display = 'none';
     }
     
-    // Add user message to chat
-    addMessage(userMessage, 'user', false);
+    // Add user message to chat (with markdown support)
+    addMessage(userMessage, 'user', true);
     conversationHistory.push({
         role: 'user',
         content: userMessage
