@@ -160,8 +160,8 @@ body {
 
 .btn-icon {
     padding: 8px;
-    background: #252525;
-    border: none;
+    background: transparent;
+    border: 1px solid transparent;
     color: #e0e0e0;
     border-radius: 4px;
     cursor: pointer;
@@ -174,7 +174,8 @@ body {
 }
 
 .btn-icon:hover {
-    background: #333333;
+    background: #252525;
+    border-color: #444;
 }
 
 .chat-messages {
