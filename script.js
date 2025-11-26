@@ -825,12 +825,16 @@ async function rateChat() {
         
     } catch (error) {
         console.error('Rating error:', error);
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
         loadingMsg.remove();
         
         let errorMessage = 'Ошибка при оценке диалога';
         
         if (error.message.includes('Failed to fetch')) {
-            errorMessage = 'Ошибка соединения с сервисом оценки.';
+            errorMessage = 'Ошибка соединения с сервисом оценки. Проверьте CORS настройки в n8n.';
+        } else if (error.message.includes('Too Many Requests') || error.message.includes('429')) {
+            errorMessage = 'Слишком много запросов. Подождите 30 секунд и попробуйте снова.';
         } else {
             errorMessage = `Ошибка оценки: ${error.message}`;
         }
