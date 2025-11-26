@@ -207,6 +207,8 @@ function loadPrompts() {
                         savePromptsToFirebaseNow();
                     }
                 }
+            }, (error) => {
+                console.error('Firebase read error:', error);
             });
             console.log('Firebase connected, listening for updates...');
         } catch (e) {
