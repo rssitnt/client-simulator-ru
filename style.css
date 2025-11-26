@@ -911,6 +911,16 @@ body {
     background: #141414;
 }
 
+/* Preview button - hidden by default, shown on header hover */
+.btn-preview {
+    opacity: 0;
+    transition: opacity 0.2s, background 0.2s, border-color 0.2s;
+}
+
+.panel-header:hover .btn-preview {
+    opacity: 1;
+}
+
 /* Preview button active state */
 .btn-preview.active {
     background: #7F96FF;
