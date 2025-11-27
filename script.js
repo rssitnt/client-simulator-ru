@@ -1172,22 +1172,17 @@ async function rateChat() {
 systemPromptInput.addEventListener('input', () => {
     // Local save (immediate)
     localStorage.setItem('systemPrompt', systemPromptInput.value);
-    // Firebase save (debounced)
-    savePromptsToFirebase();
 });
 
 // Auto-save rater prompt on change (with debounce)
 raterPromptInput.addEventListener('input', () => {
     // Local save (immediate)
     localStorage.setItem('raterPrompt', raterPromptInput.value);
-    // Firebase save (debounced)
-    savePromptsToFirebase();
 });
 
 // Auto-save manager prompt on change
 managerPromptInput.addEventListener('input', () => {
     localStorage.setItem('managerPrompt', managerPromptInput.value);
-    savePromptsToFirebase();
 });
 
 // Set textarea value with undo support
@@ -1938,4 +1933,16 @@ document.querySelectorAll('.prompt-preview').forEach(preview => {
     });
 });
 
-
+// Cloud save button handler
+const saveToCloudBtn = document.getElementById('saveToCloudBtn');
+if (saveToCloudBtn) {
+    saveToCloudBtn.addEventListener('click', () => {
+        savePromptsToFirebaseNow();
+        saveToCloudBtn.classList.add('saving');
+        setTimeout(() => {
+            saveToCloudBtn.classList.remove('saving');
+            saveToCloudBtn.classList.add('saved');
+            setTimeout(() => saveToCloudBtn.classList.remove('saved'), 1500);
+        }, 500);
+    });
+}
