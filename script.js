@@ -5,13 +5,12 @@ import { firebaseConfig } from "./firebase-config.js";
 // Initialize Firebase
 let db = null;
 try {
-    // Check if config is real or placeholder
     if (firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("EXAMPLE")) {
         const app = initializeApp(firebaseConfig);
         db = getDatabase(app);
         console.log("Firebase initialized");
     } else {
-        console.warn("Firebase config is using placeholders. Update firebase-config.js to enable real-time sync.");
+        console.warn("Firebase config is using placeholders.");
     }
 } catch (e) {
     console.error("Firebase initialization failed:", e);
@@ -21,20 +20,17 @@ try {
 const WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/client-simulator';
 const RATE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/rate-manager';
 const MANAGER_ASSISTANT_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/manager-simulator';
-const SETTINGS_WEBHOOK_URL = ''; // ВСТАВЬТЕ СЮДА URL ВАШЕГО НОВОГО ВЕБХУКА ДЛЯ НАСТРОЕК
 
-// Generate unique session ID for n8n memory (different for each agent type)
+// Generate unique session ID
 let baseSessionId = localStorage.getItem('sessionId');
 if (!baseSessionId) {
     baseSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     localStorage.setItem('sessionId', baseSessionId);
 }
-// Separate session IDs for different agents to avoid memory mixing
 let clientSessionId = baseSessionId + '_client';
 let managerSessionId = baseSessionId + '_manager';
 let raterSessionId = baseSessionId + '_rater';
 
-// Supported text file extensions for drag & drop
 const TEXT_EXTENSIONS = ['.txt', '.md', '.json', '.xml', '.csv', '.html', '.htm', '.rtf', '.log'];
 
 // DOM Elements
@@ -56,12 +52,20 @@ const managerNameInput = document.getElementById('managerName');
 const nameModal = document.getElementById('nameModal');
 const modalNameInput = document.getElementById('modalNameInput');
 const modalNameSubmit = document.getElementById('modalNameSubmit');
+const promptVariationsContainer = document.getElementById('promptVariations');
 
 // State
 let conversationHistory = [];
 let isProcessing = false;
-let lastRating = null; // Хранит последнюю оценку диалога
-let isDialogRated = false; // Диалог уже оценён - блокировка ввода
+let lastRating = null;
+let isDialogRated = false;
+
+// Prompt Variations Data
+let promptsData = {
+    client: { variations: [], activeId: null },
+    manager: { variations: [], activeId: null },
+    rater: { variations: [], activeId: null }
+};
 
 // Configure marked.js
 if (typeof marked !== 'undefined') {
@@ -72,16 +76,14 @@ if (typeof marked !== 'undefined') {
             if (typeof hljs !== 'undefined' && lang && hljs.getLanguage(lang)) {
                 try {
                     return hljs.highlight(code, { language: lang }).value;
-                } catch (e) {
-                    console.error('Highlight error:', e);
-                }
+                } catch (e) {}
             }
             return code;
         }
     });
 }
 
-// Configure Turndown (HTML to Markdown converter) for WYSIWYG editing
+// Configure Turndown
 let turndownService = null;
 if (typeof TurndownService !== 'undefined') {
     turndownService = new TurndownService({
@@ -91,56 +93,62 @@ if (typeof TurndownService !== 'undefined') {
         codeBlockStyle: 'fenced',
         emDelimiter: '*'
     });
-    
-    // IMPORTANT: Disable escaping of markdown characters
-    turndownService.escape = function(string) {
-        return string; // Don't escape anything
-    };
-    
-    // Custom rules for better markdown output
+    turndownService.escape = function(string) { return string; };
     turndownService.addRule('strikethrough', {
         filter: ['del', 's', 'strike'],
-        replacement: function (content) {
-            return '~~' + content + '~~';
-        }
+        replacement: function (content) { return '~~' + content + '~~'; }
     });
 }
 
-// Extract response from various API formats
+// Utility functions
 function extractApiResponse(data) {
     if (typeof data === 'string') return data;
     return data.response || data.message || data.output || data.text || data.rating || JSON.stringify(data, null, 2);
 }
 
-// Debounce function to limit API calls
 function debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
         clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
+        timeout = setTimeout(() => func(...args), wait);
     };
 }
 
-// Toggle chat input state
+function unescapeMarkdown(text) {
+    if (!text) return text;
+    return text
+        .replace(/\\#/g, '#').replace(/\\\*/g, '*').replace(/\\-/g, '-')
+        .replace(/\\_/g, '_').replace(/\\`/g, '`').replace(/\\\[/g, '[')
+        .replace(/\\\]/g, ']').replace(/\\\(/g, '(').replace(/\\\)/g, ')')
+        .replace(/\\>/g, '>').replace(/\\!/g, '!');
+}
+
+function generateId() {
+    return 'var_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+}
+
+function getActiveRole() {
+    const activeTab = document.querySelector('.instruction-tab.active');
+    return activeTab ? activeTab.dataset.instruction : 'client';
+}
+
+function getManagerName() {
+    return managerNameInput.value.trim() || 'менеджер';
+}
+
+// Chat input state
 function toggleInputState(enabled) {
     userInput.disabled = !enabled;
     sendBtn.disabled = !enabled;
     voiceBtn.disabled = !enabled;
     aiAssistBtn.disabled = !enabled;
-    
     if (enabled) {
         userInput.classList.remove('disabled');
-        // Restore placeholder if needed, or keep as is
     } else {
         userInput.classList.add('disabled');
     }
 }
 
-// Lock dialog input after rating
 function lockDialogInput() {
     userInput.disabled = true;
     sendBtn.disabled = true;
@@ -151,7 +159,6 @@ function lockDialogInput() {
     userInput.classList.add('disabled');
 }
 
-// Unlock dialog input
 function unlockDialogInput() {
     userInput.disabled = false;
     sendBtn.disabled = false;
@@ -162,188 +169,22 @@ function unlockDialogInput() {
     userInput.classList.remove('disabled');
 }
 
-// Load prompts from Firebase (real-time) or localStorage
-function loadPrompts() {
-    // Always load from localStorage first for instant render
-    loadSavedData();
+// ============ PROMPT VARIATIONS LOGIC ============
 
-    // If Firebase is initialized, listen for real-time updates
-    if (db) {
-        try {
-            const promptsRef = ref(db, 'prompts');
-            onValue(promptsRef, (snapshot) => {
-                const data = snapshot.val();
-                console.log('Firebase data received:', data);
-                
-                if (data) {
-                    console.log('Loading prompts from Firebase...');
-                    // Update fields only if they are not focused (to avoid overwriting user input while typing)
-                    if (document.activeElement !== systemPromptInput && data.client_prompt) {
-                        systemPromptInput.value = data.client_prompt;
-                        localStorage.setItem('systemPrompt', data.client_prompt);
-                    }
-                    
-                    if (document.activeElement !== raterPromptInput && data.rater_prompt) {
-                        raterPromptInput.value = data.rater_prompt;
-                        localStorage.setItem('raterPrompt', data.rater_prompt);
-                    }
-                    
-                    if (document.activeElement !== managerPromptInput && data.manager_prompt) {
-                        managerPromptInput.value = data.manager_prompt;
-                        localStorage.setItem('managerPrompt', data.manager_prompt);
-                    }
-                    
-                    if (data.custom_tabs && Array.isArray(data.custom_tabs)) {
-                        // Merge or overwrite logic? Overwrite for now to sync across devices
-                        customTabs = data.custom_tabs;
-                        renderCustomTabs();
-                        
-                        // Update content of custom tabs
-                        customTabs.forEach(tab => {
-                            const editor = document.getElementById(tab.id + '_editor');
-                            const preview = document.getElementById(tab.id + '_preview');
-                            if (editor && document.activeElement !== editor) {
-                                editor.value = tab.content || '';
-                            }
-                            if (preview) {
-                                preview.innerHTML = renderMarkdown(tab.content || '');
-                            }
-                        });
-                    }
-                    
-                    // Update previews after loading
-                    if (typeof updateAllPreviews === 'function') {
-                        updateAllPreviews();
-                    }
-                    console.log('Prompts loaded from Firebase');
-                } else {
-                    // Firebase is empty - upload local data if exists
-                    const hasLocalData = systemPromptInput.value || raterPromptInput.value || managerPromptInput.value;
-                    console.log('Firebase is empty. Local data exists:', hasLocalData);
-                    if (hasLocalData) {
-                        console.log('Uploading local data to Firebase...');
-                        savePromptsToFirebaseNow();
-                    }
-                }
-            }, (error) => {
-                console.error('Firebase read error:', error);
-            });
-            console.log('Firebase connected, listening for updates...');
-        } catch (e) {
-            console.error('Error setting up Firebase listener:', e);
-        }
-    }
-}
-
-// Save prompts to Firebase immediately (no debounce)
-function savePromptsToFirebaseNow() {
-    if (!db) return;
-
-    const payload = {
-        client_prompt: systemPromptInput.value,
-        rater_prompt: raterPromptInput.value,
-        manager_prompt: managerPromptInput.value,
-        custom_tabs: customTabs
-    };
-
-    set(ref(db, 'prompts'), payload)
-        .then(() => console.log('Prompts synced to Firebase'))
-        .catch(e => console.error('Failed to sync to Firebase:', e));
-}
-
-// Save prompts to Firebase (debounced)
-const savePromptsToFirebase = debounce(() => {
-    savePromptsToFirebaseNow();
-}, 1000); // Save after 1 second of no typing
-
-// Load saved data from localStorage
-// Remove Turndown escape characters from markdown
-function unescapeMarkdown(text) {
-    if (!text) return text;
-    return text
-        .replace(/\\#/g, '#')
-        .replace(/\\\*/g, '*')
-        .replace(/\\-/g, '-')
-        .replace(/\\_/g, '_')
-        .replace(/\\`/g, '`')
-        .replace(/\\\[/g, '[')
-        .replace(/\\\]/g, ']')
-        .replace(/\\\(/g, '(')
-        .replace(/\\\)/g, ')')
-        .replace(/\\>/g, '>')
-        .replace(/\\!/g, '!');
-}
-
-function loadSavedData() {
-    const savedPrompt = localStorage.getItem('systemPrompt');
-    const savedRaterPrompt = localStorage.getItem('raterPrompt');
-    const savedManagerPrompt = localStorage.getItem('managerPrompt');
-    const savedManagerName = localStorage.getItem('managerName');
-    
-    if (savedPrompt) {
-        // Clean up any escaped markdown from previous Turndown usage
-        const cleanedPrompt = unescapeMarkdown(savedPrompt);
-        systemPromptInput.value = cleanedPrompt;
-        // Save cleaned version back
-        if (cleanedPrompt !== savedPrompt) {
-            localStorage.setItem('systemPrompt', cleanedPrompt);
-        }
-    }
-    
-    if (savedRaterPrompt) {
-        const cleanedRaterPrompt = unescapeMarkdown(savedRaterPrompt);
-        raterPromptInput.value = cleanedRaterPrompt;
-        if (cleanedRaterPrompt !== savedRaterPrompt) {
-            localStorage.setItem('raterPrompt', cleanedRaterPrompt);
-        }
-    }
-    
-    // Load manager prompt
-    if (savedManagerPrompt) {
-        const cleanedManagerPrompt = unescapeMarkdown(savedManagerPrompt);
-        managerPromptInput.value = cleanedManagerPrompt;
-        if (cleanedManagerPrompt !== savedManagerPrompt) {
-            localStorage.setItem('managerPrompt', cleanedManagerPrompt);
-        }
-    }
-    
-                    // Load custom tabs logic REMOVED. Replaced with Prompt Variations logic.
-
-// Prompt Variations Logic
-let promptsData = {
-    client: { variations: [], activeId: null },
-    manager: { variations: [], activeId: null },
-    rater: { variations: [], activeId: null }
-};
-
-const promptVariationsContainer = document.getElementById('promptVariations');
-
-// Generate unique ID
-function generateId() {
-    return 'var_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-}
-
-// Get active role
-function getActiveRole() {
-    const activeTab = document.querySelector('.instruction-tab.active');
-    return activeTab ? activeTab.dataset.instruction : 'client';
-}
-
-// Initialize prompts data (migration from old format if needed)
-function initPromptsData(legacyData = {}) {
+function initPromptsData(firebaseData = {}) {
     const roles = ['client', 'manager', 'rater'];
     
     roles.forEach(role => {
-        // Check if we have existing variations in legacyData (from Firebase)
-        if (legacyData[role + '_variations'] && Array.isArray(legacyData[role + '_variations'])) {
-            promptsData[role].variations = legacyData[role + '_variations'];
-            promptsData[role].activeId = legacyData[role + '_activeId'] || (promptsData[role].variations[0] ? promptsData[role].variations[0].id : null);
+        if (firebaseData[role + '_variations'] && Array.isArray(firebaseData[role + '_variations'])) {
+            promptsData[role].variations = firebaseData[role + '_variations'];
+            promptsData[role].activeId = firebaseData[role + '_activeId'] || 
+                (promptsData[role].variations[0] ? promptsData[role].variations[0].id : null);
         } else {
-            // Check local storage for legacy string format
-            const legacyContent = legacyData[role + '_prompt'] || localStorage.getItem(role === 'client' ? 'systemPrompt' : role + 'Prompt') || '';
+            // Migration: use legacy single prompt
+            let legacyKey = role === 'client' ? 'systemPrompt' : role + 'Prompt';
+            let legacyContent = firebaseData[role + '_prompt'] || localStorage.getItem(legacyKey) || '';
             
             if (promptsData[role].variations.length === 0) {
-                // Create default variation with legacy content
                 const defaultId = generateId();
                 promptsData[role].variations.push({
                     id: defaultId,
@@ -356,12 +197,12 @@ function initPromptsData(legacyData = {}) {
     });
     
     renderVariations();
+    updateAllPreviews();
 }
 
-// Render variations chips
 function renderVariations() {
     const role = getActiveRole();
-    if (!promptsData[role]) return;
+    if (!promptsData[role] || !promptVariationsContainer) return;
     
     const variations = promptsData[role].variations;
     const activeId = promptsData[role].activeId;
@@ -376,14 +217,12 @@ function renderVariations() {
             ${variations.length > 1 ? '<span class="delete-variation">×</span>' : ''}
         `;
         
-        // Click to switch
         chip.addEventListener('click', (e) => {
             if (!e.target.classList.contains('delete-variation')) {
                 setActiveVariation(role, v.id);
             }
         });
         
-        // Double click to rename
         chip.querySelector('.chip-name').addEventListener('dblclick', (e) => {
             e.stopPropagation();
             const newName = prompt('Название промпта:', v.name);
@@ -394,7 +233,6 @@ function renderVariations() {
             }
         });
         
-        // Delete
         const deleteBtn = chip.querySelector('.delete-variation');
         if (deleteBtn) {
             deleteBtn.addEventListener('click', (e) => {
@@ -413,87 +251,66 @@ function renderVariations() {
     addBtn.className = 'add-variation-btn';
     addBtn.innerHTML = '+';
     addBtn.title = 'Добавить вариант промпта';
-    addBtn.addEventListener('click', () => {
-        addVariation(role);
-    });
-    
+    addBtn.addEventListener('click', () => addVariation(role));
     promptVariationsContainer.appendChild(addBtn);
-    
-    // Update editor content
-    updateEditorContent(role);
 }
 
-// Add new variation
 function addVariation(role) {
     const count = promptsData[role].variations.length + 1;
     const newId = generateId();
-    const newVariation = {
+    promptsData[role].variations.push({
         id: newId,
         name: `Вариант ${count}`,
         content: ''
-    };
-    
-    promptsData[role].variations.push(newVariation);
+    });
     setActiveVariation(role, newId);
     savePromptsToFirebase();
 }
 
-// Delete variation
 function deleteVariation(role, id) {
     const index = promptsData[role].variations.findIndex(v => v.id === id);
     if (index > -1) {
         promptsData[role].variations.splice(index, 1);
-        
-        // If we deleted the active one, switch to the first available
         if (promptsData[role].activeId === id) {
             promptsData[role].activeId = promptsData[role].variations[0].id;
         }
-        
         renderVariations();
+        updateEditorContent(role);
         savePromptsToFirebase();
     }
 }
 
-// Set active variation
 function setActiveVariation(role, id) {
     promptsData[role].activeId = id;
     renderVariations();
     updateEditorContent(role);
 }
 
-// Update editor content based on active variation
 function updateEditorContent(role) {
     const activeVar = promptsData[role].variations.find(v => v.id === promptsData[role].activeId);
     const content = activeVar ? activeVar.content : '';
     
     let textarea, preview;
-    
     if (role === 'client') {
         textarea = systemPromptInput;
-        preview = systemPromptPreview;
+        preview = document.getElementById('systemPromptPreview');
     } else if (role === 'manager') {
         textarea = managerPromptInput;
-        preview = managerPromptPreview;
+        preview = document.getElementById('managerPromptPreview');
     } else if (role === 'rater') {
         textarea = raterPromptInput;
-        preview = raterPromptPreview;
+        preview = document.getElementById('raterPromptPreview');
     }
     
     if (textarea && preview) {
-        // Avoid triggering input event to prevent circular save
-        textarea.value = content; 
+        textarea.value = content;
         preview.innerHTML = renderMarkdown(content);
-        
-        // Highlight code blocks
         if (typeof hljs !== 'undefined') {
-            preview.querySelectorAll('pre code').forEach((block) => {
-                hljs.highlightElement(block);
-            });
+            preview.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
         }
     }
 }
 
-// Sync content from editor to data structure
 function syncContentToData(role, content) {
     const activeVar = promptsData[role].variations.find(v => v.id === promptsData[role].activeId);
     if (activeVar) {
@@ -502,52 +319,46 @@ function syncContentToData(role, content) {
     }
 }
 
-// Hook into existing event listeners
-// Replace the old auto-save listeners with new ones that update promptsData
-function replaceInputListeners() {
-    // Remove old listeners (by cloning nodes if needed, but we can just overwrite behavior)
-    // Actually, the old listeners just saved to localStorage directly. 
-    // We will keep them for backup but primarily use our new logic.
-    
-    // We already have 'input' listeners on textareas.
-    // Let's modify the WYSIWYG sync callback to also update our data structure.
+function getActiveContent(role) {
+    const v = promptsData[role].variations.find(v => v.id === promptsData[role].activeId);
+    return v ? v.content : '';
 }
 
-// Overwrite the savePromptsToFirebaseNow to include variations
+// ============ FIREBASE SYNC ============
+
+const savePromptsToFirebase = debounce(() => {
+    savePromptsToFirebaseNow();
+}, 1000);
+
 function savePromptsToFirebaseNow() {
     if (!db) return;
 
-    // Flatten data for Firebase
     const payload = {
-        // Legacy fields for backward compatibility (save active content)
         client_prompt: getActiveContent('client'),
         manager_prompt: getActiveContent('manager'),
         rater_prompt: getActiveContent('rater'),
         
-        // New structure
         client_variations: promptsData.client.variations,
         client_activeId: promptsData.client.activeId,
-        
         manager_variations: promptsData.manager.variations,
         manager_activeId: promptsData.manager.activeId,
-        
         rater_variations: promptsData.rater.variations,
         rater_activeId: promptsData.rater.activeId
     };
 
     set(ref(db, 'prompts'), payload)
         .then(() => console.log('Prompts synced to Firebase'))
-        .catch(e => console.error('Failed to sync to Firebase:', e));
+        .catch(e => console.error('Failed to sync:', e));
 }
 
-function getActiveContent(role) {
-    const v = promptsData[role].variations.find(v => v.id === promptsData[role].activeId);
-    return v ? v.content : '';
-}
-
-// Load function updated
 function loadPrompts() {
-    loadSavedData(); // Local storage
+    // Load manager name
+    const savedManagerName = localStorage.getItem('managerName');
+    if (savedManagerName) {
+        managerNameInput.value = savedManagerName;
+    } else {
+        showNameModal();
+    }
 
     if (db) {
         try {
@@ -558,147 +369,77 @@ function loadPrompts() {
                 
                 if (data) {
                     initPromptsData(data);
-                    
-                    // Update manager name if present
-                    if (document.activeElement !== managerNameInput && data.managerName) { // Assuming managerName might be in DB in future, but currently it's local
-                        // pass
-                    }
                 } else {
-                    // Firebase empty, init with local data
                     initPromptsData({});
                     savePromptsToFirebaseNow();
                 }
             }, (error) => {
                 console.error('Firebase read error:', error);
+                initPromptsData({});
             });
         } catch (e) {
             console.error('Error setting up Firebase listener:', e);
+            initPromptsData({});
         }
     } else {
-        // No Firebase, init with local
         initPromptsData({});
     }
 }
 
-// Override loadSavedData to just load manager name (prompts handled by initPromptsData)
-function loadSavedData() {
-    const savedManagerName = localStorage.getItem('managerName');
-    if (savedManagerName) {
-        managerNameInput.value = savedManagerName;
-    } else {
-        showNameModal();
-    }
+// ============ NAME MODAL ============
+
+function showNameModal() {
+    nameModal.classList.add('active');
+    setTimeout(() => modalNameInput.focus(), 100);
 }
 
-// Update instruction tab click handler to render variations
-instructionTabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-        // ... existing logic ...
-        setTimeout(renderVariations, 0); // Render variations for the new tab
-    });
+function hideNameModal() {
+    nameModal.classList.remove('active');
+}
+
+modalNameSubmit.addEventListener('click', () => {
+    const name = modalNameInput.value.trim();
+    if (name) {
+        localStorage.setItem('managerName', name);
+        managerNameInput.value = name;
+        hideNameModal();
+    } else {
+        modalNameInput.focus();
+        modalNameInput.style.borderColor = '#ff5555';
+        setTimeout(() => { modalNameInput.style.borderColor = ''; }, 1000);
+    }
 });
 
-// Update setupWYSIWYG to sync to data
-const originalSetupWYSIWYG = setupWYSIWYG;
-setupWYSIWYG = function(previewElement, textarea, storageKey, onSaveCallback) {
-    // We ignore storageKey and onSaveCallback passed from original calls
-    // and provide our own callback
-    
-    const role = textarea.closest('.prompt-wrapper').dataset.instruction;
-    
-    const newCallback = (content) => {
-        syncContentToData(role, content);
-        if (onSaveCallback) onSaveCallback(content);
-    };
-    
-    // Call original implementation (defined in previous turn, we need to adapt it)
-    // Actually, re-declaring it might be cleaner since we modified it before.
-    
-    // Make preview editable
-    previewElement.setAttribute('contenteditable', 'true');
-    
-    // Sync changes back to textarea
-    previewElement.addEventListener('input', () => {
-        syncWYSIWYGDebounced(previewElement, textarea, null, newCallback);
-    });
-    
-    // Handle paste
-    previewElement.addEventListener('paste', (e) => {
-        // ... same paste logic ...
-        e.preventDefault();
-        const text = e.clipboardData.getData('text/plain');
-        
-        const selection = window.getSelection();
-        if (selection.rangeCount) {
-            const range = selection.getRangeAt(0);
-            range.deleteContents();
-            
-            const hasMarkdown = /^#|^\*\*|\*\*$|^-\s|^\d+\.\s|^```|^>/.test(text);
-            
-            if (hasMarkdown) {
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = renderMarkdown(text);
-                const fragment = document.createDocumentFragment();
-                while (tempDiv.firstChild) {
-                    fragment.appendChild(tempDiv.firstChild);
-                }
-                range.insertNode(fragment);
-            } else {
-                const textNode = document.createTextNode(text);
-                range.insertNode(textNode);
-            }
-            selection.collapseToEnd();
-        }
-        
-        syncWYSIWYGDebounced(previewElement, textarea, null, newCallback);
-    });
-};
-
-// Also listen to textarea inputs (fallback)
-[systemPromptInput, managerPromptInput, raterPromptInput].forEach(input => {
-    input.addEventListener('input', () => {
-        const role = input.closest('.prompt-wrapper').dataset.instruction;
-        syncContentToData(role, input.value);
-    });
+modalNameInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') modalNameSubmit.click();
 });
 
-// Initial Render
-setTimeout(() => {
-    initWYSIWYGMode(); // This calls setupWYSIWYG
-    renderVariations(); // Render initial chips
-}, 200);
+managerNameInput.addEventListener('input', () => {
+    const name = managerNameInput.value.trim();
+    if (name) localStorage.setItem('managerName', name);
+});
 
-// REPLACES OLD BLOCK: Custom Tabs Logic... to ...// Auto-resize textarea
+// ============ CHAT FUNCTIONS ============
+
 function autoResizeTextarea(textarea) {
-    // Если пустой - минимальная высота
     if (!textarea.value.trim()) {
         textarea.style.height = '44px';
         return;
     }
-    textarea.style.height = '44px'; // Сначала сбросим до минимума
-    const newHeight = Math.max(44, Math.min(textarea.scrollHeight, 300)); // Минимум 44px, максимум 300px
+    textarea.style.height = '44px';
+    const newHeight = Math.max(44, Math.min(textarea.scrollHeight, 300));
     textarea.style.height = newHeight + 'px';
 }
 
-// Prompt is auto-saved via input event listener below
-
-// Add message to chat
 function addMessage(content, role, isMarkdown = false) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
     
-    // Content
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
     
     if (role === 'loading') {
-        contentDiv.innerHTML = `
-            <div class="typing-indicator">
-                <div class="typing-dot"></div>
-                <div class="typing-dot"></div>
-                <div class="typing-dot"></div>
-            </div>
-        `;
+        contentDiv.innerHTML = `<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>`;
     } else if (isMarkdown) {
         contentDiv.innerHTML = renderMarkdown(content);
     } else {
@@ -706,135 +447,80 @@ function addMessage(content, role, isMarkdown = false) {
     }
     
     messageDiv.appendChild(contentDiv);
-    
     chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
     return messageDiv;
 }
 
-// Clear chat
 function clearChat() {
     conversationHistory = [];
     lastRating = null;
-    isDialogRated = false; // Сбрасываем флаг оценки
-    unlockDialogInput(); // Разблокируем ввод при очистке
-    // Generate new session ID for fresh conversation
+    isDialogRated = false;
+    unlockDialogInput();
+    
     baseSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     localStorage.setItem('sessionId', baseSessionId);
     clientSessionId = baseSessionId + '_client';
     managerSessionId = baseSessionId + '_manager';
     raterSessionId = baseSessionId + '_rater';
     
-    chatMessages.innerHTML = `
-        <div id="startConversation" class="start-conversation">
-            <button id="startBtn" class="btn-start">Начать диалог</button>
-        </div>
-    `;
-    // Re-attach event listener to new button
-    const newStartBtn = document.getElementById('startBtn');
-    newStartBtn.addEventListener('click', startConversationHandler);
+    chatMessages.innerHTML = `<div id="startConversation" class="start-conversation"><button id="startBtn" class="btn-start">Начать диалог</button></div>`;
+    document.getElementById('startBtn').addEventListener('click', startConversationHandler);
 }
 
-// Send message to n8n webhook
 async function sendMessage() {
     const userMessage = userInput.value.trim();
+    if (!userMessage || isProcessing || isDialogRated) return;
     
-    if (!userMessage || isProcessing || isDialogRated) {
-        return;
-    }
-    
-    // Disable input while processing
     isProcessing = true;
     toggleInputState(false);
     
-    // Hide start button if visible
-    if (startConversation) {
-        startConversation.style.display = 'none';
-    }
+    const startDiv = document.getElementById('startConversation');
+    if (startDiv) startDiv.style.display = 'none';
     
-    // Add user message to chat (with markdown support)
     addMessage(userMessage, 'user', true);
-    conversationHistory.push({
-        role: 'user',
-        content: userMessage
-    });
+    conversationHistory.push({ role: 'user', content: userMessage });
     
-    // Clear input
     userInput.value = '';
-    userInput.style.height = '44px'; // Сброс высоты
+    userInput.style.height = '44px';
     
-    // Show loading indicator
     const loadingMsg = addMessage('', 'loading');
     
     try {
-        // Prepare request body
         const systemPrompt = systemPromptInput.value.trim();
-        
-        // Format dialog history for context (exclude current message)
         let dialogHistory = '';
         conversationHistory.slice(0, -1).forEach((msg) => {
             const role = msg.role === 'user' ? 'Менеджер' : 'Клиент';
             dialogHistory += `${role}: ${msg.content}\n\n`;
         });
         
-        const requestBody = {
-            chatInput: userMessage,  // Основное поле для n8n Chat Trigger
-            systemPrompt: systemPrompt || 'Вы — полезный ассистент.',
-            dialogHistory: dialogHistory.trim(),
-            sessionId: clientSessionId
-        };
-        
-        // Make webhook request
         const response = await fetch(WEBHOOK_URL, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chatInput: userMessage,
+                systemPrompt: systemPrompt || 'Вы — клиент.',
+                dialogHistory: dialogHistory.trim(),
+                sessionId: clientSessionId
+            })
         });
         
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
         const data = await response.json();
         const assistantMessage = extractApiResponse(data);
+        if (!assistantMessage) throw new Error('Пустой ответ');
         
-        if (!assistantMessage) {
-            throw new Error('Пустой ответ от сервера');
-        }
-        
-        // Remove loading message
         loadingMsg.remove();
-        
-        // Add assistant message to chat (with markdown support)
         addMessage(assistantMessage, 'assistant', true);
-        conversationHistory.push({
-            role: 'assistant',
-            content: assistantMessage
-        });
+        conversationHistory.push({ role: 'assistant', content: assistantMessage });
         
     } catch (error) {
         console.error('Error:', error);
         loadingMsg.remove();
-        
-        let errorMessage = 'Произошла ошибка при обработке запроса';
-        
-        if (error.message.includes('Failed to fetch')) {
-            errorMessage = 'Ошибка соединения. Проверьте подключение к интернету и доступность webhook.';
-        } else if (error.message.includes('HTTP 4')) {
-            errorMessage = `Ошибка запроса (${error.message}). Проверьте корректность URL webhook.`;
-        } else if (error.message.includes('HTTP 5')) {
-            errorMessage = `Ошибка сервера (${error.message}). Попробуйте позже.`;
-        } else {
-            errorMessage = `Ошибка: ${error.message}`;
-        }
-        
-        addMessage(errorMessage, 'error', false);
+        addMessage(`Ошибка: ${error.message}`, 'error', false);
     } finally {
-        // Re-enable input
         isProcessing = false;
-        // Только если чат не заблокирован оценкой
         if (!lastRating) {
             toggleInputState(true);
             userInput.focus();
@@ -842,71 +528,7 @@ async function sendMessage() {
     }
 }
 
-// Event Listeners
-sendBtn.addEventListener('click', sendMessage);
-
-userInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-    }
-});
-
-// Auto-resize on input
-userInput.addEventListener('input', () => {
-    autoResizeTextarea(userInput);
-});
-
-clearChatBtn.addEventListener('click', () => {
-    if (confirm('Очистить весь чат?')) {
-        clearChat();
-    }
-});
-
-exportChatBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const menu = document.getElementById('exportMenu');
-    if (menu) menu.classList.toggle('show');
-});
-
-// Close dropdowns when clicking outside
-document.addEventListener('click', () => {
-    const exportMenu = document.getElementById('exportMenu');
-    const promptMenu = document.getElementById('exportPromptMenu');
-    if (exportMenu) exportMenu.classList.remove('show');
-    if (promptMenu) promptMenu.classList.remove('show');
-});
-
-// Handle export format selection (only for chat export menu)
-document.querySelectorAll('.dropdown-item[data-format]').forEach(item => {
-    item.addEventListener('click', (e) => {
-        const btn = e.target.closest('.dropdown-item');
-        const format = btn ? btn.dataset.format : e.target.dataset.format;
-        exportChat(format);
-    });
-});
-
-exportCurrentPromptBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const menu = document.getElementById('exportPromptMenu');
-    if (menu) menu.classList.toggle('show');
-});
-
-// Handle prompt export format selection
-document.querySelectorAll('.dropdown-item[data-prompt-format]').forEach(item => {
-    item.addEventListener('click', (e) => {
-        const btn = e.target.closest('.dropdown-item');
-        const format = btn ? btn.dataset.promptFormat : e.target.dataset.promptFormat;
-        exportCurrentPrompt(format);
-    });
-});
-
-rateChatBtn.addEventListener('click', rateChat);
-
-// Start conversation button
-// Start conversation handler
 async function startConversationHandler() {
-    // Generate new session IDs for fresh conversation
     baseSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     localStorage.setItem('sessionId', baseSessionId);
     clientSessionId = baseSessionId + '_client';
@@ -914,50 +536,35 @@ async function startConversationHandler() {
     raterSessionId = baseSessionId + '_rater';
     conversationHistory = [];
     lastRating = null;
-    toggleInputState(true); // Разблокируем ввод для нового диалога
+    toggleInputState(true);
     
-    // Hide start button
     const startDiv = document.getElementById('startConversation');
     if (startDiv) startDiv.style.display = 'none';
     
-    // Send /start to webhook (not shown in chat)
     const loadingMsg = addMessage('', 'loading');
     
     try {
         const systemPrompt = systemPromptInput.value.trim();
-        
-        const requestBody = {
-            chatInput: '/start',  // Hidden command to start conversation
-            systemPrompt: systemPrompt || 'Вы — клиент.',
-            dialogHistory: '',  // Empty for first message
-            sessionId: clientSessionId
-        };
-        
         const response = await fetch(WEBHOOK_URL, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chatInput: '/start',
+                systemPrompt: systemPrompt || 'Вы — клиент.',
+                dialogHistory: '',
+                sessionId: clientSessionId
+            })
         });
         
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
         const data = await response.json();
         const assistantMessage = extractApiResponse(data);
-        
-        if (!assistantMessage) {
-            throw new Error('Пустой ответ от сервера');
-        }
+        if (!assistantMessage) throw new Error('Пустой ответ');
         
         loadingMsg.remove();
         addMessage(assistantMessage, 'assistant', true);
-        conversationHistory.push({
-            role: 'assistant',
-            content: assistantMessage
-        });
+        conversationHistory.push({ role: 'assistant', content: assistantMessage });
         
     } catch (error) {
         console.error('Error:', error);
@@ -966,9 +573,115 @@ async function startConversationHandler() {
     }
 }
 
-startBtn.addEventListener('click', startConversationHandler);
+async function rateChat() {
+    if (conversationHistory.length === 0) {
+        alert('Нет диалога для оценки');
+        return;
+    }
+    if (isProcessing) return;
+    
+    rateChatBtn.disabled = true;
+    rateChatBtn.classList.add('loading');
+    toggleInputState(false);
+    
+    const loadingMsg = addMessage('', 'loading');
+    
+    try {
+        let dialogText = '';
+        conversationHistory.forEach((msg) => {
+            const role = msg.role === 'user' ? 'Менеджер' : 'Клиент';
+            dialogText += `${role}: ${msg.content}\n\n`;
+        });
+        
+        const raterPrompt = raterPromptInput.value.trim() || 'Оцените качество диалога.';
+        
+        const response = await fetch(RATE_WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                dialog: dialogText.trim(),
+                raterPrompt: raterPrompt,
+                sessionId: raterSessionId
+            })
+        });
+        
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        const data = await response.json();
+        const ratingMessage = extractApiResponse(data);
+        if (!ratingMessage) throw new Error('Пустой ответ');
+        
+        loadingMsg.remove();
+        lastRating = ratingMessage;
+        addMessage(ratingMessage, 'rating', true);
+        isDialogRated = true;
+        lockDialogInput();
+        
+    } catch (error) {
+        loadingMsg.remove();
+        addMessage(`Ошибка оценки: ${error.message}`, 'error', false);
+    } finally {
+        rateChatBtn.disabled = false;
+        rateChatBtn.classList.remove('loading');
+        if (!lastRating) {
+            toggleInputState(true);
+            userInput.focus();
+        }
+    }
+}
 
-// Export chat
+async function generateAIResponse() {
+    if (isDialogRated || conversationHistory.length === 0 || isProcessing) return;
+    
+    aiAssistBtn.disabled = true;
+    aiAssistBtn.classList.add('loading');
+    
+    try {
+        let dialogHistory = '';
+        conversationHistory.forEach((msg) => {
+            const role = msg.role === 'user' ? 'Менеджер' : 'Клиент';
+            dialogHistory += `${role}: ${msg.content}\n\n`;
+        });
+        
+        const lastMessage = conversationHistory[conversationHistory.length - 1].content;
+        const managerName = getManagerName();
+        const basePrompt = managerPromptInput.value.trim();
+        const fullPrompt = `Тебя зовут ${managerName}.\n\n${basePrompt}`;
+        
+        const response = await fetch(MANAGER_ASSISTANT_WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                systemPrompt: fullPrompt,
+                userMessage: lastMessage,
+                dialogHistory: dialogHistory.trim(),
+                sessionId: managerSessionId
+            })
+        });
+        
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        const data = await response.json();
+        let aiMessage = extractApiResponse(data);
+        if (!aiMessage) throw new Error('Пустой ответ');
+        
+        aiMessage = aiMessage.trim().replace(/^["']|["']$/g, '').replace(/^(Менеджер|Manager):\s*/i, '');
+        
+        userInput.value = aiMessage;
+        autoResizeTextarea(userInput);
+        userInput.focus();
+        
+    } catch (error) {
+        console.error('AI generation error:', error);
+        alert('Ошибка: ' + error.message);
+    } finally {
+        aiAssistBtn.disabled = false;
+        aiAssistBtn.classList.remove('loading');
+    }
+}
+
+// ============ EXPORT FUNCTIONS ============
+
 function exportChat(format = 'txt') {
     if (conversationHistory.length === 0) {
         alert('Нет сообщений для экспорта');
@@ -981,57 +694,35 @@ function exportChat(format = 'txt') {
     }));
     
     if (lastRating) {
-        messages.push({
-            role: 'ОЦЕНКА ДИАЛОГА',
-            content: lastRating
-        });
+        messages.push({ role: 'ОЦЕНКА ДИАЛОГА', content: lastRating });
     }
 
     const filename = `диалог ${new Date().toLocaleString().replace(/[:.]/g, '-')}`;
 
-    if (format === 'clipboard') {
-        copyMessagesToClipboard(messages);
-    } else if (format === 'txt') {
-        exportToTxt(messages, filename);
-    } else if (format === 'docx') {
-        exportToDocx(messages, filename);
-    } else if (format === 'rtf') {
-        exportToRtf(messages, filename);
-    }
+    if (format === 'clipboard') copyMessagesToClipboard(messages);
+    else if (format === 'txt') exportToTxt(messages, filename);
+    else if (format === 'docx') exportToDocx(messages, filename);
+    else if (format === 'rtf') exportToRtf(messages, filename);
 }
 
-// Copy messages to clipboard (plain text without markdown)
 async function copyMessagesToClipboard(messages) {
-    let chatText = '';
-    messages.forEach((msg, index) => {
-        chatText += `${msg.role}: ${msg.content}`;
-        if (index < messages.length - 1) chatText += '\n\n';
-    });
-    
+    let chatText = messages.map(msg => `${msg.role}: ${msg.content}`).join('\n\n');
     try {
         await navigator.clipboard.writeText(chatText);
-        showCopyNotification('Диалог скопирован в буфер обмена');
+        showCopyNotification('Скопировано в буфер');
     } catch (err) {
-        console.error('Failed to copy:', err);
-        alert('Ошибка копирования в буфер обмена');
+        alert('Ошибка копирования');
     }
 }
 
-// Show temporary notification
 function showCopyNotification(text) {
-    // Remove existing notification
     const existing = document.querySelector('.copy-notification');
     if (existing) existing.remove();
-    
     const notification = document.createElement('div');
     notification.className = 'copy-notification';
     notification.textContent = text;
     document.body.appendChild(notification);
-    
-    // Trigger animation
     setTimeout(() => notification.classList.add('show'), 10);
-    
-    // Remove after 2 seconds
     setTimeout(() => {
         notification.classList.remove('show');
         setTimeout(() => notification.remove(), 300);
@@ -1039,770 +730,239 @@ function showCopyNotification(text) {
 }
 
 function exportToTxt(messages, filename) {
-    let chatText = '';
-    messages.forEach((msg, index) => {
-        chatText += `${msg.role}: ${msg.content}`;
-        if (index < messages.length - 1) chatText += '\n\n';
-    });
-    
+    const chatText = messages.map(msg => `${msg.role}: ${msg.content}`).join('\n\n');
     const blob = new Blob([chatText], { type: 'text/plain;charset=utf-8' });
     saveAs(blob, filename + '.txt');
 }
 
 function exportToDocx(messages, filename) {
-    if (typeof docx === 'undefined') {
-        alert('Библиотека docx не загружена');
-        return;
-    }
+    if (typeof docx === 'undefined') { alert('docx library not loaded'); return; }
     const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = docx;
     
-    const children = [];
-    
-    // Title
-    children.push(new Paragraph({
-        text: "История диалога",
-        heading: HeadingLevel.HEADING_1,
-        alignment: AlignmentType.CENTER,
-        spacing: { after: 400 }
-    }));
+    const children = [new Paragraph({ text: "История диалога", heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER, spacing: { after: 400 } })];
     
     messages.forEach(msg => {
         const isRating = msg.role === 'ОЦЕНКА ДИАЛОГА';
-        
-        // Role
-        children.push(new Paragraph({
-            children: [
-                new TextRun({
-                    text: msg.role + ":",
-                    bold: true,
-                    size: 24, // 12pt
-                    color: isRating ? "FF9900" : "2E74B5"
-                })
-            ],
-            spacing: { before: 200, after: 100 }
-        }));
-        
-        // Content
-        children.push(new Paragraph({
-            children: [
-                new TextRun({
-                    text: msg.content,
-                    size: 24 // 12pt
-                })
-            ],
-            spacing: { after: 200 }
-        }));
+        children.push(new Paragraph({ children: [new TextRun({ text: msg.role + ":", bold: true, size: 24, color: isRating ? "FF9900" : "2E74B5" })], spacing: { before: 200, after: 100 } }));
+        children.push(new Paragraph({ children: [new TextRun({ text: msg.content, size: 24 })], spacing: { after: 200 } }));
     });
 
-    const doc = new Document({
-        sections: [{
-            properties: {},
-            children: children
-        }]
-    });
-
-    Packer.toBlob(doc).then(blob => {
-        saveAs(blob, filename + ".docx");
-    });
+    const doc = new Document({ sections: [{ properties: {}, children: children }] });
+    Packer.toBlob(doc).then(blob => saveAs(blob, filename + ".docx"));
 }
 
 function exportToRtf(messages, filename) {
     function escapeRtf(str) {
         if (!str) return '';
-        return str.replace(/\\/g, '\\\\')
-                  .replace(/{/g, '\\{')
-                  .replace(/}/g, '\\}')
-                  .replace(/\n/g, '\\par ')
-                  .replace(/[^\x00-\x7F]/g, c => `\\u${c.charCodeAt(0)}?`);
+        return str.replace(/\\/g, '\\\\').replace(/{/g, '\\{').replace(/}/g, '\\}').replace(/\n/g, '\\par ').replace(/[^\x00-\x7F]/g, c => `\\u${c.charCodeAt(0)}?`);
     }
-
-    // Header
-    let rtf = "{\\rtf1\\ansi\\deff0\\nouicompat{\\fonttbl{\\f0\\fnil\\fcharset0 Calibri;}{\\f1\\fnil\\fcharset204 Segoe UI;}}\n";
-    rtf += "{\\colortbl ;\\red46\\green116\\blue181;\\red255\\green153\\blue0;}\n";
-    rtf += "\\viewkind4\\uc1\n\\pard\\sa200\\sl276\\slmult1\\qc\\b\\f1\\fs32 История диалога\\par\n\\pard\\sa200\\sl276\\slmult1\\par\n";
-    
+    let rtf = "{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Calibri;}{\\f1 Segoe UI;}}{\\colortbl ;\\red46\\green116\\blue181;\\red255\\green153\\blue0;}\\viewkind4\\uc1\\pard\\qc\\b\\f1\\fs32 История диалога\\par\\pard\\par\n";
     messages.forEach(msg => {
-        const isRating = msg.role === 'ОЦЕНКА ДИАЛОГА';
-        const colorIndex = isRating ? 2 : 1; 
-        
-        rtf += `\\pard\\sa200\\sl276\\slmult1\\cf${colorIndex}\\b\\fs24 ${escapeRtf(msg.role)}:\\cf0\\b0\\par\n`;
-        rtf += `\\pard\\sa200\\sl276\\slmult1 ${escapeRtf(msg.content)}\\par\n`;
-        rtf += "\\par\n";
+        const colorIndex = msg.role === 'ОЦЕНКА ДИАЛОГА' ? 2 : 1;
+        rtf += `\\pard\\cf${colorIndex}\\b\\fs24 ${escapeRtf(msg.role)}:\\cf0\\b0\\par ${escapeRtf(msg.content)}\\par\\par\n`;
     });
-    
     rtf += "}";
-    
     const blob = new Blob([rtf], { type: "application/rtf" });
     saveAs(blob, filename + ".rtf");
 }
 
-// Export current active prompt
 function exportCurrentPrompt(format = 'txt') {
-    const activeTab = document.querySelector('.instruction-tab.active');
-    const instructionType = activeTab ? activeTab.dataset.instruction : 'client';
+    const role = getActiveRole();
+    const promptText = getActiveContent(role);
+    if (!promptText) { alert('Инструкция пуста'); return; }
     
-    let promptText = '';
-    let fileName = '';
-    
-    switch (instructionType) {
-        case 'client':
-            promptText = systemPromptInput.value.trim();
-            fileName = 'промпт-клиента';
-            break;
-        case 'manager':
-            promptText = managerPromptInput.value.trim();
-            fileName = 'промпт-менеджера';
-            break;
-        case 'rater':
-            promptText = raterPromptInput.value.trim();
-            fileName = 'промпт-оценщика';
-            break;
-    }
-    
-    // Append active variation name to filename
-    const role = instructionType;
-    if (promptsData[role] && promptsData[role].activeId) {
-        const activeVar = promptsData[role].variations.find(v => v.id === promptsData[role].activeId);
-        if (activeVar) {
-            fileName += `-${activeVar.name.replace(/\s+/g, '_')}`;
-        }
-    }
-    
-    if (!promptText) {
-        alert('Инструкция пуста');
-        return;
-    }
+    let fileName = role === 'client' ? 'промпт-клиента' : role === 'manager' ? 'промпт-менеджера' : 'промпт-оценщика';
+    const activeVar = promptsData[role].variations.find(v => v.id === promptsData[role].activeId);
+    if (activeVar) fileName += `-${activeVar.name.replace(/\s+/g, '_')}`;
     
     const timestamp = new Date().toLocaleString().replace(/[:.]/g, '-');
     const fullFileName = `${fileName} ${timestamp}`;
     
-    if (format === 'clipboard') {
-        copyPromptToClipboard(promptText, fileName);
-    } else if (format === 'txt') {
-        exportPromptToTxt(promptText, fullFileName);
-    } else if (format === 'docx') {
-        exportPromptToDocx(promptText, fullFileName, fileName);
-    } else if (format === 'rtf') {
-        exportPromptToRtf(promptText, fullFileName, fileName);
-    }
+    if (format === 'clipboard') copyPromptToClipboard(promptText, fileName);
+    else if (format === 'txt') { const blob = new Blob([promptText], { type: 'text/plain;charset=utf-8' }); saveAs(blob, fullFileName + '.txt'); }
+    else if (format === 'docx' || format === 'rtf') alert('Export to ' + format + ' not implemented for prompts');
 }
 
-// Copy prompt to clipboard (plain text)
 async function copyPromptToClipboard(text, label) {
     try {
         await navigator.clipboard.writeText(text);
-        showCopyNotification(`${label} скопирован в буфер обмена`);
+        showCopyNotification(`${label} скопирован`);
     } catch (err) {
-        console.error('Failed to copy:', err);
-        alert('Ошибка копирования в буфер обмена');
+        alert('Ошибка копирования');
     }
 }
 
-function exportPromptToTxt(text, filename) {
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    saveAs(blob, filename + '.txt');
+// ============ MARKDOWN RENDERING ============
+
+function renderMarkdown(text) {
+    if (!text) return '<p style="color: #666; font-style: italic;">Промпт пустой...</p>';
+    if (typeof marked !== 'undefined') return marked.parse(text);
+    
+    // Simple fallback
+    return '<p>' + text
+        .replace(/^###\s+(.+)$/gm, '<h3>$1</h3>')
+        .replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
+        .replace(/^#\s+(.+)$/gm, '<h1>$1</h1>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/\n\n+/g, '</p><p>')
+        .replace(/\n/g, '<br>') + '</p>';
 }
 
-// Parse markdown inline formatting and return array of TextRuns
-function parseMarkdownInline(text, baseSize = 24) {
-    const runs = [];
-    // Regex to match **bold**, *italic*, or plain text
-    const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|([^*]+))/g;
-    let match;
-    
-    while ((match = regex.exec(text)) !== null) {
-        if (match[2]) {
-            // Bold text **...**
-            runs.push(new docx.TextRun({
-                text: match[2],
-                bold: true,
-                size: baseSize
-            }));
-        } else if (match[3]) {
-            // Italic text *...*
-            runs.push(new docx.TextRun({
-                text: match[3],
-                italics: true,
-                size: baseSize
-            }));
-        } else if (match[4]) {
-            // Plain text
-            runs.push(new docx.TextRun({
-                text: match[4],
-                size: baseSize
-            }));
-        }
-    }
-    
-    return runs.length > 0 ? runs : [new docx.TextRun({ text: text, size: baseSize })];
+function updatePreview() {
+    const role = getActiveRole();
+    updateEditorContent(role);
 }
 
-function exportPromptToDocx(text, filename, title) {
-    if (typeof docx === 'undefined') {
-        alert('Библиотека docx не загружена');
-        return;
-    }
-    const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = docx;
-    
-    const children = [];
-    
-    // Title
-    children.push(new Paragraph({
-        text: title,
-        heading: HeadingLevel.HEADING_1,
-        alignment: AlignmentType.CENTER,
-        spacing: { after: 400 }
-    }));
-    
-    // Split text by lines
-    const lines = text.split('\n');
-    
-    lines.forEach(line => {
-        const trimmedLine = line.trim();
-        
-        // Skip empty lines but add spacing
-        if (!trimmedLine) {
-            children.push(new Paragraph({ spacing: { after: 100 } }));
-            return;
-        }
-        
-        // Check for headers (## or **HEADER**)
-        const h2Match = trimmedLine.match(/^##\s+(.+)$/);
-        const h3Match = trimmedLine.match(/^###\s+(.+)$/);
-        const boldHeaderMatch = trimmedLine.match(/^\*\*([A-ZА-ЯЁ][A-ZА-ЯЁ\s\(\)«»\-:,0-9]+)\*\*$/);
-        
-        if (h2Match) {
-            children.push(new Paragraph({
-                text: h2Match[1],
-                heading: HeadingLevel.HEADING_2,
-                spacing: { before: 300, after: 150 }
-            }));
-        } else if (h3Match) {
-            children.push(new Paragraph({
-                text: h3Match[1],
-                heading: HeadingLevel.HEADING_3,
-                spacing: { before: 200, after: 100 }
-            }));
-        } else if (boldHeaderMatch) {
-            // Bold uppercase text as header
-            children.push(new Paragraph({
-                children: [new TextRun({ text: boldHeaderMatch[1], bold: true, size: 26 })],
-                spacing: { before: 300, after: 150 }
-            }));
-        } else {
-            // Check for list items
-            const bulletMatch = trimmedLine.match(/^[-•]\s+(.+)$/);
-            const numberedMatch = trimmedLine.match(/^(\d+)\.\s+(.+)$/);
-            
-            if (bulletMatch) {
-                children.push(new Paragraph({
-                    children: parseMarkdownInline(bulletMatch[1]),
-                    bullet: { level: 0 },
-                    spacing: { after: 80 }
-                }));
-            } else if (numberedMatch) {
-                children.push(new Paragraph({
-                    children: [
-                        new TextRun({ text: numberedMatch[1] + '. ', size: 24 }),
-                        ...parseMarkdownInline(numberedMatch[2])
-                    ],
-                    spacing: { after: 80 }
-                }));
-            } else {
-                // Regular paragraph with inline formatting
-                children.push(new Paragraph({
-                    children: parseMarkdownInline(trimmedLine),
-                    spacing: { after: 120 }
-                }));
-            }
-        }
-    });
-
-    const doc = new Document({
-        sections: [{
-            properties: {},
-            children: children
-        }]
-    });
-
-    Packer.toBlob(doc).then(blob => {
-        saveAs(blob, filename + ".docx");
-    });
+function updateAllPreviews() {
+    ['client', 'manager', 'rater'].forEach(updateEditorContent);
 }
 
-function exportPromptToRtf(text, filename, title) {
-    function escapeRtfChar(str) {
-        if (!str) return '';
-        return str.replace(/\\/g, '\\\\')
-                  .replace(/{/g, '\\{')
-                  .replace(/}/g, '\\}')
-                  .replace(/[^\x00-\x7F]/g, c => `\\u${c.charCodeAt(0)}?`);
-    }
-    
-    // Parse markdown inline and return RTF formatted string
-    function parseMarkdownToRtf(line) {
-        let result = '';
-        const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|([^*]+))/g;
-        let match;
-        
-        while ((match = regex.exec(line)) !== null) {
-            if (match[2]) {
-                // Bold
-                result += '\\b ' + escapeRtfChar(match[2]) + '\\b0 ';
-            } else if (match[3]) {
-                // Italic
-                result += '\\i ' + escapeRtfChar(match[3]) + '\\i0 ';
-            } else if (match[4]) {
-                result += escapeRtfChar(match[4]);
-            }
-        }
-        
-        return result || escapeRtfChar(line);
-    }
+// ============ WYSIWYG SETUP ============
 
-    // Header
-    let rtf = "{\\rtf1\\ansi\\deff0\\nouicompat{\\fonttbl{\\f0\\fnil\\fcharset0 Calibri;}{\\f1\\fnil\\fcharset204 Segoe UI;}}\n";
-    rtf += "{\\colortbl ;\\red46\\green116\\blue181;}\n";
-    rtf += "\\viewkind4\\uc1\n\\pard\\sa200\\sl276\\slmult1\\qc\\cf1\\b\\f1\\fs32 " + escapeRtfChar(title) + "\\cf0\\b0\\par\n\\pard\\sa200\\sl276\\slmult1\\par\n";
-    
-    // Process each line
-    const lines = text.split('\n');
-    lines.forEach(line => {
-        const trimmedLine = line.trim();
-        
-        if (!trimmedLine) {
-            rtf += "\\par\n";
-            return;
-        }
-        
-        // Check for headers
-        const boldHeaderMatch = trimmedLine.match(/^\*\*([A-ZА-ЯЁ][A-ZА-ЯЁ\s\(\)«»\-:,0-9]+)\*\*$/);
-        const bulletMatch = trimmedLine.match(/^[-•]\s+(.+)$/);
-        const numberedMatch = trimmedLine.match(/^(\d+)\.\s+(.+)$/);
-        
-        if (boldHeaderMatch) {
-            rtf += "\\pard\\sa100\\sb200\\b\\fs26 " + escapeRtfChar(boldHeaderMatch[1]) + "\\b0\\fs24\\par\n";
-        } else if (bulletMatch) {
-            rtf += "\\pard\\fi-360\\li720\\sa50 \\bullet\\tab " + parseMarkdownToRtf(bulletMatch[1]) + "\\par\n";
-        } else if (numberedMatch) {
-            rtf += "\\pard\\fi-360\\li720\\sa50 " + numberedMatch[1] + ".\\tab " + parseMarkdownToRtf(numberedMatch[2]) + "\\par\n";
-        } else {
-            rtf += "\\pard\\sa100\\fs24 " + parseMarkdownToRtf(trimmedLine) + "\\par\n";
-        }
-    });
-    
-    rtf += "}";
-    
-    const blob = new Blob([rtf], { type: "application/rtf" });
-    saveAs(blob, filename + ".rtf");
-}
-
-// Rate chat dialog
-async function rateChat() {
-    if (conversationHistory.length === 0) {
-        alert('Нет диалога для оценки');
-        return;
-    }
-    
-    if (isProcessing) {
-        return;
-    }
-    
-    // Disable button while processing
-    rateChatBtn.disabled = true;
-    rateChatBtn.classList.add('loading');
-    
-    // Disable inputs
-    toggleInputState(false);
-    
-    // Show loading indicator
-    const loadingMsg = addMessage('', 'loading');
-    
-    try {
-        // Format dialog as text
-        let dialogText = '';
-        conversationHistory.forEach((msg) => {
-            const role = msg.role === 'user' ? 'Менеджер' : 'Клиент';
-            dialogText += `${role}: ${msg.content}\n\n`;
-        });
-        
-        const raterPrompt = raterPromptInput.value.trim() || 'Оцените качество диалога.';
-        
-        const requestBody = {
-            dialog: dialogText.trim(),
-            raterPrompt: raterPrompt,
-            sessionId: raterSessionId
-        };
-        
-        // Make webhook request
-        const response = await fetch(RATE_WEBHOOK_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        const ratingMessage = extractApiResponse(data);
-        
-        if (!ratingMessage) {
-            throw new Error('Пустой ответ от сервера оценки');
-        }
-        
-        // Remove loading message
-        loadingMsg.remove();
-        
-        // Save rating for export
-        lastRating = ratingMessage;
-        
-        // Add rating as special rating message (centered, orange)
-        addMessage(ratingMessage, 'rating', true);
-        
-        // Lock the dialog - no more input allowed
-        isDialogRated = true;
-        lockDialogInput();
-        
-    } catch (error) {
-        loadingMsg.remove();
-        
-        let errorMessage = 'Ошибка при оценке диалога';
-        
-        if (error.message.includes('Failed to fetch')) {
-            errorMessage = 'Ошибка соединения с сервисом оценки. Проверьте CORS настройки в n8n.';
-        } else if (error.message.includes('Too Many Requests') || error.message.includes('429')) {
-            errorMessage = 'Слишком много запросов. Подождите 30 секунд и попробуйте снова.';
-        } else {
-            errorMessage = `Ошибка оценки: ${error.message}`;
-        }
-        
-        addMessage(errorMessage, 'error', false);
-    } finally {
-        rateChatBtn.disabled = false;
-        rateChatBtn.classList.remove('loading');
-        
-        // Если оценка не была получена (ошибка), разблокируем ввод
-        // Если оценка получена успешно (lastRating установлен), оставляем ввод заблокированным
-        if (!lastRating) {
-            toggleInputState(true);
-            userInput.focus();
-        }
-    }
-}
-
-// Auto-save prompt on change (with debounce) - REMOVED, handled by syncContentToData
-// systemPromptInput.addEventListener('input', ...);
-// raterPromptInput.addEventListener('input', ...);
-// managerPromptInput.addEventListener('input', ...);
-
-// Set textarea value with undo support
-function setTextWithUndo(textarea, text) {
-    textarea.focus();
-    textarea.select();
-    // execCommand supports undo history
-    document.execCommand('insertText', false, text);
-    
-    // Also trigger input to sync variations
-    textarea.dispatchEvent(new Event('input'));
-}
-
-// Drag and drop files into prompt fields
-function setupDragAndDrop(textarea, storageKey, onSaveCallback = null) {
-    textarea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        textarea.classList.add('drag-over');
-    });
-    
-    textarea.addEventListener('dragleave', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        textarea.classList.remove('drag-over');
-    });
-    
-    textarea.addEventListener('drop', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        textarea.classList.remove('drag-over');
-        
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            const file = files[0];
-            const fileName = file.name.toLowerCase();
-            
-            // Check for .docx (Word)
-            if (fileName.endsWith('.docx')) {
-                const reader = new FileReader();
-                reader.onload = async (event) => {
-                    try {
-                        const arrayBuffer = event.target.result;
-                        // Use convertToMarkdown to preserve formatting (headers, bold, lists, etc.)
-                        const result = await mammoth.convertToMarkdown({ arrayBuffer: arrayBuffer });
-                        setTextWithUndo(textarea, result.value);
-                        if (storageKey) localStorage.setItem(storageKey, textarea.value);
-                        if (onSaveCallback) onSaveCallback(textarea.value);
-                    } catch (err) {
-                        alert('Ошибка чтения .docx файла');
-                    }
-                };
-                reader.readAsArrayBuffer(file);
-            }
-            // Check for text-based files
-            else if (file.type.startsWith('text/') || TEXT_EXTENSIONS.some(ext => fileName.endsWith(ext))) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    setTextWithUndo(textarea, event.target.result);
-                    if (storageKey) localStorage.setItem(storageKey, textarea.value);
-                    if (onSaveCallback) onSaveCallback(textarea.value);
-                };
-                reader.readAsText(file, 'UTF-8');
-            } else {
-                alert('Поддерживаемые форматы: .txt, .md, .docx, .json, .xml, .csv, .html, .rtf');
-            }
-        }
-    });
-}
-
-// Setup drag and drop for all prompt fields (textareas)
-setupDragAndDrop(systemPromptInput, 'systemPrompt');
-setupDragAndDrop(raterPromptInput, 'raterPrompt');
-setupDragAndDrop(managerPromptInput, 'managerPrompt');
-
-// Setup drag and drop for preview elements (when in preview mode)
-function setupDragAndDropForPreview(previewElement, textarea, storageKey, onSaveCallback = null) {
-    previewElement.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        previewElement.classList.add('drag-over');
-    });
-    
-    previewElement.addEventListener('dragleave', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        previewElement.classList.remove('drag-over');
-    });
-    
-    previewElement.addEventListener('drop', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        previewElement.classList.remove('drag-over');
-        
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            const file = files[0];
-            const fileName = file.name.toLowerCase();
-            
-            // Check for .docx (Word)
-            if (fileName.endsWith('.docx')) {
-                const reader = new FileReader();
-                reader.onload = async (event) => {
-                    try {
-                        const arrayBuffer = event.target.result;
-                        // Use convertToMarkdown to preserve formatting (headers, bold, lists, etc.)
-                        const result = await mammoth.convertToMarkdown({ arrayBuffer: arrayBuffer });
-                        textarea.value = result.value;
-                        if (storageKey) localStorage.setItem(storageKey, textarea.value);
-                        if (onSaveCallback) onSaveCallback(textarea.value);
-                        // Update preview
-                        previewElement.innerHTML = renderMarkdown(textarea.value);
-                    } catch (err) {
-                        alert('Ошибка чтения .docx файла');
-                    }
-                };
-                reader.readAsArrayBuffer(file);
-            }
-            // Check for text-based files
-            else if (file.type.startsWith('text/') || TEXT_EXTENSIONS.some(ext => fileName.endsWith(ext))) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    textarea.value = event.target.result;
-                    if (storageKey) localStorage.setItem(storageKey, textarea.value);
-                    if (onSaveCallback) onSaveCallback(textarea.value);
-                    // Update preview
-                    previewElement.innerHTML = renderMarkdown(textarea.value);
-                };
-                reader.readAsText(file, 'UTF-8');
-            } else {
-                alert('Поддерживаемые форматы: .txt, .md, .docx, .json, .xml, .csv, .html, .rtf');
-            }
-        }
-    });
-}
-
-// Instruction tabs functionality
-const instructionTabs = document.querySelectorAll('.instruction-tab');
-const instructionEditors = document.querySelectorAll('.instruction-editor');
-const togglePreviewBtn = document.getElementById('togglePreviewBtn');
-
-// Preview elements (WYSIWYG - always editable)
-const systemPromptPreview = document.getElementById('systemPromptPreview');
-const managerPromptPreview = document.getElementById('managerPromptPreview');
-const raterPromptPreview = document.getElementById('raterPromptPreview');
-
-// Debounced sync from WYSIWYG to textarea
-const syncWYSIWYGDebounced = debounce(function(previewElement, textarea, storageKey, onSaveCallback) {
+const syncWYSIWYGDebounced = debounce(function(previewElement, textarea, callback) {
     if (turndownService && previewElement) {
         const markdown = turndownService.turndown(previewElement.innerHTML);
         textarea.value = markdown;
-        if (storageKey) {
-            localStorage.setItem(storageKey, markdown);
-        }
-        if (onSaveCallback) {
-            onSaveCallback(markdown);
-        }
+        if (callback) callback(markdown);
     }
 }, 300);
 
-// Setup WYSIWYG editing for a preview element
-function setupWYSIWYG(previewElement, textarea, storageKey, onSaveCallback = null) {
-    // Make preview editable
+function setupWYSIWYG(previewElement, textarea, callback) {
     previewElement.setAttribute('contenteditable', 'true');
     
-    // Sync changes back to textarea
     previewElement.addEventListener('input', () => {
-        syncWYSIWYGDebounced(previewElement, textarea, storageKey, onSaveCallback);
+        syncWYSIWYGDebounced(previewElement, textarea, callback);
     });
     
-    // Handle paste - insert as plain text, then re-render
     previewElement.addEventListener('paste', (e) => {
         e.preventDefault();
         const text = e.clipboardData.getData('text/plain');
-        
-        // Insert at cursor position
         const selection = window.getSelection();
         if (selection.rangeCount) {
             const range = selection.getRangeAt(0);
             range.deleteContents();
             
-            // Check if pasted text looks like markdown
             const hasMarkdown = /^#|^\*\*|\*\*$|^-\s|^\d+\.\s|^```|^>/.test(text);
-            
             if (hasMarkdown) {
-                // Render markdown and insert
                 const tempDiv = document.createElement('div');
                 tempDiv.innerHTML = renderMarkdown(text);
                 const fragment = document.createDocumentFragment();
-                while (tempDiv.firstChild) {
-                    fragment.appendChild(tempDiv.firstChild);
-                }
+                while (tempDiv.firstChild) fragment.appendChild(tempDiv.firstChild);
                 range.insertNode(fragment);
             } else {
-                // Insert as plain text
-                const textNode = document.createTextNode(text);
-                range.insertNode(textNode);
+                range.insertNode(document.createTextNode(text));
             }
-            
-            // Move cursor to end
             selection.collapseToEnd();
         }
-        
-        // Sync to textarea
-        syncWYSIWYGDebounced(previewElement, textarea, storageKey, onSaveCallback);
+        syncWYSIWYGDebounced(previewElement, textarea, callback);
     });
 }
 
-// Render markdown to HTML
-function renderMarkdown(text) {
-    if (!text) return '<p style="color: #666; font-style: italic;">Промпт пустой...</p>';
-    
-    // Use marked.js if available
-    if (typeof marked !== 'undefined') {
-        return marked.parse(text);
-    }
-    
-    // Fallback: simple markdown conversion
-    let html = text
-        // Headers
-        .replace(/^####\s+(.+)$/gm, '<h4>$1</h4>')
-        .replace(/^###\s+(.+)$/gm, '<h3>$1</h3>')
-        .replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
-        .replace(/^#\s+(.+)$/gm, '<h1>$1</h1>')
-        // Horizontal rule
-        .replace(/^---+$/gm, '<hr>')
-        .replace(/^===+$/gm, '<hr>')
-        // Bullet lists
-        .replace(/^\*\s+(.+)$/gm, '<li>$1</li>')
-        .replace(/^-\s+(.+)$/gm, '<li>$1</li>')
-        // Numbered lists
-        .replace(/^(\d+)\.\s+(.+)$/gm, '<li>$2</li>')
-        // Bold
-        .replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>')
-        // Italic
-        .replace(/(?<!\*)\*([^\*\n]+)\*(?!\*)/g, '<em>$1</em>')
-        // Code blocks
-        .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
-        // Inline code
-        .replace(/`([^`]+)`/g, '<code>$1</code>')
-        // Blockquotes
-        .replace(/^>\s+(.+)$/gm, '<blockquote>$1</blockquote>')
-        // Paragraphs
-        .replace(/\n\n+/g, '</p><p>')
-        // Line breaks
-        .replace(/\n/g, '<br>');
-    
-    return '<p>' + html + '</p>';
-}
-
-// Update preview content for current active prompt
-function updatePreview() {
-    // This function is largely redundant now as updateEditorContent handles it,
-    // but kept for compatibility with tab switching logic
-    
-    const role = getActiveRole();
-    if (!role) return;
-    
-    updateEditorContent(role);
-}
-
-// Initialize WYSIWYG mode (always on - no toggle needed)
 function initWYSIWYGMode() {
-    // Always show preview mode
     document.querySelectorAll('.prompt-wrapper').forEach(wrapper => {
         wrapper.classList.add('preview-mode');
     });
     
-    // Hide toggle button - not needed anymore
-    if (togglePreviewBtn) {
-        togglePreviewBtn.style.display = 'none';
-    }
+    const togglePreviewBtn = document.getElementById('togglePreviewBtn');
+    if (togglePreviewBtn) togglePreviewBtn.style.display = 'none';
     
-    // Setup WYSIWYG for all preview elements - uses new dynamic setup
-// setupWYSIWYG(systemPromptPreview, systemPromptInput, 'systemPrompt');
-// setupWYSIWYG(managerPromptPreview, managerPromptInput, 'managerPrompt');
-// setupWYSIWYG(raterPromptPreview, raterPromptInput, 'raterPrompt');
-
-// Manually call setup for the 3 static elements with the new logic
-setupWYSIWYG(systemPromptPreview, systemPromptInput, null, (content) => syncContentToData('client', content));
-setupWYSIWYG(managerPromptPreview, managerPromptInput, null, (content) => syncContentToData('manager', content));
-setupWYSIWYG(raterPromptPreview, raterPromptInput, null, (content) => syncContentToData('rater', content));
+    const systemPromptPreview = document.getElementById('systemPromptPreview');
+    const managerPromptPreview = document.getElementById('managerPromptPreview');
+    const raterPromptPreview = document.getElementById('raterPromptPreview');
     
-    // Render initial content
-    // updateAllPreviews(); // Removed to avoid double render, called in init
+    setupWYSIWYG(systemPromptPreview, systemPromptInput, (c) => syncContentToData('client', c));
+    setupWYSIWYG(managerPromptPreview, managerPromptInput, (c) => syncContentToData('manager', c));
+    setupWYSIWYG(raterPromptPreview, raterPromptInput, (c) => syncContentToData('rater', c));
 }
 
-// Update all preview contents
-function updateAllPreviews() {
-    updateEditorContent('client');
-    updateEditorContent('manager');
-    updateEditorContent('rater');
+// ============ DRAG & DROP ============
+
+function setupDragAndDrop(textarea) {
+    textarea.addEventListener('dragover', (e) => { e.preventDefault(); textarea.classList.add('drag-over'); });
+    textarea.addEventListener('dragleave', (e) => { e.preventDefault(); textarea.classList.remove('drag-over'); });
+    textarea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        textarea.classList.remove('drag-over');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            const file = files[0];
+            const fileName = file.name.toLowerCase();
+            
+            if (fileName.endsWith('.docx')) {
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    try {
+                        const result = await mammoth.convertToMarkdown({ arrayBuffer: event.target.result });
+                        textarea.value = result.value;
+                        textarea.dispatchEvent(new Event('input'));
+                    } catch (err) { alert('Ошибка чтения .docx'); }
+                };
+                reader.readAsArrayBuffer(file);
+            } else if (file.type.startsWith('text/') || TEXT_EXTENSIONS.some(ext => fileName.endsWith(ext))) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    textarea.value = event.target.result;
+                    textarea.dispatchEvent(new Event('input'));
+                };
+                reader.readAsText(file, 'UTF-8');
+            } else {
+                alert('Поддерживаемые форматы: .txt, .md, .docx');
+            }
+        }
+    });
 }
 
-// Toggle preview button event - disabled, WYSIWYG always on
-// togglePreviewBtn.addEventListener('click', togglePreviewMode);
+// ============ EVENT LISTENERS ============
+
+sendBtn.addEventListener('click', sendMessage);
+userInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+userInput.addEventListener('input', () => autoResizeTextarea(userInput));
+clearChatBtn.addEventListener('click', () => { if (confirm('Очистить чат?')) clearChat(); });
+startBtn.addEventListener('click', startConversationHandler);
+rateChatBtn.addEventListener('click', rateChat);
+aiAssistBtn.addEventListener('click', generateAIResponse);
+
+exportChatBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.getElementById('exportMenu').classList.toggle('show');
+});
+
+exportCurrentPromptBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.getElementById('exportPromptMenu').classList.toggle('show');
+});
+
+document.addEventListener('click', () => {
+    document.getElementById('exportMenu')?.classList.remove('show');
+    document.getElementById('exportPromptMenu')?.classList.remove('show');
+});
+
+document.querySelectorAll('.dropdown-item[data-format]').forEach(item => {
+    item.addEventListener('click', (e) => {
+        const format = e.target.closest('.dropdown-item')?.dataset.format;
+        if (format) exportChat(format);
+    });
+});
+
+document.querySelectorAll('.dropdown-item[data-prompt-format]').forEach(item => {
+    item.addEventListener('click', (e) => {
+        const format = e.target.closest('.dropdown-item')?.dataset.promptFormat;
+        if (format) exportCurrentPrompt(format);
+    });
+});
+
+// Instruction tabs
+const instructionTabs = document.querySelectorAll('.instruction-tab');
+const instructionEditors = document.querySelectorAll('.instruction-editor');
 
 instructionTabs.forEach(tab => {
     tab.addEventListener('click', () => {
         const instructionType = tab.dataset.instruction;
         
-        // Update active tab
         instructionTabs.forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         
-        // Update active editor
         instructionEditors.forEach(editor => {
             editor.classList.remove('active');
             if (editor.dataset.instruction === instructionType) {
@@ -1810,18 +970,29 @@ instructionTabs.forEach(tab => {
             }
         });
         
-        // Update preview (WYSIWYG always on)
+        renderVariations();
         updatePreview();
     });
 });
 
-// Resize panels functionality
+// Textarea input listeners for sync
+[systemPromptInput, managerPromptInput, raterPromptInput].forEach(input => {
+    input.addEventListener('input', () => {
+        const wrapper = input.closest('.prompt-wrapper');
+        if (wrapper) {
+            const role = wrapper.dataset.instruction;
+            syncContentToData(role, input.value);
+        }
+    });
+});
+
+// Resize panels
 const resizeHandle1 = document.getElementById('resizeHandle1');
 const chatPanel = document.getElementById('chatPanel');
 const instructionsPanel = document.getElementById('instructionsPanel');
 let isResizing = false;
 
-resizeHandle1.addEventListener('mousedown', (e) => {
+resizeHandle1.addEventListener('mousedown', () => {
     isResizing = true;
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
@@ -1829,14 +1000,8 @@ resizeHandle1.addEventListener('mousedown', (e) => {
 
 document.addEventListener('mousemove', (e) => {
     if (!isResizing) return;
-    
     const container = document.querySelector('.panels-container');
-    const containerWidth = container.offsetWidth;
-    const mouseX = e.clientX;
-    
-    // Resizing between chat and instructions
-    const chatWidth = (mouseX / containerWidth) * 100;
-    
+    const chatWidth = (e.clientX / container.offsetWidth) * 100;
     if (chatWidth >= 30 && chatWidth <= 70) {
         chatPanel.style.flex = `0 0 ${chatWidth}%`;
         instructionsPanel.style.flex = `0 0 ${100 - chatWidth - 1}%`;
@@ -1855,384 +1020,78 @@ document.addEventListener('mouseup', () => {
 let recognition = null;
 let isRecording = false;
 
-// Initialize Speech Recognition
 function initSpeechRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    
-    if (!SpeechRecognition) {
-        voiceBtn.style.display = 'none';
-        return;
-    }
+    if (!SpeechRecognition) { voiceBtn.style.display = 'none'; return; }
     
     recognition = new SpeechRecognition();
     recognition.lang = 'ru-RU';
     recognition.continuous = false;
     recognition.interimResults = false;
     
-    recognition.onstart = () => {
-        isRecording = true;
-        voiceBtn.classList.add('recording');
-    };
-    
+    recognition.onstart = () => { isRecording = true; voiceBtn.classList.add('recording'); };
     recognition.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
-        const currentText = userInput.value;
-        userInput.value = currentText + (currentText ? ' ' : '') + transcript;
+        userInput.value += (userInput.value ? ' ' : '') + transcript;
         autoResizeTextarea(userInput);
     };
-    
-    recognition.onerror = (event) => {
-        console.error('Speech recognition error:', event.error);
-        if (event.error === 'not-allowed') {
-            alert('Доступ к микрофону запрещён. Разрешите доступ в настройках браузера.');
-        }
-        stopRecording();
-    };
-    
-    recognition.onend = () => {
-        stopRecording();
-    };
-}
-
-function startRecording() {
-    if (!recognition) {
-        alert('Распознавание речи не поддерживается в вашем браузере');
-        return;
-    }
-    
-    try {
-        recognition.start();
-    } catch (error) {
-        console.error('Error starting recognition:', error);
-        stopRecording();
-    }
+    recognition.onerror = () => stopRecording();
+    recognition.onend = () => stopRecording();
 }
 
 function stopRecording() {
-    if (recognition && isRecording) {
-        recognition.stop();
-    }
+    if (recognition && isRecording) recognition.stop();
     isRecording = false;
     voiceBtn.classList.remove('recording');
-    userInput.style.paddingRight = '';
 }
 
-// Generate AI response for manager
-async function generateAIResponse() {
-    if (isDialogRated) {
-        return;
-    }
-    
-    if (conversationHistory.length === 0) {
-        alert('Нет истории диалога для генерации ответа. Сначала отправьте хотя бы одно сообщение.');
-        return;
-    }
-    
-    if (isProcessing) {
-        return;
-    }
-    
-    // Disable button while processing
-    aiAssistBtn.disabled = true;
-    aiAssistBtn.classList.add('loading');
-    
-    try {
-        // Format full dialog history for context
-        let dialogHistory = '';
-        conversationHistory.forEach((msg) => {
-            const role = msg.role === 'user' ? 'Менеджер' : 'Клиент';
-            dialogHistory += `${role}: ${msg.content}\n\n`;
-        });
-        
-        // Get last message from conversation (client's message)
-        const lastMessage = conversationHistory.length > 0 
-            ? conversationHistory[conversationHistory.length - 1].content 
-            : '';
-        
-        // Prepare request body with full dialog history
-        const managerName = getManagerName();
-        const basePrompt = managerPromptInput.value.trim();
-        const fullPrompt = `Тебя зовут ${managerName}.\n\n${basePrompt}`;
-        
-        const requestBody = {
-            systemPrompt: fullPrompt,
-            userMessage: lastMessage,
-            dialogHistory: dialogHistory.trim(),
-            sessionId: managerSessionId
-        };
-        
-        // Make webhook request
-        const response = await fetch(MANAGER_ASSISTANT_WEBHOOK_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        let aiMessage = extractApiResponse(data);
-        
-        if (!aiMessage) {
-            throw new Error('Пустой ответ от AI');
-        }
-        
-        // Clean up the message (remove quotes, prefixes, etc.)
-        aiMessage = aiMessage.trim();
-        aiMessage = aiMessage.replace(/^["']|["']$/g, ''); // Remove surrounding quotes
-        aiMessage = aiMessage.replace(/^(Менеджер|Manager):\s*/i, ''); // Remove role prefix
-        
-        // Insert into input field
-        userInput.value = aiMessage;
-        autoResizeTextarea(userInput);
-        userInput.focus();
-        
-    } catch (error) {
-        console.error('AI generation error:', error);
-        alert('Ошибка при генерации ответа: ' + error.message);
-    } finally {
-        aiAssistBtn.disabled = false;
-        aiAssistBtn.classList.remove('loading');
-    }
-}
-
-// AI Assistant button event
-aiAssistBtn.addEventListener('click', generateAIResponse);
-
-// Voice button event
 voiceBtn.addEventListener('click', () => {
-    if (isRecording) {
-        stopRecording();
-    } else {
-        startRecording();
-    }
+    if (isRecording) stopRecording();
+    else if (recognition) recognition.start();
 });
 
-// Mobile tabs functionality
+// Mobile tabs
 const mobileTabs = document.querySelectorAll('.mobile-tab');
 const panels = document.querySelectorAll('.panel');
 
 mobileTabs.forEach(tab => {
     tab.addEventListener('click', () => {
         const panelName = tab.dataset.panel;
-        
-        // Remove active class from all tabs and panels
         mobileTabs.forEach(t => t.classList.remove('active'));
         panels.forEach(p => p.classList.remove('active'));
-        
-        // Add active class to clicked tab and corresponding panel
         tab.classList.add('active');
-        const activePanel = document.querySelector(`.panel[data-panel="${panelName}"]`);
-        if (activePanel) {
-            activePanel.classList.add('active');
-        }
+        document.querySelector(`.panel[data-panel="${panelName}"]`)?.classList.add('active');
     });
 });
 
-// Set initial active panel
 if (window.innerWidth <= 1024) {
     panels.forEach(p => p.classList.remove('active'));
-    document.querySelector('.panel[data-panel="chat"]').classList.add('active');
+    document.querySelector('.panel[data-panel="chat"]')?.classList.add('active');
 }
 
-// Initialize
-loadPrompts();
-initSpeechRecognition();
-userInput.focus();
-autoResizeTextarea(userInput); // Установить начальную высоту
-
-// Initialize WYSIWYG mode (always on)
-setTimeout(() => {
-    initWYSIWYGMode();
-}, 100);
-
-// Setup drag and drop for preview elements
-setupDragAndDropForPreview(systemPromptPreview, systemPromptInput, 'systemPrompt');
-setupDragAndDropForPreview(managerPromptPreview, managerPromptInput, 'managerPrompt');
-setupDragAndDropForPreview(raterPromptPreview, raterPromptInput, 'raterPrompt');
-
-// WYSIWYG Toolbar functionality (Google Docs style)
-function getActivePreview() {
-    const activeEditor = document.querySelector('.instruction-editor.active');
-    if (!activeEditor) return null;
-    return activeEditor.querySelector('.prompt-preview');
-}
-
-function getActiveTextarea() {
-    const activeEditor = document.querySelector('.instruction-editor.active');
-    if (!activeEditor) return null;
-    return activeEditor.querySelector('.prompt-editor');
-}
-
-// Apply formatting using execCommand (WYSIWYG)
-// Check if selection is inside a specific tag
-function isInsideTag(tagName) {
-    const selection = window.getSelection();
-    if (!selection.rangeCount) return false;
-    
-    let node = selection.anchorNode;
-    while (node && node !== document.body) {
-        if (node.nodeName && node.nodeName.toLowerCase() === tagName.toLowerCase()) {
-            return node;
-        }
-        node = node.parentNode;
-    }
-    return null;
-}
-
-// Unwrap element - move its contents outside and remove the tag
-function unwrapElement(element) {
-    const parent = element.parentNode;
-    while (element.firstChild) {
-        parent.insertBefore(element.firstChild, element);
-    }
-    parent.removeChild(element);
-}
-
-function applyFormat(action) {
-    const preview = getActivePreview();
-    if (!preview) return;
-    
-    // Focus preview to ensure execCommand works
-    preview.focus();
-    
-    switch (action) {
-        case 'h1':
-            // Toggle: if already h1, convert back to paragraph
-            if (isInsideTag('h1')) {
-                document.execCommand('formatBlock', false, 'p');
-            } else {
-                document.execCommand('formatBlock', false, 'h1');
-            }
-            break;
-        case 'h2':
-            if (isInsideTag('h2')) {
-                document.execCommand('formatBlock', false, 'p');
-            } else {
-                document.execCommand('formatBlock', false, 'h2');
-            }
-            break;
-        case 'h3':
-            if (isInsideTag('h3')) {
-                document.execCommand('formatBlock', false, 'p');
-            } else {
-                document.execCommand('formatBlock', false, 'h3');
-            }
-            break;
-        case 'bold':
-            document.execCommand('bold', false, null);
-            break;
-        case 'italic':
-            document.execCommand('italic', false, null);
-            break;
-        case 'strike':
-            document.execCommand('strikeThrough', false, null);
-            break;
-        case 'ul':
-            document.execCommand('insertUnorderedList', false, null);
-            break;
-        case 'ol':
-            document.execCommand('insertOrderedList', false, null);
-            break;
-        case 'quote':
-            // Toggle: if already in blockquote, convert back to paragraph
-            if (isInsideTag('blockquote')) {
-                document.execCommand('formatBlock', false, 'p');
-            } else {
-                document.execCommand('formatBlock', false, 'blockquote');
-            }
-            break;
-        case 'code':
-            // Toggle: if inside code, unwrap it
-            const codeElement = isInsideTag('code');
-            if (codeElement) {
-                // Save selection
-                const selection = window.getSelection();
-                const range = selection.getRangeAt(0);
-                
-                // Unwrap the code element
-                unwrapElement(codeElement);
-                
-                // Restore selection
-                selection.removeAllRanges();
-                selection.addRange(range);
-            } else {
-                // Wrap selection in <code> tag only if there's selected text
-                const selection = window.getSelection();
-                const selectedText = selection.toString().trim();
-                
-                // Don't create empty code tags
-                if (!selectedText) {
-                    break;
-                }
-                
-                if (selection.rangeCount > 0) {
-                    const range = selection.getRangeAt(0);
-                    const code = document.createElement('code');
-                    code.appendChild(range.extractContents());
-                    range.insertNode(code);
-                    selection.removeAllRanges();
-                    const newRange = document.createRange();
-                    newRange.selectNodeContents(code);
-                    selection.addRange(newRange);
-                }
-            }
-            break;
-        case 'hr':
-            document.execCommand('insertHorizontalRule', false, null);
-            break;
-    }
-    
-    // Sync changes back to textarea
-    syncPreviewToTextarea();
-}
-
-// Sync preview HTML back to textarea as markdown
-function syncPreviewToTextarea() {
-    const preview = getActivePreview();
-    const textarea = getActiveTextarea();
-    if (!preview || !textarea) return;
-    
-    // Use TurndownService to convert HTML to Markdown
-    if (turndownService) {
-        const markdown = turndownService.turndown(preview.innerHTML);
-        textarea.value = markdown;
-        localStorage.setItem(textarea.id, markdown);
-    }
-}
-
-// Toolbar button click handlers
+// Toolbar
 document.querySelectorAll('.toolbar-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
         e.preventDefault();
         const action = btn.dataset.action;
-        applyFormat(action);
+        const preview = document.querySelector('.instruction-editor.active .prompt-preview');
+        if (!preview) return;
+        preview.focus();
+        
+        if (action === 'bold') document.execCommand('bold', false, null);
+        else if (action === 'italic') document.execCommand('italic', false, null);
+        else if (action === 'strike') document.execCommand('strikeThrough', false, null);
+        else if (action === 'ul') document.execCommand('insertUnorderedList', false, null);
+        else if (action === 'ol') document.execCommand('insertOrderedList', false, null);
+        else if (action === 'h1') document.execCommand('formatBlock', false, 'h1');
+        else if (action === 'h2') document.execCommand('formatBlock', false, 'h2');
+        else if (action === 'h3') document.execCommand('formatBlock', false, 'h3');
+        else if (action === 'quote') document.execCommand('formatBlock', false, 'blockquote');
+        else if (action === 'hr') document.execCommand('insertHorizontalRule', false, null);
     });
 });
 
-// Keyboard shortcuts for formatting in preview
-document.querySelectorAll('.prompt-preview').forEach(preview => {
-    preview.addEventListener('keydown', (e) => {
-        if (e.ctrlKey || e.metaKey) {
-            switch (e.key.toLowerCase()) {
-                case 'b':
-                    e.preventDefault();
-                    applyFormat('bold');
-                    break;
-                case 'i':
-                    e.preventDefault();
-                    applyFormat('italic');
-                    break;
-            }
-        }
-    });
-});
-
-// Cloud save button handler
+// Cloud save button
 const saveToCloudBtn = document.getElementById('saveToCloudBtn');
 if (saveToCloudBtn) {
     saveToCloudBtn.addEventListener('click', () => {
@@ -2245,3 +1104,19 @@ if (saveToCloudBtn) {
         }, 500);
     });
 }
+
+// ============ INITIALIZATION ============
+
+loadPrompts();
+initSpeechRecognition();
+userInput.focus();
+autoResizeTextarea(userInput);
+
+setupDragAndDrop(systemPromptInput);
+setupDragAndDrop(managerPromptInput);
+setupDragAndDrop(raterPromptInput);
+
+setTimeout(() => {
+    initWYSIWYGMode();
+    renderVariations();
+}, 200);
