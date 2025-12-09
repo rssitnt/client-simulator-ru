@@ -193,6 +193,24 @@ function loadPrompts() {
                         localStorage.setItem('managerPrompt', data.manager_prompt);
                     }
                     
+                    if (data.custom_tabs && Array.isArray(data.custom_tabs)) {
+                        // Merge or overwrite logic? Overwrite for now to sync across devices
+                        customTabs = data.custom_tabs;
+                        renderCustomTabs();
+                        
+                        // Update content of custom tabs
+                        customTabs.forEach(tab => {
+                            const editor = document.getElementById(tab.id + '_editor');
+                            const preview = document.getElementById(tab.id + '_preview');
+                            if (editor && document.activeElement !== editor) {
+                                editor.value = tab.content || '';
+                            }
+                            if (preview) {
+                                preview.innerHTML = renderMarkdown(tab.content || '');
+                            }
+                        });
+                    }
+                    
                     // Update previews after loading
                     if (typeof updateAllPreviews === 'function') {
                         updateAllPreviews();
@@ -224,7 +242,8 @@ function savePromptsToFirebaseNow() {
     const payload = {
         client_prompt: systemPromptInput.value,
         rater_prompt: raterPromptInput.value,
-        manager_prompt: managerPromptInput.value
+        manager_prompt: managerPromptInput.value,
+        custom_tabs: customTabs
     };
 
     set(ref(db, 'prompts'), payload)
@@ -288,12 +307,26 @@ function loadSavedData() {
         }
     }
     
-    // Load manager name or show modal
+                    // Load manager name or show modal
     if (savedManagerName) {
         managerNameInput.value = savedManagerName;
     } else {
         // Show modal to ask for name
         showNameModal();
+    }
+    
+    // Load custom tabs
+    const savedCustomTabs = localStorage.getItem('customTabs');
+    if (savedCustomTabs) {
+        try {
+            const tabs = JSON.parse(savedCustomTabs);
+            if (Array.isArray(tabs)) {
+                customTabs = tabs;
+                renderCustomTabs();
+            }
+        } catch (e) {
+            console.error('Error parsing custom tabs:', e);
+        }
     }
 }
 
@@ -350,6 +383,149 @@ managerNameInput.addEventListener('input', () => {
         localStorage.setItem('managerName', name);
     }
 });
+
+// Custom Tabs Logic
+let customTabs = [];
+const addTabBtn = document.getElementById('addTabBtn');
+const instructionTabsContainer = document.querySelector('.instruction-tabs');
+const instructionContentContainer = document.querySelector('.instruction-content');
+
+// Save custom tabs
+function saveCustomTabs() {
+    localStorage.setItem('customTabs', JSON.stringify(customTabs));
+    savePromptsToFirebase();
+}
+
+// Render a single custom tab
+function createTabElement(tab) {
+    // Check if already exists to avoid duplicates
+    if (document.querySelector(`.instruction-tab[data-instruction="${tab.id}"]`)) return;
+
+    // Create Tab Button
+    const btn = document.createElement('button');
+    btn.className = 'instruction-tab';
+    btn.dataset.instruction = tab.id;
+    btn.dataset.custom = 'true';
+    btn.textContent = tab.name;
+    
+    // Double click to rename
+    btn.addEventListener('dblclick', () => {
+        const newName = prompt('Новое название:', tab.name);
+        if (newName && newName.trim()) {
+            tab.name = newName.trim();
+            btn.textContent = tab.name;
+            const editor = document.getElementById(tab.id + '_editor');
+            if (editor) editor.placeholder = `Инструкция для ${tab.name}...`;
+            saveCustomTabs();
+        }
+    });
+
+    // Right click to delete
+    btn.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        if (confirm(`Удалить вкладку "${tab.name}"?`)) {
+            // Remove from array
+            customTabs = customTabs.filter(t => t.id !== tab.id);
+            // Remove DOM elements
+            btn.remove();
+            const wrapper = document.querySelector(`.prompt-wrapper[data-instruction="${tab.id}"]`);
+            if (wrapper) wrapper.remove();
+            
+            // Switch to client tab
+            document.querySelector('.instruction-tab[data-instruction="client"]').click();
+            saveCustomTabs();
+        }
+    });
+
+    // Insert before Add Button
+    instructionTabsContainer.insertBefore(btn, addTabBtn);
+
+    // Create Editor Wrapper
+    const wrapper = document.createElement('div');
+    wrapper.className = 'prompt-wrapper instruction-editor preview-mode';
+    wrapper.dataset.instruction = tab.id;
+    wrapper.dataset.custom = 'true';
+
+    // TextArea
+    const textarea = document.createElement('textarea');
+    textarea.id = tab.id + '_editor'; 
+    textarea.className = 'prompt-editor';
+    textarea.placeholder = `Инструкция для ${tab.name}...`;
+    textarea.value = tab.content || '';
+
+    // Preview
+    const preview = document.createElement('div');
+    preview.id = tab.id + '_preview';
+    preview.className = 'prompt-preview';
+    preview.innerHTML = renderMarkdown(tab.content || '');
+
+    wrapper.appendChild(textarea);
+    wrapper.appendChild(preview);
+    instructionContentContainer.appendChild(wrapper);
+
+    // Setup Events
+    setupDragAndDrop(textarea, null, (content) => {
+        tab.content = content;
+        saveCustomTabs();
+    }); 
+    setupDragAndDropForPreview(preview, textarea, null, (content) => {
+        tab.content = content;
+        saveCustomTabs();
+    });
+    
+    // Setup WYSIWYG with callback for saving
+    setupWYSIWYG(preview, textarea, null, (content) => {
+        tab.content = content;
+        saveCustomTabs();
+    });
+
+    // Manual input listener for textarea (fallback)
+    textarea.addEventListener('input', () => {
+        tab.content = textarea.value;
+        saveCustomTabs();
+    });
+
+    // Attach click listener
+    btn.addEventListener('click', () => {
+         document.querySelectorAll('.instruction-tab').forEach(t => t.classList.remove('active'));
+         document.querySelectorAll('.instruction-editor').forEach(e => e.classList.remove('active'));
+         
+         btn.classList.add('active');
+         wrapper.classList.add('active');
+         updatePreview();
+    });
+}
+
+// Render all custom tabs
+function renderCustomTabs() {
+    customTabs.forEach(tab => {
+        createTabElement(tab);
+    });
+}
+
+// Add Tab Handler
+if (addTabBtn) {
+    addTabBtn.addEventListener('click', () => {
+        const defaultName = `Менеджер ${customTabs.length + 1}`;
+        const name = prompt('Название новой вкладки:', defaultName);
+        if (name) {
+            const newTab = {
+                id: 'custom_' + Date.now(),
+                name: name,
+                content: ''
+            };
+            customTabs.push(newTab);
+            createTabElement(newTab);
+            saveCustomTabs();
+            
+            // Switch to new tab
+            setTimeout(() => {
+                const newBtn = document.querySelector(`.instruction-tab[data-instruction="${newTab.id}"]`);
+                if (newBtn) newBtn.click();
+            }, 100);
+        }
+    });
+}
 
 // Auto-resize textarea
 function autoResizeTextarea(textarea) {
@@ -840,6 +1016,13 @@ function exportCurrentPrompt(format = 'txt') {
             promptText = raterPromptInput.value.trim();
             fileName = 'промпт-оценщика';
             break;
+        default:
+            const customTab = customTabs.find(t => t.id === instructionType);
+            if (customTab) {
+                promptText = customTab.content || '';
+                fileName = customTab.name.replace(/\s+/g, '-').toLowerCase();
+            }
+            break;
     }
     
     if (!promptText) {
@@ -1194,7 +1377,7 @@ function setTextWithUndo(textarea, text) {
 }
 
 // Drag and drop files into prompt fields
-function setupDragAndDrop(textarea, storageKey) {
+function setupDragAndDrop(textarea, storageKey, onSaveCallback = null) {
     textarea.addEventListener('dragover', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -1226,7 +1409,8 @@ function setupDragAndDrop(textarea, storageKey) {
                         // Use convertToMarkdown to preserve formatting (headers, bold, lists, etc.)
                         const result = await mammoth.convertToMarkdown({ arrayBuffer: arrayBuffer });
                         setTextWithUndo(textarea, result.value);
-                        localStorage.setItem(storageKey, textarea.value);
+                        if (storageKey) localStorage.setItem(storageKey, textarea.value);
+                        if (onSaveCallback) onSaveCallback(textarea.value);
                     } catch (err) {
                         alert('Ошибка чтения .docx файла');
                     }
@@ -1238,7 +1422,8 @@ function setupDragAndDrop(textarea, storageKey) {
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     setTextWithUndo(textarea, event.target.result);
-                    localStorage.setItem(storageKey, textarea.value);
+                    if (storageKey) localStorage.setItem(storageKey, textarea.value);
+                    if (onSaveCallback) onSaveCallback(textarea.value);
                 };
                 reader.readAsText(file, 'UTF-8');
             } else {
@@ -1254,7 +1439,7 @@ setupDragAndDrop(raterPromptInput, 'raterPrompt');
 setupDragAndDrop(managerPromptInput, 'managerPrompt');
 
 // Setup drag and drop for preview elements (when in preview mode)
-function setupDragAndDropForPreview(previewElement, textarea, storageKey) {
+function setupDragAndDropForPreview(previewElement, textarea, storageKey, onSaveCallback = null) {
     previewElement.addEventListener('dragover', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -1286,7 +1471,8 @@ function setupDragAndDropForPreview(previewElement, textarea, storageKey) {
                         // Use convertToMarkdown to preserve formatting (headers, bold, lists, etc.)
                         const result = await mammoth.convertToMarkdown({ arrayBuffer: arrayBuffer });
                         textarea.value = result.value;
-                        localStorage.setItem(storageKey, textarea.value);
+                        if (storageKey) localStorage.setItem(storageKey, textarea.value);
+                        if (onSaveCallback) onSaveCallback(textarea.value);
                         // Update preview
                         previewElement.innerHTML = renderMarkdown(textarea.value);
                     } catch (err) {
@@ -1300,7 +1486,8 @@ function setupDragAndDropForPreview(previewElement, textarea, storageKey) {
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     textarea.value = event.target.result;
-                    localStorage.setItem(storageKey, textarea.value);
+                    if (storageKey) localStorage.setItem(storageKey, textarea.value);
+                    if (onSaveCallback) onSaveCallback(textarea.value);
                     // Update preview
                     previewElement.innerHTML = renderMarkdown(textarea.value);
                 };
@@ -1323,22 +1510,27 @@ const managerPromptPreview = document.getElementById('managerPromptPreview');
 const raterPromptPreview = document.getElementById('raterPromptPreview');
 
 // Debounced sync from WYSIWYG to textarea
-const syncWYSIWYGDebounced = debounce(function(previewElement, textarea, storageKey) {
+const syncWYSIWYGDebounced = debounce(function(previewElement, textarea, storageKey, onSaveCallback) {
     if (turndownService && previewElement) {
         const markdown = turndownService.turndown(previewElement.innerHTML);
         textarea.value = markdown;
-        localStorage.setItem(storageKey, markdown);
+        if (storageKey) {
+            localStorage.setItem(storageKey, markdown);
+        }
+        if (onSaveCallback) {
+            onSaveCallback(markdown);
+        }
     }
 }, 300);
 
 // Setup WYSIWYG editing for a preview element
-function setupWYSIWYG(previewElement, textarea, storageKey) {
+function setupWYSIWYG(previewElement, textarea, storageKey, onSaveCallback = null) {
     // Make preview editable
     previewElement.setAttribute('contenteditable', 'true');
     
     // Sync changes back to textarea
     previewElement.addEventListener('input', () => {
-        syncWYSIWYGDebounced(previewElement, textarea, storageKey);
+        syncWYSIWYGDebounced(previewElement, textarea, storageKey, onSaveCallback);
     });
     
     // Handle paste - insert as plain text, then re-render
@@ -1375,7 +1567,7 @@ function setupWYSIWYG(previewElement, textarea, storageKey) {
         }
         
         // Sync to textarea
-        syncWYSIWYGDebounced(previewElement, textarea, storageKey);
+        syncWYSIWYGDebounced(previewElement, textarea, storageKey, onSaveCallback);
     });
 }
 
@@ -1443,6 +1635,15 @@ function updatePreview() {
             text = raterPromptInput.value;
             previewElement = raterPromptPreview;
             break;
+        default:
+            // Custom tabs
+            const customEditor = document.getElementById(instructionType + '_editor');
+            const customPreview = document.getElementById(instructionType + '_preview');
+            if (customEditor && customPreview) {
+                text = customEditor.value;
+                previewElement = customPreview;
+            }
+            break;
     }
     
     if (previewElement) {
@@ -1474,6 +1675,8 @@ function initWYSIWYGMode() {
     setupWYSIWYG(managerPromptPreview, managerPromptInput, 'managerPrompt');
     setupWYSIWYG(raterPromptPreview, raterPromptInput, 'raterPrompt');
     
+    // Setup for custom tabs is handled in createTabElement
+    
     // Render initial content
     updateAllPreviews();
 }
@@ -1483,6 +1686,14 @@ function updateAllPreviews() {
     systemPromptPreview.innerHTML = renderMarkdown(systemPromptInput.value);
     managerPromptPreview.innerHTML = renderMarkdown(managerPromptInput.value);
     raterPromptPreview.innerHTML = renderMarkdown(raterPromptInput.value);
+    
+    // Update custom tabs previews
+    customTabs.forEach(tab => {
+        const preview = document.getElementById(tab.id + '_preview');
+        if (preview) {
+            preview.innerHTML = renderMarkdown(tab.content || '');
+        }
+    });
     
     // Apply syntax highlighting if available
     if (typeof hljs !== 'undefined') {

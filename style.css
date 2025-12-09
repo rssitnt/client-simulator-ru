@@ -665,6 +665,18 @@ body {
     border-bottom-color: var(--color-accent);
 }
 
+.instruction-tab.add-tab-btn {
+    font-size: 18px;
+    padding: 6px 12px;
+    font-weight: bold;
+    color: #555;
+}
+
+.instruction-tab.add-tab-btn:hover {
+    color: var(--color-accent);
+    background: rgba(255, 255, 255, 0.05);
+}
+
 .instruction-content {
     flex: 1;
     display: flex;
