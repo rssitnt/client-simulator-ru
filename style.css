@@ -665,23 +665,80 @@ body {
     border-bottom-color: var(--color-accent);
 }
 
-.instruction-tab.add-tab-btn {
-    font-size: 18px;
-    padding: 6px 12px;
-    font-weight: bold;
-    color: #555;
-}
-
-.instruction-tab.add-tab-btn:hover {
-    color: var(--color-accent);
-    background: rgba(255, 255, 255, 0.05);
-}
-
-.instruction-content {
-    flex: 1;
+/* Prompt variations */
+.prompt-variations-container {
     display: flex;
-    flex-direction: column;
-    min-height: 0;
+    gap: 8px;
+    padding: 8px 16px;
+    background: #141414;
+    border-bottom: 1px solid #2a2a2a;
+    overflow-x: auto;
+    flex-shrink: 0;
+    align-items: center;
+}
+
+.prompt-variation-chip {
+    padding: 4px 12px;
+    background: #252525;
+    border: 1px solid #333;
+    border-radius: 14px;
+    color: #888;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.prompt-variation-chip:hover {
+    background: #333;
+    color: #e0e0e0;
+}
+
+.prompt-variation-chip.active {
+    background: var(--color-accent);
+    color: #fff;
+    border-color: var(--color-accent);
+}
+
+.prompt-variation-chip .delete-variation {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.2);
+    color: inherit;
+    font-size: 10px;
+    margin-right: -4px;
+    opacity: 0.6;
+}
+
+.prompt-variation-chip .delete-variation:hover {
+    opacity: 1;
+    background: rgba(0,0,0,0.4);
+}
+
+.add-variation-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 1px dashed #444;
+    background: transparent;
+    color: #666;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.add-variation-btn:hover {
+    color: var(--color-accent);
+    border-color: var(--color-accent);
 }
 
 /* Markdown Toolbar */

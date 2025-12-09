@@ -307,227 +307,368 @@ function loadSavedData() {
         }
     }
     
-                    // Load manager name or show modal
-    if (savedManagerName) {
-        managerNameInput.value = savedManagerName;
-    } else {
-        // Show modal to ask for name
-        showNameModal();
-    }
+                    // Load custom tabs logic REMOVED. Replaced with Prompt Variations logic.
+
+// Prompt Variations Logic
+let promptsData = {
+    client: { variations: [], activeId: null },
+    manager: { variations: [], activeId: null },
+    rater: { variations: [], activeId: null }
+};
+
+const promptVariationsContainer = document.getElementById('promptVariations');
+
+// Generate unique ID
+function generateId() {
+    return 'var_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+}
+
+// Get active role
+function getActiveRole() {
+    const activeTab = document.querySelector('.instruction-tab.active');
+    return activeTab ? activeTab.dataset.instruction : 'client';
+}
+
+// Initialize prompts data (migration from old format if needed)
+function initPromptsData(legacyData = {}) {
+    const roles = ['client', 'manager', 'rater'];
     
-    // Load custom tabs
-    const savedCustomTabs = localStorage.getItem('customTabs');
-    if (savedCustomTabs) {
-        try {
-            const tabs = JSON.parse(savedCustomTabs);
-            if (Array.isArray(tabs)) {
-                customTabs = tabs;
-                renderCustomTabs();
+    roles.forEach(role => {
+        // Check if we have existing variations in legacyData (from Firebase)
+        if (legacyData[role + '_variations'] && Array.isArray(legacyData[role + '_variations'])) {
+            promptsData[role].variations = legacyData[role + '_variations'];
+            promptsData[role].activeId = legacyData[role + '_activeId'] || (promptsData[role].variations[0] ? promptsData[role].variations[0].id : null);
+        } else {
+            // Check local storage for legacy string format
+            const legacyContent = legacyData[role + '_prompt'] || localStorage.getItem(role === 'client' ? 'systemPrompt' : role + 'Prompt') || '';
+            
+            if (promptsData[role].variations.length === 0) {
+                // Create default variation with legacy content
+                const defaultId = generateId();
+                promptsData[role].variations.push({
+                    id: defaultId,
+                    name: 'Основной',
+                    content: unescapeMarkdown(legacyContent)
+                });
+                promptsData[role].activeId = defaultId;
             }
-        } catch (e) {
-            console.error('Error parsing custom tabs:', e);
         }
-    }
+    });
+    
+    renderVariations();
 }
 
-// Show name modal
-function showNameModal() {
-    nameModal.classList.add('active');
-    setTimeout(() => {
-        modalNameInput.focus();
-    }, 100);
+// Render variations chips
+function renderVariations() {
+    const role = getActiveRole();
+    if (!promptsData[role]) return;
+    
+    const variations = promptsData[role].variations;
+    const activeId = promptsData[role].activeId;
+    
+    promptVariationsContainer.innerHTML = '';
+    
+    variations.forEach(v => {
+        const chip = document.createElement('div');
+        chip.className = `prompt-variation-chip ${v.id === activeId ? 'active' : ''}`;
+        chip.innerHTML = `
+            <span class="chip-name">${v.name}</span>
+            ${variations.length > 1 ? '<span class="delete-variation">×</span>' : ''}
+        `;
+        
+        // Click to switch
+        chip.addEventListener('click', (e) => {
+            if (!e.target.classList.contains('delete-variation')) {
+                setActiveVariation(role, v.id);
+            }
+        });
+        
+        // Double click to rename
+        chip.querySelector('.chip-name').addEventListener('dblclick', (e) => {
+            e.stopPropagation();
+            const newName = prompt('Название промпта:', v.name);
+            if (newName && newName.trim()) {
+                v.name = newName.trim();
+                renderVariations();
+                savePromptsToFirebase();
+            }
+        });
+        
+        // Delete
+        const deleteBtn = chip.querySelector('.delete-variation');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (confirm(`Удалить промпт "${v.name}"?`)) {
+                    deleteVariation(role, v.id);
+                }
+            });
+        }
+        
+        promptVariationsContainer.appendChild(chip);
+    });
+    
+    // Add button
+    const addBtn = document.createElement('button');
+    addBtn.className = 'add-variation-btn';
+    addBtn.innerHTML = '+';
+    addBtn.title = 'Добавить вариант промпта';
+    addBtn.addEventListener('click', () => {
+        addVariation(role);
+    });
+    
+    promptVariationsContainer.appendChild(addBtn);
+    
+    // Update editor content
+    updateEditorContent(role);
 }
 
-// Hide name modal
-function hideNameModal() {
-    nameModal.classList.remove('active');
-}
-
-// Get manager name
-function getManagerName() {
-    return managerNameInput.value.trim() || 'менеджер';
-}
-
-// Save manager name
-function saveManagerName(name) {
-    localStorage.setItem('managerName', name);
-    managerNameInput.value = name;
-}
-
-// Modal submit handler
-modalNameSubmit.addEventListener('click', () => {
-    const name = modalNameInput.value.trim();
-    if (name) {
-        saveManagerName(name);
-        hideNameModal();
-    } else {
-        modalNameInput.focus();
-        modalNameInput.style.borderColor = '#ff5555';
-        setTimeout(() => {
-            modalNameInput.style.borderColor = '';
-        }, 1000);
-    }
-});
-
-// Modal input enter key handler
-modalNameInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-        modalNameSubmit.click();
-    }
-});
-
-// Manager name input change handler
-managerNameInput.addEventListener('input', () => {
-    const name = managerNameInput.value.trim();
-    if (name) {
-        localStorage.setItem('managerName', name);
-    }
-});
-
-// Custom Tabs Logic
-let customTabs = [];
-const addTabBtn = document.getElementById('addTabBtn');
-const instructionTabsContainer = document.querySelector('.instruction-tabs');
-const instructionContentContainer = document.querySelector('.instruction-content');
-
-// Save custom tabs
-function saveCustomTabs() {
-    localStorage.setItem('customTabs', JSON.stringify(customTabs));
+// Add new variation
+function addVariation(role) {
+    const count = promptsData[role].variations.length + 1;
+    const newId = generateId();
+    const newVariation = {
+        id: newId,
+        name: `Вариант ${count}`,
+        content: ''
+    };
+    
+    promptsData[role].variations.push(newVariation);
+    setActiveVariation(role, newId);
     savePromptsToFirebase();
 }
 
-// Render a single custom tab
-function createTabElement(tab) {
-    // Check if already exists to avoid duplicates
-    if (document.querySelector(`.instruction-tab[data-instruction="${tab.id}"]`)) return;
-
-    // Create Tab Button
-    const btn = document.createElement('button');
-    btn.className = 'instruction-tab';
-    btn.dataset.instruction = tab.id;
-    btn.dataset.custom = 'true';
-    btn.textContent = tab.name;
-    
-    // Double click to rename
-    btn.addEventListener('dblclick', () => {
-        const newName = prompt('Новое название:', tab.name);
-        if (newName && newName.trim()) {
-            tab.name = newName.trim();
-            btn.textContent = tab.name;
-            const editor = document.getElementById(tab.id + '_editor');
-            if (editor) editor.placeholder = `Инструкция для ${tab.name}...`;
-            saveCustomTabs();
+// Delete variation
+function deleteVariation(role, id) {
+    const index = promptsData[role].variations.findIndex(v => v.id === id);
+    if (index > -1) {
+        promptsData[role].variations.splice(index, 1);
+        
+        // If we deleted the active one, switch to the first available
+        if (promptsData[role].activeId === id) {
+            promptsData[role].activeId = promptsData[role].variations[0].id;
         }
-    });
+        
+        renderVariations();
+        savePromptsToFirebase();
+    }
+}
 
-    // Right click to delete
-    btn.addEventListener('contextmenu', (e) => {
+// Set active variation
+function setActiveVariation(role, id) {
+    promptsData[role].activeId = id;
+    renderVariations();
+    updateEditorContent(role);
+}
+
+// Update editor content based on active variation
+function updateEditorContent(role) {
+    const activeVar = promptsData[role].variations.find(v => v.id === promptsData[role].activeId);
+    const content = activeVar ? activeVar.content : '';
+    
+    let textarea, preview;
+    
+    if (role === 'client') {
+        textarea = systemPromptInput;
+        preview = systemPromptPreview;
+    } else if (role === 'manager') {
+        textarea = managerPromptInput;
+        preview = managerPromptPreview;
+    } else if (role === 'rater') {
+        textarea = raterPromptInput;
+        preview = raterPromptPreview;
+    }
+    
+    if (textarea && preview) {
+        // Avoid triggering input event to prevent circular save
+        textarea.value = content; 
+        preview.innerHTML = renderMarkdown(content);
+        
+        // Highlight code blocks
+        if (typeof hljs !== 'undefined') {
+            preview.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+        }
+    }
+}
+
+// Sync content from editor to data structure
+function syncContentToData(role, content) {
+    const activeVar = promptsData[role].variations.find(v => v.id === promptsData[role].activeId);
+    if (activeVar) {
+        activeVar.content = content;
+        savePromptsToFirebase();
+    }
+}
+
+// Hook into existing event listeners
+// Replace the old auto-save listeners with new ones that update promptsData
+function replaceInputListeners() {
+    // Remove old listeners (by cloning nodes if needed, but we can just overwrite behavior)
+    // Actually, the old listeners just saved to localStorage directly. 
+    // We will keep them for backup but primarily use our new logic.
+    
+    // We already have 'input' listeners on textareas.
+    // Let's modify the WYSIWYG sync callback to also update our data structure.
+}
+
+// Overwrite the savePromptsToFirebaseNow to include variations
+function savePromptsToFirebaseNow() {
+    if (!db) return;
+
+    // Flatten data for Firebase
+    const payload = {
+        // Legacy fields for backward compatibility (save active content)
+        client_prompt: getActiveContent('client'),
+        manager_prompt: getActiveContent('manager'),
+        rater_prompt: getActiveContent('rater'),
+        
+        // New structure
+        client_variations: promptsData.client.variations,
+        client_activeId: promptsData.client.activeId,
+        
+        manager_variations: promptsData.manager.variations,
+        manager_activeId: promptsData.manager.activeId,
+        
+        rater_variations: promptsData.rater.variations,
+        rater_activeId: promptsData.rater.activeId
+    };
+
+    set(ref(db, 'prompts'), payload)
+        .then(() => console.log('Prompts synced to Firebase'))
+        .catch(e => console.error('Failed to sync to Firebase:', e));
+}
+
+function getActiveContent(role) {
+    const v = promptsData[role].variations.find(v => v.id === promptsData[role].activeId);
+    return v ? v.content : '';
+}
+
+// Load function updated
+function loadPrompts() {
+    loadSavedData(); // Local storage
+
+    if (db) {
+        try {
+            const promptsRef = ref(db, 'prompts');
+            onValue(promptsRef, (snapshot) => {
+                const data = snapshot.val();
+                console.log('Firebase data received:', data);
+                
+                if (data) {
+                    initPromptsData(data);
+                    
+                    // Update manager name if present
+                    if (document.activeElement !== managerNameInput && data.managerName) { // Assuming managerName might be in DB in future, but currently it's local
+                        // pass
+                    }
+                } else {
+                    // Firebase empty, init with local data
+                    initPromptsData({});
+                    savePromptsToFirebaseNow();
+                }
+            }, (error) => {
+                console.error('Firebase read error:', error);
+            });
+        } catch (e) {
+            console.error('Error setting up Firebase listener:', e);
+        }
+    } else {
+        // No Firebase, init with local
+        initPromptsData({});
+    }
+}
+
+// Override loadSavedData to just load manager name (prompts handled by initPromptsData)
+function loadSavedData() {
+    const savedManagerName = localStorage.getItem('managerName');
+    if (savedManagerName) {
+        managerNameInput.value = savedManagerName;
+    } else {
+        showNameModal();
+    }
+}
+
+// Update instruction tab click handler to render variations
+instructionTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+        // ... existing logic ...
+        setTimeout(renderVariations, 0); // Render variations for the new tab
+    });
+});
+
+// Update setupWYSIWYG to sync to data
+const originalSetupWYSIWYG = setupWYSIWYG;
+setupWYSIWYG = function(previewElement, textarea, storageKey, onSaveCallback) {
+    // We ignore storageKey and onSaveCallback passed from original calls
+    // and provide our own callback
+    
+    const role = textarea.closest('.prompt-wrapper').dataset.instruction;
+    
+    const newCallback = (content) => {
+        syncContentToData(role, content);
+        if (onSaveCallback) onSaveCallback(content);
+    };
+    
+    // Call original implementation (defined in previous turn, we need to adapt it)
+    // Actually, re-declaring it might be cleaner since we modified it before.
+    
+    // Make preview editable
+    previewElement.setAttribute('contenteditable', 'true');
+    
+    // Sync changes back to textarea
+    previewElement.addEventListener('input', () => {
+        syncWYSIWYGDebounced(previewElement, textarea, null, newCallback);
+    });
+    
+    // Handle paste
+    previewElement.addEventListener('paste', (e) => {
+        // ... same paste logic ...
         e.preventDefault();
-        if (confirm(`Удалить вкладку "${tab.name}"?`)) {
-            // Remove from array
-            customTabs = customTabs.filter(t => t.id !== tab.id);
-            // Remove DOM elements
-            btn.remove();
-            const wrapper = document.querySelector(`.prompt-wrapper[data-instruction="${tab.id}"]`);
-            if (wrapper) wrapper.remove();
+        const text = e.clipboardData.getData('text/plain');
+        
+        const selection = window.getSelection();
+        if (selection.rangeCount) {
+            const range = selection.getRangeAt(0);
+            range.deleteContents();
             
-            // Switch to client tab
-            document.querySelector('.instruction-tab[data-instruction="client"]').click();
-            saveCustomTabs();
-        }
-    });
-
-    // Insert before Add Button
-    instructionTabsContainer.insertBefore(btn, addTabBtn);
-
-    // Create Editor Wrapper
-    const wrapper = document.createElement('div');
-    wrapper.className = 'prompt-wrapper instruction-editor preview-mode';
-    wrapper.dataset.instruction = tab.id;
-    wrapper.dataset.custom = 'true';
-
-    // TextArea
-    const textarea = document.createElement('textarea');
-    textarea.id = tab.id + '_editor'; 
-    textarea.className = 'prompt-editor';
-    textarea.placeholder = `Инструкция для ${tab.name}...`;
-    textarea.value = tab.content || '';
-
-    // Preview
-    const preview = document.createElement('div');
-    preview.id = tab.id + '_preview';
-    preview.className = 'prompt-preview';
-    preview.innerHTML = renderMarkdown(tab.content || '');
-
-    wrapper.appendChild(textarea);
-    wrapper.appendChild(preview);
-    instructionContentContainer.appendChild(wrapper);
-
-    // Setup Events
-    setupDragAndDrop(textarea, null, (content) => {
-        tab.content = content;
-        saveCustomTabs();
-    }); 
-    setupDragAndDropForPreview(preview, textarea, null, (content) => {
-        tab.content = content;
-        saveCustomTabs();
-    });
-    
-    // Setup WYSIWYG with callback for saving
-    setupWYSIWYG(preview, textarea, null, (content) => {
-        tab.content = content;
-        saveCustomTabs();
-    });
-
-    // Manual input listener for textarea (fallback)
-    textarea.addEventListener('input', () => {
-        tab.content = textarea.value;
-        saveCustomTabs();
-    });
-
-    // Attach click listener
-    btn.addEventListener('click', () => {
-         document.querySelectorAll('.instruction-tab').forEach(t => t.classList.remove('active'));
-         document.querySelectorAll('.instruction-editor').forEach(e => e.classList.remove('active'));
-         
-         btn.classList.add('active');
-         wrapper.classList.add('active');
-         updatePreview();
-    });
-}
-
-// Render all custom tabs
-function renderCustomTabs() {
-    customTabs.forEach(tab => {
-        createTabElement(tab);
-    });
-}
-
-// Add Tab Handler
-if (addTabBtn) {
-    addTabBtn.addEventListener('click', () => {
-        const defaultName = `Менеджер ${customTabs.length + 1}`;
-        const name = prompt('Название новой вкладки:', defaultName);
-        if (name) {
-            const newTab = {
-                id: 'custom_' + Date.now(),
-                name: name,
-                content: ''
-            };
-            customTabs.push(newTab);
-            createTabElement(newTab);
-            saveCustomTabs();
+            const hasMarkdown = /^#|^\*\*|\*\*$|^-\s|^\d+\.\s|^```|^>/.test(text);
             
-            // Switch to new tab
-            setTimeout(() => {
-                const newBtn = document.querySelector(`.instruction-tab[data-instruction="${newTab.id}"]`);
-                if (newBtn) newBtn.click();
-            }, 100);
+            if (hasMarkdown) {
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = renderMarkdown(text);
+                const fragment = document.createDocumentFragment();
+                while (tempDiv.firstChild) {
+                    fragment.appendChild(tempDiv.firstChild);
+                }
+                range.insertNode(fragment);
+            } else {
+                const textNode = document.createTextNode(text);
+                range.insertNode(textNode);
+            }
+            selection.collapseToEnd();
         }
+        
+        syncWYSIWYGDebounced(previewElement, textarea, null, newCallback);
     });
-}
+};
 
-// Auto-resize textarea
+// Also listen to textarea inputs (fallback)
+[systemPromptInput, managerPromptInput, raterPromptInput].forEach(input => {
+    input.addEventListener('input', () => {
+        const role = input.closest('.prompt-wrapper').dataset.instruction;
+        syncContentToData(role, input.value);
+    });
+});
+
+// Initial Render
+setTimeout(() => {
+    initWYSIWYGMode(); // This calls setupWYSIWYG
+    renderVariations(); // Render initial chips
+}, 200);
+
+// REPLACES OLD BLOCK: Custom Tabs Logic... to ...// Auto-resize textarea
 function autoResizeTextarea(textarea) {
     // Если пустой - минимальная высота
     if (!textarea.value.trim()) {
@@ -1016,13 +1157,15 @@ function exportCurrentPrompt(format = 'txt') {
             promptText = raterPromptInput.value.trim();
             fileName = 'промпт-оценщика';
             break;
-        default:
-            const customTab = customTabs.find(t => t.id === instructionType);
-            if (customTab) {
-                promptText = customTab.content || '';
-                fileName = customTab.name.replace(/\s+/g, '-').toLowerCase();
-            }
-            break;
+    }
+    
+    // Append active variation name to filename
+    const role = instructionType;
+    if (promptsData[role] && promptsData[role].activeId) {
+        const activeVar = promptsData[role].variations.find(v => v.id === promptsData[role].activeId);
+        if (activeVar) {
+            fileName += `-${activeVar.name.replace(/\s+/g, '_')}`;
+        }
     }
     
     if (!promptText) {
@@ -1351,22 +1494,10 @@ async function rateChat() {
     }
 }
 
-// Auto-save prompt on change (with debounce)
-systemPromptInput.addEventListener('input', () => {
-    // Local save (immediate)
-    localStorage.setItem('systemPrompt', systemPromptInput.value);
-});
-
-// Auto-save rater prompt on change (with debounce)
-raterPromptInput.addEventListener('input', () => {
-    // Local save (immediate)
-    localStorage.setItem('raterPrompt', raterPromptInput.value);
-});
-
-// Auto-save manager prompt on change
-managerPromptInput.addEventListener('input', () => {
-    localStorage.setItem('managerPrompt', managerPromptInput.value);
-});
+// Auto-save prompt on change (with debounce) - REMOVED, handled by syncContentToData
+// systemPromptInput.addEventListener('input', ...);
+// raterPromptInput.addEventListener('input', ...);
+// managerPromptInput.addEventListener('input', ...);
 
 // Set textarea value with undo support
 function setTextWithUndo(textarea, text) {
@@ -1374,6 +1505,9 @@ function setTextWithUndo(textarea, text) {
     textarea.select();
     // execCommand supports undo history
     document.execCommand('insertText', false, text);
+    
+    // Also trigger input to sync variations
+    textarea.dispatchEvent(new Event('input'));
 }
 
 // Drag and drop files into prompt fields
@@ -1615,47 +1749,13 @@ function renderMarkdown(text) {
 
 // Update preview content for current active prompt
 function updatePreview() {
-    const activeWrapper = document.querySelector('.prompt-wrapper.instruction-editor.active');
-    if (!activeWrapper) return;
+    // This function is largely redundant now as updateEditorContent handles it,
+    // but kept for compatibility with tab switching logic
     
-    const instructionType = activeWrapper.dataset.instruction;
-    let text = '';
-    let previewElement = null;
+    const role = getActiveRole();
+    if (!role) return;
     
-    switch (instructionType) {
-        case 'client':
-            text = systemPromptInput.value;
-            previewElement = systemPromptPreview;
-            break;
-        case 'manager':
-            text = managerPromptInput.value;
-            previewElement = managerPromptPreview;
-            break;
-        case 'rater':
-            text = raterPromptInput.value;
-            previewElement = raterPromptPreview;
-            break;
-        default:
-            // Custom tabs
-            const customEditor = document.getElementById(instructionType + '_editor');
-            const customPreview = document.getElementById(instructionType + '_preview');
-            if (customEditor && customPreview) {
-                text = customEditor.value;
-                previewElement = customPreview;
-            }
-            break;
-    }
-    
-    if (previewElement) {
-        previewElement.innerHTML = renderMarkdown(text);
-        
-        // Apply syntax highlighting if available
-        if (typeof hljs !== 'undefined') {
-            previewElement.querySelectorAll('pre code').forEach((block) => {
-                hljs.highlightElement(block);
-            });
-        }
-    }
+    updateEditorContent(role);
 }
 
 // Initialize WYSIWYG mode (always on - no toggle needed)
@@ -1670,37 +1770,25 @@ function initWYSIWYGMode() {
         togglePreviewBtn.style.display = 'none';
     }
     
-    // Setup WYSIWYG for all preview elements
-    setupWYSIWYG(systemPromptPreview, systemPromptInput, 'systemPrompt');
-    setupWYSIWYG(managerPromptPreview, managerPromptInput, 'managerPrompt');
-    setupWYSIWYG(raterPromptPreview, raterPromptInput, 'raterPrompt');
-    
-    // Setup for custom tabs is handled in createTabElement
+    // Setup WYSIWYG for all preview elements - uses new dynamic setup
+// setupWYSIWYG(systemPromptPreview, systemPromptInput, 'systemPrompt');
+// setupWYSIWYG(managerPromptPreview, managerPromptInput, 'managerPrompt');
+// setupWYSIWYG(raterPromptPreview, raterPromptInput, 'raterPrompt');
+
+// Manually call setup for the 3 static elements with the new logic
+setupWYSIWYG(systemPromptPreview, systemPromptInput, null, (content) => syncContentToData('client', content));
+setupWYSIWYG(managerPromptPreview, managerPromptInput, null, (content) => syncContentToData('manager', content));
+setupWYSIWYG(raterPromptPreview, raterPromptInput, null, (content) => syncContentToData('rater', content));
     
     // Render initial content
-    updateAllPreviews();
+    // updateAllPreviews(); // Removed to avoid double render, called in init
 }
 
 // Update all preview contents
 function updateAllPreviews() {
-    systemPromptPreview.innerHTML = renderMarkdown(systemPromptInput.value);
-    managerPromptPreview.innerHTML = renderMarkdown(managerPromptInput.value);
-    raterPromptPreview.innerHTML = renderMarkdown(raterPromptInput.value);
-    
-    // Update custom tabs previews
-    customTabs.forEach(tab => {
-        const preview = document.getElementById(tab.id + '_preview');
-        if (preview) {
-            preview.innerHTML = renderMarkdown(tab.content || '');
-        }
-    });
-    
-    // Apply syntax highlighting if available
-    if (typeof hljs !== 'undefined') {
-        document.querySelectorAll('.prompt-preview pre code').forEach((block) => {
-            hljs.highlightElement(block);
-        });
-    }
+    updateEditorContent('client');
+    updateEditorContent('manager');
+    updateEditorContent('rater');
 }
 
 // Toggle preview button event - disabled, WYSIWYG always on

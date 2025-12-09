@@ -128,7 +128,6 @@
                     <button class="instruction-tab active" data-instruction="client">Клиент</button>
                     <button class="instruction-tab" data-instruction="manager">Менеджер</button>
                     <button class="instruction-tab" data-instruction="rater">Оценщик</button>
-                    <button id="addTabBtn" class="instruction-tab add-tab-btn" title="Добавить вкладку">+</button>
                 </div>
                 
                 <div class="header-buttons">
@@ -172,6 +171,11 @@
             
             <!-- Контент инструкций -->
             <div class="instruction-content">
+                <!-- Sub-tabs for prompt variations -->
+                <div class="prompt-variations-container" id="promptVariations">
+                    <!-- variations will be injected here via js -->
+                </div>
+
                 <!-- Markdown Toolbar -->
                 <div class="markdown-toolbar">
                     <button class="toolbar-btn" data-action="h1" title="Заголовок 1">H1</button>
