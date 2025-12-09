@@ -670,8 +670,7 @@ body {
     display: flex;
     gap: 8px;
     padding: 8px 16px;
-    background: #141414;
-    border-bottom: 1px solid #2a2a2a;
+    background: transparent;
     overflow-x: auto;
     flex-shrink: 0;
     align-items: center;
@@ -679,8 +678,8 @@ body {
 
 .prompt-variation-chip {
     padding: 4px 12px;
-    background: #252525;
-    border: 1px solid #333;
+    background: #1a1a1a;
+    border: none;
     border-radius: 14px;
     color: #888;
     font-size: 12px;
@@ -693,28 +692,29 @@ body {
 }
 
 .prompt-variation-chip:hover {
-    background: #333;
+    background: #252525;
     color: #e0e0e0;
 }
 
 .prompt-variation-chip.active {
     background: var(--color-accent);
     color: #fff;
-    border-color: var(--color-accent);
 }
 
 .prompt-variation-chip .delete-variation {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     border-radius: 50%;
-    display: inline-flex;
+    display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0,0,0,0.2);
+    background: rgba(0,0,0,0.25);
     color: inherit;
-    font-size: 10px;
+    font-size: 11px;
+    line-height: 1;
+    margin-left: 2px;
     margin-right: -4px;
-    opacity: 0.6;
+    opacity: 0.7;
 }
 
 .prompt-variation-chip .delete-variation:hover {
@@ -723,17 +723,19 @@ body {
 }
 
 .add-variation-btn {
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     border: 1px dashed #444;
     background: transparent;
-    color: #666;
+    color: #555;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     transition: all 0.2s;
+    font-size: 14px;
+    line-height: 1;
 }
 
 .add-variation-btn:hover {
