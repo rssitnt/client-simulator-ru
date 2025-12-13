@@ -59,6 +59,8 @@ let conversationHistory = [];
 let isProcessing = false;
 let lastRating = null;
 let isDialogRated = false;
+let isUserEditing = false;
+let lastFirebaseData = null;
 
 // Prompt Variations Data
 let promptsData = {
@@ -366,6 +368,20 @@ function loadPrompts() {
             onValue(promptsRef, (snapshot) => {
                 const data = snapshot.val();
                 console.log('Firebase data received:', data);
+                
+                // Skip update if user is currently editing
+                if (isUserEditing) {
+                    console.log('Skipping Firebase update - user is editing');
+                    return;
+                }
+                
+                // Skip if data hasn't changed
+                const dataStr = JSON.stringify(data);
+                if (lastFirebaseData === dataStr) {
+                    console.log('Skipping Firebase update - data unchanged');
+                    return;
+                }
+                lastFirebaseData = dataStr;
                 
                 if (data) {
                     initPromptsData(data);
@@ -820,19 +836,39 @@ function updateAllPreviews() {
 
 // ============ WYSIWYG SETUP ============
 
+let editingTimeout = null;
+
 const syncWYSIWYGDebounced = debounce(function(previewElement, textarea, callback) {
     if (turndownService && previewElement) {
         const markdown = turndownService.turndown(previewElement.innerHTML);
         textarea.value = markdown;
         if (callback) callback(markdown);
     }
+    
+    // Reset editing flag after sync is complete
+    clearTimeout(editingTimeout);
+    editingTimeout = setTimeout(() => {
+        isUserEditing = false;
+    }, 2000);
 }, 300);
 
 function setupWYSIWYG(previewElement, textarea, callback) {
     previewElement.setAttribute('contenteditable', 'true');
     
     previewElement.addEventListener('input', () => {
+        isUserEditing = true;
         syncWYSIWYGDebounced(previewElement, textarea, callback);
+    });
+    
+    previewElement.addEventListener('focus', () => {
+        isUserEditing = true;
+    });
+    
+    previewElement.addEventListener('blur', () => {
+        // Delay resetting the flag to allow sync to complete
+        setTimeout(() => {
+            isUserEditing = false;
+        }, 500);
     });
     
     previewElement.addEventListener('paste', (e) => {
@@ -978,11 +1014,27 @@ instructionTabs.forEach(tab => {
 // Textarea input listeners for sync
 [systemPromptInput, managerPromptInput, raterPromptInput].forEach(input => {
     input.addEventListener('input', () => {
+        isUserEditing = true;
         const wrapper = input.closest('.prompt-wrapper');
         if (wrapper) {
             const role = wrapper.dataset.instruction;
             syncContentToData(role, input.value);
         }
+        // Reset editing flag after a delay
+        clearTimeout(editingTimeout);
+        editingTimeout = setTimeout(() => {
+            isUserEditing = false;
+        }, 2000);
+    });
+    
+    input.addEventListener('focus', () => {
+        isUserEditing = true;
+    });
+    
+    input.addEventListener('blur', () => {
+        setTimeout(() => {
+            isUserEditing = false;
+        }, 500);
     });
 });
 
