@@ -151,6 +151,7 @@ body {
     flex-direction: column;
     background: #0F0F0F;
     min-width: 200px;
+    min-height: 0;
 }
 
 .panel-header {
@@ -745,6 +746,15 @@ body {
     border-color: var(--color-accent);
 }
 
+/* Instruction content container */
+.instruction-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
 /* Markdown Toolbar */
 .markdown-toolbar {
     display: flex;
@@ -828,6 +838,7 @@ body {
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: #444 #0F0F0F;
+    min-height: 0;
 }
 
 .prompt-editor:focus {
@@ -877,6 +888,8 @@ body {
 .prompt-wrapper.instruction-editor.active {
     display: flex;
     flex: 1;
+    min-height: 0;
+    overflow: hidden;
 }
 
 /* Edit mode: только редактор (textarea) */
@@ -914,7 +927,7 @@ body {
     scrollbar-width: thin;
     scrollbar-color: #444 #0F0F0F;
     outline: none;
-    min-height: 100%;
+    min-height: 0;
     cursor: text;
 }
 
