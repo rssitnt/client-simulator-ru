@@ -796,7 +796,95 @@ function exportCurrentPrompt(format = 'txt') {
     
     if (format === 'clipboard') copyPromptToClipboard(promptText, fileName);
     else if (format === 'txt') { const blob = new Blob([promptText], { type: 'text/plain;charset=utf-8' }); saveAs(blob, fullFileName + '.txt'); }
-    else if (format === 'docx' || format === 'rtf') alert('Export to ' + format + ' not implemented for prompts');
+    else if (format === 'docx') exportPromptToDocx(promptText, fullFileName);
+    else if (format === 'rtf') exportPromptToRtf(promptText, fullFileName);
+}
+
+function exportPromptToDocx(text, filename) {
+    if (typeof docx === 'undefined') { alert('docx library not loaded'); return; }
+    const { Document, Packer, Paragraph, TextRun, HeadingLevel } = docx;
+    
+    const children = [];
+    const lines = text.split('\n');
+    
+    lines.forEach(line => {
+        if (line.startsWith('# ')) {
+            children.push(new Paragraph({ text: line.slice(2), heading: HeadingLevel.HEADING_1, spacing: { after: 200 } }));
+        } else if (line.startsWith('## ')) {
+            children.push(new Paragraph({ text: line.slice(3), heading: HeadingLevel.HEADING_2, spacing: { after: 150 } }));
+        } else if (line.startsWith('### ')) {
+            children.push(new Paragraph({ text: line.slice(4), heading: HeadingLevel.HEADING_3, spacing: { after: 100 } }));
+        } else if (line.startsWith('- ') || line.startsWith('* ')) {
+            children.push(new Paragraph({ 
+                children: [new TextRun({ text: '• ' + line.slice(2), size: 24 })],
+                indent: { left: 360 },
+                spacing: { after: 80 }
+            }));
+        } else if (/^\d+\.\s/.test(line)) {
+            children.push(new Paragraph({ 
+                children: [new TextRun({ text: line, size: 24 })],
+                indent: { left: 360 },
+                spacing: { after: 80 }
+            }));
+        } else if (line.trim() === '') {
+            children.push(new Paragraph({ text: '', spacing: { after: 100 } }));
+        } else {
+            // Handle bold and italic
+            const runs = [];
+            let remaining = line;
+            const regex = /(\*\*(.+?)\*\*|\*(.+?)\*)/g;
+            let lastIndex = 0;
+            let match;
+            
+            while ((match = regex.exec(line)) !== null) {
+                if (match.index > lastIndex) {
+                    runs.push(new TextRun({ text: line.slice(lastIndex, match.index), size: 24 }));
+                }
+                if (match[2]) { // Bold
+                    runs.push(new TextRun({ text: match[2], bold: true, size: 24 }));
+                } else if (match[3]) { // Italic
+                    runs.push(new TextRun({ text: match[3], italics: true, size: 24 }));
+                }
+                lastIndex = match.index + match[0].length;
+            }
+            if (lastIndex < line.length) {
+                runs.push(new TextRun({ text: line.slice(lastIndex), size: 24 }));
+            }
+            if (runs.length === 0) {
+                runs.push(new TextRun({ text: line, size: 24 }));
+            }
+            children.push(new Paragraph({ children: runs, spacing: { after: 100 } }));
+        }
+    });
+
+    const doc = new Document({ sections: [{ properties: {}, children: children }] });
+    Packer.toBlob(doc).then(blob => saveAs(blob, filename + ".docx"));
+}
+
+function exportPromptToRtf(text, filename) {
+    function escapeRtf(str) {
+        if (!str) return '';
+        return str.replace(/\\/g, '\\\\').replace(/{/g, '\\{').replace(/}/g, '\\}').replace(/\n/g, '\\par ').replace(/[^\x00-\x7F]/g, c => `\\u${c.charCodeAt(0)}?`);
+    }
+    
+    let rtf = "{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Calibri;}}{\\colortbl ;\\red0\\green0\\blue0;}\\viewkind4\\uc1\\pard\\f0\\fs24\n";
+    
+    const lines = text.split('\n');
+    lines.forEach(line => {
+        if (line.startsWith('# ')) {
+            rtf += `\\pard\\b\\fs36 ${escapeRtf(line.slice(2))}\\b0\\fs24\\par\\par\n`;
+        } else if (line.startsWith('## ')) {
+            rtf += `\\pard\\b\\fs32 ${escapeRtf(line.slice(3))}\\b0\\fs24\\par\\par\n`;
+        } else if (line.startsWith('### ')) {
+            rtf += `\\pard\\b\\fs28 ${escapeRtf(line.slice(4))}\\b0\\fs24\\par\\par\n`;
+        } else {
+            rtf += `\\pard ${escapeRtf(line)}\\par\n`;
+        }
+    });
+    
+    rtf += "}";
+    const blob = new Blob([rtf], { type: "application/rtf" });
+    saveAs(blob, filename + ".rtf");
 }
 
 async function copyPromptToClipboard(text, label) {
