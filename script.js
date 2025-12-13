@@ -93,9 +93,29 @@ if (typeof TurndownService !== 'undefined') {
         hr: '---',
         bulletListMarker: '-',
         codeBlockStyle: 'fenced',
-        emDelimiter: '*'
+        emDelimiter: '*',
+        strongDelimiter: '**'
     });
+    // Disable escaping completely
     turndownService.escape = function(string) { return string; };
+    
+    // Better handling of bold text
+    turndownService.addRule('strong', {
+        filter: ['strong', 'b'],
+        replacement: function(content) {
+            if (!content.trim()) return '';
+            return '**' + content + '**';
+        }
+    });
+    
+    turndownService.addRule('emphasis', {
+        filter: ['em', 'i'],
+        replacement: function(content) {
+            if (!content.trim()) return '';
+            return '*' + content + '*';
+        }
+    });
+    
     turndownService.addRule('strikethrough', {
         filter: ['del', 's', 'strike'],
         replacement: function (content) { return '~~' + content + '~~'; }
@@ -119,10 +139,19 @@ function debounce(func, wait) {
 function unescapeMarkdown(text) {
     if (!text) return text;
     return text
-        .replace(/\\#/g, '#').replace(/\\\*/g, '*').replace(/\\-/g, '-')
-        .replace(/\\_/g, '_').replace(/\\`/g, '`').replace(/\\\[/g, '[')
-        .replace(/\\\]/g, ']').replace(/\\\(/g, '(').replace(/\\\)/g, ')')
-        .replace(/\\>/g, '>').replace(/\\!/g, '!');
+        .replace(/\\\*\\\*/g, '**')  // Handle escaped double asterisks first
+        .replace(/\\#/g, '#')
+        .replace(/\\\*/g, '*')
+        .replace(/\\-/g, '-')
+        .replace(/\\_/g, '_')
+        .replace(/\\`/g, '`')
+        .replace(/\\\[/g, '[')
+        .replace(/\\\]/g, ']')
+        .replace(/\\\(/g, '(')
+        .replace(/\\\)/g, ')')
+        .replace(/\\>/g, '>')
+        .replace(/\\!/g, '!')
+        .replace(/\\~/g, '~');
 }
 
 function generateId() {
@@ -178,7 +207,11 @@ function initPromptsData(firebaseData = {}) {
     
     roles.forEach(role => {
         if (firebaseData[role + '_variations'] && Array.isArray(firebaseData[role + '_variations'])) {
-            promptsData[role].variations = firebaseData[role + '_variations'];
+            // Unescape content in all variations
+            promptsData[role].variations = firebaseData[role + '_variations'].map(v => ({
+                ...v,
+                content: unescapeMarkdown(v.content || '')
+            }));
             promptsData[role].activeId = firebaseData[role + '_activeId'] || 
                 (promptsData[role].variations[0] ? promptsData[role].variations[0].id : null);
         } else {
@@ -900,10 +933,14 @@ async function copyPromptToClipboard(text, label) {
 
 function renderMarkdown(text) {
     if (!text) return '<p style="color: #666; font-style: italic;">Промпт пустой...</p>';
-    if (typeof marked !== 'undefined') return marked.parse(text);
+    
+    // Unescape any escaped markdown characters first
+    let cleanText = unescapeMarkdown(text);
+    
+    if (typeof marked !== 'undefined') return marked.parse(cleanText);
     
     // Simple fallback
-    return '<p>' + text
+    return '<p>' + cleanText
         .replace(/^###\s+(.+)$/gm, '<h3>$1</h3>')
         .replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
         .replace(/^#\s+(.+)$/gm, '<h1>$1</h1>')
