@@ -1039,6 +1039,66 @@ function initWYSIWYGMode() {
 
 // ============ DRAG & DROP ============
 
+function handleFileDrop(file, textarea, previewElement) {
+    const fileName = file.name.toLowerCase();
+    
+    if (fileName.endsWith('.docx')) {
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            try {
+                const result = await mammoth.convertToMarkdown({ arrayBuffer: event.target.result });
+                const content = result.value;
+                textarea.value = content;
+                if (previewElement) {
+                    previewElement.innerHTML = renderMarkdown(content);
+                }
+                textarea.dispatchEvent(new Event('input'));
+                
+                // Also sync to data
+                const role = getActiveRole();
+                syncContentToData(role, content);
+            } catch (err) { alert('Ошибка чтения .docx'); }
+        };
+        reader.readAsArrayBuffer(file);
+    } else if (fileName.endsWith('.rtf')) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            // Simple RTF to text conversion (strips RTF formatting)
+            let content = event.target.result;
+            content = content.replace(/\{\\rtf1[^}]*\}/g, '')
+                .replace(/\\par\s*/g, '\n')
+                .replace(/\\\w+\s?/g, '')
+                .replace(/[{}]/g, '')
+                .trim();
+            textarea.value = content;
+            if (previewElement) {
+                previewElement.innerHTML = renderMarkdown(content);
+            }
+            textarea.dispatchEvent(new Event('input'));
+            
+            const role = getActiveRole();
+            syncContentToData(role, content);
+        };
+        reader.readAsText(file, 'UTF-8');
+    } else if (file.type.startsWith('text/') || TEXT_EXTENSIONS.some(ext => fileName.endsWith(ext))) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const content = event.target.result;
+            textarea.value = content;
+            if (previewElement) {
+                previewElement.innerHTML = renderMarkdown(content);
+            }
+            textarea.dispatchEvent(new Event('input'));
+            
+            const role = getActiveRole();
+            syncContentToData(role, content);
+        };
+        reader.readAsText(file, 'UTF-8');
+    } else {
+        alert('Поддерживаемые форматы: .txt, .md, .docx, .rtf');
+    }
+}
+
 function setupDragAndDrop(textarea) {
     textarea.addEventListener('dragover', (e) => { e.preventDefault(); textarea.classList.add('drag-over'); });
     textarea.addEventListener('dragleave', (e) => { e.preventDefault(); textarea.classList.remove('drag-over'); });
@@ -1047,29 +1107,26 @@ function setupDragAndDrop(textarea) {
         textarea.classList.remove('drag-over');
         const files = e.dataTransfer.files;
         if (files.length > 0) {
-            const file = files[0];
-            const fileName = file.name.toLowerCase();
-            
-            if (fileName.endsWith('.docx')) {
-                const reader = new FileReader();
-                reader.onload = async (event) => {
-                    try {
-                        const result = await mammoth.convertToMarkdown({ arrayBuffer: event.target.result });
-                        textarea.value = result.value;
-                        textarea.dispatchEvent(new Event('input'));
-                    } catch (err) { alert('Ошибка чтения .docx'); }
-                };
-                reader.readAsArrayBuffer(file);
-            } else if (file.type.startsWith('text/') || TEXT_EXTENSIONS.some(ext => fileName.endsWith(ext))) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    textarea.value = event.target.result;
-                    textarea.dispatchEvent(new Event('input'));
-                };
-                reader.readAsText(file, 'UTF-8');
-            } else {
-                alert('Поддерживаемые форматы: .txt, .md, .docx');
-            }
+            handleFileDrop(files[0], textarea, null);
+        }
+    });
+}
+
+function setupDragAndDropForPreview(previewElement, textarea) {
+    previewElement.addEventListener('dragover', (e) => { 
+        e.preventDefault(); 
+        previewElement.classList.add('drag-over'); 
+    });
+    previewElement.addEventListener('dragleave', (e) => { 
+        e.preventDefault(); 
+        previewElement.classList.remove('drag-over'); 
+    });
+    previewElement.addEventListener('drop', (e) => {
+        e.preventDefault();
+        previewElement.classList.remove('drag-over');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            handleFileDrop(files[0], textarea, previewElement);
         }
     });
 }
@@ -1292,6 +1349,15 @@ autoResizeTextarea(userInput);
 setupDragAndDrop(systemPromptInput);
 setupDragAndDrop(managerPromptInput);
 setupDragAndDrop(raterPromptInput);
+
+// Setup drag and drop for preview elements (WYSIWYG mode)
+const systemPromptPreviewEl = document.getElementById('systemPromptPreview');
+const managerPromptPreviewEl = document.getElementById('managerPromptPreview');
+const raterPromptPreviewEl = document.getElementById('raterPromptPreview');
+
+setupDragAndDropForPreview(systemPromptPreviewEl, systemPromptInput);
+setupDragAndDropForPreview(managerPromptPreviewEl, managerPromptInput);
+setupDragAndDropForPreview(raterPromptPreviewEl, raterPromptInput);
 
 setTimeout(() => {
     initWYSIWYGMode();
