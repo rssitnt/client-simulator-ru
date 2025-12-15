@@ -833,6 +833,36 @@ function exportCurrentPrompt(format = 'txt') {
     else if (format === 'rtf') exportPromptToRtf(promptText, fullFileName);
 }
 
+function parseStyledText(text, TextRun) {
+    const runs = [];
+    let lastIndex = 0;
+    const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|__(.+?)__|_(.+?)_)/g;
+    let match;
+
+    while ((match = regex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+            runs.push(new TextRun({ text: text.slice(lastIndex, match.index), size: 24 }));
+        }
+        if (match[2]) { // **bold**
+            runs.push(new TextRun({ text: match[2], bold: true, size: 24 }));
+        } else if (match[3]) { // *italic*
+            runs.push(new TextRun({ text: match[3], italics: true, size: 24 }));
+        } else if (match[4]) { // __bold__
+            runs.push(new TextRun({ text: match[4], bold: true, size: 24 }));
+        } else if (match[5]) { // _italic_
+            runs.push(new TextRun({ text: match[5], italics: true, size: 24 }));
+        }
+        lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < text.length) {
+        runs.push(new TextRun({ text: text.slice(lastIndex), size: 24 }));
+    }
+    if (runs.length === 0) {
+        runs.push(new TextRun({ text: text, size: 24 }));
+    }
+    return runs;
+}
+
 function exportPromptToDocx(text, filename) {
     if (typeof docx === 'undefined') { alert('docx library not loaded'); return; }
     const { Document, Packer, Paragraph, TextRun, HeadingLevel } = docx;
@@ -841,53 +871,55 @@ function exportPromptToDocx(text, filename) {
     const lines = text.split('\n');
     
     lines.forEach(line => {
-        if (line.startsWith('# ')) {
-            children.push(new Paragraph({ text: line.slice(2), heading: HeadingLevel.HEADING_1, spacing: { after: 200 } }));
-        } else if (line.startsWith('## ')) {
-            children.push(new Paragraph({ text: line.slice(3), heading: HeadingLevel.HEADING_2, spacing: { after: 150 } }));
-        } else if (line.startsWith('### ')) {
-            children.push(new Paragraph({ text: line.slice(4), heading: HeadingLevel.HEADING_3, spacing: { after: 100 } }));
-        } else if (line.startsWith('- ') || line.startsWith('* ')) {
-            children.push(new Paragraph({ 
-                children: [new TextRun({ text: '• ' + line.slice(2), size: 24 })],
-                indent: { left: 360 },
-                spacing: { after: 80 }
-            }));
-        } else if (/^\d+\.\s/.test(line)) {
-            children.push(new Paragraph({ 
-                children: [new TextRun({ text: line, size: 24 })],
-                indent: { left: 360 },
-                spacing: { after: 80 }
-            }));
-        } else if (line.trim() === '') {
-            children.push(new Paragraph({ text: '', spacing: { after: 100 } }));
-        } else {
-            // Handle bold and italic
-            const runs = [];
-            let remaining = line;
-            const regex = /(\*\*(.+?)\*\*|\*(.+?)\*)/g;
-            let lastIndex = 0;
-            let match;
-            
-            while ((match = regex.exec(line)) !== null) {
-                if (match.index > lastIndex) {
-                    runs.push(new TextRun({ text: line.slice(lastIndex, match.index), size: 24 }));
-                }
-                if (match[2]) { // Bold
-                    runs.push(new TextRun({ text: match[2], bold: true, size: 24 }));
-                } else if (match[3]) { // Italic
-                    runs.push(new TextRun({ text: match[3], italics: true, size: 24 }));
-                }
-                lastIndex = match.index + match[0].length;
-            }
-            if (lastIndex < line.length) {
-                runs.push(new TextRun({ text: line.slice(lastIndex), size: 24 }));
-            }
-            if (runs.length === 0) {
-                runs.push(new TextRun({ text: line, size: 24 }));
-            }
-            children.push(new Paragraph({ children: runs, spacing: { after: 100 } }));
+        const trimmed = line.trim();
+        
+        // Handle empty lines with minimal spacing to avoid huge gaps
+        if (trimmed === '') {
+            children.push(new Paragraph({ text: '', spacing: { after: 0 } }));
+            return;
         }
+
+        // Base paragraph options
+        let paraOpts = {
+            spacing: { after: 120 }, // 6pt spacing after paragraphs
+            children: []
+        };
+
+        if (line.startsWith('# ')) {
+            paraOpts.text = line.slice(2);
+            paraOpts.heading = HeadingLevel.HEADING_1;
+            paraOpts.spacing = { before: 240, after: 120 };
+        } else if (line.startsWith('## ')) {
+            paraOpts.text = line.slice(3);
+            paraOpts.heading = HeadingLevel.HEADING_2;
+            paraOpts.spacing = { before: 240, after: 120 };
+        } else if (line.startsWith('### ')) {
+            paraOpts.text = line.slice(4);
+            paraOpts.heading = HeadingLevel.HEADING_3;
+            paraOpts.spacing = { before: 240, after: 120 };
+        } else if (line.startsWith('- ') || line.startsWith('* ')) {
+            paraOpts.indent = { left: 720, hanging: 360 };
+            paraOpts.children.push(new TextRun({ text: '•\t' + line.slice(2), size: 24 }));
+        } else if (/^\d+\.\s/.test(line)) {
+            paraOpts.indent = { left: 720, hanging: 360 };
+            const firstSpace = line.indexOf(' ');
+            paraOpts.children.push(new TextRun({ text: line.slice(0, firstSpace) + '\t' + line.slice(firstSpace + 1), size: 24 }));
+        } else if (/^[IVXLCDM]+\.?\s/.test(line)) {
+            // Roman numerals (I. or I)
+            paraOpts.indent = { left: 720, hanging: 360 };
+            const firstSpace = line.indexOf(' ');
+            paraOpts.children.push(new TextRun({ text: line.slice(0, firstSpace) + '\t' + line.slice(firstSpace + 1), size: 24 }));
+        } else {
+            // Regular text with potential markdown
+            paraOpts.children = parseStyledText(line, TextRun);
+        }
+
+        // Use children for headers if we want to strip markdown symbols from them? 
+        // Current implementation for headers uses 'text' property which is simple string. 
+        // If headers contain **bold**, it won't be parsed. 
+        // But let's stick to simple headers for now as per previous implementation logic.
+        
+        children.push(new Paragraph(paraOpts));
     });
 
     const doc = new Document({ sections: [{ properties: {}, children: children }] });
