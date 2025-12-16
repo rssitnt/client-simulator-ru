@@ -511,6 +511,26 @@ function hideAiImproveModal() {
     aiImproveModal.classList.remove('active');
 }
 
+const FUNNY_LOADING_MESSAGES = [
+    "Завариваю цифровой кофе...",
+    "Уговариваю нейросеть быть вежливой...",
+    "Анализирую миллионы вариантов...",
+    "Связываюсь с космосом...",
+    "Прогреваю GPU...",
+    "Листаю учебник по продажам...",
+    "Ищу вдохновение...",
+    "Полирую формулировки...",
+    "Добавляю щепотку магии...",
+    "Советуюсь с главным инженером...",
+    "Расшифровываю сигналы...",
+    "Строю нейронные мосты...",
+    "Оптимизирую смыслы...",
+    "Считаю до бесконечности...",
+    "Gemini думает (это надолго)...",
+    "Переписываю начисто...",
+    "Ищу лучшие слова..."
+];
+
 async function improvePromptWithAI() {
     const improvementRequest = aiImproveInput.value.trim();
     if (!improvementRequest) {
@@ -536,8 +556,20 @@ async function improvePromptWithAI() {
     const btnLoader = submitBtn.querySelector('.btn-loader');
     
     submitBtn.disabled = true;
-    btnText.style.display = 'none';
+    // btnText.style.display = 'none'; // Keep text visible for funny messages
     btnLoader.style.display = 'inline-flex';
+    
+    // Start funny messages cycle
+    let msgIndex = 0;
+    const originalText = btnText.textContent;
+    btnText.textContent = FUNNY_LOADING_MESSAGES[Math.floor(Math.random() * FUNNY_LOADING_MESSAGES.length)];
+    
+    const messageInterval = setInterval(() => {
+        msgIndex = (msgIndex + 1) % FUNNY_LOADING_MESSAGES.length;
+        // Pick random message to avoid repetition order
+        const randomMsg = FUNNY_LOADING_MESSAGES[Math.floor(Math.random() * FUNNY_LOADING_MESSAGES.length)];
+        btnText.textContent = randomMsg;
+    }, 2500);
     
     try {
         const response = await fetch(AI_IMPROVE_WEBHOOK_URL, {
@@ -585,7 +617,9 @@ async function improvePromptWithAI() {
         console.error('AI improve error:', error);
         alert('Ошибка улучшения: ' + error.message);
     } finally {
+        clearInterval(messageInterval);
         submitBtn.disabled = false;
+        btnText.textContent = originalText; // Restore original text
         btnText.style.display = 'inline';
         btnLoader.style.display = 'none';
     }
