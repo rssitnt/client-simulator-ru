@@ -205,7 +205,7 @@ function lockDialogInput() {
     sendBtn.disabled = true;
     voiceBtn.disabled = true;
     aiAssistBtn.disabled = true;
-    rateChatBtn.disabled = true;
+    // rateChatBtn remains enabled to allow cancelling rating
     userInput.placeholder = 'Очистите чат для нового диалога';
     userInput.classList.add('disabled');
 }
@@ -873,6 +873,23 @@ async function rateChat() {
         alert('Нет диалога для оценки');
         return;
     }
+    
+    // If already rated, cancel rating
+    if (isDialogRated) {
+        // Remove rating messages
+        const ratingMsgs = document.querySelectorAll('.message.rating');
+        ratingMsgs.forEach(msg => msg.remove());
+        
+        // Remove improve buttons
+        const improveBtns = document.querySelectorAll('.improve-from-rating-container');
+        improveBtns.forEach(btn => btn.remove());
+        
+        lastRating = null;
+        isDialogRated = false;
+        unlockDialogInput();
+        return;
+    }
+
     if (isProcessing) return;
     
     rateChatBtn.disabled = true;
