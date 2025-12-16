@@ -311,12 +311,20 @@ function renderVariations() {
 }
 
 function addVariation(role) {
+    // Save current changes first so we copy the latest version
+    syncCurrentEditorNow();
+
     const count = promptsData[role].variations.length + 1;
     const newId = generateId();
+    
+    // Copy content from active variation
+    const activeVar = promptsData[role].variations.find(v => v.id === promptsData[role].activeId);
+    const initialContent = activeVar ? activeVar.content : '';
+
     promptsData[role].variations.push({
         id: newId,
         name: `Вариант ${count}`,
-        content: ''
+        content: initialContent
     });
     setActiveVariation(role, newId);
     savePromptsToFirebase();
