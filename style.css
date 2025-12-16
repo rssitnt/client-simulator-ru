@@ -1378,14 +1378,15 @@ body {
 
 /* AI Improve Button */
 .btn-ai-improve {
-    background: var(--color-accent) !important;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
     color: #fff !important;
     border: none !important;
 }
 
 .btn-ai-improve:hover {
-    background: var(--color-accent-hover) !important;
+    background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%) !important;
     transform: scale(1.05);
+    border: none !important;
 }
 
 /* AI Improve Modal */
