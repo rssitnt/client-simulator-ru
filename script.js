@@ -20,6 +20,7 @@ try {
 const WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/client-simulator';
 const RATE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/rate-manager';
 const MANAGER_ASSISTANT_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/manager-simulator';
+const AI_IMPROVE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/699b9552-d77a-4837-87e5-4ae28f31b9ca';
 
 // Generate unique session ID
 let baseSessionId = localStorage.getItem('sessionId');
@@ -53,6 +54,14 @@ const nameModal = document.getElementById('nameModal');
 const modalNameInput = document.getElementById('modalNameInput');
 const modalNameSubmit = document.getElementById('modalNameSubmit');
 const promptVariationsContainer = document.getElementById('promptVariations');
+
+// AI Improve Modal Elements
+const aiImproveBtn = document.getElementById('aiImproveBtn');
+const aiImproveModal = document.getElementById('aiImproveModal');
+const aiImproveModalClose = document.getElementById('aiImproveModalClose');
+const aiImproveInput = document.getElementById('aiImproveInput');
+const aiImproveSubmit = document.getElementById('aiImproveSubmit');
+const aiImproveCancel = document.getElementById('aiImproveCancel');
 
 // State
 let conversationHistory = [];
@@ -469,6 +478,111 @@ modalNameInput.addEventListener('keypress', (e) => {
 managerNameInput.addEventListener('input', () => {
     const name = managerNameInput.value.trim();
     if (name) localStorage.setItem('managerName', name);
+});
+
+// ============ AI IMPROVE MODAL ============
+
+function showAiImproveModal() {
+    aiImproveModal.classList.add('active');
+    aiImproveInput.value = '';
+    setTimeout(() => aiImproveInput.focus(), 100);
+}
+
+function hideAiImproveModal() {
+    aiImproveModal.classList.remove('active');
+    aiImproveInput.value = '';
+}
+
+async function improvePromptWithAI() {
+    const improvementRequest = aiImproveInput.value.trim();
+    if (!improvementRequest) {
+        aiImproveInput.focus();
+        aiImproveInput.style.borderColor = '#ff5555';
+        setTimeout(() => { aiImproveInput.style.borderColor = ''; }, 1000);
+        return;
+    }
+    
+    const role = getActiveRole();
+    const currentPrompt = getActiveContent(role);
+    const activeVar = promptsData[role].variations.find(v => v.id === promptsData[role].activeId);
+    const currentName = activeVar ? activeVar.name : 'Промпт';
+    
+    if (!currentPrompt) {
+        alert('Сначала добавьте текст в инструкцию');
+        return;
+    }
+    
+    // Show loading state
+    const submitBtn = aiImproveSubmit;
+    const btnText = submitBtn.querySelector('.btn-text');
+    const btnLoader = submitBtn.querySelector('.btn-loader');
+    
+    submitBtn.disabled = true;
+    btnText.style.display = 'none';
+    btnLoader.style.display = 'inline-flex';
+    
+    try {
+        const response = await fetch(AI_IMPROVE_WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                currentPrompt: currentPrompt,
+                improvementRequest: improvementRequest,
+                role: role
+            })
+        });
+        
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        const data = await response.json();
+        const improvedPrompt = extractApiResponse(data);
+        
+        if (!improvedPrompt) throw new Error('Пустой ответ от AI');
+        
+        // Create new variation with improved prompt
+        const newId = generateId();
+        const newName = `${currentName} AI`;
+        
+        promptsData[role].variations.push({
+            id: newId,
+            name: newName,
+            content: improvedPrompt
+        });
+        
+        // Switch to new variation
+        setActiveVariation(role, newId);
+        savePromptsToFirebase();
+        
+        hideAiImproveModal();
+        showCopyNotification('Инструкция улучшена!');
+        
+    } catch (error) {
+        console.error('AI improve error:', error);
+        alert('Ошибка улучшения: ' + error.message);
+    } finally {
+        submitBtn.disabled = false;
+        btnText.style.display = 'inline';
+        btnLoader.style.display = 'none';
+    }
+}
+
+aiImproveBtn.addEventListener('click', showAiImproveModal);
+aiImproveModalClose.addEventListener('click', hideAiImproveModal);
+aiImproveCancel.addEventListener('click', hideAiImproveModal);
+aiImproveSubmit.addEventListener('click', improvePromptWithAI);
+
+aiImproveInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        improvePromptWithAI();
+    }
+});
+
+// Close modal on overlay click
+aiImproveModal.addEventListener('click', (e) => {
+    if (e.target === aiImproveModal) {
+        hideAiImproveModal();
+    }
 });
 
 // ============ CHAT FUNCTIONS ============

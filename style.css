@@ -1375,6 +1375,124 @@ body {
     transform: scale(0.98);
 }
 
+/* AI Improve Button */
+.btn-ai-improve {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    color: #fff !important;
+}
+
+.btn-ai-improve:hover {
+    background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%) !important;
+    transform: scale(1.05);
+}
+
+/* AI Improve Modal */
+.ai-improve-modal {
+    max-width: 500px;
+    position: relative;
+}
+
+.ai-improve-modal h3 {
+    font-size: 20px;
+}
+
+.modal-close {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    background: none;
+    border: none;
+    color: #666;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: color 0.2s, background 0.2s;
+}
+
+.modal-close:hover {
+    color: #fff;
+    background: rgba(255,255,255,0.1);
+}
+
+.ai-improve-modal textarea {
+    width: 100%;
+    background: #0f0f0f;
+    border: 1px solid #333;
+    border-radius: 8px;
+    color: #e0e0e0;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-family: inherit;
+    margin-bottom: 20px;
+    box-sizing: border-box;
+    resize: vertical;
+    min-height: 100px;
+    transition: border-color 0.2s;
+}
+
+.ai-improve-modal textarea:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.ai-improve-modal textarea::placeholder {
+    color: #555;
+}
+
+.ai-improve-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+.ai-improve-actions .btn-modal-submit {
+    width: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.ai-improve-actions .btn-modal-submit:hover {
+    background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%);
+}
+
+.ai-improve-actions .btn-modal-submit:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.btn-modal-cancel {
+    background: #333;
+    color: #ccc;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 24px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-modal-cancel:hover {
+    background: #444;
+}
+
+.btn-loader .spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
 @media (max-width: 768px) {
     .manager-name-container {
         display: none;
