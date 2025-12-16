@@ -140,7 +140,7 @@ function extractApiResponse(data) {
 function debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {
-        clearTimeout(timeout);
+            clearTimeout(timeout);
         timeout = setTimeout(() => func(...args), wait);
     };
 }
@@ -325,6 +325,9 @@ function deleteVariation(role, id) {
 }
 
 function setActiveVariation(role, id) {
+    // Save current editor content before switching
+    syncCurrentEditorNow();
+    
     promptsData[role].activeId = id;
     renderVariations();
     updateEditorContent(role);
@@ -953,7 +956,7 @@ function parseStyledText(text, TextRun) {
     let lastIndex = 0;
     const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|__(.+?)__|_(.+?)_)/g;
     let match;
-
+    
     while ((match = regex.exec(text)) !== null) {
         if (match.index > lastIndex) {
             runs.push(new TextRun({ text: text.slice(lastIndex, match.index), size: 24 }));
@@ -993,7 +996,7 @@ function exportPromptToDocx(text, filename) {
             children.push(new Paragraph({ text: '', spacing: { after: 0 } }));
             return;
         }
-
+        
         // Base paragraph options
         let paraOpts = {
             spacing: { after: 120 }, // 6pt spacing after paragraphs
@@ -1124,6 +1127,29 @@ const syncWYSIWYGDebounced = debounce(function(previewElement, textarea, callbac
     }, 2000);
 }, 300);
 
+// Force immediate sync of current editor content
+function syncCurrentEditorNow() {
+    const role = getActiveRole();
+    let preview, textarea;
+    
+    if (role === 'client') {
+        preview = document.getElementById('systemPromptPreview');
+        textarea = systemPromptInput;
+    } else if (role === 'manager') {
+        preview = document.getElementById('managerPromptPreview');
+        textarea = managerPromptInput;
+    } else if (role === 'rater') {
+        preview = document.getElementById('raterPromptPreview');
+        textarea = raterPromptInput;
+    }
+    
+    if (turndownService && preview && textarea) {
+        const markdown = turndownService.turndown(preview.innerHTML);
+        textarea.value = markdown;
+        syncContentToData(role, markdown);
+    }
+}
+
 function setupWYSIWYG(previewElement, textarea, callback) {
     previewElement.setAttribute('contenteditable', 'true');
     
@@ -1199,12 +1225,12 @@ function initWYSIWYGMode() {
 // ============ DRAG & DROP ============
 
 function handleFileDrop(file, textarea, previewElement) {
-    const fileName = file.name.toLowerCase();
-    
-    if (fileName.endsWith('.docx')) {
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-            try {
+            const fileName = file.name.toLowerCase();
+            
+            if (fileName.endsWith('.docx')) {
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    try {
                 const result = await mammoth.convertToMarkdown({ arrayBuffer: event.target.result });
                 const content = result.value;
                 textarea.value = content;
@@ -1217,8 +1243,8 @@ function handleFileDrop(file, textarea, previewElement) {
                 const role = getActiveRole();
                 syncContentToData(role, content);
             } catch (err) { alert('Ошибка чтения .docx'); }
-        };
-        reader.readAsArrayBuffer(file);
+                };
+                reader.readAsArrayBuffer(file);
     } else if (fileName.endsWith('.rtf')) {
         const reader = new FileReader();
         reader.onload = (event) => {
@@ -1240,8 +1266,8 @@ function handleFileDrop(file, textarea, previewElement) {
         };
         reader.readAsText(file, 'UTF-8');
     } else if (file.type.startsWith('text/') || TEXT_EXTENSIONS.some(ext => fileName.endsWith(ext))) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
+                const reader = new FileReader();
+                reader.onload = (event) => {
             const content = event.target.result;
             textarea.value = content;
             if (previewElement) {
@@ -1251,9 +1277,9 @@ function handleFileDrop(file, textarea, previewElement) {
             
             const role = getActiveRole();
             syncContentToData(role, content);
-        };
-        reader.readAsText(file, 'UTF-8');
-    } else {
+                };
+                reader.readAsText(file, 'UTF-8');
+            } else {
         alert('Поддерживаемые форматы: .txt, .md, .docx, .rtf');
     }
 }
@@ -1272,13 +1298,13 @@ function setupDragAndDrop(textarea) {
 }
 
 function setupDragAndDropForPreview(previewElement, textarea) {
-    previewElement.addEventListener('dragover', (e) => { 
-        e.preventDefault(); 
-        previewElement.classList.add('drag-over'); 
+    previewElement.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        previewElement.classList.add('drag-over');
     });
-    previewElement.addEventListener('dragleave', (e) => { 
-        e.preventDefault(); 
-        previewElement.classList.remove('drag-over'); 
+    previewElement.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        previewElement.classList.remove('drag-over');
     });
     previewElement.addEventListener('drop', (e) => {
         e.preventDefault();
@@ -1335,6 +1361,9 @@ const instructionEditors = document.querySelectorAll('.instruction-editor');
 
 instructionTabs.forEach(tab => {
     tab.addEventListener('click', () => {
+        // Save current editor content before switching
+        syncCurrentEditorNow();
+        
         const instructionType = tab.dataset.instruction;
         
         instructionTabs.forEach(t => t.classList.remove('active'));
