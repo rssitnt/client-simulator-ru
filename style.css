@@ -1502,11 +1502,26 @@ body {
     border: 1px solid #333;
 }
 
+div.diff-added, div.diff-removed {
+    display: block;
+    padding: 8px;
+    margin: 8px 0;
+    border-left: 3px solid;
+}
+
+div.diff-added {
+    border-left-color: #8ce65e;
+}
+
+div.diff-removed {
+    border-left-color: #ff6b6b;
+}
+
 .diff-added {
     background-color: rgba(40, 167, 69, 0.25);
     color: #8ce65e;
     text-decoration: none;
-    padding: 0 4px;
+    padding: 2px 4px;
     border-radius: 4px;
     -webkit-box-decoration-break: clone;
     box-decoration-break: clone;
@@ -1517,7 +1532,7 @@ body {
     color: #ff6b6b;
     text-decoration: line-through;
     opacity: 0.8;
-    padding: 0 4px;
+    padding: 2px 4px;
     border-radius: 4px;
     margin-right: 4px;
     -webkit-box-decoration-break: clone;

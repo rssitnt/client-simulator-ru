@@ -633,22 +633,28 @@ async function improvePromptWithAI() {
 }
 
 function showSemanticDiff(textWithMarkers) {
-    // 1. Replace markers with unique tokens that won't mess up markdown parsing
-    // We use a specific sequence that is unlikely to be in the text
+    // Replace markers with HTML tags BEFORE renderMarkdown.
+    // If the content is multiline or looks like a block element (header, list), use <div> wrapper with newlines
+    // so marked.js can parse block elements inside.
+    // Otherwise use <span> for inline highlighting.
+    
     let processedText = textWithMarkers
-        .replace(/~~([\s\S]+?)~~/g, ':::DEL-START:::$1:::DEL-END:::')
-        .replace(/\+\+([\s\S]+?)\+\+/g, ':::INS-START:::$1:::INS-END:::');
+        .replace(/~~([\s\S]+?)~~/g, (m, c) => {
+            // Check for newlines or block markdown indicators
+            if (c.includes('\n') || /^\s*#/m.test(c) || /^\s*[-*]\s/m.test(c) || /^\s*\d+\.\s/m.test(c)) {
+                return `\n\n<div class="diff-removed">\n\n${c}\n\n</div>\n\n`;
+            }
+            return `<span class="diff-removed">${c}</span>`;
+        })
+        .replace(/\+\+([\s\S]+?)\+\+/g, (m, c) => {
+            if (c.includes('\n') || /^\s*#/m.test(c) || /^\s*[-*]\s/m.test(c) || /^\s*\d+\.\s/m.test(c)) {
+                return `\n\n<div class="diff-added">\n\n${c}\n\n</div>\n\n`;
+            }
+            return `<span class="diff-added">${c}</span>`;
+        });
         
-    // 2. Render markdown (handles **bold**, *italic*, headers etc.)
     let html = renderMarkdown(processedText);
     
-    // 3. Replace tokens with actual HTML highlight tags
-    html = html
-        .replace(/:::DEL-START:::/g, '<span class="diff-removed">')
-        .replace(/:::DEL-END:::/g, '</span>')
-        .replace(/:::INS-START:::/g, '<span class="diff-added">')
-        .replace(/:::INS-END:::/g, '</span>');
-
     aiDiffView.innerHTML = html;
     
     // Switch view
