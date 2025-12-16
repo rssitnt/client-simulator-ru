@@ -487,13 +487,11 @@ managerNameInput.addEventListener('input', () => {
 
 function showAiImproveModal() {
     aiImproveModal.classList.add('active');
-    aiImproveInput.value = '';
     setTimeout(() => aiImproveInput.focus(), 100);
 }
 
 function hideAiImproveModal() {
     aiImproveModal.classList.remove('active');
-    aiImproveInput.value = '';
 }
 
 async function improvePromptWithAI() {
@@ -555,6 +553,7 @@ async function improvePromptWithAI() {
         savePromptsToFirebase();
         
         hideAiImproveModal();
+        aiImproveInput.value = ''; // Clear input after successful submission
         showCopyNotification('Инструкция улучшена!');
         
     } catch (error) {
