@@ -338,10 +338,13 @@ function updateEditorContent(role) {
     }
     
     if (textarea && preview) {
-        textarea.value = content;
-        preview.innerHTML = renderMarkdown(content);
-        if (typeof hljs !== 'undefined') {
-            preview.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+        // Only update if content has actually changed to prevent cursor jumping
+        if (textarea.value !== content) {
+            textarea.value = content;
+            preview.innerHTML = renderMarkdown(content);
+            if (typeof hljs !== 'undefined') {
+                preview.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+            }
         }
     }
 }
@@ -1030,21 +1033,33 @@ function setupWYSIWYG(previewElement, textarea, callback) {
     
     previewElement.addEventListener('paste', (e) => {
         e.preventDefault();
+        
+        const html = e.clipboardData.getData('text/html');
         const text = e.clipboardData.getData('text/plain');
+        
         const selection = window.getSelection();
         if (selection.rangeCount) {
             const range = selection.getRangeAt(0);
             range.deleteContents();
             
-            const hasMarkdown = /^#|^\*\*|\*\*$|^-\s|^\d+\.\s|^```|^>/.test(text);
-            if (hasMarkdown) {
+            if (html) {
+                // Handle HTML paste to preserve formatting
                 const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = renderMarkdown(text);
+                tempDiv.innerHTML = html;
                 const fragment = document.createDocumentFragment();
                 while (tempDiv.firstChild) fragment.appendChild(tempDiv.firstChild);
                 range.insertNode(fragment);
             } else {
-                range.insertNode(document.createTextNode(text));
+                const hasMarkdown = /^#|^\*\*|\*\*$|^-\s|^\d+\.\s|^```|^>/.test(text);
+                if (hasMarkdown) {
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = renderMarkdown(text);
+                    const fragment = document.createDocumentFragment();
+                    while (tempDiv.firstChild) fragment.appendChild(tempDiv.firstChild);
+                    range.insertNode(fragment);
+                } else {
+                    range.insertNode(document.createTextNode(text));
+                }
             }
             selection.collapseToEnd();
         }
