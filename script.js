@@ -626,28 +626,21 @@ async function improvePromptWithAI() {
 }
 
 function showSemanticDiff(textWithMarkers) {
-    // Escape HTML first
-    let html = textWithMarkers
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+    // 1. Replace markers with unique tokens that won't mess up markdown parsing
+    // We use a specific sequence that is unlikely to be in the text
+    let processedText = textWithMarkers
+        .replace(/~~([\s\S]+?)~~/g, ':::DEL-START:::$1:::DEL-END:::')
+        .replace(/\+\+([\s\S]+?)\+\+/g, ':::INS-START:::$1:::INS-END:::');
         
-    // Replace markers with spans
-    // Use [\s\S] instead of [^~] or [^+] to match newlines correctly if they were not caught
-    // But we need non-greedy match.
+    // 2. Render markdown (handles **bold**, *italic*, headers etc.)
+    let html = renderMarkdown(processedText);
     
-    // First, handle removed text
-    html = html.replace(/~~([\s\S]+?)~~/g, (match, p1) => {
-        return `<span class="diff-removed">${p1}</span>`;
-    });
-    
-    // Then added text
-    html = html.replace(/\+\+([\s\S]+?)\+\+/g, (match, p1) => {
-        return `<span class="diff-added">${p1}</span>`;
-    });
-    
-    // Finally replace newlines with <br>
-    html = html.replace(/\n/g, '<br>');
+    // 3. Replace tokens with actual HTML highlight tags
+    html = html
+        .replace(/:::DEL-START:::/g, '<span class="diff-removed">')
+        .replace(/:::DEL-END:::/g, '</span>')
+        .replace(/:::INS-START:::/g, '<span class="diff-added">')
+        .replace(/:::INS-END:::/g, '</span>');
 
     aiDiffView.innerHTML = html;
     
