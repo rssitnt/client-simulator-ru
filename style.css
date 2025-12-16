@@ -646,7 +646,6 @@ body {
 
 .btn-send:hover {
     background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%);
-    transform: scale(1.05);
 }
 
 .btn-send:hover svg {
