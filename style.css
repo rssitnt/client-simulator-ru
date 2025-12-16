@@ -482,8 +482,9 @@ body {
 .improve-from-rating-container {
     display: flex;
     justify-content: center;
-    padding: 16px;
-    animation: slideIn 0.3s ease-out;
+    padding: 16px 0;
+    margin-top: 16px;
+    border-top: 1px solid rgba(255,255,255,0.1);
 }
 
 .btn-improve-from-rating {

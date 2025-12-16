@@ -926,10 +926,10 @@ async function rateChat() {
         
         loadingMsg.remove();
         lastRating = ratingMessage;
-        addMessage(ratingMessage, 'rating', true);
+        const ratingMsgElement = addMessage(ratingMessage, 'rating', true);
         
-        // Add button to improve manager prompt based on rating
-        addImproveFromRatingButton(dialogText, ratingMessage);
+        // Add button to improve manager prompt based on rating - inside the rating message
+        addImproveFromRatingButton(dialogText, ratingMessage, ratingMsgElement);
         
         isDialogRated = true;
         lockDialogInput();
@@ -948,7 +948,7 @@ async function rateChat() {
     }
 }
 
-function addImproveFromRatingButton(dialogText, ratingText) {
+function addImproveFromRatingButton(dialogText, ratingText, ratingMsgElement) {
     const buttonContainer = document.createElement('div');
     buttonContainer.className = 'improve-from-rating-container';
     buttonContainer.innerHTML = `
@@ -1035,7 +1035,12 @@ function addImproveFromRatingButton(dialogText, ratingText) {
         }
     });
     
-    chatMessages.appendChild(buttonContainer);
+    // Append button inside the rating message element
+    if (ratingMsgElement) {
+        ratingMsgElement.appendChild(buttonContainer);
+    } else {
+        chatMessages.appendChild(buttonContainer);
+    }
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
