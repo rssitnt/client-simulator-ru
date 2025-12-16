@@ -1492,28 +1492,33 @@ body {
     border-radius: 8px;
     padding: 16px;
     margin-bottom: 20px;
-    max-height: 300px;
+    max-height: 400px;
     overflow-y: auto;
-    font-family: 'Consolas', 'Monaco', monospace;
-    white-space: pre-wrap;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Non-monospace */
+    white-space: normal; /* Allow wrapping */
     text-align: left;
-    font-size: 13px;
-    line-height: 1.5;
-    color: #888;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #e0e0e0;
     border: 1px solid #333;
 }
 
 .diff-added {
-    background-color: rgba(40, 167, 69, 0.2);
-    color: #a6e22e;
+    background-color: rgba(40, 167, 69, 0.25);
+    color: #8ce65e;
     text-decoration: none;
+    padding: 2px 4px;
+    border-radius: 4px;
 }
 
 .diff-removed {
-    background-color: rgba(220, 53, 69, 0.2);
-    color: #f92672;
+    background-color: rgba(220, 53, 69, 0.25);
+    color: #ff6b6b;
     text-decoration: line-through;
-    opacity: 0.7;
+    opacity: 0.8;
+    padding: 2px 4px;
+    border-radius: 4px;
+    margin-right: 4px;
 }
 
 .btn-loader .spinner {

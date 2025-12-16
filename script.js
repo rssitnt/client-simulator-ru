@@ -544,7 +544,7 @@ async function improvePromptWithAI() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                userMessage: `Изначальный промпт:\n\n${currentPrompt}\n\n---\n\nЗапрос на улучшение: ${improvementRequest}`
+                userMessage: `Изначальный промпт:\n\n${currentPrompt}\n\n---\n\nЗапрос на улучшение: ${improvementRequest}\n\n---\n\nВАЖНО: Верни ПОЛНЫЙ текст улучшенного промпта. Подсвети изменения так:\n1. Удаленный/измененный текст оберни в ~~ (например: ~~старый текст~~)\n2. Новый/добавленный текст оберни в ++ (например: ++новый текст++)\n3. Остальной текст оставь без изменений.\nНе используй markdown код-блоки.`
             })
         });
         
@@ -562,17 +562,24 @@ async function improvePromptWithAI() {
             data = { output: responseText };
         }
 
-        const improvedPrompt = extractApiResponse(data);
+        const rawResponse = extractApiResponse(data);
         
-        if (!improvedPrompt) throw new Error('Не удалось получить текст из ответа');
+        if (!rawResponse) throw new Error('Не удалось получить текст из ответа');
         
+        // Clean the text for saving (remove ~~deleted~~ and unwrap ++added++)
+        const cleanPrompt = rawResponse
+            .replace(/~~[^~]+~~/g, '') // Remove deleted text
+            .replace(/\+\+([^+]+)\+\+/g, '$1') // Unwrap added text
+            .replace(/\n{3,}/g, '\n\n') // Fix excess newlines
+            .trim();
+
         // Store pending data
-        pendingImprovedPrompt = improvedPrompt;
+        pendingImprovedPrompt = cleanPrompt;
         pendingRole = role;
         pendingName = currentName;
         
-        // Render diff
-        showDiffPreview(currentPrompt, improvedPrompt);
+        // Render diff (using the raw response with markers)
+        showSemanticDiff(rawResponse);
         
     } catch (error) {
         console.error('AI improve error:', error);
@@ -584,29 +591,20 @@ async function improvePromptWithAI() {
     }
 }
 
-function showDiffPreview(original, modified) {
-    if (typeof Diff === 'undefined') {
-        alert('Diff library not loaded');
-        return;
-    }
-    
-    const diff = Diff.diffWords(original, modified);
-    const fragment = document.createDocumentFragment();
+function showSemanticDiff(textWithMarkers) {
+    // Escape HTML first to prevent injection, but keep our specific markers
+    let html = textWithMarkers
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+        
+    // Replace markers with spans
+    html = html
+        .replace(/~~([^~]+)~~/g, '<span class="diff-removed">$1</span>')
+        .replace(/\+\+([^+]+)\+\+/g, '<span class="diff-added">$1</span>')
+        .replace(/\n/g, '<br>'); // Handle newlines for display
 
-    diff.forEach((part) => {
-        // green for additions, red for deletions
-        // grey for common parts
-        const color = part.added ? 'diff-added' :
-            part.removed ? 'diff-removed' : 'diff-common';
-            
-        const span = document.createElement('span');
-        span.className = color;
-        span.textContent = part.value;
-        fragment.appendChild(span);
-    });
-
-    aiDiffView.innerHTML = '';
-    aiDiffView.appendChild(fragment);
+    aiDiffView.innerHTML = html;
     
     // Switch view
     aiImproveStep1.style.display = 'none';
