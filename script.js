@@ -205,7 +205,8 @@ function lockDialogInput() {
     sendBtn.disabled = true;
     voiceBtn.disabled = true;
     aiAssistBtn.disabled = true;
-    // rateChatBtn remains enabled to allow cancelling rating
+    // rateChatBtn stays enabled so user can cancel the rating
+    rateChatBtn.disabled = false;
     userInput.placeholder = 'Очистите чат для нового диалога';
     userInput.classList.add('disabled');
 }
@@ -752,6 +753,7 @@ function clearChat() {
     lastRating = null;
     isDialogRated = false;
     unlockDialogInput();
+    rateChatBtn.classList.remove('rated');
     
     baseSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     localStorage.setItem('sessionId', baseSessionId);
@@ -873,24 +875,23 @@ async function rateChat() {
         alert('Нет диалога для оценки');
         return;
     }
+    if (isProcessing) return;
     
-    // If already rated, cancel rating
+    // If already rated, cancel the rating
     if (isDialogRated) {
-        // Remove rating messages
-        const ratingMsgs = document.querySelectorAll('.message.rating');
-        ratingMsgs.forEach(msg => msg.remove());
+        // Remove rating message and improve button from chat
+        const ratingMessages = chatMessages.querySelectorAll('.message.rating');
+        ratingMessages.forEach(msg => msg.remove());
         
-        // Remove improve buttons
-        const improveBtns = document.querySelectorAll('.improve-from-rating-container');
-        improveBtns.forEach(btn => btn.remove());
+        const improveBtn = chatMessages.querySelector('.improve-from-rating-container');
+        if (improveBtn) improveBtn.remove();
         
         lastRating = null;
         isDialogRated = false;
         unlockDialogInput();
+        rateChatBtn.classList.remove('rated');
         return;
     }
-
-    if (isProcessing) return;
     
     rateChatBtn.disabled = true;
     rateChatBtn.classList.add('loading');
@@ -932,6 +933,7 @@ async function rateChat() {
         
         isDialogRated = true;
         lockDialogInput();
+        rateChatBtn.classList.add('rated');
         
     } catch (error) {
         loadingMsg.remove();
