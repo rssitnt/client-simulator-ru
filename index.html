@@ -38,20 +38,32 @@
         <div class="modal-content ai-improve-modal">
             <button class="modal-close" id="aiImproveModalClose">&times;</button>
             <h3>Улучшить инструкцию с ИИ</h3>
-            <p>Опишите, как бы вы хотели улучшить инструкцию?</p>
-            <textarea id="aiImproveInput" placeholder="Например: Сделай инструкцию более структурированной, добавь примеры диалогов..." rows="4"></textarea>
-            <div class="ai-improve-actions">
-                <button id="aiImproveCancel" class="btn-modal-cancel">Отмена</button>
-                <button id="aiImproveSubmit" class="btn-modal-submit">
-                    <span class="btn-text">Улучшить</span>
-                    <span class="btn-loader" style="display: none;">
-                        <svg class="spinner" width="16" height="16" viewBox="0 0 24 24">
-                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round">
-                                <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/>
-                            </circle>
-                        </svg>
-                    </span>
-                </button>
+            
+            <div id="aiImproveStep1">
+                <p>Опишите, как бы вы хотели улучшить инструкцию?</p>
+                <textarea id="aiImproveInput" placeholder="Например: Сделай инструкцию более структурированной, добавь примеры диалогов..." rows="4"></textarea>
+                <div class="ai-improve-actions">
+                    <button id="aiImproveCancel" class="btn-modal-cancel">Отмена</button>
+                    <button id="aiImproveSubmit" class="btn-modal-submit">
+                        <span class="btn-text">Улучшить</span>
+                        <span class="btn-loader" style="display: none;">
+                            <svg class="spinner" width="16" height="16" viewBox="0 0 24 24">
+                                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round">
+                                    <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/>
+                                </circle>
+                            </svg>
+                        </span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="aiImproveStep2" style="display: none;">
+                <p>Просмотр изменений:</p>
+                <div id="aiDiffView" class="diff-view"></div>
+                <div class="ai-improve-actions">
+                    <button id="aiImproveBack" class="btn-modal-cancel">Назад</button>
+                    <button id="aiImproveApply" class="btn-modal-submit">Принять изменения</button>
+                </div>
             </div>
         </div>
     </div>
@@ -235,6 +247,7 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/11.1.1/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsdiff/5.1.0/diff.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <!-- Turndown for HTML to Markdown conversion (WYSIWYG editing) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js"></script>

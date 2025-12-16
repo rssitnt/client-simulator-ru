@@ -1485,6 +1485,36 @@ body {
     background: #444;
 }
 
+/* Diff View */
+.diff-view {
+    background: #0f0f0f;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 20px;
+    max-height: 300px;
+    overflow-y: auto;
+    font-family: 'Consolas', 'Monaco', monospace;
+    white-space: pre-wrap;
+    text-align: left;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #888;
+    border: 1px solid #333;
+}
+
+.diff-added {
+    background-color: rgba(40, 167, 69, 0.2);
+    color: #a6e22e;
+    text-decoration: none;
+}
+
+.diff-removed {
+    background-color: rgba(220, 53, 69, 0.2);
+    color: #f92672;
+    text-decoration: line-through;
+    opacity: 0.7;
+}
+
 .btn-loader .spinner {
     animation: spin 1s linear infinite;
 }

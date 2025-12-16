@@ -59,9 +59,20 @@ const promptVariationsContainer = document.getElementById('promptVariations');
 const aiImproveBtn = document.getElementById('aiImproveBtn');
 const aiImproveModal = document.getElementById('aiImproveModal');
 const aiImproveModalClose = document.getElementById('aiImproveModalClose');
+
+const aiImproveStep1 = document.getElementById('aiImproveStep1');
 const aiImproveInput = document.getElementById('aiImproveInput');
 const aiImproveSubmit = document.getElementById('aiImproveSubmit');
 const aiImproveCancel = document.getElementById('aiImproveCancel');
+
+const aiImproveStep2 = document.getElementById('aiImproveStep2');
+const aiDiffView = document.getElementById('aiDiffView');
+const aiImproveBack = document.getElementById('aiImproveBack');
+const aiImproveApply = document.getElementById('aiImproveApply');
+
+let pendingImprovedPrompt = null;
+let pendingRole = null;
+let pendingName = null;
 
 // State
 let conversationHistory = [];
@@ -487,6 +498,12 @@ managerNameInput.addEventListener('input', () => {
 
 function showAiImproveModal() {
     aiImproveModal.classList.add('active');
+    
+    // Reset to step 1
+    aiImproveStep1.style.display = 'block';
+    aiImproveStep2.style.display = 'none';
+    pendingImprovedPrompt = null;
+    
     setTimeout(() => aiImproveInput.focus(), 100);
 }
 
@@ -549,23 +566,13 @@ async function improvePromptWithAI() {
         
         if (!improvedPrompt) throw new Error('Не удалось получить текст из ответа');
         
-        // Create new variation with improved prompt
-        const newId = generateId();
-        const newName = `${currentName} AI`;
+        // Store pending data
+        pendingImprovedPrompt = improvedPrompt;
+        pendingRole = role;
+        pendingName = currentName;
         
-        promptsData[role].variations.push({
-            id: newId,
-            name: newName,
-            content: improvedPrompt
-        });
-        
-        // Switch to new variation
-        setActiveVariation(role, newId);
-        savePromptsToFirebase();
-        
-        hideAiImproveModal();
-        aiImproveInput.value = ''; // Clear input after successful submission
-        showCopyNotification('Инструкция улучшена!');
+        // Render diff
+        showDiffPreview(currentPrompt, improvedPrompt);
         
     } catch (error) {
         console.error('AI improve error:', error);
@@ -577,10 +584,72 @@ async function improvePromptWithAI() {
     }
 }
 
+function showDiffPreview(original, modified) {
+    if (typeof Diff === 'undefined') {
+        alert('Diff library not loaded');
+        return;
+    }
+    
+    const diff = Diff.diffWords(original, modified);
+    const fragment = document.createDocumentFragment();
+
+    diff.forEach((part) => {
+        // green for additions, red for deletions
+        // grey for common parts
+        const color = part.added ? 'diff-added' :
+            part.removed ? 'diff-removed' : 'diff-common';
+            
+        const span = document.createElement('span');
+        span.className = color;
+        span.textContent = part.value;
+        fragment.appendChild(span);
+    });
+
+    aiDiffView.innerHTML = '';
+    aiDiffView.appendChild(fragment);
+    
+    // Switch view
+    aiImproveStep1.style.display = 'none';
+    aiImproveStep2.style.display = 'block';
+}
+
+function applyImprovedPrompt() {
+    if (!pendingImprovedPrompt || !pendingRole) return;
+    
+    const newId = generateId();
+    const newName = `${pendingName} AI`;
+    
+    promptsData[pendingRole].variations.push({
+        id: newId,
+        name: newName,
+        content: pendingImprovedPrompt
+    });
+    
+    // Switch to new variation
+    setActiveVariation(pendingRole, newId);
+    savePromptsToFirebase();
+    
+    hideAiImproveModal();
+    aiImproveInput.value = ''; // Clear input after successful apply
+    showCopyNotification('Инструкция улучшена!');
+    
+    // Reset pending
+    pendingImprovedPrompt = null;
+    pendingRole = null;
+    pendingName = null;
+}
+
 aiImproveBtn.addEventListener('click', showAiImproveModal);
 aiImproveModalClose.addEventListener('click', hideAiImproveModal);
 aiImproveCancel.addEventListener('click', hideAiImproveModal);
 aiImproveSubmit.addEventListener('click', improvePromptWithAI);
+
+aiImproveBack.addEventListener('click', () => {
+    aiImproveStep1.style.display = 'block';
+    aiImproveStep2.style.display = 'none';
+});
+
+aiImproveApply.addEventListener('click', applyImprovedPrompt);
 
 aiImproveInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
