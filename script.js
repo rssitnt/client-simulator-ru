@@ -20,7 +20,7 @@ try {
 const WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/client-simulator';
 const RATE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/rate-manager';
 const MANAGER_ASSISTANT_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/manager-simulator';
-const AI_IMPROVE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/699b9552-d77a-4837-87e5-4ae28f31b9ca';
+const AI_IMPROVE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/prompt-enchancement';
 
 // Generate unique session ID
 let baseSessionId = localStorage.getItem('sessionId');
