@@ -883,8 +883,8 @@ async function rateChat() {
         const ratingMessages = chatMessages.querySelectorAll('.message.rating');
         ratingMessages.forEach(msg => msg.remove());
         
-        const improveBtn = chatMessages.querySelector('.improve-from-rating-container');
-        if (improveBtn) improveBtn.remove();
+        const improveMsgs = chatMessages.querySelectorAll('.message.improve-message');
+        improveMsgs.forEach(msg => msg.remove());
         
         lastRating = null;
         isDialogRated = false;
@@ -928,8 +928,8 @@ async function rateChat() {
         lastRating = ratingMessage;
         const ratingMsgElement = addMessage(ratingMessage, 'rating', true);
         
-        // Add button to improve manager prompt based on rating - inside the rating message
-        addImproveFromRatingButton(dialogText, ratingMessage, ratingMsgElement);
+        // Add button to improve manager prompt based on rating
+        addImproveFromRatingButton(dialogText, ratingMessage);
         
         isDialogRated = true;
         lockDialogInput();
@@ -948,9 +948,20 @@ async function rateChat() {
     }
 }
 
-function addImproveFromRatingButton(dialogText, ratingText, ratingMsgElement) {
+function addImproveFromRatingButton(dialogText, ratingText) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message system-action improve-message';
+    messageDiv.style.alignSelf = 'center';
+    messageDiv.style.maxWidth = '95%';
+    messageDiv.style.background = 'transparent';
+    messageDiv.style.padding = '0';
+    messageDiv.style.boxShadow = 'none';
+    
     const buttonContainer = document.createElement('div');
     buttonContainer.className = 'improve-from-rating-container';
+    buttonContainer.style.margin = '0';
+    buttonContainer.style.border = 'none';
+    
     buttonContainer.innerHTML = `
         <button class="btn-improve-from-rating">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1018,7 +1029,7 @@ function addImproveFromRatingButton(dialogText, ratingText, ratingMsgElement) {
             aiImproveModal.classList.add('active');
             
             // Hide the button after use
-            buttonContainer.remove();
+            messageDiv.remove();
             
         } catch (error) {
             console.error('Improve from rating error:', error);
@@ -1035,12 +1046,8 @@ function addImproveFromRatingButton(dialogText, ratingText, ratingMsgElement) {
         }
     });
     
-    // Append button inside the rating message element
-    if (ratingMsgElement) {
-        ratingMsgElement.appendChild(buttonContainer);
-    } else {
-        chatMessages.appendChild(buttonContainer);
-    }
+    messageDiv.appendChild(buttonContainer);
+    chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
