@@ -675,8 +675,29 @@ function applyImprovedPrompt() {
         content: pendingImprovedPrompt
     });
     
-    // Switch to new variation
+    // Switch to the correct instruction tab (client/manager/rater)
+    const instructionTabs = document.querySelectorAll('.instruction-tab');
+    const instructionEditors = document.querySelectorAll('.instruction-editor');
+    
+    instructionTabs.forEach(tab => {
+        if (tab.dataset.instruction === pendingRole) {
+            tab.classList.add('active');
+        } else {
+            tab.classList.remove('active');
+        }
+    });
+    
+    instructionEditors.forEach(editor => {
+        if (editor.dataset.instruction === pendingRole) {
+            editor.classList.add('active');
+        } else {
+            editor.classList.remove('active');
+        }
+    });
+    
+    // Switch to new variation and render
     setActiveVariation(pendingRole, newId);
+    renderVariations();
     savePromptsToFirebase();
     
     hideAiImproveModal();
