@@ -533,10 +533,21 @@ async function improvePromptWithAI() {
         
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
-        const data = await response.json();
+        const responseText = await response.text();
+        if (!responseText) throw new Error('Пустой ответ от сервера');
+
+        let data;
+        try {
+            data = JSON.parse(responseText);
+        } catch (e) {
+            // If response is not JSON, assume it's the raw text of the prompt
+            console.log('Response is not JSON, treating as raw text');
+            data = { output: responseText };
+        }
+
         const improvedPrompt = extractApiResponse(data);
         
-        if (!improvedPrompt) throw new Error('Пустой ответ от AI');
+        if (!improvedPrompt) throw new Error('Не удалось получить текст из ответа');
         
         // Create new variation with improved prompt
         const newId = generateId();
