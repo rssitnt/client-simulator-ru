@@ -1377,12 +1377,13 @@ body {
 
 /* AI Improve Button */
 .btn-ai-improve {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    background: var(--color-accent) !important;
     color: #fff !important;
+    border: none !important;
 }
 
 .btn-ai-improve:hover {
-    background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%) !important;
+    background: var(--color-accent-hover) !important;
     transform: scale(1.05);
 }
 
