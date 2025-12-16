@@ -626,7 +626,7 @@ body {
     width: 44px;
     height: 44px;
     padding: 0;
-    background: var(--color-accent);
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     border: none;
     color: #fff;
     border-radius: 6px;
@@ -645,7 +645,8 @@ body {
 }
 
 .btn-send:hover {
-    background: var(--color-accent);
+    background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%);
+    transform: scale(1.05);
 }
 
 .btn-send:hover svg {
