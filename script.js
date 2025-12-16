@@ -526,9 +526,7 @@ async function improvePromptWithAI() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                currentPrompt: currentPrompt,
-                improvementRequest: improvementRequest,
-                role: role
+                userMessage: `Изначальный промпт:\n\n${currentPrompt}\n\n---\n\nЗапрос на улучшение: ${improvementRequest}`
             })
         });
         
