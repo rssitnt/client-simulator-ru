@@ -1507,8 +1507,10 @@ body {
     background-color: rgba(40, 167, 69, 0.25);
     color: #8ce65e;
     text-decoration: none;
-    padding: 2px 4px;
+    padding: 0 4px;
     border-radius: 4px;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
 }
 
 .diff-removed {
@@ -1516,9 +1518,11 @@ body {
     color: #ff6b6b;
     text-decoration: line-through;
     opacity: 0.8;
-    padding: 2px 4px;
+    padding: 0 4px;
     border-radius: 4px;
     margin-right: 4px;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
 }
 
 .btn-loader .spinner {

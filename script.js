@@ -626,17 +626,28 @@ async function improvePromptWithAI() {
 }
 
 function showSemanticDiff(textWithMarkers) {
-    // Escape HTML first to prevent injection, but keep our specific markers
+    // Escape HTML first
     let html = textWithMarkers
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
         
     // Replace markers with spans
-    html = html
-        .replace(/~~([^~]+)~~/g, '<span class="diff-removed">$1</span>')
-        .replace(/\+\+([^+]+)\+\+/g, '<span class="diff-added">$1</span>')
-        .replace(/\n/g, '<br>'); // Handle newlines for display
+    // Use [\s\S] instead of [^~] or [^+] to match newlines correctly if they were not caught
+    // But we need non-greedy match.
+    
+    // First, handle removed text
+    html = html.replace(/~~([\s\S]+?)~~/g, (match, p1) => {
+        return `<span class="diff-removed">${p1}</span>`;
+    });
+    
+    // Then added text
+    html = html.replace(/\+\+([\s\S]+?)\+\+/g, (match, p1) => {
+        return `<span class="diff-added">${p1}</span>`;
+    });
+    
+    // Finally replace newlines with <br>
+    html = html.replace(/\n/g, '<br>');
 
     aiDiffView.innerHTML = html;
     
