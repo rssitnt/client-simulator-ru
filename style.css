@@ -645,7 +645,7 @@ body {
 }
 
 .btn-send:hover {
-    background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%);
+    /* No change on hover */
 }
 
 .btn-send:hover svg {
@@ -1383,7 +1383,6 @@ body {
 }
 
 .btn-ai-improve:hover {
-    background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%) !important;
     transform: scale(1.05);
     border: none !important;
 }
