@@ -478,6 +478,42 @@ body {
     border-color: rgba(0, 0, 0, 0.3);
 }
 
+/* Improve from rating button */
+.improve-from-rating-container {
+    display: flex;
+    justify-content: center;
+    padding: 16px;
+    animation: slideIn 0.3s ease-out;
+}
+
+.btn-improve-from-rating {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: transform 0.2s, opacity 0.2s;
+}
+
+.btn-improve-from-rating:hover {
+    transform: scale(1.02);
+}
+
+.btn-improve-from-rating:disabled {
+    opacity: 0.8;
+    cursor: wait;
+}
+
+.btn-improve-from-rating .spinner {
+    animation: spin 1s linear infinite;
+}
+
 .message.loading {
     align-self: flex-start;
     background: #252525;
