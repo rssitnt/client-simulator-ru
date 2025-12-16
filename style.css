@@ -1390,6 +1390,7 @@ body {
 .ai-improve-modal {
     max-width: 500px;
     position: relative;
+    border: none;
 }
 
 .ai-improve-modal h3 {
@@ -1423,7 +1424,7 @@ body {
 .ai-improve-modal textarea {
     width: 100%;
     background: #0f0f0f;
-    border: 1px solid #333;
+    border: none;
     border-radius: 8px;
     color: #e0e0e0;
     padding: 12px 16px;
@@ -1438,7 +1439,6 @@ body {
 
 .ai-improve-modal textarea:focus {
     outline: none;
-    border-color: #667eea;
 }
 
 .ai-improve-modal textarea::placeholder {
