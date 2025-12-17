@@ -80,12 +80,28 @@ body.light-theme .typing-dot {
 
 body.light-theme .chat-input-container {
     background: #ffffff;
-    border-color: #eee;
+    border: none !important; /* Убрана обводка */
+    box-shadow: none !important;
+}
+
+body.light-theme .input-wrapper {
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Кнопки в блоке ввода - светлая тема */
+body.light-theme .btn-input-action {
+    color: #bbb; /* Светло-серые по умолчанию */
+    transition: color 0.2s ease;
+}
+
+body.light-theme .btn-input-action:hover {
+    color: #666 !important; /* Темнее при наведении */
 }
 
 body.light-theme #userInput {
     background: #f5f5f5 !important;
-    border: 1px solid #ddd !important; /* Добавил рамку в спокойном состоянии */
+    border: none !important; /* Без рамки */
     color: #1a1a1a !important;
 }
 
