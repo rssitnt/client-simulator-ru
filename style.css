@@ -403,7 +403,7 @@ body.light-theme .panel {
 
 /* Дополнительно проверим разделители */
 body.light-theme .panel-header {
-    border-bottom: 1px solid #f0f0f0 !important; /* Очень легкая линия снизу шапки */
+    border-bottom: none !important; /* Убрал полоску */
 }
 
 * {
