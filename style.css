@@ -306,11 +306,11 @@ body.light-theme input:focus,
 body.light-theme textarea:focus,
 body.light-theme .prompt-editor:focus,
 body.light-theme #userInput:focus {
-    background: #ffffff !important;
-    border: none !important; /* Без рамки */
-    outline: none !important; /* Без outline */
+    background: #f5f5f5 !important; /* Тот же фон, что и без фокуса */
+    border: none !important;
+    outline: none !important;
     color: #1a1a1a !important;
-    box-shadow: none !important; /* Без свечения */
+    box-shadow: none !important;
 }
 
 /* Выпадающие меню */
