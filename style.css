@@ -2183,7 +2183,6 @@ input:checked + .slider:hover {
 }
 
 .btn-ai-improve:hover {
-    transform: scale(1.05);
     border: none !important;
 }
 
