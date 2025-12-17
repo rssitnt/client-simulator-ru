@@ -1473,6 +1473,26 @@ body {
     color: var(--color-accent) !important;
 }
 
+.btn-icon-small {
+    background: transparent;
+    border: 1px solid #444;
+    color: #888;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-icon-small:hover {
+    background: #2a2a2a;
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+}
+
 /* Settings Modal */
 .settings-modal {
     max-width: 500px !important;
