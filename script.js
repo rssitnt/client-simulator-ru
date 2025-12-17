@@ -729,7 +729,7 @@ function showSettingsModal() {
     const userRole = localStorage.getItem('userRole') || 'user';
     
     settingsNameInput.value = savedName;
-    currentRoleDisplay.textContent = userRole === 'admin' ? 'Администратор 🔑' : 'Пользователь 👤';
+    currentRoleDisplay.textContent = userRole === 'admin' ? 'Админ 🔑' : 'Пользователь 👤';
     
     // Hide password section
     roleChangePassword.style.display = 'none';
@@ -1017,7 +1017,7 @@ function switchRole(newRole) {
     localStorage.setItem('userRole', newRole);
     selectedRole = newRole;
     
-    currentRoleDisplay.textContent = newRole === 'admin' ? 'Администратор 🔑' : 'Пользователь 👤';
+    currentRoleDisplay.textContent = newRole === 'admin' ? 'Админ 🔑' : 'Пользователь 👤';
     updateUserNameDisplay();
     applyRoleRestrictions();
     renderVariations();
@@ -1027,7 +1027,7 @@ function switchRole(newRole) {
     roleChangePasswordInput.value = '';
     roleChangeError.style.display = 'none';
     
-    showCopyNotification(`Роль изменена на ${newRole === 'admin' ? 'Администратор' : 'Пользователь'}!`);
+    showCopyNotification(`Роль изменена на ${newRole === 'admin' ? 'Админ' : 'Пользователь'}!`);
 }
 
 // Cancel role change
