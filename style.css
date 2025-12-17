@@ -307,9 +307,10 @@ body.light-theme textarea:focus,
 body.light-theme .prompt-editor:focus,
 body.light-theme #userInput:focus {
     background: #ffffff !important;
-    border: 1px solid var(--color-accent) !important; /* Явная рамка */
+    border: none !important; /* Без рамки */
+    outline: none !important; /* Без outline */
     color: #1a1a1a !important;
-    box-shadow: 0 0 0 2px rgba(127, 150, 255, 0.2) !important; /* Легкое свечение */
+    box-shadow: none !important; /* Без свечения */
 }
 
 /* Выпадающие меню */
