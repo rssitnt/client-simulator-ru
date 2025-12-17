@@ -83,6 +83,14 @@ const managerNameInput = document.getElementById('managerName');
 const nameModal = document.getElementById('nameModal');
 const modalNameInput = document.getElementById('modalNameInput');
 const modalNameSubmit = document.getElementById('modalNameSubmit');
+const nameModalStep1 = document.getElementById('nameModalStep1');
+const nameModalStep2 = document.getElementById('nameModalStep2');
+const roleUserBtn = document.getElementById('roleUserBtn');
+const roleAdminBtn = document.getElementById('roleAdminBtn');
+const modalPasswordInput = document.getElementById('modalPasswordInput');
+const modalPasswordSubmit = document.getElementById('modalPasswordSubmit');
+const modalPasswordBack = document.getElementById('modalPasswordBack');
+const passwordError = document.getElementById('passwordError');
 const promptVariationsContainer = document.getElementById('promptVariations');
 
 // AI Improve Modal Elements
@@ -111,6 +119,8 @@ let lastRating = null;
 let isDialogRated = false;
 let isUserEditing = false;
 let lastFirebaseData = null;
+let selectedRole = null; // 'user' or 'admin'
+const ADMIN_PASSWORD = '1357246';
 
 // Prompt Variations Data
 let promptsData = {
@@ -454,8 +464,12 @@ function savePromptsToFirebaseNow() {
 function loadPrompts() {
     // Load manager name
     const savedManagerName = localStorage.getItem('managerName');
-    if (savedManagerName) {
+    const savedRole = localStorage.getItem('userRole');
+    
+    if (savedManagerName && savedRole) {
         managerNameInput.value = savedManagerName;
+        selectedRole = savedRole;
+        console.log(`Welcome back, ${savedManagerName} (${savedRole})`);
     } else {
         showNameModal();
     }
@@ -511,21 +525,93 @@ function hideNameModal() {
     nameModal.classList.remove('active');
 }
 
+// Role selection
+roleUserBtn.addEventListener('click', () => {
+    selectedRole = 'user';
+    roleUserBtn.classList.add('selected');
+    roleAdminBtn.classList.remove('selected');
+    modalNameSubmit.disabled = false;
+});
+
+roleAdminBtn.addEventListener('click', () => {
+    selectedRole = 'admin';
+    roleAdminBtn.classList.add('selected');
+    roleUserBtn.classList.remove('selected');
+    modalNameSubmit.disabled = false;
+});
+
+// Step 1: Name and role selection
 modalNameSubmit.addEventListener('click', () => {
     const name = modalNameInput.value.trim();
-    if (name) {
-        localStorage.setItem('managerName', name);
-        managerNameInput.value = name;
-        hideNameModal();
-    } else {
+    
+    if (!name) {
         modalNameInput.focus();
         modalNameInput.style.borderColor = '#ff5555';
         setTimeout(() => { modalNameInput.style.borderColor = ''; }, 1000);
+        return;
+    }
+    
+    if (!selectedRole) {
+        alert('Выберите роль');
+        return;
+    }
+    
+    // Save name
+    localStorage.setItem('managerName', name);
+    managerNameInput.value = name;
+    
+    if (selectedRole === 'user') {
+        // User - go straight to platform
+        localStorage.setItem('userRole', 'user');
+        hideNameModal();
+    } else {
+        // Admin - ask for password
+        nameModalStep1.style.display = 'none';
+        nameModalStep2.style.display = 'block';
+        setTimeout(() => modalPasswordInput.focus(), 100);
     }
 });
 
 modalNameInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') modalNameSubmit.click();
+});
+
+// Step 2: Admin password verification
+modalPasswordSubmit.addEventListener('click', () => {
+    const password = modalPasswordInput.value.trim();
+    
+    if (password === ADMIN_PASSWORD) {
+        // Correct password
+        localStorage.setItem('userRole', 'admin');
+        hideNameModal();
+        // Reset modal for next time
+        nameModalStep1.style.display = 'block';
+        nameModalStep2.style.display = 'none';
+        modalPasswordInput.value = '';
+        passwordError.style.display = 'none';
+    } else {
+        // Wrong password
+        passwordError.style.display = 'block';
+        modalPasswordInput.value = '';
+        modalPasswordInput.focus();
+        modalPasswordInput.style.borderColor = '#ff5555';
+        setTimeout(() => { 
+            modalPasswordInput.style.borderColor = '';
+            passwordError.style.display = 'none';
+        }, 2000);
+    }
+});
+
+modalPasswordInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') modalPasswordSubmit.click();
+});
+
+// Back button in password step
+modalPasswordBack.addEventListener('click', () => {
+    nameModalStep1.style.display = 'block';
+    nameModalStep2.style.display = 'none';
+    modalPasswordInput.value = '';
+    passwordError.style.display = 'none';
 });
 
 managerNameInput.addEventListener('input', () => {

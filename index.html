@@ -26,10 +26,30 @@
     <!-- Модальное окно для ввода имени -->
     <div id="nameModal" class="modal-overlay">
         <div class="modal-content">
-            <h3>Добро пожаловать!</h3>
-            <p>Введите ваше имя для начала работы:</p>
-            <input type="text" id="modalNameInput" placeholder="Например: Кирилл" maxlength="50" autofocus>
-            <button id="modalNameSubmit" class="btn-modal-submit">Продолжить</button>
+            <div id="nameModalStep1">
+                <h3>Добро пожаловать!</h3>
+                <p>Введите ваше имя для начала работы:</p>
+                <input type="text" id="modalNameInput" placeholder="Например: Кирилл" maxlength="50" autofocus>
+                
+                <p style="margin-top: 20px;">Выберите вашу роль:</p>
+                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <button id="roleUserBtn" class="btn-role" style="flex: 1;">👤 Пользователь</button>
+                    <button id="roleAdminBtn" class="btn-role" style="flex: 1;">🔑 Администратор</button>
+                </div>
+                
+                <button id="modalNameSubmit" class="btn-modal-submit" disabled>Продолжить</button>
+            </div>
+            
+            <div id="nameModalStep2" style="display: none;">
+                <h3>Вход для администратора</h3>
+                <p>Введите пароль:</p>
+                <input type="password" id="modalPasswordInput" placeholder="Пароль" maxlength="20">
+                <p id="passwordError" style="color: red; font-size: 14px; display: none; margin-top: 10px;">Неверный пароль!</p>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button id="modalPasswordBack" class="btn-modal-cancel">Назад</button>
+                    <button id="modalPasswordSubmit" class="btn-modal-submit">Войти</button>
+                </div>
+            </div>
         </div>
     </div>
 
