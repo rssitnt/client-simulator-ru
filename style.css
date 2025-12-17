@@ -193,6 +193,10 @@ body.light-theme .settings-section {
     border-bottom: none !important; /* Убираем разделители */
 }
 
+body.light-theme .settings-section label {
+    color: #1a1a1a !important; /* Чёрный текст для label */
+}
+
 body.light-theme .settings-section input {
     background: #f5f5f5 !important;
     border: none !important;
@@ -2058,7 +2062,7 @@ body.light-theme .btn-icon:hover {
 .settings-section {
     margin-bottom: 24px;
     padding-bottom: 20px;
-    border-bottom: 1px solid #333;
+    border-bottom: none; /* Убраны разделители */
 }
 
 .settings-section:last-child {
@@ -2067,7 +2071,7 @@ body.light-theme .btn-icon:hover {
 
 .settings-section label {
     display: block;
-    color: #fff;
+    color: #ccc;
     font-size: 14px;
     font-weight: 600;
     margin-bottom: 12px;
@@ -2077,7 +2081,7 @@ body.light-theme .btn-icon:hover {
 .settings-section input[type="password"] {
     width: 100%;
     background: #2a2a2a;
-    border: 1px solid #444;
+    border: none; /* Убрана обводка */
     border-radius: 8px;
     padding: 10px 12px;
     color: #fff;
@@ -2087,7 +2091,6 @@ body.light-theme .btn-icon:hover {
 
 .settings-section input:focus {
     outline: none;
-    border-color: var(--color-accent);
 }
 
 /* Theme Switcher */
