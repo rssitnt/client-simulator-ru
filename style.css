@@ -1720,6 +1720,7 @@ body {
 .theme-switcher {
     display: inline-flex;
     align-items: center;
+    justify-content: center; /* Центрирование по горизонтали внутри */
     gap: 16px;
     background: #222;
     padding: 8px 16px;
@@ -1734,6 +1735,8 @@ body {
     user-select: none;
     cursor: pointer;
     line-height: 1;
+    display: flex;
+    align-items: center; /* Центрирование текста внутри span */
 }
 
 .switch {
@@ -1743,6 +1746,7 @@ body {
     height: 24px;
     flex-shrink: 0;
     margin: 0;
+    vertical-align: middle; /* Вертикальное выравнивание */
 }
 
 .switch input {
