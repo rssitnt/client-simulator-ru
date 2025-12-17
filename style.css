@@ -354,9 +354,26 @@ body.light-theme #startBtn:hover {
 
 /* Удаление черной полоски (resizer) */
 body.light-theme .resizer {
-    background-color: #e0e0e0 !important;
+    background: #e0e0e0 !important; /* Светло-серый фон */
     border-left: 1px solid #d0d0d0;
     border-right: 1px solid #d0d0d0;
+    width: 6px !important; /* Чуть шире, чтобы перекрыть старое */
+}
+
+/* Убираем рамки в чате */
+body.light-theme .chat-panel,
+body.light-theme .chat-messages {
+    border: none !important;
+    box-shadow: none !important;
+}
+
+body.light-theme .panel {
+    border: none !important;
+}
+
+/* Дополнительно проверим разделители */
+body.light-theme .panel-header {
+    border-bottom: 1px solid #f0f0f0 !important; /* Очень легкая линия снизу шапки */
 }
 
 * {
