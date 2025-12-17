@@ -1856,7 +1856,7 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
 
 .modal-content {
     background: #1a1a1a;
-    border: none;
+    border: none; /* Убрана обводка */
     border-radius: 12px;
     padding: 32px 40px;
     max-width: 400px;
@@ -1864,8 +1864,6 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
     text-align: center;
     transform: scale(0.9);
     transition: transform 0.3s;
-    position: relative;
-    z-index: 1001; /* Поверх overlay */
 }
 
 .modal-overlay.active .modal-content {
