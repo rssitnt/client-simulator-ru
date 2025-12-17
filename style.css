@@ -112,9 +112,15 @@ body.light-theme .instruction-content {
 
 body.light-theme .prompt-input,
 body.light-theme .prompt-preview {
-    background: #fafafa;
+    background: #ffffff !important; /* Абсолютно белый */
     border-color: #ddd;
     color: #1a1a1a;
+}
+
+body.light-theme .prompt-editor.drag-over,
+body.light-theme .prompt-preview.drag-over {
+    background: #f0f8ff !important;
+    border: 2px dashed var(--color-accent) !important;
 }
 
 body.light-theme .prompt-variation-chip {
@@ -462,16 +468,7 @@ body {
 }
 
 /* Cloud save button */
-.btn-cloud-save.saving {
-    color: #7F96FF !important;
-    animation: pulse 0.5s ease;
-}
-
-.btn-cloud-save.saved {
-    color: #50fa7b !important;
-    background: rgba(80, 250, 123, 0.1) !important;
-    border-color: #50fa7b !important;
-}
+/* Old cloud save styles removed */
 
 @keyframes pulse {
     0%, 100% { transform: scale(1); }
