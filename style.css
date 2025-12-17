@@ -199,8 +199,83 @@ body.light-theme .dropdown-item {
     color: #1a1a1a;
 }
 
-body.light-theme .dropdown-item:hover {
+body.light-theme .start-conversation {
+    background: #ffffff;
+    border-color: #ddd;
+}
+
+body.light-theme .btn-start {
     background: #f5f5f5;
+    color: #333;
+    border: 1px solid #ddd;
+}
+
+body.light-theme .btn-start:hover {
+    background: #e0e0e0;
+}
+
+body.light-theme .resizer {
+    background: #ddd; /* Цвет разделителя */
+}
+
+body.light-theme .resizer:hover,
+body.light-theme .resizer.resizing {
+    background: var(--color-accent);
+}
+
+/* Исправление текста в редакторе промптов */
+body.light-theme .prompt-preview h1,
+body.light-theme .prompt-preview h2,
+body.light-theme .prompt-preview h3,
+body.light-theme .prompt-preview h4,
+body.light-theme .prompt-preview h5,
+body.light-theme .prompt-preview h6,
+body.light-theme .prompt-preview strong,
+body.light-theme .prompt-preview b {
+    color: #1a1a1a !important;
+}
+
+body.light-theme .prompt-preview code {
+    background: #e0e0e0;
+    color: #d32f2f;
+}
+
+body.light-theme .prompt-preview pre {
+    background: #f0f0f0;
+    border-color: #ddd;
+}
+
+body.light-theme .prompt-preview em,
+body.light-theme .prompt-preview i {
+    color: #444 !important;
+}
+
+body.light-theme .prompt-preview ul,
+body.light-theme .prompt-preview ol {
+    color: #1a1a1a !important;
+}
+
+body.light-theme .prompt-preview h1,
+body.light-theme .prompt-preview h2 {
+    border-bottom-color: #ddd !important;
+}
+
+/* Исправление кнопки Начать диалог (если она использует .btn-start) */
+body.light-theme #startBtn {
+    background: #f5f5f5 !important;
+    color: #333 !important;
+    border: 1px solid #ddd !important;
+}
+
+body.light-theme #startBtn:hover {
+    background: #e0e0e0 !important;
+}
+
+/* Удаление черной полоски (resizer) */
+body.light-theme .resizer {
+    background-color: #e0e0e0 !important;
+    border-left: 1px solid #d0d0d0;
+    border-right: 1px solid #d0d0d0;
 }
 
 * {
