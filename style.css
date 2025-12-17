@@ -156,23 +156,42 @@ body.light-theme .modal-content h3 {
     color: #1a1a1a;
 }
 
+/* Чистый дизайн настроек для светлой темы */
 body.light-theme .settings-section {
-    border-color: #eee;
-}
-
-body.light-theme .settings-section label {
-    color: #1a1a1a;
+    border-bottom: none !important; /* Убираем разделители */
 }
 
 body.light-theme .settings-section input {
-    background: #f5f5f5;
-    border-color: #ddd;
-    color: #1a1a1a;
+    background: #f5f5f5 !important;
+    border: none !important; /* Убираем рамки полей */
+}
+
+body.light-theme .settings-section input:focus {
+    background: #ffffff !important;
+    box-shadow: 0 0 0 2px rgba(127, 150, 255, 0.2) !important;
 }
 
 body.light-theme .theme-switcher {
-    background: #f0f0f0;
-    border-color: #ddd;
+    background: #f5f5f5 !important;
+    border: none !important; /* Убираем рамку переключателя */
+}
+
+body.light-theme .btn-export-settings {
+    background: #f5f5f5 !important;
+    border: none !important; /* Убираем рамки кнопок экспорта */
+}
+
+body.light-theme .btn-export-settings:hover {
+    background: #e0e0e0 !important;
+}
+
+body.light-theme .btn-icon-small {
+    border: none !important; /* Убираем рамку кнопки смены роли */
+    background: #f5f5f5 !important;
+}
+
+body.light-theme .btn-icon-small:hover {
+    background: #e0e0e0 !important;
 }
 
 body.light-theme .theme-label {
