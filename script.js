@@ -36,6 +36,9 @@ const TEXT_EXTENSIONS = ['.txt', '.md', '.json', '.xml', '.csv', '.html', '.htm'
 
 // Utility function for fetch with timeout
 async function fetchWithTimeout(url, options = {}, timeoutMs = 300000) {
+    console.log(`[Fetch] Starting request to: ${url.substring(0, 50)}... with timeout: ${timeoutMs/1000}s`);
+    const startTime = Date.now();
+    
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -46,9 +49,14 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 300000) {
         });
         
         clearTimeout(timeoutId);
+        const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+        console.log(`[Fetch] Request completed in ${duration}s`);
         return response;
         
     } catch (error) {
+        const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+        console.error(`[Fetch] Request failed after ${duration}s:`, error);
+        
         if (error.name === 'AbortError') {
             throw new Error(`Таймаут запроса (${timeoutMs/1000}с). Проверьте n8n workflow.`);
         }
@@ -991,8 +999,11 @@ async function rateChat() {
         rateChatBtn.classList.add('rated');
         
     } catch (error) {
+        console.error('Rating error details:', error);
+        console.error('Error type:', error.name);
+        console.error('Error message:', error.message);
         loadingMsg.remove();
-        addMessage(`Ошибка оценки: ${error.message}`, 'error', false);
+        addMessage(`Ошибка оценки: ${error.message}. Проверьте консоль (F12) для деталей.`, 'error', false);
     } finally {
         rateChatBtn.disabled = false;
         rateChatBtn.classList.remove('loading');
