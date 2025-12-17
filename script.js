@@ -34,6 +34,36 @@ let raterSessionId = baseSessionId + '_rater';
 
 const TEXT_EXTENSIONS = ['.txt', '.md', '.json', '.xml', '.csv', '.html', '.htm', '.rtf', '.log'];
 
+// Utility function for fetch with timeout and retry
+async function fetchWithTimeout(url, options = {}, timeoutMs = 60000, retries = 2) {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+            
+            const response = await fetch(url, {
+                ...options,
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            return response;
+            
+        } catch (error) {
+            // If this is the last attempt, throw the error
+            if (attempt === retries) {
+                if (error.name === 'AbortError') {
+                    throw new Error(`Таймаут запроса (${timeoutMs/1000}с). Проверьте n8n workflow.`);
+                }
+                throw error;
+            }
+            
+            // Wait before retrying (exponential backoff)
+            await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+        }
+    }
+}
+
 // DOM Elements
 const chatMessages = document.getElementById('chatMessages');
 const userInput = document.getElementById('userInput');
@@ -580,13 +610,13 @@ async function improvePromptWithAI() {
     }, 2500);
     
     try {
-        const response = await fetch(AI_IMPROVE_WEBHOOK_URL, {
+        const response = await fetchWithTimeout(AI_IMPROVE_WEBHOOK_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 userMessage: `Изначальный промпт:\n\n${currentPrompt}\n\n---\n\nЗапрос на улучшение: ${improvementRequest}\n\n---\n\nВАЖНО: Верни ПОЛНЫЙ текст улучшенного промпта. Подсвети изменения так:\n1. Удаленный/измененный текст оберни в ~~ (например: ~~старый текст~~)\n2. Новый/добавленный текст оберни в ++ (например: ++новый текст++)\n3. Остальной текст оставь без изменений.\nНе используй markdown код-блоки.`
             })
-        });
+        }, 60000, 2);
         
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
@@ -812,7 +842,7 @@ async function sendMessage() {
             dialogHistory += `${role}: ${msg.content}\n\n`;
         });
         
-        const response = await fetch(WEBHOOK_URL, {
+        const response = await fetchWithTimeout(WEBHOOK_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -821,7 +851,7 @@ async function sendMessage() {
                 dialogHistory: dialogHistory.trim(),
                 sessionId: clientSessionId
             })
-        });
+        }, 60000, 2);
         
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
@@ -863,7 +893,7 @@ async function startConversationHandler() {
     
     try {
         const systemPrompt = systemPromptInput.value.trim();
-        const response = await fetch(WEBHOOK_URL, {
+        const response = await fetchWithTimeout(WEBHOOK_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -872,7 +902,7 @@ async function startConversationHandler() {
                 dialogHistory: '',
                 sessionId: clientSessionId
             })
-        });
+        }, 60000, 2);
         
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
@@ -929,7 +959,7 @@ async function rateChat() {
         
         const raterPrompt = raterPromptInput.value.trim() || 'Оцените качество диалога.';
         
-        const response = await fetch(RATE_WEBHOOK_URL, {
+        const response = await fetchWithTimeout(RATE_WEBHOOK_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -937,7 +967,7 @@ async function rateChat() {
                 raterPrompt: raterPrompt,
                 sessionId: raterSessionId
             })
-        });
+        }, 60000, 2); // 60 second timeout, 2 retries
         
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
@@ -1021,13 +1051,13 @@ function addImproveFromRatingButton(dialogText, ratingText) {
         try {
             const currentManagerPrompt = getActiveContent('manager');
             
-            const response = await fetch(AI_IMPROVE_WEBHOOK_URL, {
+            const response = await fetchWithTimeout(AI_IMPROVE_WEBHOOK_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     userMessage: `Текущая инструкция ИИ-менеджера:\n\n${currentManagerPrompt}\n\n---\n\nДиалог менеджера с клиентом:\n\n${dialogText}\n\n---\n\nОценка диалога:\n\n${ratingText}\n\n---\n\nНа основе этого диалога и его оценки улучши инструкцию менеджера. Учти ошибки, которые были допущены, и добавь рекомендации, чтобы избежать их в будущем.\n\nВАЖНО: Верни ПОЛНЫЙ текст улучшенного промпта. Подсвети изменения так:\n1. Удаленный/измененный текст оберни в ~~ (например: ~~старый текст~~)\n2. Новый/добавленный текст оберни в ++ (например: ++новый текст++)\n3. Остальной текст оставь без изменений.\nНе используй markdown код-блоки.`
                 })
-            });
+            }, 60000, 2);
             
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             
@@ -1102,7 +1132,7 @@ async function generateAIResponse() {
         const basePrompt = managerPromptInput.value.trim();
         const fullPrompt = `Тебя зовут ${managerName}.\n\n${basePrompt}`;
         
-        const response = await fetch(MANAGER_ASSISTANT_WEBHOOK_URL, {
+        const response = await fetchWithTimeout(MANAGER_ASSISTANT_WEBHOOK_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1111,7 +1141,7 @@ async function generateAIResponse() {
                 dialogHistory: dialogHistory.trim(),
                 sessionId: managerSessionId
             })
-        });
+        }, 60000, 2);
         
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
