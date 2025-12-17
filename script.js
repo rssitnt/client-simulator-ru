@@ -991,9 +991,37 @@ if (savedTheme === 'light') {
 
 // Change role button
 changeRoleBtn.addEventListener('click', () => {
-    roleChangePassword.style.display = 'block';
-    roleChangePasswordInput.focus();
+    const currentRole = localStorage.getItem('userRole') || 'user';
+    
+    if (currentRole === 'admin') {
+        // Admin -> User (no password needed)
+        if (confirm('Вы уверены, что хотите переключиться на роль Пользователя?')) {
+            switchRole('user');
+        }
+    } else {
+        // User -> Admin (require password)
+        roleChangePassword.style.display = 'block';
+        roleChangePasswordInput.focus();
+    }
 });
+
+// Helper function to switch role
+function switchRole(newRole) {
+    localStorage.setItem('userRole', newRole);
+    selectedRole = newRole;
+    
+    currentRoleDisplay.textContent = `Текущая роль: ${newRole === 'admin' ? 'Администратор 🔑' : 'Пользователь 👤'}`;
+    updateUserNameDisplay();
+    applyRoleRestrictions();
+    renderVariations();
+    
+    // Hide password UI if open
+    roleChangePassword.style.display = 'none';
+    roleChangePasswordInput.value = '';
+    roleChangeError.style.display = 'none';
+    
+    showCopyNotification(`Роль изменена на ${newRole === 'admin' ? 'Администратор' : 'Пользователь'}!`);
+}
 
 // Cancel role change
 roleChangeCancelBtn.addEventListener('click', () => {
@@ -1002,27 +1030,12 @@ roleChangeCancelBtn.addEventListener('click', () => {
     roleChangeError.style.display = 'none';
 });
 
-// Confirm role change
+// Confirm role change (for User -> Admin)
 roleChangeConfirmBtn.addEventListener('click', () => {
     const password = roleChangePasswordInput.value.trim();
     
     if (password === ADMIN_PASSWORD) {
-        const currentRole = localStorage.getItem('userRole') || 'user';
-        const newRole = currentRole === 'admin' ? 'user' : 'admin';
-        
-        localStorage.setItem('userRole', newRole);
-        selectedRole = newRole;
-        
-        currentRoleDisplay.textContent = `Текущая роль: ${newRole === 'admin' ? 'Администратор 🔑' : 'Пользователь 👤'}`;
-        updateUserNameDisplay();
-        applyRoleRestrictions();
-        renderVariations();
-        
-        roleChangePassword.style.display = 'none';
-        roleChangePasswordInput.value = '';
-        roleChangeError.style.display = 'none';
-        
-        showCopyNotification(`Роль изменена на ${newRole === 'admin' ? 'Администратор' : 'Пользователь'}!`);
+        switchRole('admin');
     } else {
         roleChangeError.style.display = 'block';
         roleChangePasswordInput.value = '';
