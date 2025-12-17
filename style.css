@@ -48,7 +48,14 @@ body.light-theme .panel-header {
 }
 
 body.light-theme .chat-messages {
-    background: #fafafa;
+    background: #ffffff !important; /* Делаем полностью белым */
+    border: none !important;
+    box-shadow: none !important;
+}
+
+body.light-theme .chat-panel {
+    background: #ffffff !important;
+    border: none !important;
 }
 
 body.light-theme .message.user {
@@ -200,8 +207,9 @@ body.light-theme .dropdown-item {
 }
 
 body.light-theme .start-conversation {
-    background: #ffffff;
-    border-color: #ddd;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
 }
 
 body.light-theme .btn-start {
@@ -359,6 +367,14 @@ body.light-theme ::-webkit-scrollbar-thumb {
 
 body.light-theme ::-webkit-scrollbar-thumb:hover {
     background-color: #aaa !important;
+}
+
+/* Кнопка старта */
+body.light-theme #startBtn {
+    background: #f5f5f5 !important;
+    color: #333 !important;
+    border: none !important; /* Убрал рамку */
+    box-shadow: none !important;
 }
 
 body.light-theme #startBtn:hover {
