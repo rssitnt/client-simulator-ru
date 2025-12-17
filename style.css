@@ -2083,12 +2083,21 @@ body.light-theme .btn-icon:hover {
 .settings-section input[type="password"] {
     width: 100%;
     background: #2a2a2a;
-    border: none; /* Убрана обводка */
+    border: none;
     border-radius: 8px;
     padding: 10px 12px;
     color: #fff;
     font-size: 14px;
     margin-bottom: 10px;
+}
+
+/* Адаптивное поле ввода имени */
+.auto-width-input {
+    width: auto !important;
+    min-width: 80px;
+    max-width: 100%;
+    text-align: center;
+    font-size: 16px !important;
 }
 
 .settings-section input:focus {

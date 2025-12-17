@@ -111,7 +111,6 @@ const aiImproveApply = document.getElementById('aiImproveApply');
 // Settings Modal Elements
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsModal = document.getElementById('settingsModal');
-const settingsModalClose = document.getElementById('settingsModalClose');
 const currentUserName = document.getElementById('currentUserName');
 const settingsNameInput = document.getElementById('settingsNameInput');
 const themeToggle = document.getElementById('themeToggle');
@@ -961,7 +960,6 @@ aiImproveInput.addEventListener('keydown', (e) => {
 // ============ SETTINGS MODAL EVENT LISTENERS ============
 
 settingsBtn.addEventListener('click', showSettingsModal);
-settingsModalClose.addEventListener('click', hideSettingsModal);
 
 // Close settings modal on overlay click
 settingsModal.addEventListener('click', (e) => {
@@ -970,16 +968,34 @@ settingsModal.addEventListener('click', (e) => {
     }
 });
 
-// Save name
+// Автоподстройка ширины поля ввода
+function autoResizeInput(input) {
+    const tempSpan = document.createElement('span');
+    tempSpan.style.visibility = 'hidden';
+    tempSpan.style.position = 'absolute';
+    tempSpan.style.whiteSpace = 'pre';
+    tempSpan.style.font = getComputedStyle(input).font;
+    tempSpan.textContent = input.value || input.placeholder;
+    document.body.appendChild(tempSpan);
+    input.style.width = (tempSpan.offsetWidth + 24) + 'px'; // +24 для padding
+    document.body.removeChild(tempSpan);
+}
+
 // Автосохранение имени при вводе
-settingsNameInput.addEventListener('input', debounce(() => {
-    const newName = settingsNameInput.value.trim();
-    if (newName) {
-        localStorage.setItem('managerName', newName);
-        managerNameInput.value = newName;
-        updateUserNameDisplay();
-    }
-}, 500));
+settingsNameInput.addEventListener('input', () => {
+    autoResizeInput(settingsNameInput);
+    debounce(() => {
+        const newName = settingsNameInput.value.trim();
+        if (newName) {
+            localStorage.setItem('managerName', newName);
+            managerNameInput.value = newName;
+            updateUserNameDisplay();
+        }
+    }, 500)();
+});
+
+// Инициализация ширины при загрузке
+setTimeout(() => autoResizeInput(settingsNameInput), 100);
 
 // Theme toggle
 themeToggle.addEventListener('change', () => {
