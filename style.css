@@ -368,8 +368,7 @@ body.light-theme #startBtn:hover {
 /* Удаление черной полоски (resize-handle) */
 body.light-theme .resize-handle {
     background: #e0e0e0 !important; /* Светло-серый фон */
-    border-left: 1px solid #d0d0d0;
-    border-right: 1px solid #d0d0d0;
+    border: none !important; /* Убираем границы */
     width: 6px !important;
 }
 
