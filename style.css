@@ -88,8 +88,8 @@ body.light-theme .btn-export {
 
 body.light-theme .btn-icon:hover,
 body.light-theme .btn-export:hover {
-    background: #f0f0f0;
-    color: #1a1a1a;
+    background: transparent !important;
+    color: #333 !important; /* Тёмный при наведении в светлой теме */
 }
 
 body.light-theme .instruction-tabs {
@@ -621,10 +621,15 @@ body {
     border-color: #444;
 }
 
+.btn-icon.btn-export {
+    color: #888; /* Серо-светлый по умолчанию */
+}
+
 .btn-icon.btn-export:hover {
     background: transparent;
     border-color: transparent;
-    transform: scale(1.15);
+    color: #fff; /* Белый при наведении */
+    transform: none; /* Убрана анимация увеличения */
 }
 
 .chat-messages {

@@ -262,7 +262,7 @@ function debounce(func, wait) {
     return function executedFunction(...args) {
             clearTimeout(timeout);
         timeout = setTimeout(() => func(...args), wait);
-    };
+        };
 }
 
 function unescapeMarkdown(text) {
@@ -398,7 +398,7 @@ function renderVariations() {
                     v.name = newName.trim();
                     renderVariations();
                     savePromptsToFirebase();
-                }
+                    }
             });
         }
         
@@ -423,7 +423,7 @@ function renderVariations() {
         addBtn.title = 'Добавить вариант промпта';
         addBtn.addEventListener('click', () => addVariation(role));
         promptVariationsContainer.appendChild(addBtn);
-    }
+                    }
 }
 
 function addVariation(role) {
@@ -444,15 +444,15 @@ function addVariation(role) {
     });
     setActiveVariation(role, newId);
     savePromptsToFirebase();
-}
-
+                    }
+                    
 function deleteVariation(role, id) {
     const index = promptsData[role].variations.findIndex(v => v.id === id);
     if (index > -1) {
         promptsData[role].variations.splice(index, 1);
         if (promptsData[role].activeId === id) {
             promptsData[role].activeId = promptsData[role].variations[0].id;
-        }
+                    }
         renderVariations();
         updateEditorContent(role);
         savePromptsToFirebase();
@@ -553,7 +553,7 @@ function loadPrompts() {
         applyRoleRestrictions();
     } else {
         showNameModal();
-    }
+}
 
     if (db) {
         try {
@@ -581,7 +581,7 @@ function loadPrompts() {
                 } else {
                     initPromptsData({});
                     savePromptsToFirebaseNow();
-                }
+        }
             }, (error) => {
                 console.error('Firebase read error:', error);
                 initPromptsData({});
@@ -1152,8 +1152,8 @@ async function sendMessage() {
             body: JSON.stringify({
                 chatInput: userMessage,
                 systemPrompt: systemPrompt || 'Вы — клиент.',
-                dialogHistory: dialogHistory.trim(),
-                sessionId: clientSessionId
+            dialogHistory: dialogHistory.trim(),
+            sessionId: clientSessionId
             })
         });
         
@@ -1498,7 +1498,7 @@ function exportChat(format = 'txt') {
     else if (format === 'txt') exportToTxt(messages, filename);
     else if (format === 'docx') exportToDocx(messages, filename);
     else if (format === 'rtf') exportToRtf(messages, filename);
-}
+    }
 
 async function copyMessagesToClipboard(messages) {
     let chatText = messages.map(msg => `${msg.role}: ${msg.content}`).join('\n\n');
@@ -1577,7 +1577,7 @@ function exportCurrentPrompt(format = 'txt') {
     else if (format === 'txt') { const blob = new Blob([promptText], { type: 'text/plain;charset=utf-8' }); saveAs(blob, fullFileName + '.txt'); }
     else if (format === 'docx') exportPromptToDocx(promptText, fullFileName);
     else if (format === 'rtf') exportPromptToRtf(promptText, fullFileName);
-}
+    }
 
 function parseStyledText(text, TextRun) {
     const runs = [];
@@ -1705,8 +1705,8 @@ async function copyPromptToClipboard(text, label) {
     } catch (err) {
         alert('Ошибка копирования');
     }
-}
-
+    }
+    
 // ============ MARKDOWN RENDERING ============
 
 function renderMarkdown(text) {
@@ -1746,20 +1746,20 @@ const syncWYSIWYGDebounced = debounce(function(previewElement, textarea, callbac
         const markdown = turndownService.turndown(previewElement.innerHTML);
         textarea.value = markdown;
         if (callback) callback(markdown);
-    }
-    
+        }
+        
     // Reset editing flag after sync is complete
     clearTimeout(editingTimeout);
     editingTimeout = setTimeout(() => {
         isUserEditing = false;
     }, 2000);
 }, 300);
-
+        
 // Force immediate sync of current editor content
 function syncCurrentEditorNow() {
     const role = getActiveRole();
     let preview, textarea;
-    
+        
     if (role === 'client') {
         preview = document.getElementById('systemPromptPreview');
         textarea = systemPromptInput;
@@ -1769,7 +1769,7 @@ function syncCurrentEditorNow() {
     } else if (role === 'rater') {
         preview = document.getElementById('raterPromptPreview');
         textarea = raterPromptInput;
-    }
+        }
     
     if (turndownService && preview && textarea) {
         const markdown = turndownService.turndown(preview.innerHTML);
@@ -1784,12 +1784,12 @@ function setupWYSIWYG(previewElement, textarea, callback) {
     previewElement.addEventListener('input', () => {
         isUserEditing = true;
         syncWYSIWYGDebounced(previewElement, textarea, callback);
-    });
-    
+});
+
     previewElement.addEventListener('focus', () => {
         isUserEditing = true;
-    });
-    
+});
+
     previewElement.addEventListener('blur', () => {
         // Delay resetting the flag to allow sync to complete
         setTimeout(() => {
@@ -1909,8 +1909,8 @@ function handleFileDrop(file, textarea, previewElement) {
                 reader.readAsText(file, 'UTF-8');
             } else {
         alert('Поддерживаемые форматы: .txt, .md, .docx, .rtf');
-    }
-}
+            }
+        }
 
 function setupDragAndDrop(textarea) {
     textarea.addEventListener('dragover', (e) => { 
@@ -1969,7 +1969,7 @@ aiAssistBtn.addEventListener('click', generateAIResponse);
 exportChatBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     document.getElementById('exportMenu').classList.toggle('show');
-});
+    });
 
 exportCurrentPromptBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -1985,7 +1985,7 @@ document.querySelectorAll('.dropdown-item[data-format]').forEach(item => {
     item.addEventListener('click', (e) => {
         const format = e.target.closest('.dropdown-item')?.dataset.format;
         if (format) exportChat(format);
-    });
+            });
 });
 
 document.querySelectorAll('.dropdown-item[data-prompt-format]').forEach(item => {
@@ -2137,9 +2137,9 @@ document.querySelectorAll('.toolbar-btn').forEach(btn => {
         e.preventDefault();
         const action = btn.dataset.action;
         const preview = document.querySelector('.instruction-editor.active .prompt-preview');
-        if (!preview) return;
-        preview.focus();
-        
+    if (!preview) return;
+    preview.focus();
+    
         if (action === 'bold') document.execCommand('bold', false, null);
         else if (action === 'italic') document.execCommand('italic', false, null);
         else if (action === 'strike') document.execCommand('strikeThrough', false, null);
@@ -2152,7 +2152,7 @@ document.querySelectorAll('.toolbar-btn').forEach(btn => {
         else if (action === 'hr') document.execCommand('insertHorizontalRule', false, null);
     });
 });
-
+                
 // Cloud save button - REMOVED
 // Autosave is handled by debounce logic
 
@@ -2176,7 +2176,7 @@ setupDragAndDropForPreview(systemPromptPreviewEl, systemPromptInput);
 setupDragAndDropForPreview(managerPromptPreviewEl, managerPromptInput);
 setupDragAndDropForPreview(raterPromptPreviewEl, raterPromptInput);
 
-setTimeout(() => {
+        setTimeout(() => {
     initWYSIWYGMode();
     renderVariations();
 }, 200);
