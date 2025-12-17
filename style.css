@@ -552,6 +552,7 @@ body {
     gap: 10px;
     align-items: center;
     height: 100%;
+    margin-left: auto; /* Прижать вправо */
 }
 
 /* Export buttons always visible */
@@ -1840,6 +1841,13 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
     background: #2a2a2a !important;
     border-color: var(--color-accent) !important;
     color: var(--color-accent) !important;
+}
+
+/* Настройки для светлой темы */
+body.light-theme .btn-settings:hover {
+    background: transparent !important;
+    border-color: #ccc !important;
+    color: #333 !important;
 }
 
 .btn-icon-small {
