@@ -570,7 +570,7 @@ body {
 .btn-icon {
     padding: 8px;
     background: transparent;
-    border: 1px solid transparent;
+    border: none !important; /* Убираем border */
     color: #e0e0e0;
     border-radius: 4px;
     cursor: pointer;
@@ -1828,26 +1828,46 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
     border-color: var(--color-accent);
 }
 
-/* Settings Button */
-.btn-settings {
-    background: transparent !important;
-    border: 1px solid #444 !important;
-    color: #ccc !important;
-    padding: 8px !important;
-    transition: all 0.2s !important;
+/* Floating Settings Button */
+.btn-settings-floating {
+    position: fixed;
+    top: 15px;
+    right: 20px;
+    z-index: 1001; /* Поверх панелей */
+    background: transparent;
+    border: none !important; /* Убираем обводку */
+    color: #888;
+    padding: 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: color 0.2s;
 }
 
-.btn-settings:hover {
-    background: #2a2a2a !important;
-    border-color: var(--color-accent) !important;
-    color: var(--color-accent) !important;
+.btn-settings-floating:hover {
+    color: #fff;
+    background: transparent !important;
 }
 
-/* Настройки для светлой темы */
-body.light-theme .btn-settings:hover {
-    background: transparent !important;
-    border-color: #ccc !important;
-    color: #333 !important;
+body.light-theme .btn-settings-floating {
+    color: #666;
+}
+
+body.light-theme .btn-settings-floating:hover {
+    color: #333;
+}
+
+/* Убираем обводку у всех иконок-кнопок */
+.btn-icon {
+    border: none !important;
+    background: transparent;
+}
+
+.btn-icon:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+body.light-theme .btn-icon:hover {
+    background: rgba(0, 0, 0, 0.05);
 }
 
 .btn-icon-small {
