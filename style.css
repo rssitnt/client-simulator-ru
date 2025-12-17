@@ -1940,6 +1940,14 @@ body.light-theme .btn-settings-floating:hover {
     color: #333;
 }
 
+/* Мобильная версия - кнопки под табами */
+@media (max-width: 768px) {
+    .btn-clear-floating,
+    .btn-settings-floating {
+        top: 58px; /* Под табами */
+    }
+}
+
 /* Убираем обводку у всех иконок-кнопок */
 .btn-icon {
     border: none !important;
