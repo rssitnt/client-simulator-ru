@@ -545,7 +545,7 @@ body {
 }
 
 .panel-header {
-    padding: 16px 20px;
+    padding: 16px 60px 16px 20px; /* Увеличил отступ справа для кнопки настроек */
     background: #0F0F0F;
     display: flex;
     justify-content: space-between;
@@ -1847,11 +1847,11 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
 /* Floating Settings Button */
 .btn-settings-floating {
     position: fixed;
-    top: 15px;
-    right: 20px;
-    z-index: 1001; /* Поверх панелей */
+    top: 12px;
+    right: 12px; /* Чуть ближе к краю */
+    z-index: 2000; /* Поверх всего, даже модалок (почти) */
     background: transparent;
-    border: none !important; /* Убираем обводку */
+    border: none !important;
     color: #888;
     padding: 8px;
     border-radius: 8px;
