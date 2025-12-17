@@ -1350,6 +1350,7 @@ body {
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.3s, visibility 0.3s;
+    padding: 20px; /* Добавил отступы */
 }
 
 .modal-overlay.active {
@@ -1475,6 +1476,10 @@ body {
 /* Settings Modal */
 .settings-modal {
     max-width: 500px !important;
+    width: 90% !important; /* Для мобильных */
+    max-height: 90vh; /* Ограничение по высоте */
+    overflow-y: auto; /* Прокрутка если не влезает */
+    padding: 24px !important;
 }
 
 .settings-section {
