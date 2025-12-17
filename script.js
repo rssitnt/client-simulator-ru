@@ -2153,19 +2153,8 @@ document.querySelectorAll('.toolbar-btn').forEach(btn => {
     });
 });
 
-// Cloud save button
-const saveToCloudBtn = document.getElementById('saveToCloudBtn');
-if (saveToCloudBtn) {
-    saveToCloudBtn.addEventListener('click', () => {
-        savePromptsToFirebaseNow();
-        saveToCloudBtn.classList.add('saving');
-        setTimeout(() => {
-            saveToCloudBtn.classList.remove('saving');
-            saveToCloudBtn.classList.add('saved');
-            setTimeout(() => saveToCloudBtn.classList.remove('saved'), 1500);
-        }, 500);
-    });
-}
+// Cloud save button - REMOVED
+// Autosave is handled by debounce logic
 
 // ============ INITIALIZATION ============
 
