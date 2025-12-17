@@ -239,9 +239,7 @@ body.light-theme .btn-icon-small:hover {
     background: #e0e0e0 !important;
 }
 
-body.light-theme .theme-icon {
-    opacity: 0.8;
-}
+/* Old light-theme theme-icon styles removed */
 
 body.light-theme .btn-modal-cancel {
     background: #f0f0f0;
@@ -2109,75 +2107,69 @@ body.light-theme .btn-icon:hover {
     margin-top: 8px;
 }
 
-.theme-icon {
-    font-size: 20px;
-    user-select: none;
-    cursor: default;
-    line-height: 1;
-    display: flex;
-    align-items: center;
-    opacity: 0.7;
+/* Old theme-icon styles removed */
 }
 
-.theme-icon:hover {
-    opacity: 1;
-}
-
-.switch {
+/* Переключатель темы с иконками внутри */
+.switch-icons {
     position: relative;
     display: inline-block;
-    width: 46px;
-    height: 24px;
+    width: 52px;
+    height: 28px;
     flex-shrink: 0;
     margin: 0;
-    vertical-align: middle; /* Вертикальное выравнивание */
+    vertical-align: middle;
 }
 
-.switch input {
+.switch-icons input {
     opacity: 0;
     width: 0;
     height: 0;
 }
 
-.slider {
+.slider-icons {
     position: absolute;
     cursor: pointer;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: #444;
+    background-color: #333;
     transition: 0.3s;
-    border-radius: 24px;
+    border-radius: 28px;
 }
 
-.slider:before {
+.slider-icons:before {
     position: absolute;
-    content: "";
-    height: 18px;
-    width: 18px;
+    content: "🌙";
+    font-size: 14px;
+    line-height: 22px;
+    text-align: center;
+    height: 22px;
+    width: 22px;
     left: 3px;
     bottom: 3px;
-    background-color: #fff;
+    background-color: #1a1a1a;
     transition: 0.3s;
     border-radius: 50%;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.4);
 }
 
-input:checked + .slider {
-    background-color: var(--color-accent);
+input:checked + .slider-icons {
+    background-color: #e0e0e0;
 }
 
-input:checked + .slider:before {
-    transform: translateX(22px);
+input:checked + .slider-icons:before {
+    content: "☀️";
+    transform: translateX(24px);
+    background-color: #fff;
 }
 
-.slider:hover {
-    background-color: #555;
+.slider-icons:hover {
+    background-color: #444;
 }
 
-input:checked + .slider:hover {
-    background-color: var(--color-accent-hover);
+input:checked + .slider-icons:hover {
+    background-color: #d0d0d0;
 }
 
 /* Hide old export buttons - moved to settings */
