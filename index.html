@@ -88,6 +88,67 @@
         </div>
     </div>
 
+    <!-- Модальное окно настроек -->
+    <div id="settingsModal" class="modal-overlay">
+        <div class="modal-content settings-modal">
+            <button class="modal-close" id="settingsModalClose">&times;</button>
+            <h3>⚙️ Настройки</h3>
+            
+            <div class="settings-section">
+                <label>Имя:</label>
+                <input type="text" id="settingsNameInput" placeholder="Ваше имя" maxlength="50">
+                <button id="settingsNameSave" class="btn-modal-submit">Сохранить имя</button>
+            </div>
+
+            <div class="settings-section">
+                <label>Тема:</label>
+                <div class="theme-switcher">
+                    <span class="theme-label">Темная</span>
+                    <label class="switch">
+                        <input type="checkbox" id="themeToggle">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="theme-label">Светлая</span>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <label>Роль:</label>
+                <div id="currentRoleDisplay" style="color: #888; margin-bottom: 10px;"></div>
+                <button id="changeRoleBtn" class="btn-modal-cancel">Сменить роль</button>
+                
+                <div id="roleChangePassword" style="display: none; margin-top: 15px;">
+                    <input type="password" id="roleChangePasswordInput" placeholder="Введите пароль для смены роли" maxlength="20">
+                    <p id="roleChangeError" style="color: red; font-size: 14px; display: none; margin-top: 10px;">Неверный пароль!</p>
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <button id="roleChangeCancelBtn" class="btn-modal-cancel">Отмена</button>
+                        <button id="roleChangeConfirmBtn" class="btn-modal-submit">Подтвердить</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <label>Экспорт:</label>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button id="exportChatSettings" class="btn-export-settings">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M.5 9.9a.5.5 0 01.5.5v2.5a1 1 0 001 1h12a1 1 0 001-1v-2.5a.5.5 0 011 0v2.5a2 2 0 01-2 2H2a2 2 0 01-2-2v-2.5a.5.5 0 01.5-.5z"/>
+                            <path d="M7.646 1.146a.5.5 0 01.708 0l3 3a.5.5 0 01-.708.708L8.5 2.707V10.5a.5.5 0 01-1 0V2.707L5.354 4.854a.5.5 0 11-.708-.708l3-3z"/>
+                        </svg>
+                        Экспорт диалога
+                    </button>
+                    <button id="exportPromptSettings" class="btn-export-settings">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M.5 9.9a.5.5 0 01.5.5v2.5a1 1 0 001 1h12a1 1 0 001-1v-2.5a.5.5 0 011 0v2.5a2 2 0 01-2 2H2a2 2 0 01-2-2v-2.5a.5.5 0 01.5-.5z"/>
+                            <path d="M7.646 1.146a.5.5 0 01.708 0l3 3a.5.5 0 01-.708.708L8.5 2.707V10.5a.5.5 0 01-1 0V2.707L5.354 4.854a.5.5 0 11-.708-.708l3-3z"/>
+                        </svg>
+                        Экспорт инструкции
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="container">
         <!-- Tabs для мобильных устройств -->
         <div class="mobile-tabs">
@@ -99,9 +160,15 @@
         <!-- Левая панель - Чат -->
         <div class="chat-panel panel" id="chatPanel" data-panel="chat">
             <div class="panel-header">
-                <div class="manager-name-container">
-                    <input type="text" id="managerName" placeholder="Имя менеджера" maxlength="50">
-                </div>
+                <button id="settingsBtn" class="btn-icon btn-settings" title="Настройки">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M12 1v6m0 6v6m6-12h-6m-6 0h6m6 6h-6m-6 0h6"></path>
+                        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"></path>
+                    </svg>
+                </button>
+                <span id="currentUserName" style="margin-left: 12px; color: #fff; font-size: 15px;"></span>
+                <input type="hidden" id="managerName">
                 <div class="header-buttons">
                     <button id="clearChat" class="btn-icon btn-export" title="Очистить чат">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">

@@ -14,6 +14,23 @@
     --color-success: #50fa7b;
 }
 
+/* Light Theme */
+body.light-theme {
+    --color-accent: #5a73e6;
+    --color-accent-hover: #4a63d6;
+    --color-bg-primary: #f5f5f5;
+    --color-bg-secondary: #ffffff;
+    --color-bg-tertiary: #f0f0f0;
+    --color-bg-input: #fafafa;
+    --color-border: #ddd;
+    --color-border-light: #e0e0e0;
+    --color-text-primary: #1a1a1a;
+    --color-text-secondary: #666;
+    --color-text-muted: #999;
+    --color-error: #d32f2f;
+    --color-success: #388e3c;
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -1438,6 +1455,161 @@ body {
     background: var(--color-accent);
     color: #fff;
     border-color: var(--color-accent);
+}
+
+/* Settings Button */
+.btn-settings {
+    background: transparent !important;
+    border: 1px solid #444 !important;
+    color: #ccc !important;
+    padding: 8px !important;
+    transition: all 0.2s !important;
+}
+
+.btn-settings:hover {
+    background: #2a2a2a !important;
+    border-color: var(--color-accent) !important;
+    color: var(--color-accent) !important;
+}
+
+/* Settings Modal */
+.settings-modal {
+    max-width: 500px !important;
+}
+
+.settings-section {
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #333;
+}
+
+.settings-section:last-child {
+    border-bottom: none;
+}
+
+.settings-section label {
+    display: block;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.settings-section input[type="text"],
+.settings-section input[type="password"] {
+    width: 100%;
+    background: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: #fff;
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+
+.settings-section input:focus {
+    outline: none;
+    border-color: var(--color-accent);
+}
+
+/* Theme Switcher */
+.theme-switcher {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.theme-label {
+    color: #888;
+    font-size: 14px;
+    user-select: none;
+}
+
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 26px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #444;
+    transition: 0.3s;
+    border-radius: 26px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: #fff;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+input:checked + .slider {
+    background-color: var(--color-accent);
+}
+
+input:checked + .slider:before {
+    transform: translateX(24px);
+}
+
+.slider:hover {
+    background-color: #555;
+}
+
+input:checked + .slider:hover {
+    background-color: var(--color-accent-hover);
+}
+
+/* Hide old export buttons - moved to settings */
+#exportChat,
+#exportCurrentPrompt {
+    display: none !important;
+}
+
+/* Export buttons in settings */
+.btn-export-settings {
+    flex: 1;
+    min-width: 180px;
+    background: #2a2a2a;
+    color: #ccc;
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s;
+}
+
+.btn-export-settings:hover {
+    background: #333;
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+}
+
+.btn-export-settings svg {
+    flex-shrink: 0;
 }
 
 /* AI Improve Button */

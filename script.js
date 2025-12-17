@@ -108,6 +108,24 @@ const aiDiffView = document.getElementById('aiDiffView');
 const aiImproveBack = document.getElementById('aiImproveBack');
 const aiImproveApply = document.getElementById('aiImproveApply');
 
+// Settings Modal Elements
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsModal = document.getElementById('settingsModal');
+const settingsModalClose = document.getElementById('settingsModalClose');
+const currentUserName = document.getElementById('currentUserName');
+const settingsNameInput = document.getElementById('settingsNameInput');
+const settingsNameSave = document.getElementById('settingsNameSave');
+const themeToggle = document.getElementById('themeToggle');
+const currentRoleDisplay = document.getElementById('currentRoleDisplay');
+const changeRoleBtn = document.getElementById('changeRoleBtn');
+const roleChangePassword = document.getElementById('roleChangePassword');
+const roleChangePasswordInput = document.getElementById('roleChangePasswordInput');
+const roleChangeCancelBtn = document.getElementById('roleChangeCancelBtn');
+const roleChangeConfirmBtn = document.getElementById('roleChangeConfirmBtn');
+const roleChangeError = document.getElementById('roleChangeError');
+const exportChatSettings = document.getElementById('exportChatSettings');
+const exportPromptSettings = document.getElementById('exportPromptSettings');
+
 let pendingImprovedPrompt = null;
 let pendingRole = null;
 let pendingName = null;
@@ -528,6 +546,9 @@ function loadPrompts() {
         selectedRole = savedRole;
         console.log(`Welcome back, ${savedManagerName} (${savedRole})`);
         
+        // Update user name display
+        updateUserNameDisplay();
+        
         // Apply role-based restrictions
         applyRoleRestrictions();
     } else {
@@ -624,6 +645,7 @@ modalNameSubmit.addEventListener('click', () => {
         // User - go straight to platform
         localStorage.setItem('userRole', 'user');
         hideNameModal();
+        updateUserNameDisplay();
         applyRoleRestrictions();
     } else {
         // Admin - ask for password
@@ -646,6 +668,7 @@ modalPasswordSubmit.addEventListener('click', () => {
         localStorage.setItem('userRole', 'admin');
         selectedRole = 'admin';
         hideNameModal();
+        updateUserNameDisplay();
         applyRoleRestrictions();
         // Reset modal for next time
         nameModalStep1.style.display = 'block';
@@ -697,6 +720,34 @@ function showAiImproveModal() {
 
 function hideAiImproveModal() {
     aiImproveModal.classList.remove('active');
+}
+
+// ============ SETTINGS MODAL FUNCTIONS ============
+
+function showSettingsModal() {
+    const savedName = localStorage.getItem('managerName') || '';
+    const userRole = localStorage.getItem('userRole') || 'user';
+    
+    settingsNameInput.value = savedName;
+    currentRoleDisplay.textContent = `Текущая роль: ${userRole === 'admin' ? 'Администратор 🔑' : 'Пользователь 👤'}`;
+    
+    // Hide password section
+    roleChangePassword.style.display = 'none';
+    roleChangePasswordInput.value = '';
+    roleChangeError.style.display = 'none';
+    
+    settingsModal.classList.add('active');
+}
+
+function hideSettingsModal() {
+    settingsModal.classList.remove('active');
+}
+
+function updateUserNameDisplay() {
+    const name = localStorage.getItem('managerName') || 'Гость';
+    const role = localStorage.getItem('userRole') || 'user';
+    const roleIcon = role === 'admin' ? '🔑' : '👤';
+    currentUserName.textContent = `${roleIcon} ${name}`;
 }
 
 const FUNNY_LOADING_MESSAGES = [
@@ -906,6 +957,90 @@ aiImproveInput.addEventListener('keydown', (e) => {
         e.preventDefault();
         improvePromptWithAI();
     }
+});
+
+// ============ SETTINGS MODAL EVENT LISTENERS ============
+
+settingsBtn.addEventListener('click', showSettingsModal);
+settingsModalClose.addEventListener('click', hideSettingsModal);
+
+// Save name
+settingsNameSave.addEventListener('click', () => {
+    const newName = settingsNameInput.value.trim();
+    if (newName) {
+        localStorage.setItem('managerName', newName);
+        managerNameInput.value = newName;
+        updateUserNameDisplay();
+        showCopyNotification('Имя обновлено!');
+    }
+});
+
+// Theme toggle
+themeToggle.addEventListener('change', () => {
+    const isLight = themeToggle.checked;
+    document.body.classList.toggle('light-theme', isLight);
+    localStorage.setItem('theme', isLight ? 'light' : 'dark');
+});
+
+// Load saved theme
+const savedTheme = localStorage.getItem('theme');
+if (savedTheme === 'light') {
+    themeToggle.checked = true;
+    document.body.classList.add('light-theme');
+}
+
+// Change role button
+changeRoleBtn.addEventListener('click', () => {
+    roleChangePassword.style.display = 'block';
+    roleChangePasswordInput.focus();
+});
+
+// Cancel role change
+roleChangeCancelBtn.addEventListener('click', () => {
+    roleChangePassword.style.display = 'none';
+    roleChangePasswordInput.value = '';
+    roleChangeError.style.display = 'none';
+});
+
+// Confirm role change
+roleChangeConfirmBtn.addEventListener('click', () => {
+    const password = roleChangePasswordInput.value.trim();
+    
+    if (password === ADMIN_PASSWORD) {
+        const currentRole = localStorage.getItem('userRole') || 'user';
+        const newRole = currentRole === 'admin' ? 'user' : 'admin';
+        
+        localStorage.setItem('userRole', newRole);
+        selectedRole = newRole;
+        
+        currentRoleDisplay.textContent = `Текущая роль: ${newRole === 'admin' ? 'Администратор 🔑' : 'Пользователь 👤'}`;
+        updateUserNameDisplay();
+        applyRoleRestrictions();
+        renderVariations();
+        
+        roleChangePassword.style.display = 'none';
+        roleChangePasswordInput.value = '';
+        roleChangeError.style.display = 'none';
+        
+        showCopyNotification(`Роль изменена на ${newRole === 'admin' ? 'Администратор' : 'Пользователь'}!`);
+    } else {
+        roleChangeError.style.display = 'block';
+        roleChangePasswordInput.value = '';
+        roleChangePasswordInput.style.borderColor = '#ff5555';
+        setTimeout(() => {
+            roleChangePasswordInput.style.borderColor = '';
+            roleChangeError.style.display = 'none';
+        }, 2000);
+    }
+});
+
+// Export buttons in settings
+exportChatSettings.addEventListener('click', () => {
+    exportChat();
+});
+
+exportPromptSettings.addEventListener('click', () => {
+    exportCurrentPrompt();
 });
 
 // Close modal on overlay click
