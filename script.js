@@ -34,33 +34,25 @@ let raterSessionId = baseSessionId + '_rater';
 
 const TEXT_EXTENSIONS = ['.txt', '.md', '.json', '.xml', '.csv', '.html', '.htm', '.rtf', '.log'];
 
-// Utility function for fetch with timeout and retry
-async function fetchWithTimeout(url, options = {}, timeoutMs = 300000, retries = 2) {
-    for (let attempt = 0; attempt <= retries; attempt++) {
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-            
-            const response = await fetch(url, {
-                ...options,
-                signal: controller.signal
-            });
-            
-            clearTimeout(timeoutId);
-            return response;
-            
-        } catch (error) {
-            // If this is the last attempt, throw the error
-            if (attempt === retries) {
-                if (error.name === 'AbortError') {
-                    throw new Error(`Таймаут запроса (${timeoutMs/1000}с). Проверьте n8n workflow.`);
-                }
-                throw error;
-            }
-            
-            // Wait before retrying (exponential backoff)
-            await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+// Utility function for fetch with timeout
+async function fetchWithTimeout(url, options = {}, timeoutMs = 300000) {
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        return response;
+        
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            throw new Error(`Таймаут запроса (${timeoutMs/1000}с). Проверьте n8n workflow.`);
         }
+        throw error;
     }
 }
 
