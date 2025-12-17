@@ -64,9 +64,9 @@ body.light-theme .message.user {
 }
 
 body.light-theme .message.assistant {
-    background: #ffffff;
-    border: 1px solid #eee;
-    color: #1a1a1a;
+    background: #f7f7f7 !important; /* Чуть темнее фона чата */
+    border: 1px solid #f7f7f7 !important; /* Обводка цвета заливки */
+    color: #1a1a1a !important;
 }
 
 body.light-theme .message.loading {
