@@ -1159,6 +1159,9 @@ async function rateChat() {
 }
 
 function addImproveFromRatingButton(dialogText, ratingText) {
+    // Only show for admins
+    if (!isAdmin()) return;
+    
     const messageDiv = document.createElement('div');
     messageDiv.className = 'message system-action improve-message';
     messageDiv.style.alignSelf = 'center';
@@ -1181,6 +1184,7 @@ function addImproveFromRatingButton(dialogText, ratingText) {
             </svg>
             Улучшить инструкцию менеджера на основе оценки
         </button>
+        <p style="font-size: 12px; color: #888; margin-top: 8px; text-align: center;">использовать только в полностью сгенерированных диалогах</p>
     `;
     
     const btn = buttonContainer.querySelector('.btn-improve-from-rating');
