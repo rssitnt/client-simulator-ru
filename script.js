@@ -129,6 +129,52 @@ let promptsData = {
     rater: { variations: [], activeId: null }
 };
 
+// Check if current user is admin
+function isAdmin() {
+    return selectedRole === 'admin' || localStorage.getItem('userRole') === 'admin';
+}
+
+// Apply role-based restrictions
+function applyRoleRestrictions() {
+    const isAdminUser = isAdmin();
+    
+    if (!isAdminUser) {
+        console.log('User mode: Prompts are read-only');
+        
+        // Disable all prompt textareas
+        const promptTextareas = document.querySelectorAll('.prompt-input');
+        promptTextareas.forEach(textarea => {
+            textarea.setAttribute('readonly', 'true');
+            textarea.style.cursor = 'default';
+            textarea.style.backgroundColor = '#1a1a1a';
+        });
+        
+        // Disable all WYSIWYG preview editing
+        const previewElements = document.querySelectorAll('.prompt-preview');
+        previewElements.forEach(preview => {
+            preview.setAttribute('contenteditable', 'false');
+            preview.style.cursor = 'default';
+        });
+        
+        // Hide AI improvement button
+        if (aiImproveBtn) {
+            aiImproveBtn.style.display = 'none';
+        }
+        
+        // Disable export current prompt button (or keep it enabled if you want users to export)
+        // For now, let's keep it enabled
+        
+        // Hide format buttons in toolbar
+        const toolbarBtns = document.querySelectorAll('.toolbar-btn');
+        toolbarBtns.forEach(btn => {
+            btn.style.display = 'none';
+        });
+        
+    } else {
+        console.log('Admin mode: Full editing access');
+    }
+}
+
 // Configure marked.js
 if (typeof marked !== 'undefined') {
     marked.setOptions({
@@ -302,6 +348,7 @@ function renderVariations() {
     
     const variations = promptsData[role].variations;
     const activeId = promptsData[role].activeId;
+    const isAdminUser = isAdmin();
     
     promptVariationsContainer.innerHTML = '';
     
@@ -310,7 +357,7 @@ function renderVariations() {
         chip.className = `prompt-variation-chip ${v.id === activeId ? 'active' : ''}`;
         chip.innerHTML = `
             <span class="chip-name">${v.name}</span>
-            ${variations.length > 1 ? '<span class="delete-variation">×</span>' : ''}
+            ${variations.length > 1 && isAdminUser ? '<span class="delete-variation">×</span>' : ''}
         `;
         
         chip.addEventListener('click', (e) => {
@@ -319,15 +366,18 @@ function renderVariations() {
             }
         });
         
-        chip.querySelector('.chip-name').addEventListener('dblclick', (e) => {
-            e.stopPropagation();
-            const newName = prompt('Название промпта:', v.name);
-            if (newName && newName.trim()) {
-                v.name = newName.trim();
-                renderVariations();
-                savePromptsToFirebase();
-            }
-        });
+        // Only allow renaming for admins
+        if (isAdminUser) {
+            chip.querySelector('.chip-name').addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                const newName = prompt('Название промпта:', v.name);
+                if (newName && newName.trim()) {
+                    v.name = newName.trim();
+                    renderVariations();
+                    savePromptsToFirebase();
+                }
+            });
+        }
         
         const deleteBtn = chip.querySelector('.delete-variation');
         if (deleteBtn) {
@@ -342,13 +392,15 @@ function renderVariations() {
         promptVariationsContainer.appendChild(chip);
     });
     
-    // Add button
-    const addBtn = document.createElement('button');
-    addBtn.className = 'add-variation-btn';
-    addBtn.innerHTML = '+';
-    addBtn.title = 'Добавить вариант промпта';
-    addBtn.addEventListener('click', () => addVariation(role));
-    promptVariationsContainer.appendChild(addBtn);
+    // Add button - only for admins
+    if (isAdminUser) {
+        const addBtn = document.createElement('button');
+        addBtn.className = 'add-variation-btn';
+        addBtn.innerHTML = '+';
+        addBtn.title = 'Добавить вариант промпта';
+        addBtn.addEventListener('click', () => addVariation(role));
+        promptVariationsContainer.appendChild(addBtn);
+    }
 }
 
 function addVariation(role) {
@@ -470,6 +522,9 @@ function loadPrompts() {
         managerNameInput.value = savedManagerName;
         selectedRole = savedRole;
         console.log(`Welcome back, ${savedManagerName} (${savedRole})`);
+        
+        // Apply role-based restrictions
+        applyRoleRestrictions();
     } else {
         showNameModal();
     }
@@ -564,6 +619,7 @@ modalNameSubmit.addEventListener('click', () => {
         // User - go straight to platform
         localStorage.setItem('userRole', 'user');
         hideNameModal();
+        applyRoleRestrictions();
     } else {
         // Admin - ask for password
         nameModalStep1.style.display = 'none';
@@ -583,7 +639,9 @@ modalPasswordSubmit.addEventListener('click', () => {
     if (password === ADMIN_PASSWORD) {
         // Correct password
         localStorage.setItem('userRole', 'admin');
+        selectedRole = 'admin';
         hideNameModal();
+        applyRoleRestrictions();
         // Reset modal for next time
         nameModalStep1.style.display = 'block';
         nameModalStep2.style.display = 'none';
@@ -1691,9 +1749,18 @@ function handleFileDrop(file, textarea, previewElement) {
 }
 
 function setupDragAndDrop(textarea) {
-    textarea.addEventListener('dragover', (e) => { e.preventDefault(); textarea.classList.add('drag-over'); });
-    textarea.addEventListener('dragleave', (e) => { e.preventDefault(); textarea.classList.remove('drag-over'); });
+    textarea.addEventListener('dragover', (e) => { 
+        if (!isAdmin()) return;
+        e.preventDefault(); 
+        textarea.classList.add('drag-over'); 
+    });
+    textarea.addEventListener('dragleave', (e) => { 
+        if (!isAdmin()) return;
+        e.preventDefault(); 
+        textarea.classList.remove('drag-over'); 
+    });
     textarea.addEventListener('drop', (e) => {
+        if (!isAdmin()) return;
         e.preventDefault();
         textarea.classList.remove('drag-over');
         const files = e.dataTransfer.files;
@@ -1705,14 +1772,17 @@ function setupDragAndDrop(textarea) {
 
 function setupDragAndDropForPreview(previewElement, textarea) {
     previewElement.addEventListener('dragover', (e) => {
+        if (!isAdmin()) return;
         e.preventDefault();
         previewElement.classList.add('drag-over');
     });
     previewElement.addEventListener('dragleave', (e) => {
+        if (!isAdmin()) return;
         e.preventDefault();
         previewElement.classList.remove('drag-over');
     });
     previewElement.addEventListener('drop', (e) => {
+        if (!isAdmin()) return;
         e.preventDefault();
         previewElement.classList.remove('drag-over');
         const files = e.dataTransfer.files;
