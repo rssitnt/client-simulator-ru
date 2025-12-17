@@ -408,11 +408,20 @@ body.light-theme #startBtn:hover {
     background: #e0e0e0 !important;
 }
 
-/* Удаление черной полоски (resize-handle) */
+/* Полоска-разделитель в светлой теме */
 body.light-theme .resize-handle {
-    background: #e0e0e0 !important; /* Светло-серый фон */
-    border: none !important; /* Убираем границы */
+    background: #ffffff !important; /* Белый - цвет фона */
+    border: none !important;
     width: 6px !important;
+    transition: background 0.2s ease !important;
+}
+
+body.light-theme .resize-handle:hover {
+    background: #d0d0d0 !important; /* Серый при наведении */
+}
+
+body.light-theme .resize-handle:active {
+    background: #bbb !important; /* Чуть темнее при перетаскивании */
 }
 
 /* Убираем рамки в чате */
