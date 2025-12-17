@@ -35,7 +35,7 @@ let raterSessionId = baseSessionId + '_rater';
 const TEXT_EXTENSIONS = ['.txt', '.md', '.json', '.xml', '.csv', '.html', '.htm', '.rtf', '.log'];
 
 // Utility function for fetch with timeout and retry
-async function fetchWithTimeout(url, options = {}, timeoutMs = 60000, retries = 2) {
+async function fetchWithTimeout(url, options = {}, timeoutMs = 300000, retries = 2) {
     for (let attempt = 0; attempt <= retries; attempt++) {
         try {
             const controller = new AbortController();
@@ -616,7 +616,7 @@ async function improvePromptWithAI() {
             body: JSON.stringify({
                 userMessage: `Изначальный промпт:\n\n${currentPrompt}\n\n---\n\nЗапрос на улучшение: ${improvementRequest}\n\n---\n\nВАЖНО: Верни ПОЛНЫЙ текст улучшенного промпта. Подсвети изменения так:\n1. Удаленный/измененный текст оберни в ~~ (например: ~~старый текст~~)\n2. Новый/добавленный текст оберни в ++ (например: ++новый текст++)\n3. Остальной текст оставь без изменений.\nНе используй markdown код-блоки.`
             })
-        }, 60000, 2);
+        });
         
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
@@ -851,7 +851,7 @@ async function sendMessage() {
                 dialogHistory: dialogHistory.trim(),
                 sessionId: clientSessionId
             })
-        }, 60000, 2);
+        });
         
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
@@ -902,7 +902,7 @@ async function startConversationHandler() {
                 dialogHistory: '',
                 sessionId: clientSessionId
             })
-        }, 60000, 2);
+        });
         
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
@@ -967,7 +967,7 @@ async function rateChat() {
                 raterPrompt: raterPrompt,
                 sessionId: raterSessionId
             })
-        }, 60000, 2); // 60 second timeout, 2 retries
+        });
         
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
@@ -1057,7 +1057,7 @@ function addImproveFromRatingButton(dialogText, ratingText) {
                 body: JSON.stringify({
                     userMessage: `Текущая инструкция ИИ-менеджера:\n\n${currentManagerPrompt}\n\n---\n\nДиалог менеджера с клиентом:\n\n${dialogText}\n\n---\n\nОценка диалога:\n\n${ratingText}\n\n---\n\nНа основе этого диалога и его оценки улучши инструкцию менеджера. Учти ошибки, которые были допущены, и добавь рекомендации, чтобы избежать их в будущем.\n\nВАЖНО: Верни ПОЛНЫЙ текст улучшенного промпта. Подсвети изменения так:\n1. Удаленный/измененный текст оберни в ~~ (например: ~~старый текст~~)\n2. Новый/добавленный текст оберни в ++ (например: ++новый текст++)\n3. Остальной текст оставь без изменений.\nНе используй markdown код-блоки.`
                 })
-            }, 60000, 2);
+            });
             
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             
@@ -1141,7 +1141,7 @@ async function generateAIResponse() {
                 dialogHistory: dialogHistory.trim(),
                 sessionId: managerSessionId
             })
-        }, 60000, 2);
+        });
         
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
