@@ -352,12 +352,12 @@ body.light-theme #startBtn:hover {
     background: #e0e0e0 !important;
 }
 
-/* Удаление черной полоски (resizer) */
-body.light-theme .resizer {
+/* Удаление черной полоски (resize-handle) */
+body.light-theme .resize-handle {
     background: #e0e0e0 !important; /* Светло-серый фон */
     border-left: 1px solid #d0d0d0;
     border-right: 1px solid #d0d0d0;
-    width: 6px !important; /* Чуть шире, чтобы перекрыть старое */
+    width: 6px !important;
 }
 
 /* Убираем рамки в чате */
