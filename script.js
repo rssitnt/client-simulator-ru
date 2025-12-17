@@ -941,9 +941,21 @@ async function rateChat() {
         
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
-        const data = await response.json();
-        const ratingMessage = extractApiResponse(data);
-        if (!ratingMessage) throw new Error('Пустой ответ');
+        // Try to parse as JSON, fallback to text if fails
+        let ratingMessage;
+        const contentType = response.headers.get('content-type');
+        
+        if (contentType && contentType.includes('application/json')) {
+            const data = await response.json();
+            ratingMessage = extractApiResponse(data);
+        } else {
+            // If not JSON, treat as plain text
+            ratingMessage = await response.text();
+        }
+        
+        if (!ratingMessage || ratingMessage.trim() === '') {
+            throw new Error('Пустой ответ');
+        }
         
         loadingMsg.remove();
         lastRating = ratingMessage;
