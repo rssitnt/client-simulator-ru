@@ -114,7 +114,6 @@ const settingsModal = document.getElementById('settingsModal');
 const settingsModalClose = document.getElementById('settingsModalClose');
 const currentUserName = document.getElementById('currentUserName');
 const settingsNameInput = document.getElementById('settingsNameInput');
-const settingsNameSave = document.getElementById('settingsNameSave');
 const themeToggle = document.getElementById('themeToggle');
 const currentRoleDisplay = document.getElementById('currentRoleDisplay');
 const changeRoleBtn = document.getElementById('changeRoleBtn');
@@ -972,15 +971,15 @@ settingsModal.addEventListener('click', (e) => {
 });
 
 // Save name
-settingsNameSave.addEventListener('click', () => {
+// Автосохранение имени при вводе
+settingsNameInput.addEventListener('input', debounce(() => {
     const newName = settingsNameInput.value.trim();
     if (newName) {
         localStorage.setItem('managerName', newName);
         managerNameInput.value = newName;
         updateUserNameDisplay();
-        showCopyNotification('Имя обновлено!');
     }
-});
+}, 500));
 
 // Theme toggle
 themeToggle.addEventListener('change', () => {

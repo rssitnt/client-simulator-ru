@@ -195,12 +195,17 @@ body.light-theme .settings-section {
 
 body.light-theme .settings-section input {
     background: #f5f5f5 !important;
-    border: none !important; /* Убираем рамки полей */
+    border: none !important;
+    color: #1a1a1a !important; /* Чёрный текст */
+}
+
+body.light-theme .settings-section input::placeholder {
+    color: #999 !important;
 }
 
 body.light-theme .settings-section input:focus {
     background: #ffffff !important;
-    box-shadow: 0 0 0 2px rgba(127, 150, 255, 0.2) !important;
+    color: #1a1a1a !important;
 }
 
 body.light-theme .theme-switcher {
