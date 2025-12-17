@@ -964,6 +964,13 @@ aiImproveInput.addEventListener('keydown', (e) => {
 settingsBtn.addEventListener('click', showSettingsModal);
 settingsModalClose.addEventListener('click', hideSettingsModal);
 
+// Close settings modal on overlay click
+settingsModal.addEventListener('click', (e) => {
+    if (e.target === settingsModal) {
+        hideSettingsModal();
+    }
+});
+
 // Save name
 settingsNameSave.addEventListener('click', () => {
     const newName = settingsNameInput.value.trim();
