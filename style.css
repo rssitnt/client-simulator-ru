@@ -260,11 +260,92 @@ body.light-theme .prompt-preview h2 {
     border-bottom-color: #ddd !important;
 }
 
-/* Исправление кнопки Начать диалог (если она использует .btn-start) */
-body.light-theme #startBtn {
-    background: #f5f5f5 !important;
-    color: #333 !important;
+/* Дополнительные исправления для светлой темы */
+
+/* Кнопки в модалках и настройках */
+body.light-theme .btn-modal-cancel:hover {
+    background: #e0e0e0 !important;
+    color: #1a1a1a !important;
+}
+
+/* Поля ввода при фокусе */
+body.light-theme input:focus,
+body.light-theme textarea:focus,
+body.light-theme .prompt-editor:focus {
+    background: #ffffff !important;
+    border-color: var(--color-accent) !important;
+    color: #1a1a1a !important;
+}
+
+/* Выпадающие меню */
+body.light-theme .dropdown-menu {
+    background: #ffffff !important;
     border: 1px solid #ddd !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+}
+
+body.light-theme .dropdown-item {
+    color: #333 !important;
+}
+
+body.light-theme .dropdown-item:hover {
+    background: #f0f0f0 !important;
+    color: #000 !important;
+}
+
+/* Кнопка закрытия модалки */
+body.light-theme .modal-close {
+    color: #666 !important;
+}
+
+body.light-theme .modal-close:hover {
+    background: #f0f0f0 !important;
+    color: #d32f2f !important;
+}
+
+/* Кнопка добавления вариации промпта */
+body.light-theme .add-variation-btn {
+    color: #666 !important;
+}
+
+body.light-theme .add-variation-btn:hover {
+    background: #e0e0e0 !important;
+    color: #1a1a1a !important;
+}
+
+/* Кнопка улучшения отзыва */
+body.light-theme .btn-improve-from-rating {
+    background: #f5f5f5 !important;
+    border: 1px solid #ddd !important;
+    color: #333 !important;
+}
+
+body.light-theme .btn-improve-from-rating:hover {
+    background: #e0e0e0 !important;
+}
+
+/* Иконки действий в чате (копировать и т.д.) */
+body.light-theme .message-actions .btn-icon {
+    color: #888 !important;
+}
+
+body.light-theme .message-actions .btn-icon:hover {
+    background: #e0e0e0 !important;
+    color: #333 !important;
+}
+
+/* Скроллбары */
+body.light-theme ::-webkit-scrollbar-track {
+    background: #f5f5f5 !important;
+}
+
+body.light-theme ::-webkit-scrollbar-thumb {
+    background-color: #ccc !important;
+    border-color: #f5f5f5 !important;
+}
+
+body.light-theme ::-webkit-scrollbar-thumb:hover {
+    background-color: #aaa !important;
 }
 
 body.light-theme #startBtn:hover {
