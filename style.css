@@ -2246,6 +2246,26 @@ input:checked + .slider:hover {
     color: #555;
 }
 
+/* AI Modal - светлая тема */
+body.light-theme .ai-improve-modal textarea {
+    background: #f5f5f5 !important;
+    color: #1a1a1a !important;
+    border: none !important;
+}
+
+body.light-theme .ai-improve-modal textarea::placeholder {
+    color: #999 !important;
+}
+
+body.light-theme .ai-improve-modal .btn-modal-cancel {
+    background: #e0e0e0 !important;
+    color: #333 !important;
+}
+
+body.light-theme .ai-improve-modal .btn-modal-cancel:hover {
+    background: #d0d0d0 !important;
+}
+
 .ai-improve-actions {
     display: flex;
     gap: 12px;
