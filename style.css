@@ -2097,12 +2097,13 @@ body.light-theme .btn-icon:hover {
 .theme-switcher {
     display: inline-flex;
     align-items: center;
-    justify-content: center; /* Центрирование по горизонтали внутри */
+    justify-content: center;
     gap: 16px;
     background: #222;
     padding: 8px 16px;
     border-radius: 20px;
-    border: 1px solid #333;
+    border: none; /* Убрана обводка */
+    margin-top: 8px; /* Отступ сверху */
 }
 
 .theme-label {
