@@ -192,78 +192,7 @@ body.light-theme .modal-content h3 {
     color: #1a1a1a;
 }
 
-/* Чистый дизайн настроек для светлой темы */
-body.light-theme .settings-section {
-    border-bottom: none !important; /* Убираем разделители */
-}
-
-body.light-theme .settings-section label {
-    color: #1a1a1a !important; /* Чёрный текст для label */
-}
-
-body.light-theme .settings-section input {
-    background: #f5f5f5 !important;
-    border: none !important;
-    color: #1a1a1a !important; /* Чёрный текст */
-}
-
-body.light-theme .settings-section input::placeholder {
-    color: #999 !important;
-}
-
-body.light-theme .settings-section input:focus {
-    background: #ffffff !important;
-    color: #1a1a1a !important;
-}
-
-body.light-theme .theme-switcher {
-    background: transparent !important;
-    border: none !important;
-}
-
-body.light-theme .btn-export-settings {
-    background: #f5f5f5 !important;
-    border: none !important; /* Убираем рамки кнопок экспорта */
-}
-
-body.light-theme .btn-export-settings:hover {
-    background: #e0e0e0 !important;
-}
-
-body.light-theme .btn-icon-small {
-    border: none !important; /* Убираем рамку кнопки смены роли */
-    background: #f5f5f5 !important;
-}
-
-body.light-theme .btn-icon-small:hover {
-    background: #e0e0e0 !important;
-}
-
-/* Old light-theme theme-icon styles removed */
-
-body.light-theme .btn-modal-cancel {
-    background: #f0f0f0;
-    color: #666;
-}
-
-body.light-theme .btn-export-settings {
-    background: #f5f5f5;
-    border-color: #ddd;
-    color: #666;
-}
-
-body.light-theme .btn-export-settings:hover {
-    background: #e0e0e0;
-}
-
-body.light-theme .btn-icon-small {
-    border-color: #ddd;
-    color: #888;
-}
-
-body.light-theme .btn-icon-small:hover {
-    background: #f0f0f0;
-}
+/* Old settings styles removed */
 
 body.light-theme .dropdown-menu {
     background: #ffffff;
@@ -2045,140 +1974,262 @@ body.light-theme .btn-icon:hover {
     color: var(--color-accent);
 }
 
-/* Settings Modal */
-.settings-modal {
-    max-width: 500px !important;
-    width: 90% !important;
-    max-height: 90vh;
-    overflow-y: auto;
-    padding: 24px !important;
-    scrollbar-width: none; /* Скрыть для Firefox */
-    -ms-overflow-style: none; /* Скрыть для IE/Edge */
+/* ========== NEW SETTINGS PANEL ========== */
+.settings-panel {
+    background: #1a1a1a;
+    border-radius: 12px;
+    padding: 20px 24px;
+    min-width: 280px;
+    max-width: 320px;
 }
 
-/* Hide scrollbar for Chrome/Safari/Opera */
-.settings-modal::-webkit-scrollbar {
-    display: none;
-}
-
-.settings-section {
-    margin-bottom: 24px;
-    padding-bottom: 20px;
-    border-bottom: none; /* Убраны разделители */
-}
-
-.settings-section:last-child {
-    border-bottom: none;
-}
-
-.settings-section label {
-    display: block;
-    color: #ccc;
-    font-size: 14px;
-    font-weight: 600;
-    margin-bottom: 12px;
-}
-
-.settings-section input[type="text"],
-.settings-section input[type="password"] {
-    width: 100%;
-    background: #2a2a2a;
-    border: none;
-    border-radius: 8px;
-    padding: 10px 12px;
-    color: #fff;
-    font-size: 14px;
-    margin-bottom: 10px;
-}
-
-/* Адаптивное поле ввода имени */
-.auto-width-input {
-    width: auto !important;
-    min-width: 80px;
-    max-width: 100%;
-    text-align: center;
-    font-size: 16px !important;
-}
-
-.settings-section input:focus {
-    outline: none;
-}
-
-/* Theme Switcher */
-.theme-switcher {
-    display: inline-flex;
+.settings-row {
+    display: flex;
     align-items: center;
-    justify-content: center;
     gap: 12px;
-    background: transparent; /* Без фона */
-    padding: 0;
-    border: none;
-    margin-top: 8px;
+    margin-bottom: 16px;
 }
 
-/* Old theme-icon styles removed */
+.settings-row:last-child {
+    margin-bottom: 0;
 }
 
-/* Переключатель темы с иконками внутри */
-.switch-icons {
+.settings-label {
+    color: #888;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+/* Theme Toggle */
+.theme-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.theme-icon-svg {
+    color: #666;
+    width: 16px;
+    height: 16px;
+}
+
+.toggle-switch {
     position: relative;
-    display: inline-block;
-    width: 52px;
-    height: 28px;
-    flex-shrink: 0;
-    margin: 0;
-    vertical-align: middle;
+    width: 40px;
+    height: 20px;
 }
 
-.switch-icons input {
+.toggle-switch input {
     opacity: 0;
     width: 0;
     height: 0;
 }
 
-.slider-icons {
+.toggle-slider {
     position: absolute;
     cursor: pointer;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: #333;
-    transition: 0.3s;
-    border-radius: 28px;
+    background-color: #444;
+    transition: 0.2s;
+    border-radius: 20px;
 }
 
-.slider-icons:before {
+.toggle-slider:before {
     position: absolute;
-    content: "🌙";
-    font-size: 14px;
-    line-height: 22px;
-    text-align: center;
-    height: 22px;
-    width: 22px;
-    left: 3px;
-    bottom: 3px;
-    background-color: #1a1a1a;
-    transition: 0.3s;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 2px;
+    bottom: 2px;
+    background-color: #fff;
+    transition: 0.2s;
     border-radius: 50%;
 }
 
-input:checked + .slider-icons {
-    background-color: #e0e0e0;
+input:checked + .toggle-slider {
+    background-color: var(--color-accent);
 }
 
-input:checked + .slider-icons:before {
-    content: "☀️";
-    transform: translateX(24px);
-    background-color: #fff;
+input:checked + .toggle-slider:before {
+    transform: translateX(20px);
 }
 
-.slider-icons:hover {
-    background-color: #444;
+/* Name Input */
+.name-input {
+    background: #2a2a2a;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: #fff;
+    font-size: 14px;
+    width: auto;
+    min-width: 60px;
+    max-width: 200px;
+    outline: none;
 }
 
-input:checked + .slider-icons:hover {
-    background-color: #d0d0d0;
+.name-input::placeholder {
+    color: #666;
+}
+
+/* Role */
+.role-text {
+    color: #ccc;
+    font-size: 14px;
+}
+
+.btn-change {
+    background: transparent;
+    border: none;
+    color: #666;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: color 0.2s;
+}
+
+.btn-change:hover {
+    color: var(--color-accent);
+}
+
+/* Password Section */
+.password-section {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #333;
+}
+
+.password-input {
+    width: 100%;
+    background: #2a2a2a;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: #fff;
+    font-size: 14px;
+    outline: none;
+    margin-bottom: 8px;
+}
+
+.error-text {
+    color: #ff5555;
+    font-size: 12px;
+    margin: 4px 0;
+}
+
+.password-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.btn-cancel, .btn-confirm {
+    flex: 1;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.btn-cancel {
+    background: #333;
+    color: #aaa;
+}
+
+.btn-cancel:hover {
+    background: #444;
+}
+
+.btn-confirm {
+    background: var(--color-accent);
+    color: #fff;
+}
+
+.btn-confirm:hover {
+    background: var(--color-accent-hover);
+}
+
+/* Export Row */
+.export-row {
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.btn-export {
+    background: #2a2a2a;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: #888;
+    font-size: 12px;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.btn-export:hover {
+    color: #fff;
+}
+
+/* Light Theme */
+body.light-theme .settings-panel {
+    background: #fff;
+}
+
+body.light-theme .settings-label {
+    color: #666;
+}
+
+body.light-theme .theme-icon-svg {
+    color: #999;
+}
+
+body.light-theme .toggle-slider {
+    background-color: #ccc;
+}
+
+body.light-theme .name-input {
+    background: #f5f5f5;
+    color: #1a1a1a;
+}
+
+body.light-theme .name-input::placeholder {
+    color: #999;
+}
+
+body.light-theme .role-text {
+    color: #333;
+}
+
+body.light-theme .btn-change {
+    color: #999;
+}
+
+body.light-theme .password-section {
+    border-color: #eee;
+}
+
+body.light-theme .password-input {
+    background: #f5f5f5;
+    color: #1a1a1a;
+}
+
+body.light-theme .btn-cancel {
+    background: #eee;
+    color: #666;
+}
+
+body.light-theme .btn-export {
+    background: #f5f5f5;
+    color: #666;
+}
+
+body.light-theme .btn-export:hover {
+    color: #333;
 }
 
 /* Hide old export buttons - moved to settings */
@@ -2187,33 +2238,7 @@ input:checked + .slider-icons:hover {
     display: none !important;
 }
 
-/* Export buttons in settings */
-.btn-export-settings {
-    flex: 1;
-    min-width: 180px;
-    background: #2a2a2a;
-    color: #ccc;
-    border: none; /* Убрана обводка */
-    border-radius: 8px;
-    padding: 12px 16px;
-    font-size: 14px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    transition: all 0.2s;
-}
-
-.btn-export-settings:hover {
-    background: #333;
-    border-color: var(--color-accent);
-    color: var(--color-accent);
-}
-
-.btn-export-settings svg {
-    flex-shrink: 0;
-}
+/* Old btn-export-settings removed */
 
 /* AI Improve Button */
 .btn-ai-improve {

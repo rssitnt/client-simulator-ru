@@ -727,7 +727,8 @@ function showSettingsModal() {
     const userRole = localStorage.getItem('userRole') || 'user';
     
     settingsNameInput.value = savedName;
-    currentRoleDisplay.textContent = userRole === 'admin' ? 'Админ 🔑' : 'Пользователь 👤';
+    autoResizeNameInput();
+    currentRoleDisplay.textContent = userRole === 'admin' ? 'Админ' : 'Юзер';
     
     // Hide password section
     roleChangePassword.style.display = 'none';
@@ -735,6 +736,16 @@ function showSettingsModal() {
     roleChangeError.style.display = 'none';
     
     settingsModal.classList.add('active');
+}
+
+function autoResizeNameInput() {
+    const input = settingsNameInput;
+    const text = input.value || input.placeholder;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    ctx.font = getComputedStyle(input).font;
+    const width = ctx.measureText(text).width;
+    input.style.width = Math.max(60, width + 24) + 'px';
 }
 
 function hideSettingsModal() {
@@ -968,34 +979,16 @@ settingsModal.addEventListener('click', (e) => {
     }
 });
 
-// Автоподстройка ширины поля ввода
-function autoResizeInput(input) {
-    const tempSpan = document.createElement('span');
-    tempSpan.style.visibility = 'hidden';
-    tempSpan.style.position = 'absolute';
-    tempSpan.style.whiteSpace = 'pre';
-    tempSpan.style.font = getComputedStyle(input).font;
-    tempSpan.textContent = input.value || input.placeholder;
-    document.body.appendChild(tempSpan);
-    input.style.width = (tempSpan.offsetWidth + 24) + 'px'; // +24 для padding
-    document.body.removeChild(tempSpan);
-}
-
 // Автосохранение имени при вводе
 settingsNameInput.addEventListener('input', () => {
-    autoResizeInput(settingsNameInput);
-    debounce(() => {
-        const newName = settingsNameInput.value.trim();
-        if (newName) {
-            localStorage.setItem('managerName', newName);
-            managerNameInput.value = newName;
-            updateUserNameDisplay();
-        }
-    }, 500)();
+    autoResizeNameInput();
+    const newName = settingsNameInput.value.trim();
+    if (newName) {
+        localStorage.setItem('managerName', newName);
+        managerNameInput.value = newName;
+        updateUserNameDisplay();
+    }
 });
-
-// Инициализация ширины при загрузке
-setTimeout(() => autoResizeInput(settingsNameInput), 100);
 
 // Theme toggle
 themeToggle.addEventListener('change', () => {
@@ -1032,7 +1025,7 @@ function switchRole(newRole) {
     localStorage.setItem('userRole', newRole);
     selectedRole = newRole;
     
-    currentRoleDisplay.textContent = newRole === 'admin' ? 'Админ 🔑' : 'Пользователь 👤';
+    currentRoleDisplay.textContent = newRole === 'admin' ? 'Админ' : 'Юзер';
     updateUserNameDisplay();
     applyRoleRestrictions();
     renderVariations();
@@ -1042,7 +1035,7 @@ function switchRole(newRole) {
     roleChangePasswordInput.value = '';
     roleChangeError.style.display = 'none';
     
-    showCopyNotification(`Роль изменена на ${newRole === 'admin' ? 'Админ' : 'Пользователь'}!`);
+    showCopyNotification(`Роль: ${newRole === 'admin' ? 'Админ' : 'Юзер'}`);
 }
 
 // Cancel role change

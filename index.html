@@ -90,64 +90,58 @@
 
     <!-- Модальное окно настроек -->
     <div id="settingsModal" class="modal-overlay">
-        <div class="modal-content settings-modal">
-            
-            <div class="settings-section">
-                <input type="text" id="settingsNameInput" class="auto-width-input" placeholder="Имя" maxlength="50">
-            </div>
-
-            <div class="settings-section">
-                <label>Тема:</label>
-                <div class="theme-switcher notranslate" translate="no">
-                    <label class="switch-icons" translate="no">
+        <div class="settings-panel">
+            <!-- Тема -->
+            <div class="settings-row">
+                <span class="settings-label">Тема</span>
+                <div class="theme-toggle" translate="no">
+                    <svg class="theme-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z"/>
+                    </svg>
+                    <label class="toggle-switch">
                         <input type="checkbox" id="themeToggle">
-                        <span class="slider-icons"></span>
+                        <span class="toggle-slider"></span>
                     </label>
+                    <svg class="theme-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="12" cy="12" r="5"/>
+                        <line x1="12" y1="1" x2="12" y2="3" stroke="currentColor" stroke-width="2"/>
+                        <line x1="12" y1="21" x2="12" y2="23" stroke="currentColor" stroke-width="2"/>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="currentColor" stroke-width="2"/>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="currentColor" stroke-width="2"/>
+                        <line x1="1" y1="12" x2="3" y2="12" stroke="currentColor" stroke-width="2"/>
+                        <line x1="21" y1="12" x2="23" y2="12" stroke="currentColor" stroke-width="2"/>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" stroke="currentColor" stroke-width="2"/>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" stroke="currentColor" stroke-width="2"/>
+                    </svg>
                 </div>
             </div>
 
-            <div class="settings-section">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                     <label style="margin: 0;">Роль:</label>
-                     <span id="currentRoleDisplay" style="color: #ccc; font-size: 14px;"></span>
-                     <button id="changeRoleBtn" class="btn-icon-small" title="Сменить роль">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21 2v6h-6"></path>
-                            <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
-                            <path d="M3 22v-6h6"></path>
-                            <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
-                        </svg>
-                    </button>
-                </div>
-                
-                <div id="roleChangePassword" style="display: none; margin-top: 15px;">
-                    <input type="password" id="roleChangePasswordInput" placeholder="Введите пароль для смены роли" maxlength="20">
-                    <p id="roleChangeError" style="color: red; font-size: 14px; display: none; margin-top: 10px;">Неверный пароль!</p>
-                    <div style="display: flex; gap: 10px; margin-top: 10px;">
-                        <button id="roleChangeCancelBtn" class="btn-modal-cancel">Отмена</button>
-                        <button id="roleChangeConfirmBtn" class="btn-modal-submit">Подтвердить</button>
-                    </div>
+            <!-- Имя -->
+            <div class="settings-row">
+                <input type="text" id="settingsNameInput" class="name-input" placeholder="Имя" maxlength="30">
+            </div>
+
+            <!-- Роль -->
+            <div class="settings-row">
+                <span class="settings-label">Роль:</span>
+                <span id="currentRoleDisplay" class="role-text"></span>
+                <button id="changeRoleBtn" class="btn-change">Сменить</button>
+            </div>
+
+            <!-- Пароль для смены роли -->
+            <div id="roleChangePassword" class="password-section" style="display: none;">
+                <input type="password" id="roleChangePasswordInput" class="password-input" placeholder="Пароль" maxlength="20">
+                <p id="roleChangeError" class="error-text" style="display: none;">Неверный пароль</p>
+                <div class="password-buttons">
+                    <button id="roleChangeCancelBtn" class="btn-cancel">Отмена</button>
+                    <button id="roleChangeConfirmBtn" class="btn-confirm">OK</button>
                 </div>
             </div>
 
-            <div class="settings-section">
-                <label>Экспорт:</label>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button id="exportChatSettings" class="btn-export-settings">
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M.5 9.9a.5.5 0 01.5.5v2.5a1 1 0 001 1h12a1 1 0 001-1v-2.5a.5.5 0 011 0v2.5a2 2 0 01-2 2H2a2 2 0 01-2-2v-2.5a.5.5 0 01.5-.5z"/>
-                            <path d="M7.646 1.146a.5.5 0 01.708 0l3 3a.5.5 0 01-.708.708L8.5 2.707V10.5a.5.5 0 01-1 0V2.707L5.354 4.854a.5.5 0 11-.708-.708l3-3z"/>
-                        </svg>
-                        Экспорт диалога
-                    </button>
-                    <button id="exportPromptSettings" class="btn-export-settings">
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M.5 9.9a.5.5 0 01.5.5v2.5a1 1 0 001 1h12a1 1 0 001-1v-2.5a.5.5 0 011 0v2.5a2 2 0 01-2 2H2a2 2 0 01-2-2v-2.5a.5.5 0 01.5-.5z"/>
-                            <path d="M7.646 1.146a.5.5 0 01.708 0l3 3a.5.5 0 01-.708.708L8.5 2.707V10.5a.5.5 0 01-1 0V2.707L5.354 4.854a.5.5 0 11-.708-.708l3-3z"/>
-                        </svg>
-                        Экспорт инструкции
-                    </button>
-                </div>
+            <!-- Экспорт -->
+            <div class="settings-row export-row">
+                <button id="exportChatSettings" class="btn-export">Экспорт диалога</button>
+                <button id="exportPromptSettings" class="btn-export">Экспорт инструкции</button>
             </div>
         </div>
     </div>
