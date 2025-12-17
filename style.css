@@ -342,12 +342,14 @@ body.light-theme .mobile-tabs {
 
 body.light-theme .mobile-tab {
     background: #e0e0e0;
-    color: #666;
+    color: #333; /* Был #666, стал темнее */
+    border: none !important; /* Убираем обводку */
 }
 
 body.light-theme .mobile-tab.active {
     background: var(--color-accent);
     color: #fff;
+    border: none !important;
 }
 
 body.light-theme ::-webkit-scrollbar-thumb {
