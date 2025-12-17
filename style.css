@@ -14,6 +14,13 @@
     --color-success: #50fa7b;
 }
 
+/* Убираем стрелки у всех скроллбаров */
+::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+}
+
 /* Light Theme */
 body.light-theme {
     --color-accent: #5a73e6;
