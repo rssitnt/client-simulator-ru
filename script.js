@@ -164,10 +164,15 @@ function applyRoleRestrictions() {
         // Disable export current prompt button (or keep it enabled if you want users to export)
         // For now, let's keep it enabled
         
-        // Hide format buttons in toolbar
+        // Hide format buttons and dividers in toolbar
         const toolbarBtns = document.querySelectorAll('.toolbar-btn');
         toolbarBtns.forEach(btn => {
             btn.style.display = 'none';
+        });
+        
+        const toolbarDividers = document.querySelectorAll('.toolbar-divider');
+        toolbarDividers.forEach(divider => {
+            divider.style.display = 'none';
         });
         
     } else {
