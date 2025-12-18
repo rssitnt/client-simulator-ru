@@ -2236,26 +2236,24 @@ body.light-theme .color-preset.active {
     background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red);
     -webkit-appearance: none;
     box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-    transition: box-shadow 0.15s;
-}
-
-.color-picker:hover {
-    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
 }
 
 .color-picker::-webkit-color-swatch-wrapper {
     padding: 0;
     border-radius: 50%;
+    opacity: 0;
 }
 
 .color-picker::-webkit-color-swatch {
     border: none;
     border-radius: 50%;
+    opacity: 0;
 }
 
 .color-picker::-moz-color-swatch {
     border: none;
     border-radius: 50%;
+    opacity: 0;
 }
 
 /* Name Input */
