@@ -1686,24 +1686,27 @@ function exportCurrentPrompt(format = 'txt') {
 function parseStyledText(text, TextRun) {
     const runs = [];
     let lastIndex = 0;
-    const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|__(.+?)__|_(.+?)_)/g;
+    // Порядок важен: сначала ** (bold), потом * (italic)
+    const regex = /(\*\*(.+?)\*\*|__(.+?)__|(?<!\*)\*([^*]+?)\*(?!\*)|\b_([^_]+?)_\b)/g;
     let match;
     
     while ((match = regex.exec(text)) !== null) {
+        // Добавляем текст до найденного паттерна
         if (match.index > lastIndex) {
             runs.push(new TextRun({ text: text.slice(lastIndex, match.index), size: 24 }));
         }
         if (match[2]) { // **bold**
             runs.push(new TextRun({ text: match[2], bold: true, size: 24 }));
-        } else if (match[3]) { // *italic*
-            runs.push(new TextRun({ text: match[3], italics: true, size: 24 }));
-        } else if (match[4]) { // __bold__
-            runs.push(new TextRun({ text: match[4], bold: true, size: 24 }));
+        } else if (match[3]) { // __bold__
+            runs.push(new TextRun({ text: match[3], bold: true, size: 24 }));
+        } else if (match[4]) { // *italic*
+            runs.push(new TextRun({ text: match[4], italics: true, size: 24 }));
         } else if (match[5]) { // _italic_
             runs.push(new TextRun({ text: match[5], italics: true, size: 24 }));
         }
         lastIndex = match.index + match[0].length;
     }
+    // Добавляем оставшийся текст
     if (lastIndex < text.length) {
         runs.push(new TextRun({ text: text.slice(lastIndex), size: 24 }));
     }
@@ -1723,51 +1726,53 @@ function exportPromptToDocx(text, filename) {
     lines.forEach(line => {
         const trimmed = line.trim();
         
-        // Handle empty lines with minimal spacing to avoid huge gaps
+        // Handle empty lines with minimal spacing
         if (trimmed === '') {
-            children.push(new Paragraph({ text: '', spacing: { after: 0 } }));
+            children.push(new Paragraph({ text: '', spacing: { after: 100 } }));
             return;
         }
         
         // Base paragraph options
         let paraOpts = {
-            spacing: { after: 120 }, // 6pt spacing after paragraphs
+            spacing: { after: 120 },
             children: []
         };
 
+        // Markdown headings
         if (line.startsWith('# ')) {
-            paraOpts.text = line.slice(2);
-            paraOpts.heading = HeadingLevel.HEADING_1;
-            paraOpts.spacing = { before: 240, after: 120 };
+            paraOpts.children = [new TextRun({ text: line.slice(2), bold: true, size: 32 })];
+            paraOpts.spacing = { before: 280, after: 140 };
         } else if (line.startsWith('## ')) {
-            paraOpts.text = line.slice(3);
-            paraOpts.heading = HeadingLevel.HEADING_2;
+            paraOpts.children = [new TextRun({ text: line.slice(3), bold: true, size: 28 })];
             paraOpts.spacing = { before: 240, after: 120 };
         } else if (line.startsWith('### ')) {
-            paraOpts.text = line.slice(4);
-            paraOpts.heading = HeadingLevel.HEADING_3;
+            paraOpts.children = [new TextRun({ text: line.slice(4), bold: true, size: 26 })];
+            paraOpts.spacing = { before: 200, after: 100 };
+        }
+        // **ЗАГОЛОВОК** на отдельной строке - делаем заголовком
+        else if (/^\*\*[^*]+\*\*$/.test(trimmed)) {
+            const headerText = trimmed.slice(2, -2);
+            paraOpts.children = [new TextRun({ text: headerText, bold: true, size: 28 })];
             paraOpts.spacing = { before: 240, after: 120 };
-        } else if (line.startsWith('- ') || line.startsWith('* ')) {
-            paraOpts.indent = { left: 720, hanging: 360 };
-            paraOpts.children.push(new TextRun({ text: '•\t' + line.slice(2), size: 24 }));
-        } else if (/^\d+\.\s/.test(line)) {
-            paraOpts.indent = { left: 720, hanging: 360 };
-            const firstSpace = line.indexOf(' ');
-            paraOpts.children.push(new TextRun({ text: line.slice(0, firstSpace) + '\t' + line.slice(firstSpace + 1), size: 24 }));
-        } else if (/^[IVXLCDM]+\.?\s/.test(line)) {
-            // Roman numerals (I. or I)
-            paraOpts.indent = { left: 720, hanging: 360 };
-            const firstSpace = line.indexOf(' ');
-            paraOpts.children.push(new TextRun({ text: line.slice(0, firstSpace) + '\t' + line.slice(firstSpace + 1), size: 24 }));
-        } else {
-            // Regular text with potential markdown
+        }
+        // Маркированный список
+        else if (line.startsWith('- ') || line.startsWith('* ')) {
+            const listContent = line.slice(2);
+            paraOpts.indent = { left: 360 };
+            paraOpts.children = [new TextRun({ text: '• ', size: 24 }), ...parseStyledText(listContent, TextRun)];
+        }
+        // Нумерованный список
+        else if (/^\d+\.\s/.test(line)) {
+            const match = line.match(/^(\d+\.)\s(.*)$/);
+            if (match) {
+                paraOpts.indent = { left: 360 };
+                paraOpts.children = [new TextRun({ text: match[1] + ' ', size: 24 }), ...parseStyledText(match[2], TextRun)];
+            }
+        }
+        // Обычный текст с markdown
+        else {
             paraOpts.children = parseStyledText(line, TextRun);
         }
-
-        // Use children for headers if we want to strip markdown symbols from them? 
-        // Current implementation for headers uses 'text' property which is simple string. 
-        // If headers contain **bold**, it won't be parsed. 
-        // But let's stick to simple headers for now as per previous implementation logic.
         
         children.push(new Paragraph(paraOpts));
     });
