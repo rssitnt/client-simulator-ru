@@ -2351,7 +2351,7 @@ body.light-theme .iro-picker-popup {
 .IroWheel {
     overflow: hidden !important;
     border-radius: 50% !important;
-    clip-path: circle(49%) !important; /* Обрезаем края, чтобы не было видно артефактов RGB */
+    clip-path: circle(46%) !important; /* Еще более агрессивная обрезка для удаления цветной полоски */
 }
 
 .IroWheel svg, .IroSlider svg {
