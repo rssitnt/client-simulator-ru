@@ -1304,6 +1304,7 @@ body.light-theme .dropdown-option.active {
     line-height: 1;
     margin-left: 4px;
     margin-right: -3px;
+    padding-bottom: 1px;
     opacity: 0.7;
 }
 
