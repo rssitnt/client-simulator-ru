@@ -2344,12 +2344,28 @@ body.light-theme .iro-picker-popup {
 .IroHandle {
     stroke: #fff !important;
     stroke-width: 3px !important;
-    box-shadow: 0 1px 5px rgba(0,0,0,0.3);
 }
 
 .IroWheel, .IroSlider {
     border: none !important;
     box-shadow: none !important;
+    outline: none !important;
+}
+
+.IroWheel svg, .IroSlider svg {
+    display: block;
+}
+
+/* Убираем любые системные обводки и артефакты внутри SVG */
+.IroColorPicker * {
+    stroke-width: 0;
+    stroke: none;
+}
+
+/* Возвращаем обводку только для маркера выбора */
+.IroHandle {
+    stroke-width: 3px !important;
+    stroke: #fff !important;
 }
 
 .IroSlider {
