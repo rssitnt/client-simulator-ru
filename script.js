@@ -2250,25 +2250,15 @@ if (instructionSelect) {
 // Check if tabs need compact mode
 function checkTabsCompactMode() {
     const promptPanel = document.getElementById('instructionsPanel');
-    const tabsContainer = document.querySelector('.instruction-tabs');
-    if (!promptPanel || !tabsContainer) return;
-    
-    // Temporarily show tabs to measure
-    promptPanel.classList.remove('compact-tabs');
+    if (!promptPanel) return;
     
     const panelWidth = promptPanel.offsetWidth;
-    const headerButtons = document.querySelector('.header-buttons');
-    const buttonsWidth = headerButtons ? headerButtons.offsetWidth : 100;
-    const availableWidth = panelWidth - buttonsWidth - 40; // 40px for padding
     
-    // Calculate total tabs width
-    let tabsWidth = 0;
-    tabsContainer.querySelectorAll('.instruction-tab').forEach(tab => {
-        tabsWidth += tab.offsetWidth;
-    });
-    
-    if (tabsWidth > availableWidth) {
+    // При ширине панели меньше 420px - включаем компактный режим
+    if (panelWidth < 420) {
         promptPanel.classList.add('compact-tabs');
+    } else {
+        promptPanel.classList.remove('compact-tabs');
     }
 }
 
