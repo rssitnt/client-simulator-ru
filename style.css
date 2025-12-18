@@ -957,7 +957,7 @@ body {
     display: flex;
     gap: 12px;
     flex-shrink: 0;
-    align-items: flex-start;
+    align-items: flex-end;
 }
 
 .input-wrapper {
