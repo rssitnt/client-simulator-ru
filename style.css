@@ -2226,7 +2226,17 @@ body.light-theme .color-preset.active {
 }
 
 /* Color Picker */
-.color-picker {
+.color-picker-hidden {
+    display: none;
+}
+
+.custom-color-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.color-picker-trigger {
     width: 20px;
     height: 20px;
     border: none;
@@ -2234,26 +2244,52 @@ body.light-theme .color-preset.active {
     cursor: pointer;
     padding: 0;
     background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red);
-    -webkit-appearance: none;
     box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    transition: transform 0.15s;
 }
 
-.color-picker::-webkit-color-swatch-wrapper {
-    padding: 0;
-    border-radius: 50%;
-    opacity: 0;
+.color-picker-trigger:hover {
+    transform: scale(1.1);
 }
 
-.color-picker::-webkit-color-swatch {
-    border: none;
-    border-radius: 50%;
-    opacity: 0;
+.iro-picker-popup {
+    display: none;
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    background: #1a1a1a;
+    padding: 15px;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    z-index: 1000;
+    border: 1px solid #333;
 }
 
-.color-picker::-moz-color-swatch {
-    border: none;
-    border-radius: 50%;
-    opacity: 0;
+body.light-theme .iro-picker-popup {
+    background: #fff;
+    border-color: #ddd;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+}
+
+.iro-picker-popup.active {
+    display: block;
+    animation: fadeInScale 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fadeInScale {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* Стилизация iro.js элементов для соответствия дизайну */
+.IroColorPicker {
+    margin: 0 auto;
 }
 
 /* Name Input */

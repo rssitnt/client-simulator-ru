@@ -1020,24 +1020,33 @@ function adjustBrightness(hex, percent) {
     return '#' + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
 }
 
-accentColorPicker.addEventListener('input', (e) => {
-    const color = e.target.value;
-    setAccentColor(color);
-    localStorage.setItem('accentColor', color);
-    updateColorPresetActive(color);
-});
-
 // Color presets
 const colorPresets = document.querySelectorAll('.color-preset');
 
 function updateColorPresetActive(color) {
+    let isPreset = false;
     colorPresets.forEach(preset => {
         if (preset.dataset.color.toLowerCase() === color.toLowerCase()) {
             preset.classList.add('active');
+            isPreset = true;
         } else {
             preset.classList.remove('active');
         }
     });
+
+    // Update custom color button active state
+    if (customColorBtn) {
+        if (!isPreset) {
+            customColorBtn.classList.add('active');
+            customColorBtn.style.boxShadow = `0 0 0 2px #1a1a1a, 0 0 0 4px ${color}`;
+            if (document.body.classList.contains('light-theme')) {
+                customColorBtn.style.boxShadow = `0 0 0 2px #fff, 0 0 0 4px ${color}`;
+            }
+        } else {
+            customColorBtn.classList.remove('active');
+            customColorBtn.style.boxShadow = '0 1px 3px rgba(0,0,0,0.3)';
+        }
+    }
 }
 
 colorPresets.forEach(preset => {
@@ -1047,14 +1056,77 @@ colorPresets.forEach(preset => {
         accentColorPicker.value = color;
         localStorage.setItem('accentColor', color);
         updateColorPresetActive(color);
+        
+        // Update iro picker if it exists
+        if (iroPicker) {
+            iroPicker.color.hexString = color;
+        }
     });
 });
+
+// Accent color picker logic
+let iroPicker;
+
+function initIroPicker() {
+    if (typeof iro === 'undefined') return;
+    
+    iroPicker = new iro.ColorPicker("#iroPicker", {
+        width: 180,
+        color: savedAccentColor,
+        borderWidth: 1,
+        borderColor: "#333",
+        layout: [
+            { 
+              component: iro.ui.Wheel,
+            },
+            { 
+              component: iro.ui.Slider,
+              options: {
+                sliderType: 'value'
+              }
+            }
+        ]
+    });
+
+    iroPicker.on('color:change', function(color) {
+        const hex = color.hexString;
+        setAccentColor(hex);
+        accentColorPicker.value = hex;
+        localStorage.setItem('accentColor', hex);
+        updateColorPresetActive(hex);
+    });
+}
+
+const customColorBtn = document.getElementById('customColorBtn');
+const iroPickerWrapper = document.getElementById('iroPickerWrapper');
+
+if (customColorBtn && iroPickerWrapper) {
+    customColorBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        iroPickerWrapper.classList.toggle('active');
+        
+        // Update picker color when opening
+        if (iroPicker) {
+            iroPicker.color.hexString = accentColorPicker.value;
+        }
+    });
+
+    // Close popup on click outside
+    document.addEventListener('click', (e) => {
+        if (!iroPickerWrapper.contains(e.target) && e.target !== customColorBtn) {
+            iroPickerWrapper.classList.remove('active');
+        }
+    });
+}
 
 // Load saved accent color
 const savedAccentColor = localStorage.getItem('accentColor') || '#7F96FF';
 accentColorPicker.value = savedAccentColor;
 setAccentColor(savedAccentColor);
 updateColorPresetActive(savedAccentColor);
+
+// Initialize iro picker after some delay to ensure script is loaded
+setTimeout(initIroPicker, 100);
 
 // Load saved theme
 const savedTheme = localStorage.getItem('theme');
