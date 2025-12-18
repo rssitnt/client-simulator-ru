@@ -1132,13 +1132,14 @@ body {
 .prompt-variations-container {
     display: flex;
     gap: 8px;
-    padding: 8px 16px;
+    padding: 6px 16px;
     background: transparent;
     overflow-x: auto;
     flex-shrink: 0;
     align-items: center;
+    min-height: 34px;
     scrollbar-width: thin;
-    scrollbar-color: #555 transparent; /* Серый ползунок, прозрачный фон */
+    scrollbar-color: #555 transparent;
 }
 
 .prompt-variations-container::-webkit-scrollbar {
