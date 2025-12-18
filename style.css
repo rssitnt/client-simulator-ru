@@ -1116,25 +1116,47 @@ body {
 /* Выпадающий список для узких экранов */
 .instruction-select {
     display: none;
-    padding: 8px 12px;
-    background: #1a1a1a;
-    border: none;
-    border-radius: 6px;
+    padding: 8px 32px 8px 14px;
+    background-color: #1a1a1a;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    border: 1px solid #333;
+    border-radius: 8px;
     color: #e0e0e0;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 500;
     cursor: pointer;
     outline: none;
-    min-width: 100px;
+    min-width: 120px;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.instruction-select:hover {
+    background-color: #252525;
+    border-color: #444;
 }
 
 .instruction-select:focus {
-    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px rgba(var(--color-accent-rgb), 0.2);
 }
 
 body.light-theme .instruction-select {
-    background: #f0f0f0;
+    background-color: #f8f9fa;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    border-color: #e0e0e0;
     color: #1a1a1a;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+body.light-theme .instruction-select:hover {
+    background-color: #ffffff;
+    border-color: #d0d0d0;
 }
 
 /* При узкой панели - скрываем табы, показываем select */
