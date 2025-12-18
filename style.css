@@ -2590,7 +2590,10 @@ body.light-theme .btn-export:hover {
     background: var(--color-accent) !important;
     color: #fff !important;
     border: none !important;
+    box-shadow: none !important; /* Убираем все тени */
     transition: none !important;
+    border-radius: 8px; /* Явно задаем скругление углов */
+    padding: 6px 10px; /* Немного уменьшим отступы для более компактного вида */
 }
 
 .btn-ai-improve:hover,
@@ -2605,7 +2608,7 @@ body.light-theme .btn-ai-improve:focus {
     border: none !important;
     transform: none !important;
     outline: none !important;
-    box-shadow: none !important;
+    box-shadow: none !important; /* Убираем все тени при наведении/фокусе */
 }
 
 /* AI Improve Modal */
