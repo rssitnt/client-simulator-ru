@@ -1068,12 +1068,39 @@ roleChangeConfirmBtn.addEventListener('click', () => {
 });
 
 // Export buttons in settings
-exportChatSettings.addEventListener('click', () => {
-    exportChat();
+exportChatSettings.addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.getElementById('exportChatSettingsMenu').classList.toggle('show');
+    document.getElementById('exportPromptSettingsMenu').classList.remove('show');
 });
 
-exportPromptSettings.addEventListener('click', () => {
-    exportCurrentPrompt();
+exportPromptSettings.addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.getElementById('exportPromptSettingsMenu').classList.toggle('show');
+    document.getElementById('exportChatSettingsMenu').classList.remove('show');
+});
+
+// Handle settings export menu items
+document.querySelectorAll('.dropdown-item[data-settings-chat-format]').forEach(item => {
+    item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const format = e.target.dataset.settingsChatFormat;
+        if (format) {
+            exportChat(format);
+            document.getElementById('exportChatSettingsMenu').classList.remove('show');
+        }
+    });
+});
+
+document.querySelectorAll('.dropdown-item[data-settings-prompt-format]').forEach(item => {
+    item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const format = e.target.dataset.settingsPromptFormat;
+        if (format) {
+            exportCurrentPrompt(format);
+            document.getElementById('exportPromptSettingsMenu').classList.remove('show');
+        }
+    });
 });
 
 // Close modal on overlay click
@@ -1514,7 +1541,8 @@ function exportChat(format = 'txt') {
     else if (format === 'txt') exportToTxt(messages, filename);
     else if (format === 'docx') exportToDocx(messages, filename);
     else if (format === 'rtf') exportToRtf(messages, filename);
-    }
+    else if (format === 'pdf') exportToPdf(messages, filename);
+}
 
 async function copyMessagesToClipboard(messages) {
     let chatText = messages.map(msg => `${msg.role}: ${msg.content}`).join('\n\n');
@@ -1577,6 +1605,65 @@ function exportToRtf(messages, filename) {
     saveAs(blob, filename + ".rtf");
 }
 
+function exportToPdf(messages, filename) {
+    const content = messages.map(msg => {
+        const roleColor = msg.role === 'ОЦЕНКА ДИАЛОГА' ? '#ff9900' : '#2e74b5';
+        return `<div style="margin-bottom: 16px;"><strong style="color: ${roleColor};">${msg.role}:</strong><br>${msg.content.replace(/\n/g, '<br>')}</div>`;
+    }).join('');
+    
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>${filename}</title>
+            <style>
+                body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; line-height: 1.6; }
+                h1 { text-align: center; margin-bottom: 30px; }
+            </style>
+        </head>
+        <body>
+            <h1>История диалога</h1>
+            ${content}
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+    printWindow.onload = () => {
+        printWindow.print();
+    };
+}
+
+function exportPromptToPdf(text, filename) {
+    const content = renderMarkdown(text);
+    
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>${filename}</title>
+            <style>
+                body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; line-height: 1.6; }
+                h1, h2, h3 { margin-top: 24px; margin-bottom: 12px; }
+                ul, ol { margin: 12px 0; padding-left: 24px; }
+                li { margin-bottom: 6px; }
+                code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; }
+                pre { background: #f5f5f5; padding: 16px; border-radius: 6px; overflow-x: auto; }
+                blockquote { border-left: 3px solid #667eea; padding-left: 16px; margin: 16px 0; color: #555; }
+            </style>
+        </head>
+        <body>
+            ${content}
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+    printWindow.onload = () => {
+        printWindow.print();
+    };
+}
+
 function exportCurrentPrompt(format = 'txt') {
     const role = getActiveRole();
     const promptText = getActiveContent(role);
@@ -1593,7 +1680,8 @@ function exportCurrentPrompt(format = 'txt') {
     else if (format === 'txt') { const blob = new Blob([promptText], { type: 'text/plain;charset=utf-8' }); saveAs(blob, fullFileName + '.txt'); }
     else if (format === 'docx') exportPromptToDocx(promptText, fullFileName);
     else if (format === 'rtf') exportPromptToRtf(promptText, fullFileName);
-    }
+    else if (format === 'pdf') exportPromptToPdf(promptText, fullFileName);
+}
 
 function parseStyledText(text, TextRun) {
     const runs = [];
@@ -1998,6 +2086,8 @@ exportCurrentPromptBtn.addEventListener('click', (e) => {
 document.addEventListener('click', () => {
     document.getElementById('exportMenu')?.classList.remove('show');
     document.getElementById('exportPromptMenu')?.classList.remove('show');
+    document.getElementById('exportChatSettingsMenu')?.classList.remove('show');
+    document.getElementById('exportPromptSettingsMenu')?.classList.remove('show');
 });
 
 document.querySelectorAll('.dropdown-item[data-format]').forEach(item => {

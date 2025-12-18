@@ -2249,6 +2249,10 @@ body.light-theme .btn-change:hover {
     margin-top: 8px; /* Дополнительный отступ сверху */
 }
 
+.export-dropdown {
+    position: relative;
+}
+
 .btn-export {
     background: #2a2a2a;
     border: none;

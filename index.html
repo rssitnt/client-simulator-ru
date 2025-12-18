@@ -150,8 +150,22 @@
 
             <!-- Экспорт -->
             <div class="settings-row export-row">
-                <button id="exportChatSettings" class="btn-export">Экспорт диалога</button>
-                <button id="exportPromptSettings" class="btn-export">Экспорт инструкции</button>
+                <div class="export-dropdown">
+                    <button id="exportChatSettings" class="btn-export">Экспорт диалога</button>
+                    <div id="exportChatSettingsMenu" class="dropdown-menu dropdown-menu-settings">
+                        <button class="dropdown-item" data-settings-chat-format="txt">TXT</button>
+                        <button class="dropdown-item" data-settings-chat-format="docx">DOCX</button>
+                        <button class="dropdown-item" data-settings-chat-format="pdf">PDF</button>
+                    </div>
+                </div>
+                <div class="export-dropdown">
+                    <button id="exportPromptSettings" class="btn-export">Экспорт инструкции</button>
+                    <div id="exportPromptSettingsMenu" class="dropdown-menu dropdown-menu-settings">
+                        <button class="dropdown-item" data-settings-prompt-format="txt">TXT</button>
+                        <button class="dropdown-item" data-settings-prompt-format="docx">DOCX</button>
+                        <button class="dropdown-item" data-settings-prompt-format="pdf">PDF</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
