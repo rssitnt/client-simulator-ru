@@ -541,6 +541,7 @@ body {
     background: #0F0F0F;
     min-width: 320px;
     min-height: 0;
+    overflow: hidden;
 }
 
 .panel-header {
