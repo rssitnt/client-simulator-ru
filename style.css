@@ -2347,7 +2347,7 @@ body.light-theme .iro-picker-popup {
 .IroHandle circle {
     fill: #fff !important;
     stroke: #000 !important;
-    stroke-width: 2px !important;
+    stroke-width: 0.7px !important;
 }
 
 
