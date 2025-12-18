@@ -346,6 +346,7 @@ body.light-theme .message-actions .btn-icon:hover {
 body.light-theme .mobile-tabs {
     background: #f5f5f5;
     border-bottom: 1px solid #ddd;
+    padding: 10px 50px;
 }
 
 body.light-theme .mobile-tab {
@@ -439,7 +440,7 @@ body {
 .mobile-tabs {
     display: none;
     background: #0F0F0F;
-    padding: 10px;
+    padding: 10px 50px; /* Боковые отступы для плавающих кнопок */
     gap: 8px;
     border-bottom: 1px solid #2a2a2a;
     flex-shrink: 0;
@@ -1940,11 +1941,15 @@ body.light-theme .btn-settings-floating:hover {
     color: #333;
 }
 
-/* Мобильная версия - кнопки под табами */
+/* Мобильная версия - кнопки в одной линии с табами */
 @media (max-width: 768px) {
-    .btn-clear-floating,
+    .btn-clear-floating {
+        top: 12px;
+        left: 10px;
+    }
     .btn-settings-floating {
-        top: 58px; /* Под табами */
+        top: 12px;
+        right: 10px;
     }
 }
 
