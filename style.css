@@ -1173,7 +1173,7 @@ body.light-theme .prompt-variations-container::-webkit-scrollbar-thumb:hover {
 }
 
 .prompt-variation-chip {
-    padding: 4px 12px;
+    padding: 3px 12px 5px;
     background: #1a1a1a;
     border: none;
     border-radius: 14px;
@@ -1185,6 +1185,7 @@ body.light-theme .prompt-variations-container::-webkit-scrollbar-thumb:hover {
     display: flex;
     align-items: center;
     gap: 6px;
+    line-height: 1;
 }
 
 .prompt-variation-chip:hover {
