@@ -2507,16 +2507,20 @@ body.light-theme .btn-export:hover {
 
 /* AI Improve Button */
 .btn-ai-improve {
-    background: var(--color-accent) !important;
-    color: #fff !important;
+    background: transparent !important;
+    color: var(--color-accent) !important;
     border: none !important;
     box-shadow: none !important;
     outline: none !important;
     transition: none !important;
-    border-radius: 50% !important;
     padding: 0 !important;
-    width: 32px !important;
-    height: 32px !important;
+    width: auto !important;
+    height: auto !important;
+}
+
+.btn-ai-improve span {
+    position: relative;
+    top: -2px;
 }
 
 .btn-ai-improve:hover,
@@ -2526,8 +2530,8 @@ body.light-theme .btn-ai-improve,
 body.light-theme .btn-ai-improve:hover,
 body.light-theme .btn-ai-improve:active,
 body.light-theme .btn-ai-improve:focus {
-    background: var(--color-accent) !important;
-    color: #fff !important;
+    background: transparent !important;
+    color: var(--color-accent) !important;
     border: none !important;
     transform: none !important;
     outline: none !important;
