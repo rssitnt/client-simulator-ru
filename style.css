@@ -126,7 +126,7 @@ body.light-theme .btn-export:hover {
 
 body.light-theme .instruction-tabs {
     background: #f5f5f5;
-    border-color: #eee;
+    border: none !important;
 }
 
 body.light-theme .instruction-tab {
@@ -345,7 +345,7 @@ body.light-theme .message-actions .btn-icon:hover {
 /* Мобильные табы */
 body.light-theme .mobile-tabs {
     background: #f5f5f5;
-    border-bottom: 1px solid #ddd;
+    border-bottom: none;
     padding: 10px 50px;
 }
 
@@ -442,7 +442,7 @@ body {
     background: #0F0F0F;
     padding: 10px 50px; /* Боковые отступы для плавающих кнопок */
     gap: 8px;
-    border-bottom: 1px solid #2a2a2a;
+    border-bottom: none;
     flex-shrink: 0;
 }
 
@@ -450,7 +450,7 @@ body {
     flex: 1;
     padding: 10px 16px;
     background: #252525;
-    border: 1px solid #333333;
+    border: none;
     color: #e0e0e0;
     border-radius: 4px;
     cursor: pointer;
@@ -465,7 +465,7 @@ body {
 
 .mobile-tab.active {
     background: var(--color-accent);
-    border-color: var(--color-accent);
+    border: none;
     color: #fff;
 }
 
@@ -1102,7 +1102,7 @@ body {
     gap: 0;
     padding: 0 16px;
     background: #0F0F0F;
-    border-bottom: 1px solid #252525;
+    border-bottom: none;
     flex-shrink: 0;
 }
 
