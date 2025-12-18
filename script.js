@@ -1831,10 +1831,14 @@ function exportPromptToDocx(text, filename) {
             paraOpts.spacing = { before: 200, after: 100 };
         }
         // **ЗАГОЛОВОК** на отдельной строке (может содержать скобки и другие символы)
-        else if (/^\*\*.+\*\*$/.test(trimmed) && !trimmed.slice(2, -2).includes('**')) {
+        else if (trimmed.startsWith('**') && trimmed.endsWith('**') && trimmed.length > 4) {
             const headerText = trimmed.slice(2, -2);
-            paraOpts.children = [new TextRun({ text: headerText, bold: true, size: 28 })];
-            paraOpts.spacing = { before: 240, after: 120 };
+            if (!headerText.includes('**')) {
+                paraOpts.children = [new TextRun({ text: headerText, bold: true, size: 28 })];
+                paraOpts.spacing = { before: 240, after: 120 };
+            } else {
+                paraOpts.children = parseStyledText(line, TextRun);
+            }
         }
         // Маркированный список
         else if (line.startsWith('- ') || line.startsWith('* ')) {
