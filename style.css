@@ -241,13 +241,13 @@ body.light-theme .prompt-preview b {
 }
 
 body.light-theme .prompt-preview code {
-    background: #e0e0e0;
-    color: #d32f2f;
+    background: transparent;
+    color: inherit;
 }
 
 body.light-theme .prompt-preview pre {
-    background: #f0f0f0;
-    border-color: #ddd;
+    background: transparent;
+    border: none;
 }
 
 body.light-theme .prompt-preview em,
@@ -697,7 +697,9 @@ body {
     padding: 12px;
     background: #0a0a0a;
     border-radius: 6px;
-    overflow-x: auto;
+    overflow-x: hidden;
+    white-space: pre-wrap;
+    word-break: break-word;
     border: 1px solid #2a2a2a;
 }
 
@@ -1522,22 +1524,26 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
 }
 
 .prompt-preview code {
-    font-family: 'Consolas', 'Monaco', monospace;
-    font-size: 0.9em;
-    background: var(--color-bg-secondary);
-    padding: 2px 6px;
-    border-radius: 4px;
-    border: 1px solid var(--color-border);
-    color: var(--color-accent);
+    font-family: inherit;
+    font-size: inherit;
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+    border: none;
+    color: inherit;
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
 .prompt-preview pre {
-    margin: 16px 0;
-    padding: 16px;
-    background: #1a1a1a;
-    border: 1px solid #333;
-    border-radius: 8px;
-    overflow-x: auto;
+    margin: 12px 0;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    overflow-x: hidden;
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
 .prompt-preview pre code {
@@ -1545,7 +1551,18 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
     padding: 0;
     background: none;
     border: none;
-    color: #e0e0e0;
+    color: inherit;
+    font-family: inherit;
+    font-size: inherit;
+}
+
+/* Убираем подсветку синтаксиса в промпте */
+.prompt-preview pre code,
+.prompt-preview pre code *,
+.prompt-preview code,
+.prompt-preview code * {
+    color: inherit !important;
+    background: transparent !important;
 }
 
 .prompt-preview blockquote {

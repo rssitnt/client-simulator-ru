@@ -755,7 +755,7 @@ function autoResizeNameInput() {
 
 function hideSettingsModal() {
     settingsModal.classList.remove('active');
-}
+    }
 
 function updateUserNameDisplay() {
     const name = localStorage.getItem('managerName') || 'Гость';
@@ -1979,7 +1979,7 @@ userInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shift
 userInput.addEventListener('input', () => {
     autoResizeTextarea(userInput);
     updateSendBtnState();
-});
+    });
 clearChatBtn.addEventListener('click', () => { if (confirm('Очистить чат?')) clearChat(); });
 startBtn.addEventListener('click', startConversationHandler);
 rateChatBtn.addEventListener('click', rateChat);
