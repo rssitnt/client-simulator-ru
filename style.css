@@ -2001,6 +2001,7 @@ body.light-theme .btn-icon:hover {
     align-items: center;
     gap: 12px;
     margin-bottom: 16px;
+    line-height: 1; /* Для лучшего выравнивания текста */
 }
 
 .settings-row:last-child {
@@ -2011,25 +2012,22 @@ body.light-theme .btn-icon:hover {
     color: #888;
     font-size: 14px;
     white-space: nowrap;
+    display: flex;
+    align-items: center;
 }
 
 /* Theme Toggle */
 .theme-toggle {
     display: flex;
     align-items: center;
-    gap: 8px;
-}
-
-.theme-icon-svg {
-    color: #666;
-    width: 16px;
-    height: 16px;
 }
 
 .toggle-switch {
     position: relative;
-    width: 40px;
-    height: 20px;
+    width: 44px;
+    height: 22px;
+    display: flex;
+    align-items: center;
 }
 
 .toggle-switch input {
@@ -2045,68 +2043,106 @@ body.light-theme .btn-icon:hover {
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: #444;
-    transition: 0.2s;
-    border-radius: 20px;
+    background-color: #333;
+    transition: 0.3s;
+    border-radius: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 6px; /* Чуть увеличил отступ */
+}
+
+.slider-icon {
+    color: #888; /* Цвет неактивных иконок */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    transition: color 0.3s;
+    width: 18px; /* Совпадает с размером круга */
+    height: 18px;
+}
+
+.slider-icon svg {
+    width: 12px;
+    height: 12px;
 }
 
 .toggle-slider:before {
     position: absolute;
     content: "";
-    height: 16px;
-    width: 16px;
+    height: 18px;
+    width: 18px;
     left: 2px;
-    bottom: 2px;
+    top: 2px;
     background-color: #fff;
-    transition: 0.2s;
+    transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     border-radius: 50%;
-}
-
-input:checked + .toggle-slider {
-    background-color: var(--color-accent);
+    z-index: 2;
 }
 
 input:checked + .toggle-slider:before {
-    transform: translateX(20px);
+    transform: translateX(22px);
 }
 
-/* Name Input */
-.name-input {
-    background: #2a2a2a;
-    border: none;
-    border-radius: 6px;
-    padding: 8px 12px;
-    color: #fff;
-    font-size: 14px;
-    width: auto;
-    min-width: 60px;
-    max-width: 200px;
-    outline: none;
+/* Активная иконка (под белым кругом) */
+input:not(:checked) + .toggle-slider .moon,
+input:checked + .toggle-slider .sun {
+    color: #1a1a1a;
 }
 
-.name-input::placeholder {
+/* Неактивная иконка */
+input:checked + .toggle-slider .moon,
+input:not(:checked) + .toggle-slider .sun {
     color: #666;
 }
 
-/* Role */
+/* Стили для светлой темы */
+body.light-theme .toggle-slider .moon,
+body.light-theme .toggle-slider .sun {
+    color: #999;
+}
+
+body.light-theme input:not(:checked) + .toggle-slider .moon,
+body.light-theme input:checked + .toggle-slider .sun {
+    color: #1a1a1a;
+}
+
+/* Роль */
+.role-row {
+    align-items: center;
+}
+
 .role-text {
     color: #ccc;
     font-size: 14px;
+    display: flex;
+    align-items: center;
+    height: 24px; /* Тот же рост что и у кнопки */
 }
 
 .btn-change {
     background: transparent;
     border: none;
     color: #666;
-    font-size: 12px;
+    font-size: 13px;
     cursor: pointer;
-    padding: 4px 8px;
+    padding: 0 8px;
     border-radius: 4px;
-    transition: color 0.2s;
+    transition: all 0.2s;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    margin-left: 4px; /* Небольшой отступ от текста роли */
 }
 
 .btn-change:hover {
-    color: var(--color-accent);
+    color: #fff;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+body.light-theme .btn-change:hover {
+    color: #333;
 }
 
 /* Password Section */
@@ -2202,7 +2238,28 @@ body.light-theme .theme-icon-svg {
 }
 
 body.light-theme .toggle-slider {
-    background-color: #ccc;
+    background-color: #e0e0e0;
+}
+
+body.light-theme .toggle-slider:before {
+    background-color: #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+body.light-theme .slider-icon {
+    color: #999;
+}
+
+body.light-theme input:checked + .toggle-slider {
+    background-color: #e0e0e0;
+}
+
+body.light-theme input:not(:checked) + .toggle-slider .moon {
+    color: #1a1a1a;
+}
+
+body.light-theme input:checked + .toggle-slider .sun {
+    color: #1a1a1a;
 }
 
 body.light-theme .name-input {
@@ -2215,11 +2272,16 @@ body.light-theme .name-input::placeholder {
 }
 
 body.light-theme .role-text {
-    color: #333;
+    color: #1a1a1a;
 }
 
 body.light-theme .btn-change {
-    color: #999;
+    color: #888;
+}
+
+body.light-theme .btn-change:hover {
+    color: #000;
+    background: rgba(0, 0, 0, 0.05);
 }
 
 body.light-theme .password-section {
