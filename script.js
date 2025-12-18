@@ -1558,6 +1558,7 @@ async function generateAIResponse() {
         
         userInput.value = aiMessage;
         autoResizeTextarea(userInput);
+        updateSendBtnState(); // Активируем кнопку отправки
         userInput.focus();
         
     } catch (error) {
