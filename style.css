@@ -1237,8 +1237,6 @@ body.light-theme .dropdown-option.active {
     font-size: 13px;
     font-weight: 500;
     transition: all 0.2s;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -1px;
 }
 
 .instruction-tab:hover {
@@ -1247,7 +1245,6 @@ body.light-theme .dropdown-option.active {
 
 .instruction-tab.active {
     color: var(--color-accent);
-    border-bottom-color: var(--color-accent);
 }
 
 /* Prompt variations */
