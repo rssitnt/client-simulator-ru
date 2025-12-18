@@ -891,7 +891,7 @@ body {
     align-items: center;
     gap: 10px;
     padding: 12px 20px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--color-accent);
     border: none;
     border-radius: 8px;
     color: #fff;
@@ -1062,7 +1062,7 @@ body {
     width: 44px;
     height: 44px;
     padding: 0;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--color-accent);
     border: none;
     color: #fff;
     border-radius: 6px;
@@ -2162,6 +2162,40 @@ body.light-theme .btn-change:hover {
     color: #333;
 }
 
+/* Color Picker */
+.color-picker {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    padding: 0;
+    background: transparent;
+    -webkit-appearance: none;
+}
+
+.color-picker::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.color-picker::-webkit-color-swatch {
+    border: 2px solid #444;
+    border-radius: 6px;
+}
+
+.color-picker::-moz-color-swatch {
+    border: 2px solid #444;
+    border-radius: 6px;
+}
+
+body.light-theme .color-picker::-webkit-color-swatch {
+    border-color: #ddd;
+}
+
+body.light-theme .color-picker::-moz-color-swatch {
+    border-color: #ddd;
+}
+
 /* Name Input */
 .name-input {
     background: #2a2a2a;
@@ -2361,10 +2395,10 @@ body.light-theme .btn-export:hover {
 
 /* AI Improve Button */
 .btn-ai-improve {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    background: var(--color-accent) !important;
     color: #fff !important;
     border: none !important;
-    transition: none !important; /* Без анимаций */
+    transition: none !important;
 }
 
 .btn-ai-improve:hover,
@@ -2374,7 +2408,7 @@ body.light-theme .btn-ai-improve,
 body.light-theme .btn-ai-improve:hover,
 body.light-theme .btn-ai-improve:active,
 body.light-theme .btn-ai-improve:focus {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    background: var(--color-accent) !important;
     color: #fff !important;
     border: none !important;
     transform: none !important;
@@ -2472,11 +2506,11 @@ body.light-theme .ai-improve-modal .btn-modal-cancel:hover {
     display: flex;
     align-items: center;
     gap: 8px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--color-accent);
 }
 
 .ai-improve-actions .btn-modal-submit:hover {
-    background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%);
+    background: var(--color-accent-hover);
 }
 
 .ai-improve-actions .btn-modal-submit:disabled {

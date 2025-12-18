@@ -114,6 +114,7 @@ const settingsModal = document.getElementById('settingsModal');
 const currentUserName = document.getElementById('currentUserName');
 const settingsNameInput = document.getElementById('settingsNameInput');
 const themeToggle = document.getElementById('themeToggle');
+const accentColorPicker = document.getElementById('accentColorPicker');
 const currentRoleDisplay = document.getElementById('currentRoleDisplay');
 const changeRoleBtn = document.getElementById('changeRoleBtn');
 const roleChangePassword = document.getElementById('roleChangePassword');
@@ -1001,6 +1002,36 @@ themeToggle.addEventListener('change', () => {
     document.body.classList.toggle('light-theme', isLight);
     localStorage.setItem('theme', isLight ? 'light' : 'dark');
 });
+
+// Accent color picker
+function setAccentColor(color) {
+    // Вычисляем hover цвет (темнее на 15%)
+    const hoverColor = adjustBrightness(color, -15);
+    document.documentElement.style.setProperty('--color-accent', color);
+    document.documentElement.style.setProperty('--color-accent-hover', hoverColor);
+}
+
+function adjustBrightness(hex, percent) {
+    const num = parseInt(hex.replace('#', ''), 16);
+    const amt = Math.round(2.55 * percent);
+    const R = Math.max(0, Math.min(255, (num >> 16) + amt));
+    const G = Math.max(0, Math.min(255, ((num >> 8) & 0x00FF) + amt));
+    const B = Math.max(0, Math.min(255, (num & 0x0000FF) + amt));
+    return '#' + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
+}
+
+accentColorPicker.addEventListener('input', (e) => {
+    const color = e.target.value;
+    setAccentColor(color);
+    localStorage.setItem('accentColor', color);
+});
+
+// Load saved accent color
+const savedAccentColor = localStorage.getItem('accentColor');
+if (savedAccentColor) {
+    accentColorPicker.value = savedAccentColor;
+    setAccentColor(savedAccentColor);
+}
 
 // Load saved theme
 const savedTheme = localStorage.getItem('theme');
