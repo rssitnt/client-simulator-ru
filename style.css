@@ -1944,12 +1944,12 @@ body.light-theme .btn-settings-floating:hover {
 /* Мобильная версия - кнопки в одной линии с табами */
 @media (max-width: 768px) {
     .btn-clear-floating {
-        top: 12px;
-        left: 10px;
+        top: 6px;
+        left: 8px;
     }
     .btn-settings-floating {
-        top: 12px;
-        right: 10px;
+        top: 6px;
+        right: 8px;
     }
 }
 
