@@ -2259,8 +2259,12 @@ resizeHandle1.addEventListener('mousedown', () => {
 document.addEventListener('mousemove', (e) => {
     if (!isResizing) return;
     const container = document.querySelector('.panels-container');
-    const chatWidth = (e.clientX / container.offsetWidth) * 100;
-    if (chatWidth >= 30 && chatWidth <= 70) {
+    const containerWidth = container.offsetWidth;
+    const chatWidth = (e.clientX / containerWidth) * 100;
+    const instructionsWidth = containerWidth - e.clientX;
+    
+    // Минимальная ширина панели инструкций 320px
+    if (chatWidth >= 25 && chatWidth <= 75 && instructionsWidth >= 320) {
         chatPanel.style.flex = `0 0 ${chatWidth}%`;
         instructionsPanel.style.flex = `0 0 ${100 - chatWidth - 1}%`;
     }
