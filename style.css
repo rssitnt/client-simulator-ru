@@ -2271,11 +2271,11 @@ body.light-theme .btn-change:hover {
 }
 
 .color-preset.active {
-    box-shadow: 0 0 0 2px #1a1a1a, 0 0 0 4px currentColor;
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px #fff;
 }
 
 body.light-theme .color-preset.active {
-    box-shadow: 0 0 0 2px #fff, 0 0 0 4px currentColor;
+    box-shadow: 0 0 0 2px #000, 0 0 0 4px #000;
 }
 
 /* More Colors Button and Popup */
