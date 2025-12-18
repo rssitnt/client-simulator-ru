@@ -2342,19 +2342,12 @@ body.light-theme .iro-picker-popup {
     margin: 0 auto;
 }
 
-/* Маркер выбора цвета - два кольца (белое внутри, чёрное снаружи) */
+/* Маркер выбора цвета - белая точка с чёрной обводкой */
 .IroHandle,
 .IroHandle circle {
-    fill: none !important;
-    stroke: #fff !important;
+    fill: #fff !important;
+    stroke: #000 !important;
     stroke-width: 2px !important;
-}
-
-/* Внешнее чёрное кольцо через тень */
-.IroHandle {
-    filter: 
-        drop-shadow(0 0 0 1px #000)
-        drop-shadow(0 0 0 1px #000) !important;
 }
 
 
