@@ -1255,45 +1255,13 @@ body.light-theme .dropdown-option.active {
 /* Prompt variations */
 .prompt-variations-container {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
-    padding: 6px 16px;
+    padding: 8px 16px;
     background: transparent;
-    overflow-x: auto;
     flex-shrink: 0;
     align-items: center;
     min-height: 34px;
-    scrollbar-width: thin;
-    scrollbar-color: #555 transparent;
-}
-
-.prompt-variations-container::-webkit-scrollbar {
-    height: 6px;
-}
-
-.prompt-variations-container::-webkit-scrollbar-track {
-    background: transparent; /* Без фона */
-}
-
-.prompt-variations-container::-webkit-scrollbar-thumb {
-    background-color: #555; /* Серый ползунок */
-    border-radius: 3px;
-}
-
-.prompt-variations-container::-webkit-scrollbar-thumb:hover {
-    background-color: #777;
-}
-
-/* Светлая тема */
-body.light-theme .prompt-variations-container {
-    scrollbar-color: #ccc transparent;
-}
-
-body.light-theme .prompt-variations-container::-webkit-scrollbar-thumb {
-    background-color: #ccc;
-}
-
-body.light-theme .prompt-variations-container::-webkit-scrollbar-thumb:hover {
-    background-color: #aaa;
 }
 
 .prompt-variation-chip {
