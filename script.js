@@ -1071,15 +1071,24 @@ function initIroPicker() {
         width: 180,
         color: savedAccentColor,
         borderWidth: 0,
+        borderColor: 'transparent',
         handleRadius: 8,
+        padding: 0,
+        margin: 0,
         layout: [
             { 
               component: iro.ui.Wheel,
+              options: {
+                borderWidth: 0,
+                borderColor: 'transparent'
+              }
             },
             { 
               component: iro.ui.Slider,
               options: {
-                sliderType: 'value'
+                sliderType: 'value',
+                borderWidth: 0,
+                borderColor: 'transparent'
               }
             }
         ]
@@ -1895,7 +1904,7 @@ function exportPromptToDocx(text, filename) {
             if (!headerText.includes('**')) {
                 paraOpts.children = [new TextRun({ text: headerText, bold: true, size: 28 })];
                 paraOpts.spacing = { before: 240, after: 120 };
-            } else {
+        } else {
                 paraOpts.children = parseStyledText(line, TextRun);
             }
         }

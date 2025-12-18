@@ -2351,11 +2351,16 @@ body.light-theme .iro-picker-popup {
 .IroWheel {
     overflow: hidden !important;
     border-radius: 50% !important;
-    background: #1a1a1a !important;
 }
 
-body.light-theme .IroWheel {
-    background: #e0e0e0 !important;
+/* Скрываем внешнюю обводку колеса */
+.IroWheel svg > defs + * {
+    stroke: none !important;
+    stroke-width: 0 !important;
+}
+
+.IroWheelBorder {
+    display: none !important;
 }
 
 .IroWheel svg, .IroSlider svg {
