@@ -1280,6 +1280,11 @@ body.light-theme .dropdown-option.active {
     line-height: 1;
 }
 
+.prompt-variation-chip .chip-name {
+    position: relative;
+    top: -1px;
+}
+
 .prompt-variation-chip:hover {
     background: #252525;
     color: #e0e0e0;
