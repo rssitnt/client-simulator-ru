@@ -2252,13 +2252,24 @@ function checkTabsCompactMode() {
     const promptPanel = document.getElementById('instructionsPanel');
     if (!promptPanel) return;
     
-    const panelWidth = promptPanel.offsetWidth;
+    const panelWidth = promptPanel.getBoundingClientRect().width;
     
     // При ширине панели меньше 420px - включаем компактный режим
     if (panelWidth < 420) {
         promptPanel.classList.add('compact-tabs');
     } else {
         promptPanel.classList.remove('compact-tabs');
+    }
+}
+
+// Also check on panel resize via ResizeObserver
+if (typeof ResizeObserver !== 'undefined') {
+    const promptPanel = document.getElementById('instructionsPanel');
+    if (promptPanel) {
+        const resizeObserver = new ResizeObserver(() => {
+            checkTabsCompactMode();
+        });
+        resizeObserver.observe(promptPanel);
     }
 }
 
