@@ -1089,7 +1089,8 @@ function initIroPicker() {
               options: {
                 sliderType: 'value',
                 borderWidth: 0,
-                borderColor: 'transparent'
+                borderColor: 'transparent',
+                handleRadius: 6
               }
             }
         ]

@@ -2357,11 +2357,6 @@ body.light-theme .iro-picker-popup {
         drop-shadow(0 0 0 1px #000) !important;
 }
 
-/* Уменьшенный маркер для ползунка яркости */
-.IroSlider .IroHandle {
-    transform: scale(0.65) !important;
-    transform-origin: center !important;
-}
 
 .IroWheel, .IroSlider {
     border: none !important;
