@@ -2195,65 +2195,64 @@ body.light-theme .btn-change:hover {
 .color-presets {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
+    margin-left: 12px;
 }
 
 .color-preset {
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
-    border: 2px solid transparent;
+    border: none;
     cursor: pointer;
-    transition: transform 0.15s, border-color 0.15s;
+    transition: transform 0.15s, box-shadow 0.15s;
     padding: 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
 
 .color-preset:hover {
-    transform: scale(1.15);
+    transform: scale(1.2);
 }
 
 .color-preset.active {
-    border-color: #fff;
-    box-shadow: 0 0 0 2px rgba(0,0,0,0.3);
+    box-shadow: 0 0 0 2px #1a1a1a, 0 0 0 4px currentColor;
 }
 
 body.light-theme .color-preset.active {
-    border-color: #333;
-    box-shadow: 0 0 0 2px rgba(0,0,0,0.1);
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px currentColor;
 }
 
 /* Color Picker */
 .color-picker {
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
     border: none;
     border-radius: 50%;
     cursor: pointer;
     padding: 0;
-    background: transparent;
+    background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red);
     -webkit-appearance: none;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    transition: transform 0.15s;
+}
+
+.color-picker:hover {
+    transform: scale(1.2);
 }
 
 .color-picker::-webkit-color-swatch-wrapper {
     padding: 0;
+    border-radius: 50%;
 }
 
 .color-picker::-webkit-color-swatch {
-    border: 2px dashed #555;
+    border: none;
     border-radius: 50%;
 }
 
 .color-picker::-moz-color-swatch {
-    border: 2px dashed #555;
+    border: none;
     border-radius: 50%;
-}
-
-body.light-theme .color-picker::-webkit-color-swatch {
-    border-color: #bbb;
-}
-
-body.light-theme .color-picker::-moz-color-swatch {
-    border-color: #bbb;
 }
 
 /* Name Input */
