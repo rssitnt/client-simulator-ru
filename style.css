@@ -2315,7 +2315,6 @@ body.light-theme .more-colors-btn:hover {
 }
 
 .more-colors-popup {
-    display: none;
     position: absolute;
     top: calc(100% + 8px);
     right: 0;
@@ -2325,9 +2324,9 @@ body.light-theme .more-colors-btn:hover {
     box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     z-index: 1000;
     width: 200px;
-    display: grid;
     grid-template-columns: repeat(8, 1fr);
     gap: 6px;
+    display: none;
 }
 
 .more-colors-popup.active {

@@ -1050,9 +1050,16 @@ const moreColorsPopup = document.getElementById('moreColorsPopup');
 const colorOptions = document.querySelectorAll('.color-option');
 
 if (moreColorsBtn && moreColorsPopup) {
+    const moreColorsContainer = moreColorsBtn.parentElement;
+    
     moreColorsBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         moreColorsPopup.classList.toggle('active');
+    });
+
+    // Close popup when mouse leaves container
+    moreColorsContainer.addEventListener('mouseleave', () => {
+        moreColorsPopup.classList.remove('active');
     });
 
     // Close popup on click outside
