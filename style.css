@@ -2368,6 +2368,11 @@ body.light-theme .iro-picker-popup {
     margin-top: 20px !important;
     border-radius: 8px !important;
     overflow: hidden !important;
+    background: #1a1a1a !important;
+}
+
+body.light-theme .IroSlider {
+    background: #e0e0e0 !important;
 }
 
 /* Name Input */
