@@ -2342,16 +2342,19 @@ body.light-theme .iro-picker-popup {
     margin: 0 auto;
 }
 
-/* Маркер выбора цвета - два кольца (белое и чёрное) */
+/* Маркер выбора цвета - два кольца (белое внутри, чёрное снаружи) */
 .IroHandle,
 .IroHandle circle {
     fill: none !important;
-    stroke: #fff !important;
-    stroke-width: 1.5px !important;
+    stroke: #000 !important;
+    stroke-width: 3px !important;
+    paint-order: stroke fill !important;
 }
 
-.IroHandle {
-    filter: drop-shadow(0 0 0 1.2px #000) !important;
+/* Белое кольцо поверх чёрного */
+.IroHandle circle {
+    stroke: #fff !important;
+    stroke-width: 1.5px !important;
 }
 
 
@@ -2590,10 +2593,13 @@ body.light-theme .btn-export:hover {
     background: var(--color-accent) !important;
     color: #fff !important;
     border: none !important;
-    box-shadow: none !important; /* Убираем все тени */
+    box-shadow: none !important;
+    outline: none !important;
     transition: none !important;
-    border-radius: 8px; /* Явно задаем скругление углов */
-    padding: 6px 10px; /* Немного уменьшим отступы для более компактного вида */
+    border-radius: 50% !important;
+    padding: 0 !important;
+    width: 32px !important;
+    height: 32px !important;
 }
 
 .btn-ai-improve:hover,
@@ -2608,7 +2614,7 @@ body.light-theme .btn-ai-improve:focus {
     border: none !important;
     transform: none !important;
     outline: none !important;
-    box-shadow: none !important; /* Убираем все тени при наведении/фокусе */
+    box-shadow: none !important;
 }
 
 /* AI Improve Modal */
