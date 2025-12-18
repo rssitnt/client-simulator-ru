@@ -2348,6 +2348,16 @@ body.light-theme .iro-picker-popup {
     outline: none !important;
 }
 
+.IroWheel {
+    overflow: hidden !important;
+    border-radius: 50% !important;
+    background: #1a1a1a !important;
+}
+
+body.light-theme .IroWheel {
+    background: #e0e0e0 !important;
+}
+
 .IroWheel svg, .IroSlider svg {
     display: block;
 }
