@@ -2212,10 +2212,69 @@ instructionTabs.forEach(tab => {
             }
         });
         
+        // Sync select with tabs
+        const instructionSelect = document.getElementById('instructionSelect');
+        if (instructionSelect) {
+            instructionSelect.value = instructionType;
+        }
+        
         renderVariations();
         updatePreview();
     });
 });
+
+// Instruction select for compact mode
+const instructionSelect = document.getElementById('instructionSelect');
+if (instructionSelect) {
+    instructionSelect.addEventListener('change', () => {
+        syncCurrentEditorNow();
+        
+        const instructionType = instructionSelect.value;
+        
+        instructionTabs.forEach(t => t.classList.remove('active'));
+        const activeTab = document.querySelector(`.instruction-tab[data-instruction="${instructionType}"]`);
+        if (activeTab) activeTab.classList.add('active');
+        
+        instructionEditors.forEach(editor => {
+            editor.classList.remove('active');
+            if (editor.dataset.instruction === instructionType) {
+                editor.classList.add('active');
+            }
+        });
+        
+        renderVariations();
+        updatePreview();
+    });
+}
+
+// Check if tabs need compact mode
+function checkTabsCompactMode() {
+    const promptPanel = document.getElementById('instructionsPanel');
+    const tabsContainer = document.querySelector('.instruction-tabs');
+    if (!promptPanel || !tabsContainer) return;
+    
+    // Temporarily show tabs to measure
+    promptPanel.classList.remove('compact-tabs');
+    
+    const panelWidth = promptPanel.offsetWidth;
+    const headerButtons = document.querySelector('.header-buttons');
+    const buttonsWidth = headerButtons ? headerButtons.offsetWidth : 100;
+    const availableWidth = panelWidth - buttonsWidth - 40; // 40px for padding
+    
+    // Calculate total tabs width
+    let tabsWidth = 0;
+    tabsContainer.querySelectorAll('.instruction-tab').forEach(tab => {
+        tabsWidth += tab.offsetWidth;
+    });
+    
+    if (tabsWidth > availableWidth) {
+        promptPanel.classList.add('compact-tabs');
+    }
+}
+
+// Run on load and resize
+checkTabsCompactMode();
+window.addEventListener('resize', debounce(checkTabsCompactMode, 100));
 
 // Textarea input listeners for sync
 [systemPromptInput, managerPromptInput, raterPromptInput].forEach(input => {
@@ -2267,6 +2326,7 @@ document.addEventListener('mousemove', (e) => {
     if (chatWidth >= 25 && chatWidth <= 75 && instructionsWidth >= 320) {
         chatPanel.style.flex = `0 0 ${chatWidth}%`;
         instructionsPanel.style.flex = `0 0 ${100 - chatWidth - 1}%`;
+        checkTabsCompactMode();
     }
 });
 

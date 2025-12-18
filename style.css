@@ -1109,40 +1109,41 @@ body {
     border-bottom: none;
     flex: 1;
     min-width: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: hidden;
     white-space: nowrap;
-    scrollbar-width: thin;
-    scrollbar-color: #444 transparent;
 }
 
-.instruction-tabs::-webkit-scrollbar {
-    height: 4px;
+/* Выпадающий список для узких экранов */
+.instruction-select {
+    display: none;
+    padding: 8px 12px;
+    background: #1a1a1a;
+    border: none;
+    border-radius: 6px;
+    color: #e0e0e0;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    outline: none;
+    min-width: 100px;
 }
 
-.instruction-tabs::-webkit-scrollbar-track {
-    background: transparent;
+.instruction-select:focus {
+    outline: none;
 }
 
-.instruction-tabs::-webkit-scrollbar-thumb {
-    background: #444;
-    border-radius: 2px;
+body.light-theme .instruction-select {
+    background: #f0f0f0;
+    color: #1a1a1a;
 }
 
-.instruction-tabs::-webkit-scrollbar-thumb:hover {
-    background: #666;
+/* При узкой панели - скрываем табы, показываем select */
+.prompt-panel.compact-tabs .instruction-tabs {
+    display: none;
 }
 
-body.light-theme .instruction-tabs {
-    scrollbar-color: #ccc transparent;
-}
-
-body.light-theme .instruction-tabs::-webkit-scrollbar-thumb {
-    background: #ccc;
-}
-
-body.light-theme .instruction-tabs::-webkit-scrollbar-thumb:hover {
-    background: #aaa;
+.prompt-panel.compact-tabs .instruction-select {
+    display: block;
 }
 
 .instruction-tab {
