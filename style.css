@@ -2145,6 +2145,28 @@ body.light-theme .btn-change:hover {
     color: #333;
 }
 
+/* Name Input */
+.name-input {
+    background: #2a2a2a;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: #fff;
+    font-size: 14px;
+    outline: none;
+    width: auto;
+    min-width: 100px;
+    transition: background 0.2s;
+}
+
+.name-input:focus {
+    background: #333;
+}
+
+.name-input::placeholder {
+    color: #666;
+}
+
 /* Password Section */
 .password-section {
     margin-top: 12px;
