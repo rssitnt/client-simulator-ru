@@ -1613,23 +1613,6 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
 }
 
 /* Preview button - hidden by default, shown on header hover */
-.btn-preview {
-    opacity: 0;
-    transition: opacity 0.2s, background 0.2s;
-}
-
-.panel-header:hover .btn-preview {
-    opacity: 1;
-}
-
-/* Preview button active state - same as normal button */
-.btn-preview.active {
-}
-
-.btn-preview.active:hover {
-}
-
-
 /* Responsive design */
 @media (max-width: 1024px) {
     .message {

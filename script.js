@@ -2027,9 +2027,6 @@ function initWYSIWYGMode() {
         wrapper.classList.add('preview-mode');
     });
     
-    const togglePreviewBtn = document.getElementById('togglePreviewBtn');
-    if (togglePreviewBtn) togglePreviewBtn.style.display = 'none';
-    
     const systemPromptPreview = document.getElementById('systemPromptPreview');
     const managerPromptPreview = document.getElementById('managerPromptPreview');
     const raterPromptPreview = document.getElementById('raterPromptPreview');
