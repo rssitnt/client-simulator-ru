@@ -2017,8 +2017,8 @@ body.light-theme .btn-icon:hover {
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-bottom: 16px;
-    line-height: 1; /* Для лучшего выравнивания текста */
+    margin-bottom: 24px; /* Увеличил отступ между параметрами */
+    line-height: 1;
 }
 
 .settings-row:last-child {
@@ -2186,8 +2186,8 @@ body.light-theme .btn-change:hover {
 
 /* Password Section */
 .password-section {
-    margin-top: 12px;
-    padding-top: 12px;
+    margin-top: 20px;
+    padding-top: 16px;
     border-top: 1px solid #333;
 }
 
@@ -2246,6 +2246,7 @@ body.light-theme .btn-change:hover {
 .export-row {
     flex-wrap: wrap;
     gap: 8px;
+    margin-top: 8px; /* Дополнительный отступ сверху */
 }
 
 .btn-export {
