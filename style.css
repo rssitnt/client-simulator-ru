@@ -1370,6 +1370,8 @@ body.light-theme .prompt-variations-container::-webkit-scrollbar-thumb:hover {
     resize: none;
     outline: none;
     line-height: 1.6;
+    max-width: 100%;
+    box-sizing: border-box;
     transition: background 0.2s;
     overflow-y: auto;
     scrollbar-width: thin;
@@ -1441,6 +1443,7 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
     min-height: 0;
     position: relative;
     gap: 0;
+    overflow: hidden;
 }
 
 /* ВАЖНО: скрываем неактивные вкладки */
@@ -1490,6 +1493,8 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
     scrollbar-width: thin;
     scrollbar-color: #444 #0F0F0F;
     outline: none;
+    max-width: 100%;
+    box-sizing: border-box;
     min-height: 0;
     cursor: text;
 }
