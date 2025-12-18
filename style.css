@@ -2293,12 +2293,7 @@ body.light-theme .color-preset.active {
     cursor: pointer;
     padding: 0;
     background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-    transition: transform 0.15s;
-}
-
-.color-picker-trigger:hover {
-    transform: scale(1.1);
+    transition: background 0.2s;
 }
 
 .iro-picker-popup {

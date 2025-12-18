@@ -1034,17 +1034,14 @@ function updateColorPresetActive(color) {
         }
     });
 
-    // Update custom color button active state
+    // Update custom color button - show selected color or rainbow gradient
     if (customColorBtn) {
         if (!isPreset) {
-            customColorBtn.classList.add('active');
-            customColorBtn.style.boxShadow = `0 0 0 2px #1a1a1a, 0 0 0 4px ${color}`;
-            if (document.body.classList.contains('light-theme')) {
-                customColorBtn.style.boxShadow = `0 0 0 2px #fff, 0 0 0 4px ${color}`;
-            }
+            // Custom color selected - show the color
+            customColorBtn.style.background = color;
         } else {
-            customColorBtn.classList.remove('active');
-            customColorBtn.style.boxShadow = '0 1px 3px rgba(0,0,0,0.3)';
+            // Preset selected - show rainbow
+            customColorBtn.style.background = 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)';
         }
     }
 }
