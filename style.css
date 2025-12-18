@@ -2263,7 +2263,11 @@ body.light-theme .btn-export:hover {
 
 .btn-ai-improve:hover,
 .btn-ai-improve:active,
-.btn-ai-improve:focus {
+.btn-ai-improve:focus,
+body.light-theme .btn-ai-improve,
+body.light-theme .btn-ai-improve:hover,
+body.light-theme .btn-ai-improve:active,
+body.light-theme .btn-ai-improve:focus {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
     color: #fff !important;
     border: none !important;
