@@ -1073,8 +1073,8 @@ function initIroPicker() {
     iroPicker = new iro.ColorPicker("#iroPicker", {
         width: 180,
         color: savedAccentColor,
-        borderWidth: 1,
-        borderColor: "#333",
+        borderWidth: 0,
+        handleRadius: 8,
         layout: [
             { 
               component: iro.ui.Wheel,
