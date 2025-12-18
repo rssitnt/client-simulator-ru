@@ -133,7 +133,7 @@ body.light-theme .instruction-tab {
 
 body.light-theme .instruction-tab.active {
     background: #ffffff;
-    color: #1a1a1a;
+    color: var(--color-accent);
 }
 
 body.light-theme .instruction-content {
