@@ -2342,10 +2342,17 @@ body.light-theme .iro-picker-popup {
     margin: 0 auto;
 }
 
+/* Маркер выбора цвета - два кольца (белое внутри, чёрное снаружи) */
 .IroHandle {
+    fill: none !important;
+    stroke: #000 !important;
+    stroke-width: 4px !important;
+}
+
+.IroHandle circle {
+    fill: none !important;
     stroke: #fff !important;
     stroke-width: 2px !important;
-    filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000) !important;
 }
 
 .IroWheel, .IroSlider {
@@ -2368,13 +2375,6 @@ body.light-theme .iro-picker-popup {
 .IroColorPicker * {
     stroke-width: 0;
     stroke: none;
-}
-
-/* Возвращаем обводку только для маркера выбора */
-.IroHandle {
-    stroke-width: 2px !important;
-    stroke: #fff !important;
-    filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000) !important;
 }
 
 .IroSlider {
