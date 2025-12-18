@@ -1716,31 +1716,57 @@ function exportCurrentPrompt(format = 'txt') {
 
 function parseStyledText(text, TextRun) {
     const runs = [];
-    let lastIndex = 0;
-    // Порядок важен: сначала ** (bold), потом * (italic)
-    const regex = /(\*\*(.+?)\*\*|__(.+?)__|(?<!\*)\*([^*]+?)\*(?!\*)|\b_([^_]+?)_\b)/g;
-    let match;
+    let remaining = text;
     
-    while ((match = regex.exec(text)) !== null) {
-        // Добавляем текст до найденного паттерна
-        if (match.index > lastIndex) {
-            runs.push(new TextRun({ text: text.slice(lastIndex, match.index), size: 24 }));
+    // Простой парсер: ищем **bold** и *italic* поочерёдно
+    while (remaining.length > 0) {
+        // Ищем ближайший маркер форматирования
+        const boldMatch = remaining.match(/\*\*([^*]+)\*\*/);
+        const italicMatch = remaining.match(/(?<!\*)\*([^*]+)\*(?!\*)/);
+        
+        let nextMatch = null;
+        let matchType = null;
+        
+        // Определяем какой маркер ближе
+        if (boldMatch && italicMatch) {
+            if (remaining.indexOf(boldMatch[0]) <= remaining.indexOf(italicMatch[0])) {
+                nextMatch = boldMatch;
+                matchType = 'bold';
+            } else {
+                nextMatch = italicMatch;
+                matchType = 'italic';
+            }
+        } else if (boldMatch) {
+            nextMatch = boldMatch;
+            matchType = 'bold';
+        } else if (italicMatch) {
+            nextMatch = italicMatch;
+            matchType = 'italic';
         }
-        if (match[2]) { // **bold**
-            runs.push(new TextRun({ text: match[2], bold: true, size: 24 }));
-        } else if (match[3]) { // __bold__
-            runs.push(new TextRun({ text: match[3], bold: true, size: 24 }));
-        } else if (match[4]) { // *italic*
-            runs.push(new TextRun({ text: match[4], italics: true, size: 24 }));
-        } else if (match[5]) { // _italic_
-            runs.push(new TextRun({ text: match[5], italics: true, size: 24 }));
+        
+        if (nextMatch) {
+            const matchIndex = remaining.indexOf(nextMatch[0]);
+            
+            // Добавляем текст до маркера
+            if (matchIndex > 0) {
+                runs.push(new TextRun({ text: remaining.slice(0, matchIndex), size: 24 }));
+            }
+            
+            // Добавляем форматированный текст
+            if (matchType === 'bold') {
+                runs.push(new TextRun({ text: nextMatch[1], bold: true, size: 24 }));
+            } else {
+                runs.push(new TextRun({ text: nextMatch[1], italics: true, size: 24 }));
+            }
+            
+            remaining = remaining.slice(matchIndex + nextMatch[0].length);
+        } else {
+            // Нет больше маркеров - добавляем остаток
+            runs.push(new TextRun({ text: remaining, size: 24 }));
+            break;
         }
-        lastIndex = match.index + match[0].length;
     }
-    // Добавляем оставшийся текст
-    if (lastIndex < text.length) {
-        runs.push(new TextRun({ text: text.slice(lastIndex), size: 24 }));
-    }
+    
     if (runs.length === 0) {
         runs.push(new TextRun({ text: text, size: 24 }));
     }
@@ -1780,8 +1806,8 @@ function exportPromptToDocx(text, filename) {
             paraOpts.children = [new TextRun({ text: line.slice(4), bold: true, size: 26 })];
             paraOpts.spacing = { before: 200, after: 100 };
         }
-        // **ЗАГОЛОВОК** на отдельной строке - делаем заголовком
-        else if (/^\*\*[^*]+\*\*$/.test(trimmed)) {
+        // **ЗАГОЛОВОК** на отдельной строке (может содержать скобки и другие символы)
+        else if (/^\*\*.+\*\*$/.test(trimmed) && !trimmed.slice(2, -2).includes('**')) {
             const headerText = trimmed.slice(2, -2);
             paraOpts.children = [new TextRun({ text: headerText, bold: true, size: 28 })];
             paraOpts.spacing = { before: 240, after: 120 };
