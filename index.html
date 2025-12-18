@@ -300,8 +300,22 @@
                     <button class="instruction-tab" data-instruction="manager">Менеджер</button>
                     <button class="instruction-tab" data-instruction="rater">Оценщик</button>
                 </div>
-                <!-- Выпадающий список для узких экранов -->
-                <select class="instruction-select" id="instructionSelect">
+                <!-- Выпадающий список для узких экранов (кастомный) -->
+                <div class="custom-instruction-dropdown" id="instructionDropdown">
+                    <div class="dropdown-trigger">
+                        <span id="selectedInstructionText">Клиент</span>
+                        <svg class="dropdown-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </div>
+                    <div class="dropdown-options" id="instructionOptions">
+                        <div class="dropdown-option active" data-value="client">Клиент</div>
+                        <div class="dropdown-option" data-value="manager">Менеджер</div>
+                        <div class="dropdown-option" data-value="rater">Оценщик</div>
+                    </div>
+                </div>
+                <!-- Скрытый нативный селект для совместимости с существующим кодом -->
+                <select class="instruction-select-hidden" id="instructionSelect" style="display: none;">
                     <option value="client" selected>Клиент</option>
                     <option value="manager">Менеджер</option>
                     <option value="rater">Оценщик</option>

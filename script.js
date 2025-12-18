@@ -2284,38 +2284,79 @@ instructionTabs.forEach(tab => {
             }
         });
         
-        // Sync select with tabs
+        // Sync select and custom dropdown with tabs
         const instructionSelect = document.getElementById('instructionSelect');
         if (instructionSelect) {
             instructionSelect.value = instructionType;
         }
+        
+        const selectedText = document.getElementById('selectedInstructionText');
+        if (selectedText) {
+            const tabText = tab.innerText;
+            selectedText.innerText = tabText;
+        }
+        
+        const dropdownOptions = document.querySelectorAll('.dropdown-option');
+        dropdownOptions.forEach(opt => {
+            opt.classList.toggle('active', opt.dataset.value === instructionType);
+        });
         
         renderVariations();
         updatePreview();
     });
 });
 
-// Instruction select for compact mode
-const instructionSelect = document.getElementById('instructionSelect');
-if (instructionSelect) {
-    instructionSelect.addEventListener('change', () => {
-        syncCurrentEditorNow();
-        
-        const instructionType = instructionSelect.value;
-        
-        instructionTabs.forEach(t => t.classList.remove('active'));
-        const activeTab = document.querySelector(`.instruction-tab[data-instruction="${instructionType}"]`);
-        if (activeTab) activeTab.classList.add('active');
-        
-        instructionEditors.forEach(editor => {
-            editor.classList.remove('active');
-            if (editor.dataset.instruction === instructionType) {
-                editor.classList.add('active');
-            }
+// Instruction dropdown for compact mode (custom implementation)
+const instructionDropdown = document.getElementById('instructionDropdown');
+const selectedInstructionText = document.getElementById('selectedInstructionText');
+const instructionOptions = document.querySelectorAll('.dropdown-option');
+
+if (instructionDropdown) {
+    // Toggle dropdown
+    instructionDropdown.addEventListener('click', (e) => {
+        e.stopPropagation();
+        instructionDropdown.classList.toggle('active');
+    });
+
+    // Option selection
+    instructionOptions.forEach(option => {
+        option.addEventListener('click', (e) => {
+            e.stopPropagation();
+            syncCurrentEditorNow();
+            
+            const instructionType = option.dataset.value;
+            const instructionName = option.innerText;
+            
+            // Update UI
+            selectedInstructionText.innerText = instructionName;
+            instructionOptions.forEach(opt => opt.classList.remove('active'));
+            option.classList.add('active');
+            instructionDropdown.classList.remove('active');
+            
+            // Sync with tabs
+            instructionTabs.forEach(t => t.classList.remove('active'));
+            const activeTab = document.querySelector(`.instruction-tab[data-instruction="${instructionType}"]`);
+            if (activeTab) activeTab.classList.add('active');
+            
+            // Sync with hidden select
+            if (instructionSelect) instructionSelect.value = instructionType;
+            
+            // Switch content
+            instructionEditors.forEach(editor => {
+                editor.classList.remove('active');
+                if (editor.dataset.instruction === instructionType) {
+                    editor.classList.add('active');
+                }
+            });
+            
+            renderVariations();
+            updatePreview();
         });
-        
-        renderVariations();
-        updatePreview();
+    });
+
+    // Close dropdown on click outside
+    document.addEventListener('click', () => {
+        instructionDropdown.classList.remove('active');
     });
 }
 
