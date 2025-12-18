@@ -2280,32 +2280,79 @@ body.light-theme .color-preset.active {
     box-shadow: 0 0 0 2px #fff, 0 0 0 4px currentColor;
 }
 
-/* Native Color Picker */
-.color-picker-native {
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    border: none;
+/* More Colors Button and Popup */
+.more-colors-container {
+    position: relative;
+}
+
+.more-colors-btn {
+    width: 20px;
+    height: 20px;
+    border: 1px dashed #555;
     border-radius: 50%;
-    cursor: pointer;
     background: transparent;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-}
-
-.color-picker-native::-webkit-color-swatch-wrapper {
+    color: #888;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     padding: 0;
+    line-height: 1;
 }
 
-.color-picker-native::-webkit-color-swatch {
-    border: none;
-    border-radius: 50%;
+.more-colors-btn:hover {
+    border-color: #888;
+    color: #ccc;
 }
 
-.color-picker-native::-moz-color-swatch {
+body.light-theme .more-colors-btn {
+    border-color: #ccc;
+    color: #888;
+}
+
+body.light-theme .more-colors-btn:hover {
+    border-color: #999;
+    color: #666;
+}
+
+.more-colors-popup {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: #1a1a1a;
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    z-index: 1000;
+    width: 200px;
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 6px;
+}
+
+.more-colors-popup.active {
+    display: grid;
+}
+
+body.light-theme .more-colors-popup {
+    background: #fff;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+}
+
+.color-option {
+    width: 18px;
+    height: 18px;
     border: none;
-    border-radius: 50%;
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 0;
+    transition: transform 0.1s;
+}
+
+.color-option:hover {
+    transform: scale(1.2);
 }
 
 /* Name Input */
@@ -2520,7 +2567,7 @@ body.light-theme .btn-export:hover {
 
 .btn-ai-improve span {
     position: relative;
-    top: -2px;
+    top: -4px;
 }
 
 .btn-ai-improve:hover,

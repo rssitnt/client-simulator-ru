@@ -114,7 +114,6 @@ const settingsModal = document.getElementById('settingsModal');
 const currentUserName = document.getElementById('currentUserName');
 const settingsNameInput = document.getElementById('settingsNameInput');
 const themeToggle = document.getElementById('themeToggle');
-const accentColorPicker = document.getElementById('accentColorPicker');
 const currentRoleDisplay = document.getElementById('currentRoleDisplay');
 const changeRoleBtn = document.getElementById('changeRoleBtn');
 const roleChangePassword = document.getElementById('roleChangePassword');
@@ -1040,23 +1039,43 @@ colorPresets.forEach(preset => {
     preset.addEventListener('click', () => {
         const color = preset.dataset.color;
         setAccentColor(color);
-        accentColorPicker.value = color;
         localStorage.setItem('accentColor', color);
         updateColorPresetActive(color);
     });
 });
 
-// Native color picker event
-accentColorPicker.addEventListener('input', (e) => {
-    const color = e.target.value;
-    setAccentColor(color);
-    localStorage.setItem('accentColor', color);
-    updateColorPresetActive(color);
-});
+// More colors button and popup
+const moreColorsBtn = document.getElementById('moreColorsBtn');
+const moreColorsPopup = document.getElementById('moreColorsPopup');
+const colorOptions = document.querySelectorAll('.color-option');
+
+if (moreColorsBtn && moreColorsPopup) {
+    moreColorsBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        moreColorsPopup.classList.toggle('active');
+    });
+
+    // Close popup on click outside
+    document.addEventListener('click', (e) => {
+        if (!moreColorsPopup.contains(e.target) && e.target !== moreColorsBtn) {
+            moreColorsPopup.classList.remove('active');
+        }
+    });
+
+    // Color option selection
+    colorOptions.forEach(option => {
+        option.addEventListener('click', () => {
+            const color = option.dataset.color;
+            setAccentColor(color);
+            localStorage.setItem('accentColor', color);
+            updateColorPresetActive(color);
+            moreColorsPopup.classList.remove('active');
+        });
+    });
+}
 
 // Load saved accent color
 const savedAccentColor = localStorage.getItem('accentColor') || '#7F96FF';
-accentColorPicker.value = savedAccentColor;
 setAccentColor(savedAccentColor);
 updateColorPresetActive(savedAccentColor);
 
