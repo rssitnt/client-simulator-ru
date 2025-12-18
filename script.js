@@ -1080,7 +1080,8 @@ function initIroPicker() {
               component: iro.ui.Wheel,
               options: {
                 borderWidth: 0,
-                borderColor: 'transparent'
+                borderColor: 'transparent',
+                wheelLightness: true
               }
             },
             { 
