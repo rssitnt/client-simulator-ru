@@ -2340,6 +2340,7 @@ body.light-theme .iro-picker-popup {
 .IroHandle {
     stroke: #fff !important;
     stroke-width: 3px !important;
+    mix-blend-mode: difference !important;
 }
 
 .IroWheel, .IroSlider {
@@ -2368,6 +2369,7 @@ body.light-theme .iro-picker-popup {
 .IroHandle {
     stroke-width: 3px !important;
     stroke: #fff !important;
+    mix-blend-mode: difference !important;
 }
 
 .IroSlider {
