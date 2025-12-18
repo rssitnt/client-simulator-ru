@@ -2280,115 +2280,32 @@ body.light-theme .color-preset.active {
     box-shadow: 0 0 0 2px #fff, 0 0 0 4px currentColor;
 }
 
-/* Color Picker */
-.color-picker-hidden {
-    display: none;
-}
-
-.custom-color-container {
-    position: relative;
-    display: flex;
-    align-items: center;
-}
-
-.color-picker-trigger {
-    width: 20px;
-    height: 20px;
+/* Native Color Picker */
+.color-picker-native {
+    width: 24px;
+    height: 24px;
+    padding: 0;
     border: none;
     border-radius: 50%;
     cursor: pointer;
+    background: transparent;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+.color-picker-native::-webkit-color-swatch-wrapper {
     padding: 0;
-    background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red);
-    transition: background 0.2s;
 }
 
-.iro-picker-popup {
-    display: none;
-    position: absolute;
-    top: calc(100% + 10px);
-    right: 0;
-    background: #1a1a1a;
-    padding: 15px;
-    border-radius: 12px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-    z-index: 1000;
-    border: 1px solid #333;
+.color-picker-native::-webkit-color-swatch {
+    border: none;
+    border-radius: 50%;
 }
 
-body.light-theme .iro-picker-popup {
-    background: #fff;
-    border-color: #ddd;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-}
-
-.iro-picker-popup.active {
-    display: block;
-    animation: fadeInScale 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-@keyframes fadeInScale {
-    from {
-        opacity: 0;
-        transform: scale(0.95) translateY(-5px);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1) translateY(0);
-    }
-}
-
-/* Стилизация iro.js элементов для соответствия дизайну */
-.IroColorPicker {
-    margin: 0 auto;
-}
-
-/* Маркер выбора цвета - два кольца (белое внутри, чёрное снаружи) */
-.IroHandle,
-.IroHandle circle {
-    fill: none !important;
-    stroke: #000 !important;
-    stroke-width: 3px !important;
-    paint-order: stroke fill !important;
-}
-
-/* Белое кольцо поверх чёрного */
-.IroHandle circle {
-    stroke: #fff !important;
-    stroke-width: 1.5px !important;
-}
-
-
-.IroWheel, .IroSlider {
-    border: none !important;
-    box-shadow: none !important;
-    outline: none !important;
-}
-
-.IroWheel {
-    overflow: hidden !important;
-    border-radius: 50% !important;
-    clip-path: circle(46%) !important; /* Еще более агрессивная обрезка для удаления цветной полоски */
-}
-
-.IroWheel svg, .IroSlider svg {
-    display: block;
-}
-
-/* Убираем любые системные обводки и артефакты внутри SVG */
-.IroColorPicker * {
-    stroke-width: 0;
-    stroke: none;
-}
-
-.IroSlider {
-    margin-top: 20px !important;
-    border-radius: 8px !important;
-    overflow: hidden !important;
-    background: #1a1a1a !important;
-}
-
-body.light-theme .IroSlider {
-    background: #e0e0e0 !important;
+.color-picker-native::-moz-color-swatch {
+    border: none;
+    border-radius: 50%;
 }
 
 /* Name Input */

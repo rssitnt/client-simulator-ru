@@ -14,8 +14,6 @@
     <!-- docx.js for exporting to .docx -->
     <script src="https://unpkg.com/docx@7.1.0/build/index.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-    <!-- Iro.js for modern color picker -->
-    <script src="https://cdn.jsdelivr.net/npm/@jaames/iro@5"></script>
     
     <!-- Favicon -->
     <link rel="apple-touch-icon" sizes="180x180" href="favicon/apple-touch-icon.png">
@@ -132,13 +130,7 @@
                         <button class="color-preset" data-color="#8B5CF6" style="background: #8B5CF6;" title="Фиолетовый"></button>
                         <button class="color-preset" data-color="#EC4899" style="background: #EC4899;" title="Розовый"></button>
                         
-                        <div class="custom-color-container">
-                            <button id="customColorBtn" class="color-picker-trigger" title="Свой цвет"></button>
-                            <div id="iroPickerWrapper" class="iro-picker-popup">
-                                <div id="iroPicker"></div>
-                            </div>
-                        </div>
-                        <input type="color" id="accentColorPicker" class="color-picker-hidden">
+                        <input type="color" id="accentColorPicker" class="color-picker-native" value="#7F96FF" title="Свой цвет">
                     </div>
                 </div>
             </div>

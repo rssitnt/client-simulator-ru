@@ -1034,16 +1034,6 @@ function updateColorPresetActive(color) {
         }
     });
 
-    // Update custom color button - show selected color or rainbow gradient
-    if (customColorBtn) {
-        if (!isPreset) {
-            // Custom color selected - show the color
-            customColorBtn.style.background = color;
-        } else {
-            // Preset selected - show rainbow
-            customColorBtn.style.background = 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)';
-        }
-    }
 }
 
 colorPresets.forEach(preset => {
@@ -1053,88 +1043,22 @@ colorPresets.forEach(preset => {
         accentColorPicker.value = color;
         localStorage.setItem('accentColor', color);
         updateColorPresetActive(color);
-        
-        // Update iro picker if it exists
-        if (iroPicker) {
-            iroPicker.color.hexString = color;
-        }
     });
 });
 
-// Accent color picker logic
-let iroPicker;
-
-function initIroPicker() {
-    if (typeof iro === 'undefined') return;
-    
-    iroPicker = new iro.ColorPicker("#iroPicker", {
-        width: 180,
-        color: savedAccentColor,
-        borderWidth: 0,
-        borderColor: 'transparent',
-        handleRadius: 8,
-        padding: 0,
-        margin: 0,
-        layout: [
-            { 
-              component: iro.ui.Wheel,
-              options: {
-                borderWidth: 0,
-                borderColor: 'transparent',
-                wheelLightness: true
-              }
-            },
-            { 
-              component: iro.ui.Slider,
-              options: {
-                sliderType: 'value',
-                borderWidth: 0,
-                borderColor: 'transparent',
-                handleRadius: 6
-              }
-            }
-        ]
-    });
-
-    iroPicker.on('color:change', function(color) {
-        const hex = color.hexString;
-        setAccentColor(hex);
-        accentColorPicker.value = hex;
-        localStorage.setItem('accentColor', hex);
-        updateColorPresetActive(hex);
-    });
-}
-
-const customColorBtn = document.getElementById('customColorBtn');
-const iroPickerWrapper = document.getElementById('iroPickerWrapper');
-
-if (customColorBtn && iroPickerWrapper) {
-    customColorBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        iroPickerWrapper.classList.toggle('active');
-        
-        // Update picker color when opening
-        if (iroPicker) {
-            iroPicker.color.hexString = accentColorPicker.value;
-        }
-    });
-
-    // Close popup on click outside
-    document.addEventListener('click', (e) => {
-        if (!iroPickerWrapper.contains(e.target) && e.target !== customColorBtn) {
-            iroPickerWrapper.classList.remove('active');
-        }
-    });
-}
+// Native color picker event
+accentColorPicker.addEventListener('input', (e) => {
+    const color = e.target.value;
+    setAccentColor(color);
+    localStorage.setItem('accentColor', color);
+    updateColorPresetActive(color);
+});
 
 // Load saved accent color
 const savedAccentColor = localStorage.getItem('accentColor') || '#7F96FF';
 accentColorPicker.value = savedAccentColor;
 setAccentColor(savedAccentColor);
 updateColorPresetActive(savedAccentColor);
-
-// Initialize iro picker after some delay to ensure script is loaded
-setTimeout(initIroPicker, 100);
 
 // Load saved theme
 const savedTheme = localStorage.getItem('theme');
