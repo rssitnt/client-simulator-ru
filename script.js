@@ -1151,19 +1151,9 @@ changeRoleBtn.addEventListener('click', () => {
 // Helper function to switch role
 function switchRole(newRole) {
     localStorage.setItem('userRole', newRole);
-    selectedRole = newRole;
     
-    currentRoleDisplay.textContent = newRole === 'admin' ? 'Админ' : 'Юзер';
-    updateUserNameDisplay();
-    applyRoleRestrictions();
-    renderVariations();
-    
-    // Hide password UI if open
-    roleChangePassword.style.display = 'none';
-    roleChangePasswordInput.value = '';
-    roleChangeError.style.display = 'none';
-    
-    showCopyNotification(`Роль: ${newRole === 'admin' ? 'Админ' : 'Юзер'}`);
+    // Перезагрузка страницы для применения новой роли
+    location.reload();
 }
 
 // Cancel role change
