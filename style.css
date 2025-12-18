@@ -2475,9 +2475,20 @@ body.light-theme .ai-improve-modal .btn-modal-cancel:hover {
 
 div.diff-added, div.diff-removed {
     display: block;
-    padding: 8px;
+    padding: 12px 16px 12px 35px; /* Увеличил отступ слева, чтобы цифры списков не наезжали на границу */
+    margin: 16px 0;
+    border-left: 4px solid;
+    position: relative;
+}
+
+.diff-view ol, .diff-view ul {
+    padding-left: 0; /* Убираем лишний отступ у списков, так как он есть у родителя */
     margin: 8px 0;
-    border-left: 3px solid;
+}
+
+.diff-view li {
+    margin-bottom: 8px;
+    list-style-position: inside; /* Цифры теперь внутри блока текста */
 }
 
 div.diff-added {
