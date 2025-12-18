@@ -297,14 +297,19 @@ function getManagerName() {
 // Chat input state
 function toggleInputState(enabled) {
     userInput.disabled = !enabled;
-    sendBtn.disabled = !enabled;
     voiceBtn.disabled = !enabled;
     aiAssistBtn.disabled = !enabled;
     if (enabled) {
         userInput.classList.remove('disabled');
+        updateSendBtnState(); // Обновляем состояние кнопки отправки на основе текста
     } else {
         userInput.classList.add('disabled');
+        sendBtn.disabled = true;
     }
+}
+
+function updateSendBtnState() {
+    sendBtn.disabled = !userInput.value.trim() || isProcessing || isDialogRated;
 }
 
 function lockDialogInput() {
@@ -320,12 +325,12 @@ function lockDialogInput() {
 
 function unlockDialogInput() {
     userInput.disabled = false;
-    sendBtn.disabled = false;
     voiceBtn.disabled = false;
     aiAssistBtn.disabled = false;
     rateChatBtn.disabled = false;
     userInput.placeholder = '';
     userInput.classList.remove('disabled');
+    updateSendBtnState();
 }
 
 // ============ PROMPT VARIATIONS LOGIC ============
@@ -1483,6 +1488,9 @@ async function generateAIResponse() {
     }
 }
 
+// Initialize button state
+updateSendBtnState();
+
 // ============ EXPORT FUNCTIONS ============
 
 function exportChat(format = 'txt') {
@@ -1968,7 +1976,10 @@ function setupDragAndDropForPreview(previewElement, textarea) {
 
 sendBtn.addEventListener('click', sendMessage);
 userInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
-userInput.addEventListener('input', () => autoResizeTextarea(userInput));
+userInput.addEventListener('input', () => {
+    autoResizeTextarea(userInput);
+    updateSendBtnState();
+});
 clearChatBtn.addEventListener('click', () => { if (confirm('Очистить чат?')) clearChat(); });
 startBtn.addEventListener('click', startConversationHandler);
 rateChatBtn.addEventListener('click', rateChat);
