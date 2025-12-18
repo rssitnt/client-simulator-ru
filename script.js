@@ -1024,14 +1024,37 @@ accentColorPicker.addEventListener('input', (e) => {
     const color = e.target.value;
     setAccentColor(color);
     localStorage.setItem('accentColor', color);
+    updateColorPresetActive(color);
+});
+
+// Color presets
+const colorPresets = document.querySelectorAll('.color-preset');
+
+function updateColorPresetActive(color) {
+    colorPresets.forEach(preset => {
+        if (preset.dataset.color.toLowerCase() === color.toLowerCase()) {
+            preset.classList.add('active');
+        } else {
+            preset.classList.remove('active');
+        }
+    });
+}
+
+colorPresets.forEach(preset => {
+    preset.addEventListener('click', () => {
+        const color = preset.dataset.color;
+        setAccentColor(color);
+        accentColorPicker.value = color;
+        localStorage.setItem('accentColor', color);
+        updateColorPresetActive(color);
+    });
 });
 
 // Load saved accent color
-const savedAccentColor = localStorage.getItem('accentColor');
-if (savedAccentColor) {
-    accentColorPicker.value = savedAccentColor;
-    setAccentColor(savedAccentColor);
-}
+const savedAccentColor = localStorage.getItem('accentColor') || '#7F96FF';
+accentColorPicker.value = savedAccentColor;
+setAccentColor(savedAccentColor);
+updateColorPresetActive(savedAccentColor);
 
 // Load saved theme
 const savedTheme = localStorage.getItem('theme');
