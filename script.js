@@ -146,6 +146,8 @@ let isUserEditing = false;
 let lastFirebaseData = null;
 let selectedRole = null; // 'user' or 'admin'
 const ADMIN_PASSWORD = '1357246';
+let lockedPromptRole = null;
+let lockedPromptVariationId = null;
 
 // Prompt Variations Data
 let promptsData = {
@@ -313,6 +315,28 @@ function generateId() {
 function getActiveRole() {
     const activeTab = document.querySelector('.instruction-tab.active');
     return activeTab ? activeTab.dataset.instruction : 'client';
+}
+
+function updatePromptLock() {
+    if (conversationHistory.length === 0) {
+        lockedPromptRole = null;
+        lockedPromptVariationId = null;
+        return;
+    }
+    if (!lockedPromptRole) {
+        lockedPromptRole = getActiveRole();
+        if (lockedPromptRole === 'client') {
+            lockedPromptVariationId = promptsData.client.activeId;
+        }
+    }
+}
+
+function isPromptSwitchLocked(targetRole) {
+    return lockedPromptRole === 'client' && targetRole !== lockedPromptRole;
+}
+
+function isClientVariationLocked(targetId) {
+    return lockedPromptRole === 'client' && targetId !== lockedPromptVariationId;
 }
 
 function getManagerName() {
@@ -629,6 +653,10 @@ function deleteVariation(role, id) {
 }
 
 function setActiveVariation(role, id) {
+    if (role === 'client' && isClientVariationLocked(id)) {
+        showCopyNotification('Нельзя менять личность во время диалога');
+        return;
+    }
     // Save current editor content before switching
     syncCurrentEditorNow();
     
@@ -1408,6 +1436,7 @@ function clearChat() {
     conversationHistory = [];
     lastRating = null;
     isDialogRated = false;
+    updatePromptLock();
     unlockDialogInput();
     rateChatBtn.classList.remove('rated');
     
@@ -1433,6 +1462,7 @@ async function sendMessage() {
     
     addMessage(userMessage, 'user', true);
     conversationHistory.push({ role: 'user', content: userMessage });
+    updatePromptLock();
     
     userInput.value = '';
     userInput.style.height = '44px';
@@ -1467,6 +1497,7 @@ async function sendMessage() {
         loadingMsg.remove();
         addMessage(assistantMessage, 'assistant', true);
         conversationHistory.push({ role: 'assistant', content: assistantMessage });
+        updatePromptLock();
         
     } catch (error) {
         console.error('Error:', error);
@@ -1489,6 +1520,7 @@ async function startConversationHandler() {
     raterSessionId = baseSessionId + '_rater';
     conversationHistory = [];
     lastRating = null;
+    updatePromptLock();
     toggleInputState(true);
     
     const startDiv = document.getElementById('startConversation');
@@ -1518,6 +1550,7 @@ async function startConversationHandler() {
         loadingMsg.remove();
         addMessage(assistantMessage, 'assistant', true);
         conversationHistory.push({ role: 'assistant', content: assistantMessage });
+        updatePromptLock();
         
     } catch (error) {
         console.error('Error:', error);
@@ -2404,10 +2437,13 @@ const instructionEditors = document.querySelectorAll('.instruction-editor');
 
 instructionTabs.forEach(tab => {
     tab.addEventListener('click', () => {
+        const instructionType = tab.dataset.instruction;
+        if (isPromptSwitchLocked(instructionType)) {
+            showCopyNotification('Нельзя менять личность во время диалога');
+            return;
+        }
         // Save current editor content before switching
         syncCurrentEditorNow();
-        
-        const instructionType = tab.dataset.instruction;
         
         instructionTabs.forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
@@ -2461,6 +2497,11 @@ if (instructionDropdown) {
             
             const instructionType = option.dataset.value;
             const instructionName = option.innerText;
+
+            if (isPromptSwitchLocked(instructionType)) {
+                showCopyNotification('Нельзя менять личность во время диалога');
+                return;
+            }
             
             // Update UI
             selectedInstructionText.innerText = instructionName;
