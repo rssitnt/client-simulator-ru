@@ -19,7 +19,7 @@ try {
 // n8n Webhook Configuration
 const WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/client-simulator';
 const RATE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/rate-manager';
-const ATTESTATION_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/attestation';
+const ATTESTATION_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook-test/certification';
 const MANAGER_ASSISTANT_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/manager-simulator';
 const AI_IMPROVE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/prompt-enchancement';
 
@@ -82,6 +82,7 @@ const startBtn = document.getElementById('startBtn');
 const startConversation = document.getElementById('startConversation');
 const managerNameInput = document.getElementById('managerName');
 const attestationBtn = document.getElementById('attestationBtn');
+const exitAttestationBtn = document.getElementById('exitAttestationBtn');
 const nameModal = document.getElementById('nameModal');
 const modalNameInput = document.getElementById('modalNameInput');
 const modalNameSubmit = document.getElementById('modalNameSubmit');
@@ -219,6 +220,9 @@ function applyRoleRestrictions() {
         if (attestationBtn) {
             attestationBtn.style.display = 'none';
         }
+        if (exitAttestationBtn) {
+            exitAttestationBtn.style.display = 'none';
+        }
         
     } else {
         console.log('Admin mode: Full editing access');
@@ -230,6 +234,9 @@ function applyRoleRestrictions() {
         }
         if (attestationBtn) {
             attestationBtn.style.display = '';
+        }
+        if (exitAttestationBtn) {
+            exitAttestationBtn.style.display = '';
         }
     }
 }
@@ -1836,6 +1843,7 @@ async function sendAttestationResult(dialogText, ratingText) {
         return;
     }
     try {
+        const { fileName, fileBase64, fileMime } = await buildAttestationDocxPayload(dialogText, ratingText);
         await fetchWithTimeout(ATTESTATION_WEBHOOK_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1846,7 +1854,10 @@ async function sendAttestationResult(dialogText, ratingText) {
                 managerPrompt: getActiveContent('manager'),
                 raterPrompt: getActiveContent('rater'),
                 sessionId: raterSessionId,
-                mode: 'attestation'
+                mode: 'attestation',
+                fileName,
+                fileBase64,
+                fileMime
             })
         });
         showCopyNotification('Отчет отправлен в Telegram');
@@ -1854,6 +1865,66 @@ async function sendAttestationResult(dialogText, ratingText) {
         console.error('Attestation webhook error:', error);
         showCopyNotification('Ошибка отправки отчета');
     }
+}
+
+function textToDocxParagraphs(text) {
+    const { Paragraph, TextRun } = docx;
+    if (!text) {
+        return [new Paragraph({ children: [new TextRun('')] })];
+    }
+    return text.replace(/\r\n/g, '\n').split('\n').map(line => new Paragraph({
+        children: [new TextRun(line)]
+    }));
+}
+
+async function buildAttestationDocxPayload(dialogText, ratingText) {
+    if (typeof docx === 'undefined') {
+        throw new Error('docx library not loaded');
+    }
+    const { Document, Packer, Paragraph, TextRun, HeadingLevel } = docx;
+    const title = new Paragraph({
+        text: 'Отчет аттестации',
+        heading: HeadingLevel.HEADING_1,
+        spacing: { after: 300 }
+    });
+    const ratingHeader = new Paragraph({
+        children: [new TextRun({ text: 'Оценка', bold: true })],
+        spacing: { after: 120 }
+    });
+    const dialogHeader = new Paragraph({
+        children: [new TextRun({ text: 'Диалог', bold: true })],
+        spacing: { before: 240, after: 120 }
+    });
+    const children = [
+        title,
+        ratingHeader,
+        ...textToDocxParagraphs(ratingText),
+        new Paragraph({ children: [new TextRun('')] }),
+        dialogHeader,
+        ...textToDocxParagraphs(dialogText)
+    ];
+    const doc = new Document({ sections: [{ properties: {}, children }] });
+    const blob = await Packer.toBlob(doc);
+    const fileBase64 = await blobToBase64(blob);
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    return {
+        fileName: `attestation_${timestamp}.docx`,
+        fileBase64,
+        fileMime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    };
+}
+
+function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const result = String(reader.result || '');
+            const base64 = result.includes(',') ? result.split(',')[1] : result;
+            resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
 }
 
 async function generateAIResponse() {
@@ -2499,6 +2570,11 @@ aiAssistBtn.addEventListener('click', generateAIResponse);
 if (attestationBtn) {
     attestationBtn.addEventListener('click', () => {
         setAttestationMode(!isAttestationMode);
+    });
+}
+if (exitAttestationBtn) {
+    exitAttestationBtn.addEventListener('click', () => {
+        setAttestationMode(false);
     });
 }
 
