@@ -19,7 +19,7 @@ try {
 // n8n Webhook Configuration
 const WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/client-simulator';
 const RATE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/rate-manager';
-const ATTESTATION_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook-test/certification';
+const ATTESTATION_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/certification';
 const MANAGER_ASSISTANT_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/manager-simulator';
 const AI_IMPROVE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/prompt-enchancement';
 
@@ -1844,23 +1844,37 @@ async function sendAttestationResult(dialogText, ratingText) {
     }
     try {
         const { fileName, fileBase64, fileMime } = await buildAttestationDocxPayload(dialogText, ratingText);
-        await fetchWithTimeout(ATTESTATION_WEBHOOK_URL, {
+        const payload = {
+            dialog: dialogText.trim(),
+            rating: ratingText,
+            clientPrompt: getActiveContent('client'),
+            managerPrompt: getActiveContent('manager'),
+            raterPrompt: getActiveContent('rater'),
+            sessionId: raterSessionId,
+            mode: 'attestation',
+            fileName,
+            fileBase64,
+            fileMime
+        };
+        showCopyNotification('Отправляю отчет в Telegram...');
+        try {
+            await fetchWithTimeout(ATTESTATION_WEBHOOK_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            showCopyNotification('Отчет отправлен в Telegram');
+            return;
+        } catch (primaryError) {
+            console.warn('Attestation primary send failed, trying fallback:', primaryError);
+        }
+        await fetch(ATTESTATION_WEBHOOK_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                dialog: dialogText.trim(),
-                rating: ratingText,
-                clientPrompt: getActiveContent('client'),
-                managerPrompt: getActiveContent('manager'),
-                raterPrompt: getActiveContent('rater'),
-                sessionId: raterSessionId,
-                mode: 'attestation',
-                fileName,
-                fileBase64,
-                fileMime
-            })
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload)
         });
-        showCopyNotification('Отчет отправлен в Telegram');
+        showCopyNotification('Отчет отправлен (без подтверждения)');
     } catch (error) {
         console.error('Attestation webhook error:', error);
         showCopyNotification('Ошибка отправки отчета');
@@ -1875,6 +1889,15 @@ function textToDocxParagraphs(text) {
     return text.replace(/\r\n/g, '\n').split('\n').map(line => new Paragraph({
         children: [new TextRun(line)]
     }));
+}
+
+function sanitizeFileNamePart(value) {
+    return String(value || '')
+        .trim()
+        .replace(/[\\/:*?"<>|]+/g, '_')
+        .replace(/\s+/g, ' ')
+        .replace(/[.]+$/g, '')
+        .trim();
 }
 
 async function buildAttestationDocxPayload(dialogText, ratingText) {
@@ -1907,8 +1930,10 @@ async function buildAttestationDocxPayload(dialogText, ratingText) {
     const blob = await Packer.toBlob(doc);
     const fileBase64 = await blobToBase64(blob);
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const rawName = localStorage.getItem('managerName') || '';
+    const safeName = sanitizeFileNamePart(rawName) || 'user';
     return {
-        fileName: `attestation_${timestamp}.docx`,
+        fileName: `attestation_${safeName}_${timestamp}.docx`,
         fileBase64,
         fileMime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     };
