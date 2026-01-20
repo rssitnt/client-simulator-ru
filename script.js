@@ -123,10 +123,19 @@ const roleChangeConfirmBtn = document.getElementById('roleChangeConfirmBtn');
 const roleChangeError = document.getElementById('roleChangeError');
 const exportChatSettings = document.getElementById('exportChatSettings');
 const exportPromptSettings = document.getElementById('exportPromptSettings');
+const promptChangesList = document.getElementById('promptChangesList');
+const changesSection = document.querySelector('.changes-section');
 
 let pendingImprovedPrompt = null;
 let pendingRole = null;
 let pendingName = null;
+const HISTORY_LIMIT = 50;
+let promptHistory = [];
+let lastHistoryContent = {
+    client: {},
+    manager: {},
+    rater: {}
+};
 
 // State
 let conversationHistory = [];
@@ -155,7 +164,6 @@ function applyRoleRestrictions() {
     const isAdminUser = isAdmin();
 
     document.body.classList.toggle('user-mode', !isAdminUser);
-    const promptAccessNotice = document.getElementById('promptAccessNotice');
     
     if (!isAdminUser) {
         console.log('User mode: Prompts are read-only');
@@ -198,8 +206,8 @@ function applyRoleRestrictions() {
             exportPromptSettings.style.display = 'none';
         }
 
-        if (promptAccessNotice) {
-            promptAccessNotice.style.display = 'flex';
+        if (changesSection) {
+            changesSection.style.display = 'none';
         }
         
     } else {
@@ -207,8 +215,8 @@ function applyRoleRestrictions() {
         if (exportPromptSettings) {
             exportPromptSettings.style.display = '';
         }
-        if (promptAccessNotice) {
-            promptAccessNotice.style.display = '';
+        if (changesSection) {
+            changesSection.style.display = 'block';
         }
     }
 }
@@ -356,6 +364,9 @@ function initPromptsData(firebaseData = {}) {
     const roles = ['client', 'manager', 'rater'];
     
     roles.forEach(role => {
+        let legacyKey = role === 'client' ? 'systemPrompt' : role + 'Prompt';
+        let legacyContent = firebaseData[role + '_prompt'] || localStorage.getItem(legacyKey) || '';
+
         if (firebaseData[role + '_variations'] && Array.isArray(firebaseData[role + '_variations'])) {
             // Unescape content in all variations
             promptsData[role].variations = firebaseData[role + '_variations'].map(v => ({
@@ -364,11 +375,32 @@ function initPromptsData(firebaseData = {}) {
             }));
             promptsData[role].activeId = firebaseData[role + '_activeId'] || 
                 (promptsData[role].variations[0] ? promptsData[role].variations[0].id : null);
+
+            // Restore from legacy/localStorage if all variations are empty
+            const hasContent = promptsData[role].variations.some(v => (v.content || '').trim().length > 0);
+            let didRestore = false;
+            if (!hasContent && legacyContent.trim()) {
+                if (promptsData[role].variations.length === 0) {
+                    const defaultId = generateId();
+                    promptsData[role].variations.push({
+                        id: defaultId,
+                        name: 'Основной',
+                        content: unescapeMarkdown(legacyContent)
+                    });
+                    promptsData[role].activeId = defaultId;
+                    didRestore = true;
+                } else {
+                    const activeVar = promptsData[role].variations.find(v => v.id === promptsData[role].activeId) || promptsData[role].variations[0];
+                    activeVar.content = unescapeMarkdown(legacyContent);
+                    didRestore = true;
+                }
+            }
+
+            if (didRestore && db && isAdmin()) {
+                savePromptsToFirebaseNow();
+            }
         } else {
             // Migration: use legacy single prompt
-            let legacyKey = role === 'client' ? 'systemPrompt' : role + 'Prompt';
-            let legacyContent = firebaseData[role + '_prompt'] || localStorage.getItem(legacyKey) || '';
-            
             if (promptsData[role].variations.length === 0) {
                 const defaultId = generateId();
                 promptsData[role].variations.push({
@@ -379,6 +411,12 @@ function initPromptsData(firebaseData = {}) {
                 promptsData[role].activeId = defaultId;
             }
         }
+
+        // Seed history content snapshot for change detection
+        if (!lastHistoryContent[role]) lastHistoryContent[role] = {};
+        promptsData[role].variations.forEach(v => {
+            lastHistoryContent[role][v.id] = v.content || '';
+        });
     });
     
     renderVariations();
@@ -444,6 +482,117 @@ function renderVariations() {
         addBtn.addEventListener('click', () => addVariation(role));
         promptVariationsContainer.appendChild(addBtn);
                     }
+}
+
+function formatHistoryTime(ts) {
+    try {
+        return new Date(ts).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
+    } catch (e) {
+        return '';
+    }
+}
+
+function getRoleLabel(role) {
+    if (role === 'client') return 'Клиент';
+    if (role === 'manager') return 'Менеджер';
+    if (role === 'rater') return 'Оценщик';
+    return role;
+}
+
+function renderPromptHistory() {
+    if (!promptChangesList) return;
+    const isAdminUser = isAdmin();
+    if (changesSection) {
+        changesSection.style.display = isAdminUser ? 'block' : 'none';
+    }
+    if (!isAdminUser) return;
+
+    if (!promptHistory.length) {
+        promptChangesList.innerHTML = '<div class="changes-empty">Пока нет изменений.</div>';
+        return;
+    }
+
+    const items = promptHistory.slice(0, HISTORY_LIMIT);
+    promptChangesList.innerHTML = '';
+    items.forEach(entry => {
+        const item = document.createElement('div');
+        item.className = 'change-item';
+        const title = `${getRoleLabel(entry.role)} · ${entry.variationName || 'Без названия'}`;
+        const time = formatHistoryTime(entry.ts);
+        item.innerHTML = `
+            <div class="change-meta">
+                <div class="change-title" title="${title}">${title}</div>
+                <div class="change-time">${time}</div>
+            </div>
+            <button class="btn-restore" data-id="${entry.id}">Восстановить</button>
+        `;
+        item.querySelector('.btn-restore').addEventListener('click', (e) => {
+            e.stopPropagation();
+            restorePromptVersion(entry.id);
+        });
+        promptChangesList.appendChild(item);
+    });
+}
+
+function savePromptHistory() {
+    if (!promptHistory) return;
+    if (promptHistory.length > HISTORY_LIMIT) {
+        promptHistory = promptHistory.slice(0, HISTORY_LIMIT);
+    }
+    if (db) {
+        set(ref(db, 'prompt_history'), promptHistory)
+            .then(() => console.log('Prompt history synced'))
+            .catch(e => console.error('Failed to sync history:', e));
+    } else {
+        localStorage.setItem('promptHistory', JSON.stringify(promptHistory));
+    }
+}
+
+function recordPromptHistory(role, variation) {
+    if (!isAdmin()) return;
+    if (!variation) return;
+    const content = variation.content || '';
+    const lastContent = lastHistoryContent[role]?.[variation.id] ?? '';
+    if (content === lastContent) return;
+
+    const entry = {
+        id: generateId(),
+        ts: Date.now(),
+        role,
+        variationId: variation.id,
+        variationName: variation.name,
+        content
+    };
+
+    promptHistory.unshift(entry);
+    lastHistoryContent[role][variation.id] = content;
+    savePromptHistory();
+    renderPromptHistory();
+}
+
+function restorePromptVersion(entryId) {
+    if (!isAdmin()) return;
+    const entry = promptHistory.find(item => item.id === entryId);
+    if (!entry) return;
+
+    const role = entry.role;
+    const variations = promptsData[role]?.variations || [];
+    let targetVar = variations.find(v => v.id === entry.variationId);
+    if (!targetVar) {
+        targetVar = {
+            id: entry.variationId,
+            name: entry.variationName || 'Восстановленный',
+            content: entry.content
+        };
+        variations.push(targetVar);
+    } else {
+        targetVar.content = entry.content;
+    }
+
+    promptsData[role].activeId = targetVar.id;
+    renderVariations();
+    updateEditorContent(role);
+    savePromptsToFirebaseNow();
 }
 
 function addVariation(role) {
@@ -536,6 +685,11 @@ const savePromptsToFirebase = debounce(() => {
 }, 1000);
 
 function savePromptsToFirebaseNow() {
+    const activeRole = getActiveRole();
+    const activeVar = promptsData[activeRole]?.variations.find(v => v.id === promptsData[activeRole]?.activeId);
+    if (activeVar) {
+        recordPromptHistory(activeRole, activeVar);
+    }
     if (!db) return;
 
     const payload = {
@@ -606,12 +760,34 @@ function loadPrompts() {
                 console.error('Firebase read error:', error);
                 initPromptsData({});
             });
+
+            const historyRef = ref(db, 'prompt_history');
+            onValue(historyRef, (snapshot) => {
+                const historyData = snapshot.val();
+                if (Array.isArray(historyData)) {
+                    promptHistory = historyData;
+                } else if (historyData && typeof historyData === 'object') {
+                    promptHistory = Object.values(historyData);
+                } else {
+                    promptHistory = [];
+                }
+                renderPromptHistory();
+            });
         } catch (e) {
             console.error('Error setting up Firebase listener:', e);
             initPromptsData({});
         }
     } else {
         initPromptsData({});
+        const localHistory = localStorage.getItem('promptHistory');
+        if (localHistory) {
+            try {
+                promptHistory = JSON.parse(localHistory) || [];
+            } catch (e) {
+                promptHistory = [];
+            }
+        }
+        renderPromptHistory();
     }
 }
 
@@ -758,6 +934,7 @@ function showSettingsModal() {
     roleChangeError.style.display = 'none';
     
     settingsModal.classList.add('active');
+    renderPromptHistory();
 }
 
 function autoResizeNameInput() {
