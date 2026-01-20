@@ -153,12 +153,15 @@ function isAdmin() {
 // Apply role-based restrictions
 function applyRoleRestrictions() {
     const isAdminUser = isAdmin();
+
+    document.body.classList.toggle('user-mode', !isAdminUser);
+    const promptAccessNotice = document.getElementById('promptAccessNotice');
     
     if (!isAdminUser) {
         console.log('User mode: Prompts are read-only');
         
         // Disable all prompt textareas
-        const promptTextareas = document.querySelectorAll('.prompt-input');
+        const promptTextareas = document.querySelectorAll('.prompt-editor');
         promptTextareas.forEach(textarea => {
             textarea.setAttribute('readonly', 'true');
             textarea.style.cursor = 'default';
@@ -190,9 +193,23 @@ function applyRoleRestrictions() {
         toolbarDividers.forEach(divider => {
             divider.style.display = 'none';
         });
+
+        if (exportPromptSettings) {
+            exportPromptSettings.style.display = 'none';
+        }
+
+        if (promptAccessNotice) {
+            promptAccessNotice.style.display = 'flex';
+        }
         
     } else {
         console.log('Admin mode: Full editing access');
+        if (exportPromptSettings) {
+            exportPromptSettings.style.display = '';
+        }
+        if (promptAccessNotice) {
+            promptAccessNotice.style.display = '';
+        }
     }
 }
 
