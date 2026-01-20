@@ -1756,7 +1756,7 @@ function addImproveFromRatingButton(dialogText, ratingText) {
             </svg>
             Улучшить инструкцию менеджера на основе оценки
         </button>
-        <p style="font-size: 12px; color: #888; margin-top: 8px; text-align: center;">использовать только в полностью сгенерированных диалогах</p>
+        <p style="font-size: 12px; color: #888; margin-top: 4px; text-align: center;">использовать только в полностью сгенерированных диалогах</p>
     `;
     
     const btn = buttonContainer.querySelector('.btn-improve-from-rating');
