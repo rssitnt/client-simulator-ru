@@ -19,6 +19,7 @@ try {
 // n8n Webhook Configuration
 const WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/client-simulator';
 const RATE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/rate-manager';
+const ATTESTATION_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/attestation';
 const MANAGER_ASSISTANT_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/manager-simulator';
 const AI_IMPROVE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/prompt-enchancement';
 
@@ -80,6 +81,7 @@ const rateChatBtn = document.getElementById('rateChat');
 const startBtn = document.getElementById('startBtn');
 const startConversation = document.getElementById('startConversation');
 const managerNameInput = document.getElementById('managerName');
+const attestationBtn = document.getElementById('attestationBtn');
 const nameModal = document.getElementById('nameModal');
 const modalNameInput = document.getElementById('modalNameInput');
 const modalNameSubmit = document.getElementById('modalNameSubmit');
@@ -136,6 +138,8 @@ let lastHistoryContent = {
     manager: {},
     rater: {}
 };
+let isAttestationMode = false;
+let attestationPrevState = null;
 
 // State
 let conversationHistory = [];
@@ -211,6 +215,10 @@ function applyRoleRestrictions() {
         if (changesSection) {
             changesSection.style.display = 'none';
         }
+
+        if (attestationBtn) {
+            attestationBtn.style.display = 'none';
+        }
         
     } else {
         console.log('Admin mode: Full editing access');
@@ -219,6 +227,9 @@ function applyRoleRestrictions() {
         }
         if (changesSection) {
             changesSection.style.display = 'block';
+        }
+        if (attestationBtn) {
+            attestationBtn.style.display = '';
         }
     }
 }
@@ -341,6 +352,63 @@ function isClientVariationLocked(targetId) {
 
 function getManagerName() {
     return managerNameInput.value.trim() || 'менеджер';
+}
+
+function getVariationByName(role, name) {
+    const variations = promptsData[role]?.variations || [];
+    const target = name.trim().toLowerCase();
+    return variations.find(v => (v.name || '').trim().toLowerCase() === target);
+}
+
+function ensureAttestationVariation(role) {
+    let variation = getVariationByName(role, 'Аттестация');
+    if (!variation) {
+        variation = {
+            id: generateId(),
+            name: 'Аттестация',
+            content: getActiveContent(role)
+        };
+        promptsData[role].variations.push(variation);
+        if (isAdmin()) {
+            savePromptsToFirebaseNow();
+        }
+    }
+    return variation;
+}
+
+function applyAttestationPrompts() {
+    const roles = ['client', 'manager', 'rater'];
+    roles.forEach(role => {
+        const variation = ensureAttestationVariation(role);
+        promptsData[role].activeId = variation.id;
+        updateEditorContent(role);
+    });
+    renderVariations();
+}
+
+function setAttestationMode(enabled) {
+    if (enabled) {
+        attestationPrevState = {
+            client: promptsData.client.activeId,
+            manager: promptsData.manager.activeId,
+            rater: promptsData.rater.activeId
+        };
+        applyAttestationPrompts();
+        document.body.classList.add('attestation-mode');
+        isAttestationMode = true;
+        showCopyNotification('Режим аттестации включен');
+    } else {
+        if (attestationPrevState) {
+            promptsData.client.activeId = attestationPrevState.client;
+            promptsData.manager.activeId = attestationPrevState.manager;
+            promptsData.rater.activeId = attestationPrevState.rater;
+            ['client', 'manager', 'rater'].forEach(updateEditorContent);
+            renderVariations();
+        }
+        document.body.classList.remove('attestation-mode');
+        isAttestationMode = false;
+        showCopyNotification('Режим аттестации выключен');
+    }
 }
 
 // Chat input state
@@ -1635,6 +1703,9 @@ async function rateChat() {
         isDialogRated = true;
         lockDialogInput();
         rateChatBtn.classList.add('rated');
+        if (isAttestationMode) {
+            sendAttestationResult(dialogText, ratingMessage);
+        }
         
     } catch (error) {
         console.error('Rating error details:', error);
@@ -1757,6 +1828,32 @@ function addImproveFromRatingButton(dialogText, ratingText) {
     messageDiv.appendChild(buttonContainer);
     chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+async function sendAttestationResult(dialogText, ratingText) {
+    if (!ATTESTATION_WEBHOOK_URL) {
+        console.warn('ATTESTATION_WEBHOOK_URL is not set');
+        return;
+    }
+    try {
+        await fetchWithTimeout(ATTESTATION_WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                dialog: dialogText.trim(),
+                rating: ratingText,
+                clientPrompt: getActiveContent('client'),
+                managerPrompt: getActiveContent('manager'),
+                raterPrompt: getActiveContent('rater'),
+                sessionId: raterSessionId,
+                mode: 'attestation'
+            })
+        });
+        showCopyNotification('Отчет отправлен в Telegram');
+    } catch (error) {
+        console.error('Attestation webhook error:', error);
+        showCopyNotification('Ошибка отправки отчета');
+    }
 }
 
 async function generateAIResponse() {
@@ -2399,6 +2496,11 @@ clearChatBtn.addEventListener('click', () => { if (confirm('Очистить ч�
 startBtn.addEventListener('click', startConversationHandler);
 rateChatBtn.addEventListener('click', rateChat);
 aiAssistBtn.addEventListener('click', generateAIResponse);
+if (attestationBtn) {
+    attestationBtn.addEventListener('click', () => {
+        setAttestationMode(!isAttestationMode);
+    });
+}
 
 exportChatBtn.addEventListener('click', (e) => {
     e.stopPropagation();

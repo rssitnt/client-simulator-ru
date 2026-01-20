@@ -116,10 +116,21 @@ body.light-theme .btn-export {
     border-color: #ddd;
 }
 
+body.light-theme .btn-attestation {
+    background: #f5f5f5;
+    border-color: #ddd;
+    color: #666;
+}
+
 body.light-theme .btn-icon:hover,
 body.light-theme .btn-export:hover {
     background: transparent !important;
     color: #333 !important; /* Тёмный при наведении в светлой теме */
+}
+
+body.light-theme .btn-attestation:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
 }
 
 body.light-theme .instruction-tabs {
@@ -544,6 +555,18 @@ body {
     overflow: hidden;
 }
 
+body.attestation-mode #instructionsPanel {
+    display: none !important;
+}
+
+body.attestation-mode .resize-handle {
+    display: none !important;
+}
+
+body.attestation-mode .chat-panel {
+    flex: 1 0 100% !important;
+}
+
 .panel-header {
     padding: 16px 60px 16px 20px; /* Увеличил отступ справа для кнопки настроек */
     background: #0F0F0F;
@@ -571,6 +594,23 @@ body {
     margin-left: auto;
     flex-shrink: 0;
     padding-left: 12px;
+}
+
+.btn-attestation {
+    background: #222;
+    border: 1px solid #333;
+    color: #bbb;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.btn-attestation:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
 }
 
 /* Export buttons always visible */
