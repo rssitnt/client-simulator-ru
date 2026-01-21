@@ -81,8 +81,8 @@ const rateChatBtn = document.getElementById('rateChat');
 const startBtn = document.getElementById('startBtn');
 const startConversation = document.getElementById('startConversation');
 const managerNameInput = document.getElementById('managerName');
-const attestationBtn = document.getElementById('attestationBtn');
 const exitAttestationBtn = document.getElementById('exitAttestationBtn');
+const startAttestationBtn = document.getElementById('startAttestationBtn');
 const nameModal = document.getElementById('nameModal');
 const modalNameInput = document.getElementById('modalNameInput');
 const modalNameSubmit = document.getElementById('modalNameSubmit');
@@ -217,11 +217,11 @@ function applyRoleRestrictions() {
             changesSection.style.display = 'none';
         }
 
-        if (attestationBtn) {
-            attestationBtn.style.display = 'none';
-        }
         if (exitAttestationBtn) {
             exitAttestationBtn.style.display = 'none';
+        }
+        if (startAttestationBtn) {
+            startAttestationBtn.style.display = 'none';
         }
         
     } else {
@@ -232,11 +232,11 @@ function applyRoleRestrictions() {
         if (changesSection) {
             changesSection.style.display = 'block';
         }
-        if (attestationBtn) {
-            attestationBtn.style.display = '';
-        }
         if (exitAttestationBtn) {
             exitAttestationBtn.style.display = '';
+        }
+        if (startAttestationBtn) {
+            startAttestationBtn.style.display = '';
         }
     }
 }
@@ -403,6 +403,9 @@ function setAttestationMode(enabled) {
         applyAttestationPrompts();
         document.body.classList.add('attestation-mode');
         isAttestationMode = true;
+        if (startAttestationBtn) {
+            startAttestationBtn.style.display = 'none';
+        }
         showCopyNotification('Режим аттестации включен');
     } else {
         if (attestationPrevState) {
@@ -414,6 +417,9 @@ function setAttestationMode(enabled) {
         }
         document.body.classList.remove('attestation-mode');
         isAttestationMode = false;
+        if (startAttestationBtn) {
+            startAttestationBtn.style.display = isAdmin() ? '' : 'none';
+        }
         showCopyNotification('Режим аттестации выключен');
     }
 }
@@ -2592,14 +2598,14 @@ clearChatBtn.addEventListener('click', () => { if (confirm('Очистить ч�
 startBtn.addEventListener('click', startConversationHandler);
 rateChatBtn.addEventListener('click', rateChat);
 aiAssistBtn.addEventListener('click', generateAIResponse);
-if (attestationBtn) {
-    attestationBtn.addEventListener('click', () => {
-        setAttestationMode(!isAttestationMode);
-    });
-}
 if (exitAttestationBtn) {
     exitAttestationBtn.addEventListener('click', () => {
         setAttestationMode(false);
+    });
+}
+if (startAttestationBtn) {
+    startAttestationBtn.addEventListener('click', () => {
+        setAttestationMode(true);
     });
 }
 
@@ -2641,10 +2647,6 @@ const instructionEditors = document.querySelectorAll('.instruction-editor');
 instructionTabs.forEach(tab => {
     tab.addEventListener('click', () => {
         const instructionType = tab.dataset.instruction;
-        if (isPromptSwitchLocked(instructionType)) {
-            showCopyNotification('Нельзя менять личность во время диалога');
-            return;
-        }
         // Save current editor content before switching
         syncCurrentEditorNow();
         
@@ -2700,11 +2702,6 @@ if (instructionDropdown) {
             
             const instructionType = option.dataset.value;
             const instructionName = option.innerText;
-
-            if (isPromptSwitchLocked(instructionType)) {
-                showCopyNotification('Нельзя менять личность во время диалога');
-                return;
-            }
             
             // Update UI
             selectedInstructionText.innerText = instructionName;

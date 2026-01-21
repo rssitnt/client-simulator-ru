@@ -689,9 +689,12 @@ body.attestation-mode .btn-attestation-exit {
     align-items: center;
     flex: 1;
     min-height: 200px;
+    flex-direction: column;
 }
 
 .btn-start {
+    width: 320px;
+    max-width: 90%;
     padding: 54px 72px;
     background: #252525;
     border: none;
@@ -709,6 +712,10 @@ body.attestation-mode .btn-attestation-exit {
 
 .btn-start:active {
     background: #1f1f1f;
+}
+
+.btn-start-attestation {
+    margin-top: 8px;
 }
 
 .message {
@@ -1347,13 +1354,25 @@ body.light-theme .dropdown-option.active {
     justify-content: center;
     background: rgba(0,0,0,0.25);
     color: inherit;
-    font-size: 10px;
+    font-size: 0;
     font-weight: 400;
-    line-height: 1;
+    line-height: 0;
+    position: relative;
     margin-left: 4px;
     margin-right: -3px;
-    padding-bottom: 1px;
     opacity: 0.7;
+}
+
+.prompt-variation-chip .delete-variation::before {
+    content: "×";
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    line-height: 1;
+    transform: translateY(-1px);
 }
 
 .prompt-variation-chip .delete-variation:hover {
@@ -2739,6 +2758,7 @@ body.light-theme .btn-ai-improve:focus {
 /* AI Improve Modal */
 .ai-improve-modal {
     max-width: 500px;
+    width: min(90vw, 500px);
     position: relative;
     border: none;
 }
@@ -2818,7 +2838,8 @@ body.light-theme .ai-improve-modal .btn-modal-cancel:hover {
 .ai-improve-actions {
     display: flex;
     gap: 12px;
-    justify-content: flex-end;
+    justify-content: center;
+    flex-wrap: wrap;
 }
 
 .ai-improve-actions .btn-modal-submit {
@@ -2827,6 +2848,13 @@ body.light-theme .ai-improve-modal .btn-modal-cancel:hover {
     align-items: center;
     gap: 8px;
     background: var(--color-accent);
+    flex: 1 1 160px;
+    max-width: 100%;
+}
+
+.ai-improve-actions .btn-modal-cancel {
+    flex: 1 1 160px;
+    max-width: 100%;
 }
 
 .ai-improve-actions .btn-modal-submit:hover {
