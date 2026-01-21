@@ -1527,8 +1527,19 @@ function clearChat() {
     managerSessionId = baseSessionId + '_manager';
     raterSessionId = baseSessionId + '_rater';
     
-    chatMessages.innerHTML = `<div id="startConversation" class="start-conversation"><button id="startBtn" class="btn-start">Начать диалог</button></div>`;
-    document.getElementById('startBtn').addEventListener('click', startConversationHandler);
+    chatMessages.innerHTML = `
+        <div id="startConversation" class="start-conversation">
+            <button id="startBtn" class="btn-start">Начать диалог</button>
+            <button id="startAttestationBtn" class="btn-start btn-start-attestation">Начать аттестацию</button>
+        </div>
+    `;
+    const startBtnEl = document.getElementById('startBtn');
+    if (startBtnEl) startBtnEl.addEventListener('click', startConversationHandler);
+    const startAttestationBtnEl = document.getElementById('startAttestationBtn');
+    if (startAttestationBtnEl) {
+        startAttestationBtnEl.style.display = isAdmin() && !isAttestationMode ? '' : 'none';
+        startAttestationBtnEl.addEventListener('click', () => setAttestationMode(true));
+    }
 }
 
 async function sendMessage() {
@@ -1649,17 +1660,7 @@ async function rateChat() {
     
     // If already rated, cancel the rating
     if (isDialogRated) {
-        // Remove rating message and improve button from chat
-        const ratingMessages = chatMessages.querySelectorAll('.message.rating');
-        ratingMessages.forEach(msg => msg.remove());
-        
-        const improveMsgs = chatMessages.querySelectorAll('.message.improve-message');
-        improveMsgs.forEach(msg => msg.remove());
-        
-        lastRating = null;
-        isDialogRated = false;
-        unlockDialogInput();
-        rateChatBtn.classList.remove('rated');
+        showCopyNotification('Оценка уже получена');
         return;
     }
     
@@ -1705,6 +1706,7 @@ async function rateChat() {
         if (!ratingMessage || ratingMessage.trim() === '') {
             throw new Error('Пустой ответ');
         }
+        ratingMessage = ratingMessage.trim();
         
         loadingMsg.remove();
         lastRating = ratingMessage;
