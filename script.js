@@ -1605,7 +1605,11 @@ async function sendMessage() {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
         const assistantMessage = await readWebhookResponse(response);
-        if (!assistantMessage) throw new Error('Пустой ответ');
+        if (!assistantMessage) {
+            console.warn('Empty webhook response for user message.');
+            loadingMsg.remove();
+            return;
+        }
         
         loadingMsg.remove();
         addMessage(assistantMessage, 'assistant', true);
@@ -1657,7 +1661,11 @@ async function startConversationHandler() {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
         const assistantMessage = await readWebhookResponse(response);
-        if (!assistantMessage) throw new Error('Пустой ответ');
+        if (!assistantMessage) {
+            console.warn('Empty webhook response for /start.');
+            loadingMsg.remove();
+            return;
+        }
         
         loadingMsg.remove();
         addMessage(assistantMessage, 'assistant', true);
