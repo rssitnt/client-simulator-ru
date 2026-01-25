@@ -300,6 +300,28 @@ function extractApiResponse(data) {
     return data.response || data.message || data.output || data.text || data.rating || JSON.stringify(data, null, 2);
 }
 
+async function readWebhookResponse(response) {
+    const contentType = response.headers.get('content-type') || '';
+    const rawText = await response.text();
+    if (!rawText || rawText.trim() === '') {
+        return '';
+    }
+    const trimmed = rawText.trim();
+    let parsed = null;
+    try {
+        parsed = JSON.parse(trimmed);
+    } catch (e) {
+        parsed = null;
+    }
+    if (parsed) {
+        return extractApiResponse(parsed);
+    }
+    if (contentType.includes('application/json')) {
+        return trimmed;
+    }
+    return trimmed;
+}
+
 function debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {
@@ -1582,8 +1604,7 @@ async function sendMessage() {
         
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
-        const data = await response.json();
-        const assistantMessage = extractApiResponse(data);
+        const assistantMessage = await readWebhookResponse(response);
         if (!assistantMessage) throw new Error('Пустой ответ');
         
         loadingMsg.remove();
@@ -1635,8 +1656,7 @@ async function startConversationHandler() {
         
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
-        const data = await response.json();
-        const assistantMessage = extractApiResponse(data);
+        const assistantMessage = await readWebhookResponse(response);
         if (!assistantMessage) throw new Error('Пустой ответ');
         
         loadingMsg.remove();
