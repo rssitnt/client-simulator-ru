@@ -218,10 +218,10 @@ function applyRoleRestrictions() {
         }
 
         if (exitAttestationBtn) {
-            exitAttestationBtn.style.display = 'none';
+            exitAttestationBtn.style.display = '';
         }
         if (startAttestationBtn) {
-            startAttestationBtn.style.display = 'none';
+            startAttestationBtn.style.display = isAttestationMode ? 'none' : '';
         }
         
     } else {
@@ -236,7 +236,7 @@ function applyRoleRestrictions() {
             exitAttestationBtn.style.display = '';
         }
         if (startAttestationBtn) {
-            startAttestationBtn.style.display = '';
+            startAttestationBtn.style.display = isAttestationMode ? 'none' : '';
         }
     }
 }
@@ -449,7 +449,7 @@ function setAttestationMode(enabled) {
         document.body.classList.remove('attestation-mode');
         isAttestationMode = false;
         if (startAttestationBtn) {
-            startAttestationBtn.style.display = isAdmin() ? '' : 'none';
+            startAttestationBtn.style.display = '';
         }
         showCopyNotification('Режим аттестации выключен');
     }
@@ -679,7 +679,7 @@ function savePromptHistory() {
         set(ref(db, 'prompt_history'), promptHistory)
             .then(() => console.log('Prompt history synced'))
             .catch(e => console.error('Failed to sync history:', e));
-    } else {
+                } else {
         localStorage.setItem('promptHistory', JSON.stringify(promptHistory));
     }
 }
@@ -1568,7 +1568,7 @@ function clearChat() {
     if (startBtnEl) startBtnEl.addEventListener('click', startConversationHandler);
     const startAttestationBtnEl = document.getElementById('startAttestationBtn');
     if (startAttestationBtnEl) {
-        startAttestationBtnEl.style.display = isAdmin() && !isAttestationMode ? '' : 'none';
+        startAttestationBtnEl.style.display = isAttestationMode ? 'none' : '';
         startAttestationBtnEl.addEventListener('click', () => setAttestationMode(true));
     }
 }
@@ -1617,6 +1617,7 @@ async function sendMessage() {
         if (!assistantMessage) {
             console.warn('Empty webhook response for user message.');
             loadingMsg.remove();
+            addMessage('Ошибка: что-то сломалось. Обратитесь к администратору сайта.', 'error', false);
             return;
         }
         
