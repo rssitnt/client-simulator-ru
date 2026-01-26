@@ -297,7 +297,16 @@ if (typeof TurndownService !== 'undefined') {
 // Utility functions
 function extractApiResponse(data) {
     if (typeof data === 'string') return data;
-    return data.response || data.message || data.output || data.text || data.rating || JSON.stringify(data, null, 2);
+    const candidates = [
+        data.response,
+        data.message,
+        data.output,
+        data.text,
+        data.rating
+    ];
+    const firstNonEmpty = candidates.find((value) => typeof value === 'string' && value.trim() !== '');
+    if (firstNonEmpty) return firstNonEmpty;
+    return '';
 }
 
 async function readWebhookResponse(response) {
@@ -1664,6 +1673,7 @@ async function startConversationHandler() {
         if (!assistantMessage) {
             console.warn('Empty webhook response for /start.');
             loadingMsg.remove();
+            addMessage('Ошибка: что-то сломалось. Обратитесь к администратору сайта.', 'error', false);
             return;
         }
         
