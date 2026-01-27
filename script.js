@@ -564,17 +564,27 @@ function renderVariations() {
     if (!promptsData[role] || !promptVariationsContainer) return;
     
     const variations = promptsData[role].variations;
-    const activeId = promptsData[role].activeId;
+    let activeId = promptsData[role].activeId;
     const isAdminUser = isAdmin();
+    const shouldHideAttestation = !isAdminUser && !isAttestationMode;
+    const visibleVariations = shouldHideAttestation
+        ? variations.filter(v => (v.name || '').trim().toLowerCase() !== 'аттестация')
+        : variations;
+    const activeVisible = visibleVariations.find(v => v.id === activeId);
+    if (!activeVisible && visibleVariations.length > 0) {
+        activeId = visibleVariations[0].id;
+        promptsData[role].activeId = activeId;
+        updateEditorContent(role);
+    }
     
     promptVariationsContainer.innerHTML = '';
     
-    variations.forEach(v => {
+    visibleVariations.forEach(v => {
         const chip = document.createElement('div');
         chip.className = `prompt-variation-chip ${v.id === activeId ? 'active' : ''}`;
         chip.innerHTML = `
             <span class="chip-name">${v.name}</span>
-            ${variations.length > 1 && isAdminUser ? '<span class="delete-variation">×</span>' : ''}
+            ${visibleVariations.length > 1 && isAdminUser ? '<span class="delete-variation">×</span>' : ''}
         `;
         
         chip.addEventListener('click', (e) => {
@@ -2030,13 +2040,12 @@ async function generateAIResponse() {
         
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
-        const data = await response.json();
-        let aiMessage = extractApiResponse(data);
+        const aiMessage = await readWebhookResponse(response);
         if (!aiMessage) throw new Error('Пустой ответ');
         
-        aiMessage = aiMessage.trim().replace(/^["']|["']$/g, '').replace(/^(Менеджер|Manager):\s*/i, '');
+        const cleanedMessage = aiMessage.trim().replace(/^["']|["']$/g, '').replace(/^(Менеджер|Manager):\s*/i, '');
         
-        userInput.value = aiMessage;
+        userInput.value = cleanedMessage;
         autoResizeTextarea(userInput);
         updateSendBtnState(); // Активируем кнопку отправки
         userInput.focus();
