@@ -1807,88 +1807,81 @@ function addImproveFromRatingButton(dialogText, ratingText) {
     buttonContainer.style.border = 'none';
     
     buttonContainer.innerHTML = `
-        <button class="btn-improve-from-rating">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
-                <path d="M2 17l10 5 10-5"></path>
-                <path d="M2 12l10 5 10-5"></path>
-            </svg>
-            Улучшить инструкцию менеджера на основе оценки
-        </button>
-        <p style="font-size: 12px; color: #888; margin-top: 4px; text-align: center;">использовать только в полностью сгенерированных диалогах</p>
+        <div style="font-size: 13px; color: #cfcfcf; text-align: center; margin-bottom: 8px;">
+            Улучшить инструкции на основе диалога
+        </div>
+        <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+            <button class="btn-improve-from-rating" data-role="manager">Менеджер</button>
+            <button class="btn-improve-from-rating" data-role="client">Клиент</button>
+            <button class="btn-improve-from-rating" data-role="rater">Оценщик</button>
+        </div>
+        <p style="font-size: 12px; color: #888; margin-top: 8px; text-align: center;">использовать только в полностью сгенерированных диалогах</p>
     `;
     
-    const btn = buttonContainer.querySelector('.btn-improve-from-rating');
-    btn.addEventListener('click', async () => {
-        btn.disabled = true;
-        btn.innerHTML = `
-            <svg class="spinner" width="16" height="16" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round">
-                    <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/>
-                </circle>
-            </svg>
-            Анализирую оценку...
-        `;
-        
-        try {
-            const currentManagerPrompt = getActiveContent('manager');
-            
-            const response = await fetchWithTimeout(AI_IMPROVE_WEBHOOK_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    userMessage: `Текущая инструкция ИИ-менеджера:\n\n${currentManagerPrompt}\n\n---\n\nДиалог менеджера с клиентом:\n\n${dialogText}\n\n---\n\nОценка диалога:\n\n${ratingText}\n\n---\n\nНа основе этого диалога и его оценки улучши инструкцию менеджера. Учти ошибки, которые были допущены, и добавь рекомендации, чтобы избежать их в будущем.\n\nВАЖНО: Верни ПОЛНЫЙ текст улучшенного промпта. Подсвети изменения так:\n1. Удаленный/измененный текст оберни в ~~ (например: ~~старый текст~~)\n2. Новый/добавленный текст оберни в ++ (например: ++новый текст++)\n3. Остальной текст оставь без изменений.\nНе используй markdown код-блоки.`
-                })
-            });
-            
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            
-            const responseText = await response.text();
-            if (!responseText) throw new Error('Пустой ответ от сервера');
-
-            let data;
-            try {
-                data = JSON.parse(responseText);
-            } catch (e) {
-                data = { output: responseText };
-            }
-
-            const rawResponse = extractApiResponse(data);
-            if (!rawResponse) throw new Error('Не удалось получить текст из ответа');
-            
-            // Clean the text for saving
-            const cleanPrompt = rawResponse
-                .replace(/~~[\s\S]+?~~/g, '')
-                .replace(/\+\+([\s\S]+?)\+\+/g, '$1')
-                .replace(/\n{3,}/g, '\n\n')
-                .trim();
-
-            // Store pending data for the diff preview
-            pendingImprovedPrompt = cleanPrompt;
-            pendingRole = 'manager';
-            const activeVar = promptsData.manager.variations.find(v => v.id === promptsData.manager.activeId);
-            pendingName = activeVar ? activeVar.name : 'Менеджер';
-            
-            // Show diff preview in AI modal
-            showSemanticDiff(rawResponse);
-            aiImproveModal.classList.add('active');
-            
-            // Hide the button after use
-            messageDiv.remove();
-            
-        } catch (error) {
-            console.error('Improve from rating error:', error);
-            alert('Ошибка улучшения: ' + error.message);
-            btn.disabled = false;
+    const roleButtons = buttonContainer.querySelectorAll('.btn-improve-from-rating');
+    roleButtons.forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            const role = btn.dataset.role;
+            if (!role) return;
+            roleButtons.forEach(b => (b.disabled = true));
             btn.innerHTML = `
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
-                    <path d="M2 17l10 5 10-5"></path>
-                    <path d="M2 12l10 5 10-5"></path>
+                <svg class="spinner" width="16" height="16" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round">
+                        <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/>
+                    </circle>
                 </svg>
-                Улучшить инструкцию менеджера на основе оценки
+                Анализирую оценку...
             `;
-        }
+            
+            try {
+                const currentPrompt = getActiveContent(role);
+                const roleLabel = role === 'client' ? 'клиента' : role === 'manager' ? 'менеджера' : 'оценщика';
+                const response = await fetchWithTimeout(AI_IMPROVE_WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userMessage: `Текущая инструкция ИИ-${roleLabel}:\n\n${currentPrompt}\n\n---\n\nДиалог менеджера с клиентом:\n\n${dialogText}\n\n---\n\nОценка диалога:\n\n${ratingText}\n\n---\n\nНа основе этого диалога и его оценки улучши инструкцию ${roleLabel}. Учти ошибки, которые были допущены, и добавь рекомендации, чтобы избежать их в будущем.\n\nВАЖНО: Верни ПОЛНЫЙ текст улучшенного промпта. Подсвети изменения так:\n1. Удаленный/измененный текст оберни в ~~ (например: ~~старый текст~~)\n2. Новый/добавленный текст оберни в ++ (например: ++новый текст++)\n3. Остальной текст оставь без изменений.\nНе используй markdown код-блоки.`
+                    })
+                });
+                
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const responseText = await response.text();
+                if (!responseText) throw new Error('Пустой ответ от сервера');
+
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                } catch (e) {
+                    data = { output: responseText };
+                }
+
+                const rawResponse = extractApiResponse(data);
+                if (!rawResponse) throw new Error('Не удалось получить текст из ответа');
+                
+                const cleanPrompt = rawResponse
+                    .replace(/~~[\s\S]+?~~/g, '')
+                    .replace(/\+\+([\s\S]+?)\+\+/g, '$1')
+                    .replace(/\n{3,}/g, '\n\n')
+                    .trim();
+
+                pendingImprovedPrompt = cleanPrompt;
+                pendingRole = role;
+                const activeVar = promptsData[role].variations.find(v => v.id === promptsData[role].activeId);
+                pendingName = activeVar ? activeVar.name : roleLabel;
+                
+                showSemanticDiff(rawResponse);
+                aiImproveModal.classList.add('active');
+                
+                messageDiv.remove();
+                
+            } catch (error) {
+                console.error('Improve from rating error:', error);
+                alert('Ошибка улучшения: ' + error.message);
+                roleButtons.forEach(b => (b.disabled = false));
+                btn.textContent = role === 'manager' ? 'Менеджер' : role === 'client' ? 'Клиент' : 'Оценщик';
+            }
+        });
     });
     
     messageDiv.appendChild(buttonContainer);
