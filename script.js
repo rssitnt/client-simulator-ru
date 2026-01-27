@@ -1715,6 +1715,7 @@ async function rateChat() {
     
     rateChatBtn.disabled = true;
     rateChatBtn.classList.add('loading');
+    aiAssistBtn.disabled = true;
     toggleInputState(false);
     
     const loadingMsg = addMessage('', 'loading');
@@ -1780,6 +1781,7 @@ async function rateChat() {
     } finally {
         rateChatBtn.disabled = false;
         rateChatBtn.classList.remove('loading');
+        aiAssistBtn.disabled = false;
         if (!lastRating) {
             toggleInputState(true);
             userInput.focus();
@@ -2013,6 +2015,7 @@ async function generateAIResponse() {
     if (isDialogRated || conversationHistory.length === 0 || isProcessing) return;
     
     aiAssistBtn.disabled = true;
+    rateChatBtn.disabled = true;
     aiAssistBtn.classList.add('loading');
     
     try {
@@ -2055,6 +2058,7 @@ async function generateAIResponse() {
         alert('Ошибка: ' + error.message);
     } finally {
         aiAssistBtn.disabled = false;
+        rateChatBtn.disabled = false;
         aiAssistBtn.classList.remove('loading');
     }
 }

@@ -2015,6 +2015,10 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
     font-weight: 500;
     cursor: pointer;
     transition: background 0.2s, transform 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
 }
 
 .btn-modal-submit:hover {
