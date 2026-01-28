@@ -401,6 +401,9 @@ function getVariationByName(role, name) {
 function ensureAttestationVariation(role) {
     let variation = getVariationByName(role, 'Аттестация');
     if (!variation) {
+        if (!isAdmin()) {
+            return null;
+        }
         variation = {
             id: generateId(),
             name: 'Аттестация',
@@ -416,12 +419,17 @@ function ensureAttestationVariation(role) {
 
 function applyAttestationPrompts() {
     const roles = ['client', 'manager', 'rater'];
-    roles.forEach(role => {
+    for (const role of roles) {
         const variation = ensureAttestationVariation(role);
+        if (!variation) {
+            showCopyNotification('Аттестационные промпты не настроены. Обратитесь к администратору.');
+            return false;
+        }
         promptsData[role].activeId = variation.id;
         updateEditorContent(role);
-    });
+    }
     renderVariations();
+    return true;
 }
 
 function setAttestationMode(enabled) {
@@ -431,7 +439,10 @@ function setAttestationMode(enabled) {
             manager: promptsData.manager.activeId,
             rater: promptsData.rater.activeId
         };
-        applyAttestationPrompts();
+        const applied = applyAttestationPrompts();
+        if (!applied) {
+            return;
+        }
         document.body.classList.add('attestation-mode');
         isAttestationMode = true;
         if (startAttestationBtn) {
@@ -1066,6 +1077,11 @@ function showAiImproveModal() {
 
 function hideAiImproveModal() {
     aiImproveModal.classList.remove('active');
+    document.querySelectorAll('.btn-improve-from-rating').forEach(btn => {
+        btn.disabled = false;
+        const role = btn.dataset.role;
+        btn.textContent = role === 'manager' ? 'Менеджер' : role === 'client' ? 'Клиент' : 'Оценщик';
+    });
 }
 
 // ============ SETTINGS MODAL FUNCTIONS ============
@@ -1872,8 +1888,6 @@ function addImproveFromRatingButton(dialogText, ratingText) {
                 
                 showSemanticDiff(rawResponse);
                 aiImproveModal.classList.add('active');
-                
-                messageDiv.remove();
                 
             } catch (error) {
                 console.error('Improve from rating error:', error);
