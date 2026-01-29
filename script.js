@@ -681,8 +681,8 @@ function initPromptsData(firebaseData = {}) {
     }
 
     renderVariations();
-    updateAllPreviews();
-}
+                        updateAllPreviews();
+                    }
 
 function renderVariations() {
     const role = getActiveRole();
@@ -758,7 +758,7 @@ function renderVariations() {
 function formatHistoryTime(ts) {
     try {
         return new Date(ts).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
-    } catch (e) {
+        } catch (e) {
         return '';
     }
 }
@@ -1813,7 +1813,7 @@ async function startConversationHandler() {
         const assistantMessage = await readWebhookResponse(response);
         if (!assistantMessage) {
             console.warn('Empty webhook response for /start.');
-            loadingMsg.remove();
+        loadingMsg.remove();
             addMessage('Ошибка: что-то сломалось. Обратитесь к администратору сайта.', 'error', false);
             return;
         }
@@ -2009,8 +2009,8 @@ function addImproveFromRatingButton(dialogText, ratingText) {
                 roleButtons.forEach(b => (b.disabled = false));
                 btn.textContent = role === 'manager' ? 'Менеджер' : role === 'client' ? 'Клиент' : 'Оценщик';
             }
-        });
     });
+});
 
     messageDiv.appendChild(buttonContainer);
     chatMessages.appendChild(messageDiv);
