@@ -609,6 +609,12 @@ function unlockDialogInput() {
 // ============ PROMPT VARIATIONS LOGIC ============
 
 function initPromptsData(firebaseData = {}) {
+    // #region agent log
+    try {
+        const sessionId = typeof baseSessionId !== 'undefined' ? baseSessionId : 'unknown';
+        fetch('http://127.0.0.1:7243/ingest/987d1d6f-727d-4fc5-a54f-c42484f79884',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'script.js:612',message:'initPromptsData called',data:{firebaseDataKeys:Object.keys(firebaseData),hasClientVars:!!firebaseData.client_variations},timestamp:Date.now(),sessionId:sessionId,hypothesisId:'A'})}).catch(()=>{});
+    } catch(e) {}
+    // #endregion
     const roles = ['client', 'manager', 'rater'];
     
     roles.forEach(role => {
@@ -887,6 +893,12 @@ function addVariation(role) {
 }
                     
 function deleteVariation(role, id) {
+    // #region agent log
+    try {
+        const sessionId = typeof baseSessionId !== 'undefined' ? baseSessionId : 'unknown';
+        fetch('http://127.0.0.1:7243/ingest/987d1d6f-727d-4fc5-a54f-c42484f79884',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'script.js:890',message:'deleteVariation called',data:{role,id},timestamp:Date.now(),sessionId:sessionId,hypothesisId:'E'})}).catch(()=>{});
+    } catch(e) {}
+    // #endregion
     const index = promptsData[role].variations.findIndex(v => v.id === id);
     if (index > -1) {
         promptsData[role].variations.splice(index, 1);
@@ -941,6 +953,12 @@ function updateEditorContent(role) {
 }
 
 function syncContentToData(role, content) {
+    // #region agent log
+    try {
+        const sessionId = typeof baseSessionId !== 'undefined' ? baseSessionId : 'unknown';
+        fetch('http://127.0.0.1:7243/ingest/987d1d6f-727d-4fc5-a54f-c42484f79884',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'script.js:944',message:'syncContentToData called',data:{role,contentLength:content?.length},timestamp:Date.now(),sessionId:sessionId,hypothesisId:'D'})}).catch(()=>{});
+    } catch(e) {}
+    // #endregion
     const activeVar = promptsData[role].variations.find(v => v.id === promptsData[role].activeId);
     if (activeVar) {
         activeVar.content = content;
@@ -960,6 +978,12 @@ const savePromptsToFirebase = debounce(() => {
 }, 1000);
 
 function savePromptsToFirebaseNow() {
+    // #region agent log
+    try {
+        const sessionId = typeof baseSessionId !== 'undefined' ? baseSessionId : 'unknown';
+        fetch('http://127.0.0.1:7243/ingest/987d1d6f-727d-4fc5-a54f-c42484f79884',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'script.js:963',message:'savePromptsToFirebaseNow called',data:{promptsSummary:Object.keys(promptsData).map(r=>({role:r,vars:promptsData[r].variations.length,activeId:promptsData[r].activeId}))},timestamp:Date.now(),sessionId:sessionId,hypothesisId:'B'})}).catch(()=>{});
+    } catch(e) {}
+    // #endregion
     const activeRole = getActiveRole();
     const activeVar = promptsData[activeRole]?.variations.find(v => v.id === promptsData[activeRole]?.activeId);
     if (activeVar) {
@@ -1009,6 +1033,12 @@ function loadPrompts() {
             const promptsRef = ref(db, 'prompts');
             onValue(promptsRef, (snapshot) => {
                 const data = snapshot.val();
+                // #region agent log
+                try {
+                    const sessionId = typeof baseSessionId !== 'undefined' ? baseSessionId : 'unknown';
+                    fetch('http://127.0.0.1:7243/ingest/987d1d6f-727d-4fc5-a54f-c42484f79884',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'script.js:1012',message:'Firebase onValue triggered',data:{hasData:!!data,isUserEditing:typeof isUserEditing !== 'undefined' ? isUserEditing : 'unknown'},timestamp:Date.now(),sessionId:sessionId,hypothesisId:'C'})}).catch(()=>{});
+                } catch(e) {}
+                // #endregion
                 console.log('Firebase data received:', data);
                 
                 // Skip update if user is currently editing
