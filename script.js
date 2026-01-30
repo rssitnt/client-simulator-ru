@@ -961,6 +961,12 @@ function syncContentToData(role, content) {
     // #endregion
     const activeVar = promptsData[role].variations.find(v => v.id === promptsData[role].activeId);
     if (activeVar) {
+        // Critical Fix: Don't allow empty content if previous content was significant
+        // This prevents data loss from WYSIWYG/Turndown glitches
+        if (content.trim() === '' && activeVar.content && activeVar.content.trim().length > 10) {
+            console.warn(`Prevented accidental data loss for ${role}. New content was empty.`);
+            return;
+        }
         activeVar.content = content;
         savePromptsToFirebase();
     }
@@ -1003,6 +1009,17 @@ function savePromptsToFirebaseNow() {
         rater_variations: promptsData.rater.variations,
         rater_activeId: promptsData.rater.activeId
     };
+
+    // Critical Fix: Validation to prevent saving empty/corrupted data to cloud
+    const hasEmptyEssential = 
+        (payload.client_prompt === '' && promptsData.client.variations.some(v => v.content)) ||
+        (payload.manager_prompt === '' && promptsData.manager.variations.some(v => v.content)) ||
+        (payload.rater_prompt === '' && promptsData.rater.variations.some(v => v.content));
+
+    if (hasEmptyEssential) {
+        console.warn('Sync cancelled: attempt to save empty prompt detected');
+        return;
+    }
 
     set(ref(db, 'prompts'), payload)
         .then(() => console.log('Prompts synced to Firebase'))
@@ -2590,7 +2607,8 @@ const syncWYSIWYGDebounced = debounce(function(previewElement, textarea, callbac
     clearTimeout(editingTimeout);
     editingTimeout = setTimeout(() => {
         isUserEditing = false;
-    }, 2000);
+        console.log('isUserEditing set to false (timeout)');
+    }, 5000); // Increased to 5s to prevent race conditions with Firebase echo
 }, 300);
         
 // Force immediate sync of current editor content
@@ -2611,6 +2629,13 @@ function syncCurrentEditorNow() {
     
     if (turndownService && preview && textarea) {
         const markdown = turndownService.turndown(preview.innerHTML);
+        
+        // Critical Fix: Don't sync if Turndown failed but content exists
+        if (markdown.trim() === '' && (preview.innerText || '').trim() !== '') {
+            console.warn('Sync cancelled: Turndown returned empty for non-empty preview');
+            return;
+        }
+
         textarea.value = markdown;
         syncContentToData(role, markdown);
     }
