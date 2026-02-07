@@ -1633,6 +1633,19 @@ function getActiveContent(role) {
     return v ? v.content : '';
 }
 
+function validatePromptBeforeWebhook(role, promptValue) {
+    const trimmedPrompt = String(promptValue || '').trim();
+    if (trimmedPrompt) return trimmedPrompt;
+
+    const roleLabel = role === 'client'
+        ? 'клиента'
+        : role === 'manager'
+            ? 'менеджера'
+            : 'оценщика';
+    addMessage(`Ошибка: промпт ${roleLabel} пустой. Заполните инструкцию.`, 'error', false);
+    return null;
+}
+
 // ============ FIREBASE SYNC ============
 
 const savePromptsToFirebase = debounce(() => {
@@ -2467,6 +2480,9 @@ function clearChat() {
 async function sendMessage() {
     const userMessage = userInput.value.trim();
     if (!userMessage || isProcessing || isDialogRated) return;
+
+    const systemPrompt = validatePromptBeforeWebhook('client', systemPromptInput.value);
+    if (!systemPrompt) return;
     
     isProcessing = true;
     toggleInputState(false);
@@ -2484,7 +2500,6 @@ async function sendMessage() {
     const loadingMsg = addMessage('', 'loading');
     
     try {
-        const systemPrompt = systemPromptInput.value.trim();
         let dialogHistory = '';
         conversationHistory.slice(0, -1).forEach((msg) => {
             const role = msg.role === 'user' ? 'Менеджер' : 'Клиент';
@@ -2496,7 +2511,7 @@ async function sendMessage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 chatInput: userMessage,
-                systemPrompt: systemPrompt || 'Вы — клиент.',
+                systemPrompt,
             dialogHistory: dialogHistory.trim(),
             sessionId: clientSessionId
             })
@@ -2531,6 +2546,9 @@ async function sendMessage() {
 }
 
 async function startConversationHandler() {
+    const systemPrompt = validatePromptBeforeWebhook('client', systemPromptInput.value);
+    if (!systemPrompt) return;
+
     baseSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     localStorage.setItem('sessionId', baseSessionId);
     clientSessionId = baseSessionId + '_client';
@@ -2547,13 +2565,12 @@ async function startConversationHandler() {
     const loadingMsg = addMessage('', 'loading');
     
     try {
-        const systemPrompt = systemPromptInput.value.trim();
         const response = await fetchWithTimeout(WEBHOOK_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 chatInput: '/start',
-                systemPrompt: systemPrompt || 'Вы — клиент.',
+                systemPrompt,
                 dialogHistory: '',
                 sessionId: clientSessionId
             })
@@ -2593,6 +2610,9 @@ async function rateChat() {
         showCopyNotification('Оценка уже получена');
         return;
     }
+
+    const raterPrompt = validatePromptBeforeWebhook('rater', raterPromptInput.value);
+    if (!raterPrompt) return;
     
     rateChatBtn.disabled = true;
     rateChatBtn.classList.add('loading');
@@ -2607,9 +2627,7 @@ async function rateChat() {
             const role = msg.role === 'user' ? 'Менеджер' : 'Клиент';
             dialogText += `${role}: ${msg.content}\n\n`;
         });
-        
-        const raterPrompt = raterPromptInput.value.trim() || 'Оцените качество диалога.';
-        
+
         const response = await fetchWithTimeout(RATE_WEBHOOK_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -2823,6 +2841,9 @@ function blobToBase64(blob) {
 
 async function generateAIResponse() {
     if (isDialogRated || conversationHistory.length === 0 || isProcessing) return;
+
+    const basePrompt = validatePromptBeforeWebhook('manager', managerPromptInput.value);
+    if (!basePrompt) return;
     
     aiAssistBtn.disabled = true;
     rateChatBtn.disabled = true;
@@ -2837,7 +2858,6 @@ async function generateAIResponse() {
         
         const lastMessage = conversationHistory[conversationHistory.length - 1].content;
         const managerName = getManagerName();
-        const basePrompt = managerPromptInput.value.trim();
         const fullPrompt = `Тебя зовут ${managerName}.\n\n${basePrompt}`;
         
         const response = await fetchWithTimeout(MANAGER_ASSISTANT_WEBHOOK_URL, {
