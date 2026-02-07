@@ -682,6 +682,10 @@ body.attestation-mode .chat-panel {
     padding-left: 0;
 }
 
+#instructionsPanel.compact-tabs .panel-header {
+    padding-left: 16px;
+}
+
 .panel-header h2 {
     font-size: 18px;
     font-weight: 500;
@@ -2048,6 +2052,10 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
 
     #instructionsPanel .panel-header {
         padding-left: 0;
+    }
+
+    #instructionsPanel.compact-tabs .panel-header {
+        padding-left: 12px;
     }
     
     .panel-header h2 {
