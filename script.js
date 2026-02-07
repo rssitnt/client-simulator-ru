@@ -641,6 +641,10 @@ function positionTooltipLayer(target) {
 
     const finalLeft = Number.isFinite(left) ? Math.round(left) : TOOLTIP_EDGE_OFFSET_PX;
     const finalTop = Number.isFinite(top) ? Math.round(top) : TOOLTIP_EDGE_OFFSET_PX;
+    tooltipLayer.style.setProperty('position', 'fixed', 'important');
+    tooltipLayer.style.setProperty('inset', 'auto', 'important');
+    tooltipLayer.style.setProperty('right', 'auto', 'important');
+    tooltipLayer.style.setProperty('bottom', 'auto', 'important');
     tooltipLayer.style.setProperty('left', `${finalLeft}px`, 'important');
     tooltipLayer.style.setProperty('top', `${finalTop}px`, 'important');
     tooltipLayer.style.setProperty('--tooltip-arrow-left', `${Math.round(arrowLeft)}px`);
@@ -676,6 +680,10 @@ function showTooltip(target) {
     }
     tooltipLayer.classList.remove('visible');
     tooltipLayer.classList.remove('placement-bottom');
+    tooltipLayer.style.setProperty('position', 'fixed', 'important');
+    tooltipLayer.style.setProperty('inset', 'auto', 'important');
+    tooltipLayer.style.setProperty('right', 'auto', 'important');
+    tooltipLayer.style.setProperty('bottom', 'auto', 'important');
     tooltipLayer.style.setProperty('left', '-9999px', 'important');
     tooltipLayer.style.setProperty('top', '-9999px', 'important');
     positionTooltipLayer(target);
