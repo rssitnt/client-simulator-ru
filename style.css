@@ -1568,10 +1568,20 @@ body.user-mode .prompt-preview {
 .markdown-toolbar {
     display: flex;
     align-items: center;
+    flex-wrap: nowrap;
     gap: 2px;
     padding: 6px 10px;
     background: #0F0F0F;
     flex-shrink: 0;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+}
+
+.markdown-toolbar::-webkit-scrollbar {
+    display: none;
 }
 
 .toolbar-btn {
@@ -1589,6 +1599,7 @@ body.user-mode .prompt-preview {
     display: flex;
     align-items: center;
     justify-content: center;
+    flex: 0 0 auto;
 }
 
 .toolbar-btn:hover {
@@ -1626,10 +1637,34 @@ body.user-mode .prompt-preview {
     height: 16px;
     background: #333;
     margin: 0 6px;
+    flex: 0 0 auto;
 }
 
 body.light-theme .toolbar-btn-eye.state-hidden {
     color: #d32f2f;
+}
+
+.prompt-panel.compact-toolbar .markdown-toolbar {
+    flex-wrap: wrap;
+    overflow-x: hidden;
+    overflow-y: auto;
+    align-items: flex-start;
+    row-gap: 4px;
+}
+
+.prompt-panel.compact-toolbar .toolbar-divider {
+    display: none;
+}
+
+.prompt-panel.compact-toolbar .toolbar-btn {
+    min-width: 24px;
+    height: 24px;
+    padding: 3px 6px;
+    font-size: 11px;
+}
+
+.prompt-panel.compact-toolbar .toolbar-btn-ai {
+    font-size: 15px;
 }
 
 .instruction-editor {

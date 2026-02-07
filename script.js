@@ -3634,6 +3634,8 @@ function checkTabsCompactMode() {
     
     // При ширине панели меньше 420px - включаем компактный режим
     instructionsPanelElement.classList.toggle('compact-tabs', panelWidth < 420);
+    // Для узкой правой панели адаптируем и toolbar форматирования
+    instructionsPanelElement.classList.toggle('compact-toolbar', panelWidth < 560);
 }
 
 // Also check on panel resize via ResizeObserver
