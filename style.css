@@ -455,7 +455,9 @@ body {
 
 .custom-tooltip-layer {
     --tooltip-arrow-left: 50%;
-    position: fixed;
+    position: fixed !important;
+    inset: auto !important;
+    margin: 0;
     left: -9999px;
     top: -9999px;
     z-index: 2147483647;
@@ -486,6 +488,12 @@ body {
     transform: translateY(6px) scale(0.97);
     transition: opacity 0.2s ease, transform 0.2s ease, visibility 0s linear 0.2s;
     will-change: transform, opacity;
+}
+
+.custom-tooltip-layer:popover-open {
+    position: fixed !important;
+    inset: auto !important;
+    margin: 0;
 }
 
 .custom-tooltip-layer::before {

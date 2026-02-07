@@ -570,10 +570,12 @@ function prepareCustomTooltips(root = document) {
 const TOOLTIP_SHOW_DELAY_MS = 320;
 const TOOLTIP_GAP_PX = 12;
 const TOOLTIP_EDGE_OFFSET_PX = 12;
+const SUPPORTS_POPOVER = typeof HTMLElement !== 'undefined' && 'showPopover' in HTMLElement.prototype;
 let tooltipLayer = null;
 let tooltipActiveTarget = null;
 let tooltipShowTimer = null;
 let tooltipHideTimer = null;
+let tooltipMutationObserver = null;
 
 function getTooltipTarget(node) {
     if (!(node instanceof Element)) return null;
@@ -589,9 +591,18 @@ function ensureTooltipLayer() {
     tooltipLayer = document.createElement('div');
     tooltipLayer.className = 'custom-tooltip-layer';
     tooltipLayer.setAttribute('role', 'tooltip');
-    tooltipLayer.hidden = true;
+    if (SUPPORTS_POPOVER) {
+        tooltipLayer.setAttribute('popover', 'manual');
+    } else {
+        tooltipLayer.hidden = true;
+    }
     document.body.appendChild(tooltipLayer);
     return tooltipLayer;
+}
+
+function isTooltipPopoverOpen() {
+    if (!tooltipLayer || !SUPPORTS_POPOVER) return false;
+    return tooltipLayer.matches(':popover-open');
 }
 
 function positionTooltipLayer(target) {
@@ -654,7 +665,13 @@ function showTooltip(target) {
 
     tooltipActiveTarget = target;
     tooltipLayer.textContent = tooltipText;
-    tooltipLayer.hidden = false;
+    if (!SUPPORTS_POPOVER) {
+        tooltipLayer.hidden = false;
+    } else if (!isTooltipPopoverOpen()) {
+        try {
+            tooltipLayer.showPopover();
+        } catch (e) {}
+    }
     tooltipLayer.classList.remove('visible');
     tooltipLayer.classList.remove('placement-bottom');
     tooltipLayer.style.left = '-9999px';
@@ -696,7 +713,14 @@ function hideTooltip(immediate = false) {
             clearTimeout(tooltipHideTimer);
             tooltipHideTimer = null;
         }
-        tooltipLayer.hidden = true;
+        if (SUPPORTS_POPOVER && isTooltipPopoverOpen()) {
+            try {
+                tooltipLayer.hidePopover();
+            } catch (e) {}
+        }
+        if (!SUPPORTS_POPOVER) {
+            tooltipLayer.hidden = true;
+        }
         return;
     }
 
@@ -705,13 +729,47 @@ function hideTooltip(immediate = false) {
     }
     tooltipHideTimer = setTimeout(() => {
         if (!tooltipLayer.classList.contains('visible')) {
-            tooltipLayer.hidden = true;
+            if (SUPPORTS_POPOVER && isTooltipPopoverOpen()) {
+                try {
+                    tooltipLayer.hidePopover();
+                } catch (e) {}
+            }
+            if (!SUPPORTS_POPOVER) {
+                tooltipLayer.hidden = true;
+            }
         }
     }, 180);
 }
 
 function initCustomTooltipLayer() {
     ensureTooltipLayer();
+
+    if (!tooltipMutationObserver) {
+        tooltipMutationObserver = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.type === 'attributes') {
+                    const target = mutation.target;
+                    if (target instanceof Element && target.hasAttribute('title')) {
+                        setCustomTooltip(target, target.getAttribute('title'));
+                    }
+                    return;
+                }
+                mutation.addedNodes.forEach((node) => {
+                    if (!(node instanceof Element)) return;
+                    if (node.hasAttribute('title')) {
+                        setCustomTooltip(node, node.getAttribute('title'));
+                    }
+                    prepareCustomTooltips(node);
+                });
+            });
+        });
+        tooltipMutationObserver.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['title']
+        });
+    }
 
     document.addEventListener('pointerover', (event) => {
         if (event.pointerType === 'touch') return;
