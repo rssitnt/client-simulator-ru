@@ -567,6 +567,197 @@ function prepareCustomTooltips(root = document) {
     });
 }
 
+const TOOLTIP_SHOW_DELAY_MS = 320;
+const TOOLTIP_GAP_PX = 12;
+const TOOLTIP_EDGE_OFFSET_PX = 12;
+let tooltipLayer = null;
+let tooltipActiveTarget = null;
+let tooltipShowTimer = null;
+let tooltipHideTimer = null;
+
+function getTooltipTarget(node) {
+    if (!(node instanceof Element)) return null;
+    const target = node.closest('.custom-tooltip-target[data-tooltip]');
+    if (!target) return null;
+    const text = (target.getAttribute('data-tooltip') || '').trim();
+    if (!text) return null;
+    return target;
+}
+
+function ensureTooltipLayer() {
+    if (tooltipLayer) return tooltipLayer;
+    tooltipLayer = document.createElement('div');
+    tooltipLayer.className = 'custom-tooltip-layer';
+    tooltipLayer.setAttribute('role', 'tooltip');
+    tooltipLayer.hidden = true;
+    document.body.appendChild(tooltipLayer);
+    return tooltipLayer;
+}
+
+function positionTooltipLayer(target) {
+    if (!tooltipLayer || !target) return;
+    if (!document.contains(target)) {
+        hideTooltip(true);
+        return;
+    }
+
+    const rect = target.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    tooltipLayer.classList.remove('placement-bottom');
+    const tooltipRect = tooltipLayer.getBoundingClientRect();
+
+    const preferredLeft = rect.left + rect.width / 2 - tooltipRect.width / 2;
+    const maxLeft = Math.max(TOOLTIP_EDGE_OFFSET_PX, viewportWidth - TOOLTIP_EDGE_OFFSET_PX - tooltipRect.width);
+    const left = Math.min(maxLeft, Math.max(TOOLTIP_EDGE_OFFSET_PX, preferredLeft));
+
+    const topPlacement = rect.top - TOOLTIP_GAP_PX - tooltipRect.height;
+    const bottomPlacement = rect.bottom + TOOLTIP_GAP_PX;
+    const hasSpaceAbove = topPlacement >= TOOLTIP_EDGE_OFFSET_PX;
+    const hasSpaceBelow = bottomPlacement + tooltipRect.height <= viewportHeight - TOOLTIP_EDGE_OFFSET_PX;
+    const placeBottom = !hasSpaceAbove && hasSpaceBelow;
+
+    if (placeBottom) {
+        tooltipLayer.classList.add('placement-bottom');
+    }
+
+    let top = placeBottom ? bottomPlacement : topPlacement;
+    top = Math.max(TOOLTIP_EDGE_OFFSET_PX, Math.min(top, viewportHeight - TOOLTIP_EDGE_OFFSET_PX - tooltipRect.height));
+
+    const anchorX = rect.left + rect.width / 2;
+    const arrowLeft = Math.max(12, Math.min(anchorX - left, tooltipRect.width - 12));
+
+    tooltipLayer.style.left = `${Math.round(left)}px`;
+    tooltipLayer.style.top = `${Math.round(top)}px`;
+    tooltipLayer.style.setProperty('--tooltip-arrow-left', `${Math.round(arrowLeft)}px`);
+}
+
+function clearTooltipTimers() {
+    if (tooltipShowTimer) {
+        clearTimeout(tooltipShowTimer);
+        tooltipShowTimer = null;
+    }
+    if (tooltipHideTimer) {
+        clearTimeout(tooltipHideTimer);
+        tooltipHideTimer = null;
+    }
+}
+
+function showTooltip(target) {
+    if (!target) return;
+    const tooltipText = (target.getAttribute('data-tooltip') || '').trim();
+    if (!tooltipText) return;
+
+    ensureTooltipLayer();
+    clearTooltipTimers();
+
+    tooltipActiveTarget = target;
+    tooltipLayer.textContent = tooltipText;
+    tooltipLayer.hidden = false;
+    tooltipLayer.classList.remove('visible');
+    tooltipLayer.classList.remove('placement-bottom');
+    tooltipLayer.style.left = '-9999px';
+    tooltipLayer.style.top = '-9999px';
+    positionTooltipLayer(target);
+
+    requestAnimationFrame(() => {
+        if (!tooltipLayer || tooltipActiveTarget !== target) return;
+        tooltipLayer.classList.add('visible');
+    });
+}
+
+function scheduleTooltip(target) {
+    clearTooltipTimers();
+    if (!target) return;
+
+    if (tooltipActiveTarget === target && tooltipLayer && !tooltipLayer.hidden) {
+        positionTooltipLayer(target);
+        return;
+    }
+
+    tooltipShowTimer = setTimeout(() => {
+        showTooltip(target);
+    }, TOOLTIP_SHOW_DELAY_MS);
+}
+
+function hideTooltip(immediate = false) {
+    if (!tooltipLayer) return;
+    if (tooltipShowTimer) {
+        clearTimeout(tooltipShowTimer);
+        tooltipShowTimer = null;
+    }
+
+    tooltipLayer.classList.remove('visible');
+    tooltipActiveTarget = null;
+
+    if (immediate) {
+        if (tooltipHideTimer) {
+            clearTimeout(tooltipHideTimer);
+            tooltipHideTimer = null;
+        }
+        tooltipLayer.hidden = true;
+        return;
+    }
+
+    if (tooltipHideTimer) {
+        clearTimeout(tooltipHideTimer);
+    }
+    tooltipHideTimer = setTimeout(() => {
+        if (!tooltipLayer.classList.contains('visible')) {
+            tooltipLayer.hidden = true;
+        }
+    }, 180);
+}
+
+function initCustomTooltipLayer() {
+    ensureTooltipLayer();
+
+    document.addEventListener('pointerover', (event) => {
+        if (event.pointerType === 'touch') return;
+        const target = getTooltipTarget(event.target);
+        if (!target) return;
+        scheduleTooltip(target);
+    }, true);
+
+    document.addEventListener('pointerout', (event) => {
+        if (event.pointerType === 'touch') return;
+        const currentTarget = getTooltipTarget(event.target);
+        if (!currentTarget) return;
+        const nextTarget = event.relatedTarget instanceof Element ? getTooltipTarget(event.relatedTarget) : null;
+        if (currentTarget === nextTarget) return;
+        hideTooltip();
+    }, true);
+
+    document.addEventListener('focusin', (event) => {
+        const target = getTooltipTarget(event.target);
+        if (!target) return;
+        scheduleTooltip(target);
+    }, true);
+
+    document.addEventListener('focusout', (event) => {
+        const target = getTooltipTarget(event.target);
+        if (!target) return;
+        hideTooltip();
+    }, true);
+
+    window.addEventListener('scroll', () => {
+        if (!tooltipActiveTarget || !tooltipLayer || tooltipLayer.hidden) return;
+        positionTooltipLayer(tooltipActiveTarget);
+    }, true);
+
+    window.addEventListener('resize', () => {
+        if (!tooltipActiveTarget || !tooltipLayer || tooltipLayer.hidden) return;
+        positionTooltipLayer(tooltipActiveTarget);
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            hideTooltip(true);
+        }
+    });
+}
+
 function unescapeMarkdown(text) {
     if (!text) return text;
     return text
@@ -3551,6 +3742,7 @@ initSpeechRecognition();
 userInput.focus();
 autoResizeTextarea(userInput);
 prepareCustomTooltips();
+initCustomTooltipLayer();
 
 setupDragAndDrop(systemPromptInput);
 setupDragAndDrop(managerPromptInput);
