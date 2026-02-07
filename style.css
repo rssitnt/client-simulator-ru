@@ -1294,6 +1294,14 @@ body.light-theme .message.user a {
     transform: rotate(15deg);
 }
 
+.btn-send.voice-mode:hover svg {
+    transform: none;
+}
+
+.btn-send.voice-mode svg {
+    transform: none;
+}
+
 .btn-send:active {
     transform: scale(0.95);
 }

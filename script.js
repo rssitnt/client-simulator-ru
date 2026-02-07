@@ -271,6 +271,19 @@ const promptPreviewByRole = {
     rater: document.getElementById('raterPromptPreview')
 };
 
+const SEND_BUTTON_ICON = `
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="22" y1="2" x2="11" y2="13"></line>
+        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+    </svg>
+`;
+
+const VOICE_MODE_BUTTON_ICON = `
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.86 19.86 0 0 1 11.19 18.7a19.5 19.5 0 0 1-5.9-5.9A19.86 19.86 0 0 1 2.08 4.18 2 2 0 0 1 4.06 2h3a2 2 0 0 1 2 1.72c.12.9.32 1.78.59 2.63a2 2 0 0 1-.45 2.11L8 9.67a16 16 0 0 0 6.33 6.33l1.21-1.2a2 2 0 0 1 2.11-.45c.85.27 1.73.47 2.63.59A2 2 0 0 1 22 16.92z"></path>
+    </svg>
+`;
+
 let pendingImprovedPrompt = null;
 let pendingRole = null;
 let pendingName = null;
@@ -298,6 +311,9 @@ let selectedRole = null; // 'user' or 'admin'
 const ADMIN_PASSWORD = '1357246';
 let lockedPromptRole = null;
 let lockedPromptVariationId = null;
+let recognition = null;
+let isRecording = false;
+let isSpeechRecognitionAvailable = false;
 let publicActiveIds = {
     client: null,
     manager: null,
@@ -1184,8 +1200,39 @@ function toggleInputState(enabled) {
     }
 }
 
+function isTextDialogStarted() {
+    return conversationHistory.length > 0;
+}
+
+function setPrimaryActionMode(mode) {
+    if (!sendBtn) return;
+    const nextMode = mode === 'voice' ? 'voice' : 'send';
+    if (sendBtn.dataset.mode === nextMode) return;
+
+    sendBtn.dataset.mode = nextMode;
+    if (nextMode === 'voice') {
+        sendBtn.classList.add('voice-mode');
+        sendBtn.innerHTML = VOICE_MODE_BUTTON_ICON;
+        setCustomTooltip(sendBtn, 'Использовать голосовой режим');
+    } else {
+        sendBtn.classList.remove('voice-mode');
+        sendBtn.innerHTML = SEND_BUTTON_ICON;
+        setCustomTooltip(sendBtn, 'Отправить (Enter)');
+    }
+}
+
 function updateSendBtnState() {
-    sendBtn.disabled = !userInput.value.trim() || isProcessing || isDialogRated;
+    const hasText = !!userInput.value.trim();
+    const showVoiceModeAction = !hasText && !isTextDialogStarted() && !isProcessing && !isDialogRated;
+
+    if (showVoiceModeAction) {
+        setPrimaryActionMode('voice');
+        sendBtn.disabled = userInput.disabled || !isSpeechRecognitionAvailable;
+        return;
+    }
+
+    setPrimaryActionMode('send');
+    sendBtn.disabled = !hasText || isProcessing || isDialogRated;
 }
 
 function lockDialogInput() {
@@ -2506,6 +2553,7 @@ async function sendMessage() {
     addMessage(userMessage, 'user', true);
     conversationHistory.push({ role: 'user', content: userMessage });
     updatePromptLock();
+    updateSendBtnState();
     
     userInput.value = '';
     userInput.style.height = '44px';
@@ -2544,6 +2592,7 @@ async function sendMessage() {
         addMessage(assistantMessage, 'assistant', true);
         conversationHistory.push({ role: 'assistant', content: assistantMessage });
         updatePromptLock();
+        updateSendBtnState();
         
     } catch (error) {
         console.error('Error:', error);
@@ -2603,6 +2652,7 @@ async function startConversationHandler() {
         addMessage(assistantMessage, 'assistant', true);
         conversationHistory.push({ role: 'assistant', content: assistantMessage });
         updatePromptLock();
+        updateSendBtnState();
         
     } catch (error) {
         console.error('Error:', error);
@@ -3479,7 +3529,23 @@ function setupDragAndDropForPreview(previewElement, textarea) {
 
 // ============ EVENT LISTENERS ============
 
-sendBtn.addEventListener('click', sendMessage);
+function handlePrimaryActionClick() {
+    if (sendBtn.dataset.mode === 'voice') {
+        if (isRecording) {
+            stopRecording();
+            return;
+        }
+        if (!isSpeechRecognitionAvailable || !recognition) {
+            addMessage('Ошибка: голосовой режим недоступен в этом браузере.', 'error', false);
+            return;
+        }
+        recognition.start();
+        return;
+    }
+    sendMessage();
+}
+
+sendBtn.addEventListener('click', handlePrimaryActionClick);
 userInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
 userInput.addEventListener('input', () => {
     autoResizeTextarea(userInput);
@@ -3736,12 +3802,15 @@ document.addEventListener('mouseup', () => {
 });
 
 // Speech Recognition
-let recognition = null;
-let isRecording = false;
-
 function initSpeechRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) { voiceBtn.style.display = 'none'; return; }
+    if (!SpeechRecognition) {
+        isSpeechRecognitionAvailable = false;
+        voiceBtn.style.display = 'none';
+        updateSendBtnState();
+        return;
+    }
+    isSpeechRecognitionAvailable = true;
     
     recognition = new SpeechRecognition();
     recognition.lang = 'ru-RU';
@@ -3753,15 +3822,18 @@ function initSpeechRecognition() {
         const transcript = event.results[0][0].transcript;
         userInput.value += (userInput.value ? ' ' : '') + transcript;
         autoResizeTextarea(userInput);
+        updateSendBtnState();
     };
     recognition.onerror = () => stopRecording();
     recognition.onend = () => stopRecording();
+    updateSendBtnState();
 }
 
 function stopRecording() {
     if (recognition && isRecording) recognition.stop();
     isRecording = false;
     voiceBtn.classList.remove('recording');
+    updateSendBtnState();
 }
 
 voiceBtn.addEventListener('click', () => {
