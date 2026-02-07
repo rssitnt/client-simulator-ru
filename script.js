@@ -680,7 +680,14 @@ function showTooltip(target) {
 
     requestAnimationFrame(() => {
         if (!tooltipLayer || tooltipActiveTarget !== target) return;
+        positionTooltipLayer(target);
         tooltipLayer.classList.add('visible');
+        if (SUPPORTS_POPOVER) {
+            requestAnimationFrame(() => {
+                if (!tooltipLayer || tooltipActiveTarget !== target) return;
+                positionTooltipLayer(target);
+            });
+        }
     });
 }
 
