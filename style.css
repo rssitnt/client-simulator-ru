@@ -485,9 +485,8 @@ body {
     backdrop-filter: blur(8px);
     opacity: 0;
     visibility: hidden;
-    transform: translateY(6px) scale(0.97);
-    transition: opacity 0.2s ease, transform 0.2s ease, visibility 0s linear 0.2s;
-    will-change: transform, opacity;
+    transition: opacity 0.2s ease, visibility 0s linear 0.2s;
+    will-change: opacity;
 }
 
 .custom-tooltip-layer:popover-open {
@@ -503,13 +502,12 @@ body {
 .custom-tooltip-layer.visible {
     visibility: visible;
     opacity: 1;
-    transform: translateY(0) scale(1);
-    transition-delay: 0s, 0s, 0s;
-    transition-duration: 0.2s, 0.2s, 0s;
+    transition-delay: 0s, 0s;
+    transition-duration: 0.2s, 0s;
 }
 
 .custom-tooltip-layer.placement-bottom {
-    transform: translateY(-6px) scale(0.97);
+    transform: none;
 }
 
 .custom-tooltip-layer.placement-bottom::before {

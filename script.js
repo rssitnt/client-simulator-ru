@@ -800,7 +800,11 @@ function initCustomTooltipLayer() {
         if (!currentTarget) return;
         const nextTarget = event.relatedTarget instanceof Element ? getTooltipTarget(event.relatedTarget) : null;
         if (currentTarget === nextTarget) return;
-        hideTooltip();
+        requestAnimationFrame(() => {
+            if (!tooltipLayer || tooltipActiveTarget !== currentTarget) return;
+            if (currentTarget.matches(':hover') || currentTarget.matches(':focus-within')) return;
+            hideTooltip();
+        });
     }, true);
 
     document.addEventListener('focusin', (event) => {
