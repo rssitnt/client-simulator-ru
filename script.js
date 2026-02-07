@@ -639,8 +639,10 @@ function positionTooltipLayer(target) {
     const anchorX = rect.left + rect.width / 2;
     const arrowLeft = Math.max(12, Math.min(anchorX - left, tooltipRect.width - 12));
 
-    tooltipLayer.style.left = `${Math.round(left)}px`;
-    tooltipLayer.style.top = `${Math.round(top)}px`;
+    const finalLeft = Number.isFinite(left) ? Math.round(left) : TOOLTIP_EDGE_OFFSET_PX;
+    const finalTop = Number.isFinite(top) ? Math.round(top) : TOOLTIP_EDGE_OFFSET_PX;
+    tooltipLayer.style.setProperty('left', `${finalLeft}px`, 'important');
+    tooltipLayer.style.setProperty('top', `${finalTop}px`, 'important');
     tooltipLayer.style.setProperty('--tooltip-arrow-left', `${Math.round(arrowLeft)}px`);
 }
 
@@ -674,8 +676,8 @@ function showTooltip(target) {
     }
     tooltipLayer.classList.remove('visible');
     tooltipLayer.classList.remove('placement-bottom');
-    tooltipLayer.style.left = '-9999px';
-    tooltipLayer.style.top = '-9999px';
+    tooltipLayer.style.setProperty('left', '-9999px', 'important');
+    tooltipLayer.style.setProperty('top', '-9999px', 'important');
     positionTooltipLayer(target);
 
     requestAnimationFrame(() => {
