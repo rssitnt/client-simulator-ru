@@ -705,8 +705,7 @@ function scheduleTooltip(target) {
     clearTooltipTimers();
     if (!target) return;
 
-    if (tooltipActiveTarget === target && tooltipLayer && !tooltipLayer.hidden) {
-        positionTooltipLayer(target);
+    if (tooltipActiveTarget === target && tooltipLayer) {
         return;
     }
 
