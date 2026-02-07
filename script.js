@@ -134,6 +134,26 @@ let managerSessionId = baseSessionId + '_manager';
 let raterSessionId = baseSessionId + '_rater';
 
 const TEXT_EXTENSIONS = ['.txt', '.md', '.json', '.xml', '.csv', '.html', '.htm', '.rtf', '.log'];
+const ENABLE_AGENT_LOGS = false;
+const AGENT_LOG_WEBHOOK_URL = 'http://127.0.0.1:7243/ingest/987d1d6f-727d-4fc5-a54f-c42484f79884';
+
+function agentLog(message, dataFactory, meta = {}) {
+    if (!ENABLE_AGENT_LOGS) return;
+    try {
+        const payloadData = typeof dataFactory === 'function' ? dataFactory() : dataFactory;
+        fetch(AGENT_LOG_WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message,
+                data: payloadData,
+                timestamp: Date.now(),
+                sessionId: typeof baseSessionId !== 'undefined' ? baseSessionId : 'unknown',
+                ...meta
+            })
+        }).catch(() => {});
+    } catch (e) {}
+}
 
 // Utility function for fetch with timeout
 async function fetchWithTimeout(url, options = {}, timeoutMs = 300000) {
@@ -175,6 +195,7 @@ const raterPromptInput = document.getElementById('raterPrompt');
 const managerPromptInput = document.getElementById('managerPrompt');
 const exportChatBtn = document.getElementById('exportChat');
 const exportCurrentPromptBtn = document.getElementById('exportCurrentPrompt');
+const promptVisibilityBtn = document.getElementById('promptVisibilityBtn');
 const voiceBtn = document.getElementById('voiceBtn');
 const aiAssistBtn = document.getElementById('aiAssistBtn');
 const rateChatBtn = document.getElementById('rateChat');
@@ -200,6 +221,8 @@ const promptVariationsContainer = document.getElementById('promptVariations');
 const aiImproveBtn = document.getElementById('aiImproveBtn');
 const aiImproveModal = document.getElementById('aiImproveModal');
 const aiImproveModalClose = document.getElementById('aiImproveModalClose');
+const aiImproveModalTitle = document.getElementById('aiImproveModalTitle');
+const aiImproveModalDescription = document.getElementById('aiImproveModalDescription');
 
 const aiImproveStep1 = document.getElementById('aiImproveStep1');
 const aiImproveInput = document.getElementById('aiImproveInput');
@@ -228,10 +251,32 @@ const exportChatSettings = document.getElementById('exportChatSettings');
 const exportPromptSettings = document.getElementById('exportPromptSettings');
 const promptChangesList = document.getElementById('promptChangesList');
 const changesSection = document.querySelector('.changes-section');
+const exportMenu = document.getElementById('exportMenu');
+const exportPromptMenu = document.getElementById('exportPromptMenu');
+const exportChatSettingsMenu = document.getElementById('exportChatSettingsMenu');
+const exportPromptSettingsMenu = document.getElementById('exportPromptSettingsMenu');
+const instructionSelectEl = document.getElementById('instructionSelect');
+const panelsContainer = document.querySelector('.panels-container');
+const instructionsPanelElement = document.getElementById('instructionsPanel');
+
+const promptInputsByRole = {
+    client: systemPromptInput,
+    manager: managerPromptInput,
+    rater: raterPromptInput
+};
+
+const promptPreviewByRole = {
+    client: document.getElementById('systemPromptPreview'),
+    manager: document.getElementById('managerPromptPreview'),
+    rater: document.getElementById('raterPromptPreview')
+};
 
 let pendingImprovedPrompt = null;
 let pendingRole = null;
 let pendingName = null;
+let pendingRatingImproveContext = null;
+let aiImproveMode = 'default';
+const LOCAL_PROMPTS_STORAGE_VERSION = 'v2';
 const HISTORY_LIMIT = 50;
 let promptHistory = [];
 let lastHistoryContent = {
@@ -253,6 +298,12 @@ let selectedRole = null; // 'user' or 'admin'
 const ADMIN_PASSWORD = '1357246';
 let lockedPromptRole = null;
 let lockedPromptVariationId = null;
+let publicActiveIds = {
+    client: null,
+    manager: null,
+    rater: null
+};
+const PROMPT_ROLES = ['client', 'manager', 'rater'];
 
 // Prompt Variations Data
 let promptsData = {
@@ -339,6 +390,8 @@ function applyRoleRestrictions() {
             startAttestationBtn.style.display = isAttestationMode ? 'none' : '';
         }
     }
+
+    updatePromptVisibilityButton();
 }
 
 // Configure marked.js
@@ -409,6 +462,61 @@ function extractApiResponse(data) {
     return '';
 }
 
+function formatStructuredDataForDisplay(value, depth = 0) {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'string') return value.trim();
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+
+    const indent = '  '.repeat(depth);
+
+    if (Array.isArray(value)) {
+        const items = value
+            .map(item => formatStructuredDataForDisplay(item, depth + 1))
+            .filter(item => item && item.trim() !== '')
+            .map(item => {
+                const lines = item.split('\n');
+                if (lines.length === 1) {
+                    return `${indent}- ${lines[0]}`;
+                }
+                const [first, ...rest] = lines;
+                const tail = rest.map(line => `${indent}  ${line}`).join('\n');
+                return `${indent}- ${first}\n${tail}`;
+            });
+        return items.join('\n');
+    }
+
+    if (typeof value === 'object') {
+        const lines = Object.entries(value)
+            .map(([key, nested]) => {
+                const nestedText = formatStructuredDataForDisplay(nested, depth + 1);
+                if (!nestedText) return '';
+                if (typeof nested === 'object' && nested !== null) {
+                    const nestedLines = nestedText.split('\n').map(line => `${indent}  ${line}`).join('\n');
+                    return `${indent}${key}:\n${nestedLines}`;
+                }
+                return `${indent}${key}: ${nestedText}`;
+            })
+            .filter(Boolean);
+        return lines.join('\n');
+    }
+
+    return '';
+}
+
+function normalizeStructuredJsonText(text) {
+    const trimmed = (text || '').trim();
+    if (!trimmed) return '';
+    if (!(trimmed.startsWith('{') || trimmed.startsWith('['))) {
+        return trimmed;
+    }
+    try {
+        const parsed = JSON.parse(trimmed);
+        return formatStructuredDataForDisplay(parsed) || trimmed;
+    } catch (e) {
+        return trimmed;
+    }
+}
+
 async function readWebhookResponse(response) {
     const contentType = response.headers.get('content-type') || '';
     const rawText = await response.text();
@@ -423,7 +531,8 @@ async function readWebhookResponse(response) {
         parsed = null;
     }
     if (parsed) {
-        return extractApiResponse(parsed);
+        const extracted = extractApiResponse(parsed);
+        return extracted || trimmed;
     }
     if (contentType.includes('application/json')) {
         return trimmed;
@@ -461,9 +570,215 @@ function generateId() {
     return 'var_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
 }
 
+function getPromptOwnerKey() {
+    const storedName = (localStorage.getItem('managerName') || managerNameInput?.value || 'guest')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '_');
+    const role = localStorage.getItem('userRole') || selectedRole || 'user';
+    return `${role}:${storedName || 'guest'}`;
+}
+
+function getLocalPromptsStorageKey() {
+    return `localPrompts:${LOCAL_PROMPTS_STORAGE_VERSION}:${getPromptOwnerKey()}`;
+}
+
+function loadLocalPromptsStore() {
+    try {
+        const raw = localStorage.getItem(getLocalPromptsStorageKey());
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (e) {
+        return {};
+    }
+}
+
+function getLocalPromptsRoleData(role) {
+    const store = loadLocalPromptsStore();
+    const rawVariations = Array.isArray(store[role + '_variations']) ? store[role + '_variations'] : [];
+    const variations = rawVariations
+        .filter(v => v && typeof v === 'object' && typeof v.id === 'string')
+        .map(v => ({
+            id: v.id,
+            name: v.name || 'Локальный',
+            content: unescapeMarkdown(v.content || ''),
+            isLocal: true
+        }));
+    return {
+        variations,
+        activeId: typeof store[role + '_activeId'] === 'string' ? store[role + '_activeId'] : null
+    };
+}
+
+function saveLocalPromptsData() {
+    const payload = {};
+    let hasLocalData = false;
+
+    PROMPT_ROLES.forEach(role => {
+        const localVariations = (promptsData[role]?.variations || [])
+            .filter(v => v && v.isLocal)
+            .map(v => ({
+                id: v.id,
+                name: v.name || 'Локальный',
+                content: v.content || '',
+                isLocal: true
+            }));
+        const activeId = localVariations.some(v => v.id === promptsData[role].activeId)
+            ? promptsData[role].activeId
+            : null;
+
+        payload[role + '_variations'] = localVariations;
+        payload[role + '_activeId'] = activeId;
+        if (localVariations.length > 0 || activeId) {
+            hasLocalData = true;
+        }
+    });
+
+    if (hasLocalData) {
+        localStorage.setItem(getLocalPromptsStorageKey(), JSON.stringify(payload));
+    } else {
+        localStorage.removeItem(getLocalPromptsStorageKey());
+    }
+}
+
 function getActiveRole() {
     const activeTab = document.querySelector('.instruction-tab.active');
     return activeTab ? activeTab.dataset.instruction : 'client';
+}
+
+function getActiveVariation(role = getActiveRole()) {
+    return (promptsData[role]?.variations || []).find(v => v.id === promptsData[role].activeId) || null;
+}
+
+function getPublicActiveId(role) {
+    const publicVariations = (promptsData[role]?.variations || []).filter(v => !v.isLocal);
+    if (!publicVariations.length) {
+        publicActiveIds[role] = null;
+        return null;
+    }
+    if (publicVariations.some(v => v.id === publicActiveIds[role])) {
+        return publicActiveIds[role];
+    }
+    publicActiveIds[role] = publicVariations[0].id;
+    return publicActiveIds[role];
+}
+
+function getPublicVariations(role) {
+    return (promptsData[role]?.variations || [])
+        .filter(v => !v.isLocal)
+        .map(v => ({
+            id: v.id,
+            name: v.name,
+            content: v.content
+        }));
+}
+
+function getPublicActiveContent(role) {
+    const activeId = getPublicActiveId(role);
+    if (!activeId) return '';
+    const variation = (promptsData[role]?.variations || []).find(v => !v.isLocal && v.id === activeId);
+    return variation ? (variation.content || '') : '';
+}
+
+function updatePromptVisibilityButton() {
+    if (!promptVisibilityBtn) return;
+
+    if (!isAdmin()) {
+        promptVisibilityBtn.style.display = 'none';
+        return;
+    }
+
+    const activeVariation = getActiveVariation();
+    if (!activeVariation) {
+        promptVisibilityBtn.style.display = 'none';
+        return;
+    }
+
+    promptVisibilityBtn.style.display = '';
+    const isLocal = !!activeVariation.isLocal;
+    promptVisibilityBtn.textContent = isLocal ? 'Опубликовать' : 'Сделать локальным';
+    promptVisibilityBtn.classList.toggle('is-local', isLocal);
+    promptVisibilityBtn.title = isLocal
+        ? 'Опубликовать промпт для всех пользователей'
+        : 'Сделать промпт локальным (только для вас)';
+}
+
+function buildLocalPromptName(name) {
+    const baseName = (name || 'Локальный').trim();
+    if (/\(локальный\)$/i.test(baseName)) return baseName;
+    return `${baseName} (локальный)`;
+}
+
+function getUniqueVariationName(role, baseName) {
+    const normalizedBase = (baseName || 'Промпт').trim() || 'Промпт';
+    const existing = new Set(
+        (promptsData[role]?.variations || []).map(v => (v.name || '').trim().toLowerCase())
+    );
+    if (!existing.has(normalizedBase.toLowerCase())) {
+        return normalizedBase;
+    }
+    let idx = 2;
+    while (existing.has(`${normalizedBase} ${idx}`.toLowerCase())) {
+        idx += 1;
+    }
+    return `${normalizedBase} ${idx}`;
+}
+
+function makeActivePromptLocal(role) {
+    const activeVariation = getActiveVariation(role);
+    if (!activeVariation || activeVariation.isLocal) return false;
+
+    const localCopy = {
+        id: generateId(),
+        name: getUniqueVariationName(role, buildLocalPromptName(activeVariation.name)),
+        content: activeVariation.content || '',
+        isLocal: true
+    };
+    promptsData[role].variations.push(localCopy);
+    promptsData[role].activeId = localCopy.id;
+    saveLocalPromptsData();
+    return true;
+}
+
+function publishActiveLocalPrompt(role) {
+    const activeVariation = getActiveVariation(role);
+    if (!activeVariation || !activeVariation.isLocal) return false;
+
+    activeVariation.isLocal = false;
+    activeVariation.name = getUniqueVariationName(
+        role,
+        (activeVariation.name || '').replace(/\s*\(локальный\)$/i, '').trim() || 'Промпт'
+    );
+    publicActiveIds[role] = activeVariation.id;
+    saveLocalPromptsData();
+    savePromptsToFirebaseNow();
+    return true;
+}
+
+function toggleActivePromptVisibility() {
+    if (!isAdmin()) return;
+    syncCurrentEditorNow();
+    const role = getActiveRole();
+    const activeVariation = getActiveVariation(role);
+    if (!activeVariation) return;
+    const action = activeVariation.isLocal ? 'publish' : 'localize';
+
+    if (role === 'client' && action === 'localize' && conversationHistory.length > 0) {
+        showCopyNotification('Нельзя менять личность во время диалога');
+        return;
+    }
+
+    const updated = action === 'publish'
+        ? publishActiveLocalPrompt(role)
+        : makeActivePromptLocal(role);
+
+    if (!updated) return;
+
+    renderVariations();
+    updateEditorContent(role);
+    updatePromptVisibilityButton();
+    showCopyNotification(action === 'publish' ? 'Промпт опубликован' : 'Промпт сделан локальным');
 }
 
 function updatePromptLock() {
@@ -518,8 +833,7 @@ function ensureAttestationVariation(role) {
 }
 
 function applyAttestationPrompts() {
-    const roles = ['client', 'manager', 'rater'];
-    for (const role of roles) {
+    for (const role of PROMPT_ROLES) {
         const variation = ensureAttestationVariation(role);
         if (!variation) {
             showCopyNotification('Аттестационные промпты не настроены. Обратитесь к администратору.');
@@ -555,7 +869,7 @@ function setAttestationMode(enabled) {
             promptsData.client.activeId = attestationPrevState.client;
             promptsData.manager.activeId = attestationPrevState.manager;
             promptsData.rater.activeId = attestationPrevState.rater;
-            ['client', 'manager', 'rater'].forEach(updateEditorContent);
+            PROMPT_ROLES.forEach(updateEditorContent);
             renderVariations();
         }
         document.body.classList.remove('attestation-mode');
@@ -609,85 +923,115 @@ function unlockDialogInput() {
 // ============ PROMPT VARIATIONS LOGIC ============
 
 function initPromptsData(firebaseData = {}) {
-    // #region agent log
-    try {
-        const sessionId = typeof baseSessionId !== 'undefined' ? baseSessionId : 'unknown';
-        fetch('http://127.0.0.1:7243/ingest/987d1d6f-727d-4fc5-a54f-c42484f79884',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'script.js:612',message:'initPromptsData called',data:{firebaseDataKeys:Object.keys(firebaseData),hasClientVars:!!firebaseData.client_variations},timestamp:Date.now(),sessionId:sessionId,hypothesisId:'A'})}).catch(()=>{});
-    } catch(e) {}
-    // #endregion
-    const roles = ['client', 'manager', 'rater'];
-    
-    roles.forEach(role => {
-        let legacyKey = role === 'client' ? 'systemPrompt' : role + 'Prompt';
-        let legacyContent = firebaseData[role + '_prompt'] || localStorage.getItem(legacyKey) || '';
+    agentLog(
+        'initPromptsData called',
+        () => ({
+            firebaseDataKeys: Object.keys(firebaseData),
+            hasClientVars: !!firebaseData.client_variations
+        }),
+        { location: 'script.js:initPromptsData', hypothesisId: 'A' }
+    );
+    let didRestorePublicPrompt = false;
 
-        if (firebaseData[role + '_variations'] && Array.isArray(firebaseData[role + '_variations'])) {
-            // Unescape content in all variations
-            promptsData[role].variations = firebaseData[role + '_variations'].map(v => ({
-                ...v,
-                content: unescapeMarkdown(v.content || '')
+    PROMPT_ROLES.forEach(role => {
+        const legacyKey = role === 'client' ? 'systemPrompt' : role + 'Prompt';
+        const legacyContent = firebaseData[role + '_prompt'] || localStorage.getItem(legacyKey) || '';
+        const rawPublicVariations = Array.isArray(firebaseData[role + '_variations'])
+            ? firebaseData[role + '_variations']
+            : [];
+
+        const publicVariations = rawPublicVariations
+            .filter(v => v && typeof v === 'object' && typeof v.id === 'string')
+            .map(v => ({
+                id: v.id,
+                name: v.name || 'Основной',
+                content: unescapeMarkdown(v.content || ''),
+                isLocal: false
             }));
-            promptsData[role].activeId = firebaseData[role + '_activeId'] || 
-                (promptsData[role].variations[0] ? promptsData[role].variations[0].id : null);
 
-            // Restore from legacy/localStorage if all variations are empty
-            const hasContent = promptsData[role].variations.some(v => (v.content || '').trim().length > 0);
-            let didRestore = false;
-            if (!hasContent && legacyContent.trim()) {
-                if (promptsData[role].variations.length === 0) {
-                    const defaultId = generateId();
-                    promptsData[role].variations.push({
-                        id: defaultId,
-                        name: 'Основной',
-                        content: unescapeMarkdown(legacyContent)
-                    });
-                    promptsData[role].activeId = defaultId;
-                    didRestore = true;
-                } else {
-                    const activeVar = promptsData[role].variations.find(v => v.id === promptsData[role].activeId) || promptsData[role].variations[0];
-                    activeVar.content = unescapeMarkdown(legacyContent);
-                    didRestore = true;
-                }
-            }
+        if (!publicVariations.length) {
+            publicVariations.push({
+                id: generateId(),
+                name: 'Основной',
+                content: unescapeMarkdown(legacyContent),
+                isLocal: false
+            });
+        }
 
-            if (didRestore && db && isAdmin()) {
-                savePromptsToFirebaseNow();
-            }
-        } else {
-            // Migration: use legacy single prompt
-            if (promptsData[role].variations.length === 0) {
-                const defaultId = generateId();
-                promptsData[role].variations.push({
-                    id: defaultId,
-                    name: 'Основной',
-                    content: unescapeMarkdown(legacyContent)
-                });
-                promptsData[role].activeId = defaultId;
+        const hasPublicContent = publicVariations.some(v => (v.content || '').trim().length > 0);
+        if (!hasPublicContent && legacyContent.trim()) {
+            const requestedPublicActiveId = firebaseData[role + '_activeId'];
+            const activePublicVar =
+                publicVariations.find(v => v.id === requestedPublicActiveId) || publicVariations[0];
+            if (activePublicVar) {
+                activePublicVar.content = unescapeMarkdown(legacyContent);
+                didRestorePublicPrompt = true;
             }
         }
 
-        // Seed history content snapshot for change detection
+        const requestedPublicActiveId = firebaseData[role + '_activeId'];
+        const activePublicVar =
+            publicVariations.find(v => v.id === requestedPublicActiveId) || publicVariations[0] || null;
+        publicActiveIds[role] = activePublicVar ? activePublicVar.id : null;
+
+        const localRoleData = getLocalPromptsRoleData(role);
+        const usedIds = new Set(publicVariations.map(v => v.id));
+        const localVariations = localRoleData.variations.map(v => {
+            let uniqueId = v.id;
+            while (usedIds.has(uniqueId)) {
+                uniqueId = generateId();
+            }
+            usedIds.add(uniqueId);
+            return {
+                ...v,
+                id: uniqueId,
+                isLocal: true
+            };
+        });
+
+        promptsData[role].variations = [...publicVariations, ...localVariations];
+
+        const hasLocalActive = localVariations.some(v => v.id === localRoleData.activeId);
+        if (hasLocalActive) {
+            promptsData[role].activeId = localRoleData.activeId;
+        } else if (activePublicVar) {
+            promptsData[role].activeId = activePublicVar.id;
+        } else if (promptsData[role].variations[0]) {
+            promptsData[role].activeId = promptsData[role].variations[0].id;
+        } else {
+            promptsData[role].activeId = null;
+        }
+
         if (!lastHistoryContent[role]) lastHistoryContent[role] = {};
         promptsData[role].variations.forEach(v => {
             lastHistoryContent[role][v.id] = v.content || '';
         });
     });
-    
+
     if (isAdmin()) {
         const appliedVersion = localStorage.getItem('raterPromptVersion');
         if (appliedVersion !== RATER_PROMPT_VERSION) {
-            const activeVar = promptsData.rater.variations.find(v => v.id === promptsData.rater.activeId);
-            if (activeVar) {
-                activeVar.content = DEFAULT_RATER_PROMPT;
-                updateEditorContent('rater');
-                savePromptsToFirebaseNow();
+            const activePublicRaterId = getPublicActiveId('rater');
+            const activePublicVar = promptsData.rater.variations.find(
+                v => !v.isLocal && v.id === activePublicRaterId
+            );
+            if (activePublicVar) {
+                activePublicVar.content = DEFAULT_RATER_PROMPT;
+                didRestorePublicPrompt = true;
                 localStorage.setItem('raterPromptVersion', RATER_PROMPT_VERSION);
             }
         }
     }
 
+    if (didRestorePublicPrompt && db && isAdmin()) {
+        savePromptsToFirebaseNow();
+    } else {
+        saveLocalPromptsData();
+    }
+
     renderVariations();
     updateAllPreviews();
+    updatePromptVisibilityButton();
 }
 
 function renderVariations() {
@@ -708,15 +1052,25 @@ function renderVariations() {
         updateEditorContent(role);
     }
     
-    promptVariationsContainer.innerHTML = '';
-    
+    const fragment = document.createDocumentFragment();
+
     visibleVariations.forEach(v => {
         const chip = document.createElement('div');
         chip.className = `prompt-variation-chip ${v.id === activeId ? 'active' : ''}`;
-        chip.innerHTML = `
-            <span class="chip-name">${v.name}</span>
-            ${visibleVariations.length > 1 && isAdminUser ? '<span class="delete-variation">×</span>' : ''}
-        `;
+        chip.classList.toggle('local', !!v.isLocal);
+
+        const chipName = document.createElement('span');
+        chipName.className = 'chip-name';
+        chipName.textContent = v.name || '';
+        chip.appendChild(chipName);
+
+        let deleteBtn = null;
+        if (visibleVariations.length > 1 && isAdminUser) {
+            deleteBtn = document.createElement('span');
+            deleteBtn.className = 'delete-variation';
+            deleteBtn.textContent = '×';
+            chip.appendChild(deleteBtn);
+        }
         
         chip.addEventListener('click', (e) => {
             if (!e.target.classList.contains('delete-variation')) {
@@ -726,18 +1080,21 @@ function renderVariations() {
         
         // Only allow renaming for admins
         if (isAdminUser) {
-            chip.querySelector('.chip-name').addEventListener('dblclick', (e) => {
+            chipName.addEventListener('dblclick', (e) => {
                 e.stopPropagation();
                 const newName = prompt('Название промпта:', v.name);
                 if (newName && newName.trim()) {
                     v.name = newName.trim();
                     renderVariations();
-                    savePromptsToFirebase();
+                    if (v.isLocal) {
+                        saveLocalPromptsData();
+                    } else {
+                        savePromptsToFirebase();
                     }
+                }
             });
         }
         
-        const deleteBtn = chip.querySelector('.delete-variation');
         if (deleteBtn) {
             deleteBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -747,18 +1104,21 @@ function renderVariations() {
             });
         }
         
-        promptVariationsContainer.appendChild(chip);
+        fragment.appendChild(chip);
     });
     
     // Add button - only for admins
     if (isAdminUser) {
         const addBtn = document.createElement('button');
         addBtn.className = 'add-variation-btn';
-        addBtn.innerHTML = '+';
+        addBtn.textContent = '+';
         addBtn.title = 'Добавить вариант промпта';
         addBtn.addEventListener('click', () => addVariation(role));
-        promptVariationsContainer.appendChild(addBtn);
+        fragment.appendChild(addBtn);
     }
+
+    promptVariationsContainer.replaceChildren(fragment);
+    updatePromptVisibilityButton();
 }
 
 function formatHistoryTime(ts) {
@@ -882,32 +1242,54 @@ function addVariation(role) {
     // Copy content from active variation
     const activeVar = promptsData[role].variations.find(v => v.id === promptsData[role].activeId);
     const initialContent = activeVar ? activeVar.content : '';
+    const initialScopeLocal = !!activeVar?.isLocal;
 
     promptsData[role].variations.push({
         id: newId,
         name: `Вариант ${count}`,
-        content: initialContent
+        content: initialContent,
+        isLocal: initialScopeLocal
     });
     setActiveVariation(role, newId);
-    savePromptsToFirebase();
+    if (initialScopeLocal) {
+        saveLocalPromptsData();
+    } else {
+        savePromptsToFirebase();
+    }
 }
                     
 function deleteVariation(role, id) {
-    // #region agent log
-    try {
-        const sessionId = typeof baseSessionId !== 'undefined' ? baseSessionId : 'unknown';
-        fetch('http://127.0.0.1:7243/ingest/987d1d6f-727d-4fc5-a54f-c42484f79884',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'script.js:890',message:'deleteVariation called',data:{role,id},timestamp:Date.now(),sessionId:sessionId,hypothesisId:'E'})}).catch(()=>{});
-    } catch(e) {}
-    // #endregion
+    agentLog(
+        'deleteVariation called',
+        { role, id },
+        { location: 'script.js:deleteVariation', hypothesisId: 'E' }
+    );
     const index = promptsData[role].variations.findIndex(v => v.id === id);
     if (index > -1) {
+        const deletedVariation = promptsData[role].variations[index];
         promptsData[role].variations.splice(index, 1);
+        if (promptsData[role].variations.length === 0) {
+            promptsData[role].variations.push({
+                id: generateId(),
+                name: 'Основной',
+                content: '',
+                isLocal: !!deletedVariation?.isLocal
+            });
+        }
         if (promptsData[role].activeId === id) {
             promptsData[role].activeId = promptsData[role].variations[0].id;
         }
+        if (publicActiveIds[role] === id) {
+            publicActiveIds[role] = null;
+            getPublicActiveId(role);
+        }
         renderVariations();
         updateEditorContent(role);
-        savePromptsToFirebase();
+        if (deletedVariation?.isLocal) {
+            saveLocalPromptsData();
+        } else {
+            savePromptsToFirebase();
+        }
     }
 }
 
@@ -927,18 +1309,9 @@ function setActiveVariation(role, id) {
 function updateEditorContent(role) {
     const activeVar = promptsData[role].variations.find(v => v.id === promptsData[role].activeId);
     const content = activeVar ? activeVar.content : '';
-    
-    let textarea, preview;
-    if (role === 'client') {
-        textarea = systemPromptInput;
-        preview = document.getElementById('systemPromptPreview');
-    } else if (role === 'manager') {
-        textarea = managerPromptInput;
-        preview = document.getElementById('managerPromptPreview');
-    } else if (role === 'rater') {
-        textarea = raterPromptInput;
-        preview = document.getElementById('raterPromptPreview');
-    }
+
+    const textarea = promptInputsByRole[role];
+    const preview = promptPreviewByRole[role];
     
     if (textarea && preview) {
         // Only update if content has actually changed to prevent cursor jumping
@@ -946,19 +1319,21 @@ function updateEditorContent(role) {
             textarea.value = content;
             preview.innerHTML = renderMarkdown(content);
             if (typeof hljs !== 'undefined') {
-                preview.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+                const codeBlocks = preview.querySelectorAll('pre code');
+                if (codeBlocks.length > 0) {
+                    codeBlocks.forEach(block => hljs.highlightElement(block));
+                }
             }
         }
     }
 }
 
 function syncContentToData(role, content) {
-    // #region agent log
-    try {
-        const sessionId = typeof baseSessionId !== 'undefined' ? baseSessionId : 'unknown';
-        fetch('http://127.0.0.1:7243/ingest/987d1d6f-727d-4fc5-a54f-c42484f79884',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'script.js:944',message:'syncContentToData called',data:{role,contentLength:content?.length},timestamp:Date.now(),sessionId:sessionId,hypothesisId:'D'})}).catch(()=>{});
-    } catch(e) {}
-    // #endregion
+    agentLog(
+        'syncContentToData called',
+        { role, contentLength: content?.length },
+        { location: 'script.js:syncContentToData', hypothesisId: 'D' }
+    );
     const activeVar = promptsData[role].variations.find(v => v.id === promptsData[role].activeId);
     if (activeVar) {
         // Critical Fix: Don't allow empty content if previous content was significant
@@ -968,7 +1343,11 @@ function syncContentToData(role, content) {
             return;
         }
         activeVar.content = content;
-        savePromptsToFirebase();
+        if (activeVar.isLocal) {
+            saveLocalPromptsData();
+        } else {
+            savePromptsToFirebase();
+        }
     }
 }
 
@@ -984,37 +1363,45 @@ const savePromptsToFirebase = debounce(() => {
 }, 1000);
 
 function savePromptsToFirebaseNow() {
-    // #region agent log
-    try {
-        const sessionId = typeof baseSessionId !== 'undefined' ? baseSessionId : 'unknown';
-        fetch('http://127.0.0.1:7243/ingest/987d1d6f-727d-4fc5-a54f-c42484f79884',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'script.js:963',message:'savePromptsToFirebaseNow called',data:{promptsSummary:Object.keys(promptsData).map(r=>({role:r,vars:promptsData[r].variations.length,activeId:promptsData[r].activeId}))},timestamp:Date.now(),sessionId:sessionId,hypothesisId:'B'})}).catch(()=>{});
-    } catch(e) {}
-    // #endregion
+    agentLog(
+        'savePromptsToFirebaseNow called',
+        () => ({
+            promptsSummary: Object.keys(promptsData).map(r => ({
+                role: r,
+                vars: promptsData[r].variations.length,
+                activeId: promptsData[r].activeId
+            }))
+        }),
+        { location: 'script.js:savePromptsToFirebaseNow', hypothesisId: 'B' }
+    );
+    saveLocalPromptsData();
+
     const activeRole = getActiveRole();
     const activeVar = promptsData[activeRole]?.variations.find(v => v.id === promptsData[activeRole]?.activeId);
-    if (activeVar) {
+    if (activeVar && !activeVar.isLocal) {
         recordPromptHistory(activeRole, activeVar);
     }
     if (!db) return;
 
     const payload = {
-        client_prompt: getActiveContent('client'),
-        manager_prompt: getActiveContent('manager'),
-        rater_prompt: getActiveContent('rater'),
-        
-        client_variations: promptsData.client.variations,
-        client_activeId: promptsData.client.activeId,
-        manager_variations: promptsData.manager.variations,
-        manager_activeId: promptsData.manager.activeId,
-        rater_variations: promptsData.rater.variations,
-        rater_activeId: promptsData.rater.activeId
+        client_prompt: getPublicActiveContent('client'),
+        manager_prompt: getPublicActiveContent('manager'),
+        rater_prompt: getPublicActiveContent('rater'),
+
+        client_variations: getPublicVariations('client'),
+        client_activeId: getPublicActiveId('client'),
+        manager_variations: getPublicVariations('manager'),
+        manager_activeId: getPublicActiveId('manager'),
+        rater_variations: getPublicVariations('rater'),
+        rater_activeId: getPublicActiveId('rater')
     };
 
     // Critical Fix: Validation to prevent saving empty/corrupted data to cloud
-    const hasEmptyEssential = 
-        (payload.client_prompt === '' && promptsData.client.variations.some(v => v.content)) ||
-        (payload.manager_prompt === '' && promptsData.manager.variations.some(v => v.content)) ||
-        (payload.rater_prompt === '' && promptsData.rater.variations.some(v => v.content));
+    const hasEmptyEssential = PROMPT_ROLES.some(role => {
+        const publicVariations = payload[role + '_variations'] || [];
+        const activeContent = payload[role + '_prompt'] || '';
+        return activeContent === '' && publicVariations.some(v => (v.content || '').trim() !== '');
+    });
 
     if (hasEmptyEssential) {
         console.warn('Sync cancelled: attempt to save empty prompt detected');
@@ -1050,12 +1437,11 @@ function loadPrompts() {
             const promptsRef = ref(db, 'prompts');
             onValue(promptsRef, (snapshot) => {
                 const data = snapshot.val();
-                // #region agent log
-                try {
-                    const sessionId = typeof baseSessionId !== 'undefined' ? baseSessionId : 'unknown';
-                    fetch('http://127.0.0.1:7243/ingest/987d1d6f-727d-4fc5-a54f-c42484f79884',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'script.js:1012',message:'Firebase onValue triggered',data:{hasData:!!data,isUserEditing:typeof isUserEditing !== 'undefined' ? isUserEditing : 'unknown'},timestamp:Date.now(),sessionId:sessionId,hypothesisId:'C'})}).catch(()=>{});
-                } catch(e) {}
-                // #endregion
+                agentLog(
+                    'Firebase onValue triggered',
+                    { hasData: !!data, isUserEditing },
+                    { location: 'script.js:loadPrompts.onValue', hypothesisId: 'C' }
+                );
                 console.log('Firebase data received:', data);
                 
                 // Skip update if user is currently editing
@@ -1225,24 +1611,41 @@ managerNameInput.addEventListener('input', () => {
 
 // ============ AI IMPROVE MODAL ============
 
-function showAiImproveModal() {
+function setAiImproveModalContent(mode = 'default') {
+    if (!aiImproveModalTitle || !aiImproveModalDescription || !aiImproveInput) return;
+    if (mode === 'rating') {
+        aiImproveModalTitle.textContent = 'Улучшить инструкцию на основе представленного диалога и оценки';
+        aiImproveModalDescription.textContent = 'Опишите, что конкретно нужно улучшить на основе диалога и оценки.';
+        aiImproveInput.placeholder = 'Например: усилий контроль по этапу выявления потребности и добавь конкретные анти-паттерны.';
+    } else {
+        aiImproveModalTitle.textContent = 'Улучшить инструкцию с ИИ';
+        aiImproveModalDescription.textContent = 'Опишите, как бы вы хотели улучшить инструкцию?';
+        aiImproveInput.placeholder = 'Например: Сделай инструкцию более структурированной, добавь примеры диалогов...';
+    }
+}
+
+function showAiImproveModal(options = {}) {
+    const { mode = 'default', context = null } = options;
+    aiImproveMode = mode;
+    pendingRatingImproveContext = mode === 'rating' ? context : null;
+    setAiImproveModalContent(mode);
+
     aiImproveModal.classList.add('active');
     
     // Reset to step 1
     aiImproveStep1.style.display = 'block';
     aiImproveStep2.style.display = 'none';
     pendingImprovedPrompt = null;
+    aiImproveInput.value = '';
     
     setTimeout(() => aiImproveInput.focus(), 100);
 }
 
 function hideAiImproveModal() {
     aiImproveModal.classList.remove('active');
-    document.querySelectorAll('.btn-improve-from-rating').forEach(btn => {
-        btn.disabled = false;
-        const role = btn.dataset.role;
-        btn.textContent = role === 'manager' ? 'Менеджер' : role === 'client' ? 'Клиент' : 'Оценщик';
-    });
+    pendingRatingImproveContext = null;
+    aiImproveMode = 'default';
+    setAiImproveModalContent('default');
 }
 
 // ============ SETTINGS MODAL FUNCTIONS ============
@@ -1264,13 +1667,15 @@ function showSettingsModal() {
     renderPromptHistory();
 }
 
+const nameInputMeasureCanvas = document.createElement('canvas');
+const nameInputMeasureCtx = nameInputMeasureCanvas.getContext('2d');
+
 function autoResizeNameInput() {
     const input = settingsNameInput;
     const text = input.value || input.placeholder;
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    ctx.font = getComputedStyle(input).font;
-    const width = ctx.measureText(text).width;
+    if (!nameInputMeasureCtx) return;
+    nameInputMeasureCtx.font = getComputedStyle(input).font;
+    const width = nameInputMeasureCtx.measureText(text).width;
     input.style.width = Math.max(60, width + 24) + 'px';
 }
 
@@ -1312,8 +1717,12 @@ async function improvePromptWithAI() {
         setTimeout(() => { aiImproveInput.style.borderColor = ''; }, 1000);
         return;
     }
-    
-    const role = getActiveRole();
+
+    let role = getActiveRole();
+    if (aiImproveMode === 'rating' && pendingRatingImproveContext?.role) {
+        role = pendingRatingImproveContext.role;
+    }
+
     const currentPrompt = getActiveContent(role);
     const activeVar = promptsData[role].variations.find(v => v.id === promptsData[role].activeId);
     const currentName = activeVar ? activeVar.name : 'Промпт';
@@ -1321,6 +1730,14 @@ async function improvePromptWithAI() {
     if (!currentPrompt) {
         alert('Сначала добавьте текст в инструкцию');
         return;
+    }
+
+    let userMessage = `Изначальный промпт:\n\n${currentPrompt}\n\n---\n\nЗапрос на улучшение: ${improvementRequest}\n\n---\n\nВАЖНО: Верни ПОЛНЫЙ текст улучшенного промпта. Подсвети изменения так:\n1. Удаленный/измененный текст оберни в ~~ (например: ~~старый текст~~)\n2. Новый/добавленный текст оберни в ++ (например: ++новый текст++)\n3. Остальной текст оставь без изменений.\nНе используй markdown код-блоки.`;
+
+    if (aiImproveMode === 'rating' && pendingRatingImproveContext) {
+        const { dialogText = '', ratingText = '' } = pendingRatingImproveContext;
+        const roleLabel = role === 'client' ? 'клиента' : role === 'manager' ? 'менеджера' : 'оценщика';
+        userMessage = `Текущая инструкция ИИ-${roleLabel}:\n\n${currentPrompt}\n\n---\n\nДиалог менеджера с клиентом:\n\n${dialogText}\n\n---\n\nОценка диалога:\n\n${ratingText}\n\n---\n\nЗапрос на улучшение от пользователя:\n${improvementRequest}\n\n---\n\nНа основе этого диалога и его оценки улучши инструкцию ${roleLabel}. Учти ошибки, которые были допущены, и добавь рекомендации, чтобы избежать их в будущем.\n\nВАЖНО: Верни ПОЛНЫЙ текст улучшенного промпта. Подсвети изменения так:\n1. Удаленный/измененный текст оберни в ~~ (например: ~~старый текст~~)\n2. Новый/добавленный текст оберни в ++ (например: ++новый текст++)\n3. Остальной текст оставь без изменений.\nНе используй markdown код-блоки.`;
     }
     
     // Show loading state
@@ -1349,7 +1766,7 @@ async function improvePromptWithAI() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                userMessage: `Изначальный промпт:\n\n${currentPrompt}\n\n---\n\nЗапрос на улучшение: ${improvementRequest}\n\n---\n\nВАЖНО: Верни ПОЛНЫЙ текст улучшенного промпта. Подсвети изменения так:\n1. Удаленный/измененный текст оберни в ~~ (например: ~~старый текст~~)\n2. Новый/добавленный текст оберни в ++ (например: ++новый текст++)\n3. Остальной текст оставь без изменений.\nНе используй markdown код-блоки.`
+                userMessage
             })
         });
         
@@ -1433,11 +1850,14 @@ function applyImprovedPrompt() {
     
     const newId = generateId();
     const newName = `${pendingName} AI`;
+    const baseVariation = promptsData[pendingRole].variations.find(v => v.id === promptsData[pendingRole].activeId);
+    const shouldBeLocal = !!baseVariation?.isLocal;
     
     promptsData[pendingRole].variations.push({
         id: newId,
         name: newName,
-        content: pendingImprovedPrompt
+        content: pendingImprovedPrompt,
+        isLocal: shouldBeLocal
     });
     
     // Switch to the correct instruction tab (client/manager/rater)
@@ -1463,7 +1883,11 @@ function applyImprovedPrompt() {
     // Switch to new variation and render
     setActiveVariation(pendingRole, newId);
     renderVariations();
-    savePromptsToFirebase();
+    if (shouldBeLocal) {
+        saveLocalPromptsData();
+    } else {
+        savePromptsToFirebase();
+    }
     
     hideAiImproveModal();
     aiImproveInput.value = ''; // Clear input after successful apply
@@ -1476,6 +1900,9 @@ function applyImprovedPrompt() {
 }
 
 aiImproveBtn.addEventListener('click', showAiImproveModal);
+if (promptVisibilityBtn) {
+    promptVisibilityBtn.addEventListener('click', toggleActivePromptVisibility);
+}
 aiImproveModalClose.addEventListener('click', hideAiImproveModal);
 aiImproveCancel.addEventListener('click', hideAiImproveModal);
 aiImproveSubmit.addEventListener('click', improvePromptWithAI);
@@ -1658,14 +2085,14 @@ roleChangeConfirmBtn.addEventListener('click', () => {
 // Export buttons in settings
 exportChatSettings.addEventListener('click', (e) => {
     e.stopPropagation();
-    document.getElementById('exportChatSettingsMenu').classList.toggle('show');
-    document.getElementById('exportPromptSettingsMenu').classList.remove('show');
+    exportChatSettingsMenu?.classList.toggle('show');
+    exportPromptSettingsMenu?.classList.remove('show');
 });
 
 exportPromptSettings.addEventListener('click', (e) => {
     e.stopPropagation();
-    document.getElementById('exportPromptSettingsMenu').classList.toggle('show');
-    document.getElementById('exportChatSettingsMenu').classList.remove('show');
+    exportPromptSettingsMenu?.classList.toggle('show');
+    exportChatSettingsMenu?.classList.remove('show');
 });
 
 // Handle settings export menu items
@@ -1675,7 +2102,7 @@ document.querySelectorAll('.dropdown-item[data-settings-chat-format]').forEach(i
         const format = e.target.dataset.settingsChatFormat;
         if (format) {
             exportChat(format);
-            document.getElementById('exportChatSettingsMenu').classList.remove('show');
+            exportChatSettingsMenu?.classList.remove('show');
         }
     });
 });
@@ -1686,7 +2113,7 @@ document.querySelectorAll('.dropdown-item[data-settings-prompt-format]').forEach
         const format = e.target.dataset.settingsPromptFormat;
         if (format) {
             exportCurrentPrompt(format);
-            document.getElementById('exportPromptSettingsMenu').classList.remove('show');
+            exportPromptSettingsMenu?.classList.remove('show');
         }
     });
 });
@@ -1918,17 +2345,8 @@ async function rateChat() {
         
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
-        // Try to parse as JSON, fallback to text if fails
-        let ratingMessage;
-        const contentType = response.headers.get('content-type');
-        
-        if (contentType && contentType.includes('application/json')) {
-            const data = await response.json();
-            ratingMessage = extractApiResponse(data);
-        } else {
-            // If not JSON, treat as plain text
-            ratingMessage = await response.text();
-        }
+        let ratingMessage = await readWebhookResponse(response);
+        ratingMessage = normalizeStructuredJsonText(ratingMessage);
         
         if (!ratingMessage || ratingMessage.trim() === '') {
             throw new Error('Пустой ответ');
@@ -1985,77 +2403,24 @@ function addImproveFromRatingButton(dialogText, ratingText) {
     
     buttonContainer.innerHTML = `
         <div style="font-size: 13px; color: #cfcfcf; text-align: center; margin-bottom: 8px;">
-            Улучшить инструкции на основе диалога
+            Улучшение ИИ-менеджера (автоответ клиенту) использовать только в полностью сгенерированных диалогах
         </div>
         <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
             <button class="btn-improve-from-rating" data-role="manager">Менеджер</button>
             <button class="btn-improve-from-rating" data-role="client">Клиент</button>
             <button class="btn-improve-from-rating" data-role="rater">Оценщик</button>
         </div>
-        <p style="font-size: 12px; color: #888; margin-top: 8px; text-align: center;">использовать только в полностью сгенерированных диалогах</p>
     `;
     
     const roleButtons = buttonContainer.querySelectorAll('.btn-improve-from-rating');
     roleButtons.forEach((btn) => {
-        btn.addEventListener('click', async () => {
+        btn.addEventListener('click', () => {
             const role = btn.dataset.role;
             if (!role) return;
-            roleButtons.forEach(b => (b.disabled = true));
-            btn.innerHTML = `
-                <svg class="spinner" width="16" height="16" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round">
-                        <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/>
-                    </circle>
-                </svg>
-                Анализирую оценку...
-            `;
-            
-            try {
-                const currentPrompt = getActiveContent(role);
-                const roleLabel = role === 'client' ? 'клиента' : role === 'manager' ? 'менеджера' : 'оценщика';
-                const response = await fetchWithTimeout(AI_IMPROVE_WEBHOOK_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        userMessage: `Текущая инструкция ИИ-${roleLabel}:\n\n${currentPrompt}\n\n---\n\nДиалог менеджера с клиентом:\n\n${dialogText}\n\n---\n\nОценка диалога:\n\n${ratingText}\n\n---\n\nНа основе этого диалога и его оценки улучши инструкцию ${roleLabel}. Учти ошибки, которые были допущены, и добавь рекомендации, чтобы избежать их в будущем.\n\nВАЖНО: Верни ПОЛНЫЙ текст улучшенного промпта. Подсвети изменения так:\n1. Удаленный/измененный текст оберни в ~~ (например: ~~старый текст~~)\n2. Новый/добавленный текст оберни в ++ (например: ++новый текст++)\n3. Остальной текст оставь без изменений.\nНе используй markdown код-блоки.`
-                    })
-                });
-                
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                
-                const responseText = await response.text();
-                if (!responseText) throw new Error('Пустой ответ от сервера');
-
-                let data;
-                try {
-                    data = JSON.parse(responseText);
-                } catch (e) {
-                    data = { output: responseText };
-                }
-
-                const rawResponse = extractApiResponse(data);
-                if (!rawResponse) throw new Error('Не удалось получить текст из ответа');
-                
-                const cleanPrompt = rawResponse
-                    .replace(/~~[\s\S]+?~~/g, '')
-                    .replace(/\+\+([\s\S]+?)\+\+/g, '$1')
-                    .replace(/\n{3,}/g, '\n\n')
-                    .trim();
-
-                pendingImprovedPrompt = cleanPrompt;
-                pendingRole = role;
-                const activeVar = promptsData[role].variations.find(v => v.id === promptsData[role].activeId);
-                pendingName = activeVar ? activeVar.name : roleLabel;
-                
-                showSemanticDiff(rawResponse);
-                aiImproveModal.classList.add('active');
-                
-            } catch (error) {
-                console.error('Improve from rating error:', error);
-                alert('Ошибка улучшения: ' + error.message);
-                roleButtons.forEach(b => (b.disabled = false));
-                btn.textContent = role === 'manager' ? 'Менеджер' : role === 'client' ? 'Клиент' : 'Оценщик';
-            }
+            showAiImproveModal({
+                mode: 'rating',
+                context: { role, dialogText, ratingText }
+            });
         });
     });
 
@@ -2589,7 +2954,7 @@ function updatePreview() {
 }
 
 function updateAllPreviews() {
-    ['client', 'manager', 'rater'].forEach(updateEditorContent);
+    PROMPT_ROLES.forEach(updateEditorContent);
 }
 
 // ============ WYSIWYG SETUP ============
@@ -2614,18 +2979,8 @@ const syncWYSIWYGDebounced = debounce(function(previewElement, textarea, callbac
 // Force immediate sync of current editor content
 function syncCurrentEditorNow() {
     const role = getActiveRole();
-    let preview, textarea;
-        
-    if (role === 'client') {
-        preview = document.getElementById('systemPromptPreview');
-        textarea = systemPromptInput;
-    } else if (role === 'manager') {
-        preview = document.getElementById('managerPromptPreview');
-        textarea = managerPromptInput;
-    } else if (role === 'rater') {
-        preview = document.getElementById('raterPromptPreview');
-        textarea = raterPromptInput;
-        }
+    const preview = promptPreviewByRole[role];
+    const textarea = promptInputsByRole[role];
     
     if (turndownService && preview && textarea) {
         const markdown = turndownService.turndown(preview.innerHTML);
@@ -2700,14 +3055,10 @@ function initWYSIWYGMode() {
     document.querySelectorAll('.prompt-wrapper').forEach(wrapper => {
         wrapper.classList.add('preview-mode');
     });
-    
-    const systemPromptPreview = document.getElementById('systemPromptPreview');
-    const managerPromptPreview = document.getElementById('managerPromptPreview');
-    const raterPromptPreview = document.getElementById('raterPromptPreview');
-    
-    setupWYSIWYG(systemPromptPreview, systemPromptInput, (c) => syncContentToData('client', c));
-    setupWYSIWYG(managerPromptPreview, managerPromptInput, (c) => syncContentToData('manager', c));
-    setupWYSIWYG(raterPromptPreview, raterPromptInput, (c) => syncContentToData('rater', c));
+
+    setupWYSIWYG(promptPreviewByRole.client, systemPromptInput, (c) => syncContentToData('client', c));
+    setupWYSIWYG(promptPreviewByRole.manager, managerPromptInput, (c) => syncContentToData('manager', c));
+    setupWYSIWYG(promptPreviewByRole.rater, raterPromptInput, (c) => syncContentToData('rater', c));
 }
 
 // ============ DRAG & DROP ============
@@ -2841,19 +3192,19 @@ if (startAttestationBtn) {
 
 exportChatBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    document.getElementById('exportMenu').classList.toggle('show');
+    exportMenu?.classList.toggle('show');
     });
 
 exportCurrentPromptBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    document.getElementById('exportPromptMenu').classList.toggle('show');
+    exportPromptMenu?.classList.toggle('show');
 });
 
 document.addEventListener('click', () => {
-    document.getElementById('exportMenu')?.classList.remove('show');
-    document.getElementById('exportPromptMenu')?.classList.remove('show');
-    document.getElementById('exportChatSettingsMenu')?.classList.remove('show');
-    document.getElementById('exportPromptSettingsMenu')?.classList.remove('show');
+    exportMenu?.classList.remove('show');
+    exportPromptMenu?.classList.remove('show');
+    exportChatSettingsMenu?.classList.remove('show');
+    exportPromptSettingsMenu?.classList.remove('show');
 });
 
 document.querySelectorAll('.dropdown-item[data-format]').forEach(item => {
@@ -2891,9 +3242,8 @@ instructionTabs.forEach(tab => {
         });
         
         // Sync select and custom dropdown with tabs
-        const instructionSelect = document.getElementById('instructionSelect');
-        if (instructionSelect) {
-            instructionSelect.value = instructionType;
+        if (instructionSelectEl) {
+            instructionSelectEl.value = instructionType;
         }
         
         const selectedText = document.getElementById('selectedInstructionText');
@@ -2945,7 +3295,7 @@ if (instructionDropdown) {
             if (activeTab) activeTab.classList.add('active');
             
             // Sync with hidden select
-            if (instructionSelect) instructionSelect.value = instructionType;
+            if (instructionSelectEl) instructionSelectEl.value = instructionType;
             
             // Switch content
             instructionEditors.forEach(editor => {
@@ -2968,28 +3318,20 @@ if (instructionDropdown) {
 
 // Check if tabs need compact mode
 function checkTabsCompactMode() {
-    const promptPanel = document.getElementById('instructionsPanel');
-    if (!promptPanel) return;
+    if (!instructionsPanelElement) return;
     
-    const panelWidth = promptPanel.getBoundingClientRect().width;
+    const panelWidth = instructionsPanelElement.getBoundingClientRect().width;
     
     // При ширине панели меньше 420px - включаем компактный режим
-    if (panelWidth < 420) {
-        promptPanel.classList.add('compact-tabs');
-    } else {
-        promptPanel.classList.remove('compact-tabs');
-    }
+    instructionsPanelElement.classList.toggle('compact-tabs', panelWidth < 420);
 }
 
 // Also check on panel resize via ResizeObserver
-if (typeof ResizeObserver !== 'undefined') {
-    const promptPanel = document.getElementById('instructionsPanel');
-    if (promptPanel) {
-        const resizeObserver = new ResizeObserver(() => {
-            checkTabsCompactMode();
-        });
-        resizeObserver.observe(promptPanel);
-    }
+if (typeof ResizeObserver !== 'undefined' && instructionsPanelElement) {
+    const resizeObserver = new ResizeObserver(() => {
+        checkTabsCompactMode();
+    });
+    resizeObserver.observe(instructionsPanelElement);
 }
 
 // Run on load and resize
@@ -3026,33 +3368,56 @@ window.addEventListener('resize', debounce(checkTabsCompactMode, 100));
 // Resize panels
 const resizeHandle1 = document.getElementById('resizeHandle1');
 const chatPanel = document.getElementById('chatPanel');
-const instructionsPanel = document.getElementById('instructionsPanel');
+const instructionsPanel = instructionsPanelElement;
 let isResizing = false;
+let resizeContainerLeft = 0;
+let resizeContainerWidth = 0;
+let resizeClientX = 0;
+let resizeFrameId = 0;
 
-resizeHandle1.addEventListener('mousedown', () => {
-    isResizing = true;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-});
+function applyPanelResize() {
+    resizeFrameId = 0;
+    if (!isResizing || !chatPanel || !instructionsPanel || !resizeContainerWidth) return;
 
-document.addEventListener('mousemove', (e) => {
-    if (!isResizing) return;
-    const container = document.querySelector('.panels-container');
-    const containerWidth = container.offsetWidth;
-    const chatWidth = (e.clientX / containerWidth) * 100;
-    const instructionsWidth = containerWidth - e.clientX;
-    
+    const relativeX = resizeClientX - resizeContainerLeft;
+    const safeX = Math.max(0, Math.min(relativeX, resizeContainerWidth));
+    const chatWidth = (safeX / resizeContainerWidth) * 100;
+    const instructionsWidth = resizeContainerWidth - safeX;
+
     // Минимальная ширина панели инструкций 320px
     if (chatWidth >= 25 && chatWidth <= 75 && instructionsWidth >= 320) {
         chatPanel.style.flex = `0 0 ${chatWidth}%`;
         instructionsPanel.style.flex = `0 0 ${100 - chatWidth - 1}%`;
         checkTabsCompactMode();
     }
+}
+
+resizeHandle1.addEventListener('mousedown', (e) => {
+    if (!panelsContainer) return;
+    isResizing = true;
+    const rect = panelsContainer.getBoundingClientRect();
+    resizeContainerLeft = rect.left;
+    resizeContainerWidth = rect.width;
+    resizeClientX = e.clientX;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!isResizing) return;
+    resizeClientX = e.clientX;
+    if (!resizeFrameId) {
+        resizeFrameId = requestAnimationFrame(applyPanelResize);
+    }
 });
 
 document.addEventListener('mouseup', () => {
     if (isResizing) {
         isResizing = false;
+        if (resizeFrameId) {
+            cancelAnimationFrame(resizeFrameId);
+            resizeFrameId = 0;
+        }
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
     }
@@ -3111,6 +3476,19 @@ if (window.innerWidth <= 1024) {
     document.querySelector('.panel[data-panel="chat"]')?.classList.add('active');
 }
 
+function isSelectionInsideTag(preview, tagName) {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return false;
+    let node = selection.anchorNode;
+    if (!node) return false;
+    if (node.nodeType === Node.TEXT_NODE) {
+        node = node.parentElement;
+    }
+    if (!node || !(node instanceof Element)) return false;
+    const match = node.closest(tagName);
+    return !!match && preview.contains(match);
+}
+
 // Toolbar
 document.querySelectorAll('.toolbar-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -3128,7 +3506,16 @@ document.querySelectorAll('.toolbar-btn').forEach(btn => {
         else if (action === 'h1') document.execCommand('formatBlock', false, 'h1');
         else if (action === 'h2') document.execCommand('formatBlock', false, 'h2');
         else if (action === 'h3') document.execCommand('formatBlock', false, 'h3');
-        else if (action === 'quote') document.execCommand('formatBlock', false, 'blockquote');
+        else if (action === 'quote') {
+            if (isSelectionInsideTag(preview, 'blockquote')) {
+                const removed = document.execCommand('outdent', false, null);
+                if (!removed) {
+                    document.execCommand('formatBlock', false, 'p');
+                }
+            } else {
+                document.execCommand('formatBlock', false, 'blockquote');
+            }
+        }
         else if (action === 'hr') document.execCommand('insertHorizontalRule', false, null);
     });
 });
@@ -3148,13 +3535,9 @@ setupDragAndDrop(managerPromptInput);
 setupDragAndDrop(raterPromptInput);
 
 // Setup drag and drop for preview elements (WYSIWYG mode)
-const systemPromptPreviewEl = document.getElementById('systemPromptPreview');
-const managerPromptPreviewEl = document.getElementById('managerPromptPreview');
-const raterPromptPreviewEl = document.getElementById('raterPromptPreview');
-
-setupDragAndDropForPreview(systemPromptPreviewEl, systemPromptInput);
-setupDragAndDropForPreview(managerPromptPreviewEl, managerPromptInput);
-setupDragAndDropForPreview(raterPromptPreviewEl, raterPromptInput);
+setupDragAndDropForPreview(promptPreviewByRole.client, systemPromptInput);
+setupDragAndDropForPreview(promptPreviewByRole.manager, managerPromptInput);
+setupDragAndDropForPreview(promptPreviewByRole.rater, raterPromptInput);
 
         setTimeout(() => {
     initWYSIWYGMode();

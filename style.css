@@ -122,6 +122,12 @@ body.light-theme .btn-attestation {
     color: #666;
 }
 
+body.light-theme .btn-scope-toggle {
+    background: #f5f5f5;
+    border-color: #ddd;
+    color: #666;
+}
+
 body.light-theme .btn-icon:hover,
 body.light-theme .btn-export:hover {
     background: transparent !important;
@@ -129,6 +135,11 @@ body.light-theme .btn-export:hover {
 }
 
 body.light-theme .btn-attestation:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+}
+
+body.light-theme .btn-scope-toggle:hover {
     border-color: var(--color-accent);
     color: var(--color-accent);
 }
@@ -611,6 +622,33 @@ body.attestation-mode .chat-panel {
 .btn-attestation:hover {
     border-color: var(--color-accent);
     color: var(--color-accent);
+}
+
+.btn-scope-toggle {
+    background: #222;
+    border: 1px solid #333;
+    color: #bbb;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.btn-scope-toggle:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+}
+
+.btn-scope-toggle.is-local {
+    color: #7cc89b;
+    border-color: #2f5f46;
+}
+
+.btn-scope-toggle.is-local:hover {
+    color: #9ee0b7;
+    border-color: #4f8d6b;
 }
 
 .btn-attestation-exit {

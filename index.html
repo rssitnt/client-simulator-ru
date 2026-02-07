@@ -62,10 +62,10 @@
     <div id="aiImproveModal" class="modal-overlay">
         <div class="modal-content ai-improve-modal">
             <button class="modal-close" id="aiImproveModalClose">&times;</button>
-            <h3>Улучшить инструкцию с ИИ</h3>
+            <h3 id="aiImproveModalTitle">Улучшить инструкцию с ИИ</h3>
             
             <div id="aiImproveStep1">
-                <p>Опишите, как бы вы хотели улучшить инструкцию?</p>
+                <p id="aiImproveModalDescription">Опишите, как бы вы хотели улучшить инструкцию?</p>
                 <textarea id="aiImproveInput" placeholder="Например: Сделай инструкцию более структурированной, добавь примеры диалогов..." rows="4"></textarea>
                 <div class="ai-improve-actions">
                     <button id="aiImproveCancel" class="btn-modal-cancel">Отмена</button>
@@ -358,6 +358,7 @@
                 </select>
                 
                 <div class="header-buttons">
+                    <button id="promptVisibilityBtn" class="btn-scope-toggle" title="Переключить видимость промпта">Опубликовать</button>
                     <button id="aiImproveBtn" class="btn-icon btn-ai-improve" title="Улучшить инструкцию с AI">
                         <span style="font-size: 28px;">✦</span>
                     </button>
