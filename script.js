@@ -223,6 +223,9 @@ const aiImproveModal = document.getElementById('aiImproveModal');
 const aiImproveModalClose = document.getElementById('aiImproveModalClose');
 const aiImproveModalTitle = document.getElementById('aiImproveModalTitle');
 const aiImproveModalDescription = document.getElementById('aiImproveModalDescription');
+const voiceModeModal = document.getElementById('voiceModeModal');
+const voiceModeModalClose = document.getElementById('voiceModeModalClose');
+const voiceModeStartBtn = document.getElementById('voiceModeStartBtn');
 
 const aiImproveStep1 = document.getElementById('aiImproveStep1');
 const aiImproveInput = document.getElementById('aiImproveInput');
@@ -1227,7 +1230,7 @@ function updateSendBtnState() {
 
     if (showVoiceModeAction) {
         setPrimaryActionMode('voice');
-        sendBtn.disabled = userInput.disabled || !isSpeechRecognitionAvailable;
+        sendBtn.disabled = userInput.disabled;
         return;
     }
 
@@ -1998,6 +2001,16 @@ function hideAiImproveModal() {
     setAiImproveModalContent('default');
 }
 
+function showVoiceModeModal() {
+    if (!voiceModeModal) return;
+    voiceModeModal.classList.add('active');
+}
+
+function hideVoiceModeModal() {
+    if (!voiceModeModal) return;
+    voiceModeModal.classList.remove('active');
+}
+
 // ============ SETTINGS MODAL FUNCTIONS ============
 
 function showSettingsModal() {
@@ -2256,6 +2269,15 @@ if (promptVisibilityBtn) {
 aiImproveModalClose.addEventListener('click', hideAiImproveModal);
 aiImproveCancel.addEventListener('click', hideAiImproveModal);
 aiImproveSubmit.addEventListener('click', improvePromptWithAI);
+if (voiceModeModalClose) {
+    voiceModeModalClose.addEventListener('click', hideVoiceModeModal);
+}
+if (voiceModeStartBtn) {
+    voiceModeStartBtn.addEventListener('click', () => {
+        hideVoiceModeModal();
+        showCopyNotification('Голосовой режим находится в разработке.');
+    });
+}
 
 aiImproveBack.addEventListener('click', () => {
     aiImproveStep1.style.display = 'block';
@@ -2474,6 +2496,13 @@ aiImproveModal.addEventListener('click', (e) => {
         hideAiImproveModal();
     }
 });
+if (voiceModeModal) {
+    voiceModeModal.addEventListener('click', (e) => {
+        if (e.target === voiceModeModal) {
+            hideVoiceModeModal();
+        }
+    });
+}
 
 // ============ CHAT FUNCTIONS ============
 
@@ -3531,15 +3560,7 @@ function setupDragAndDropForPreview(previewElement, textarea) {
 
 function handlePrimaryActionClick() {
     if (sendBtn.dataset.mode === 'voice') {
-        if (isRecording) {
-            stopRecording();
-            return;
-        }
-        if (!isSpeechRecognitionAvailable || !recognition) {
-            addMessage('Ошибка: голосовой режим недоступен в этом браузере.', 'error', false);
-            return;
-        }
-        recognition.start();
+        showVoiceModeModal();
         return;
     }
     sendMessage();
