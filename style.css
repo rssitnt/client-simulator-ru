@@ -64,9 +64,12 @@ body.light-theme .chat-panel {
 }
 
 body.light-theme .message.user {
-    background: transparent;
-    border: none;
-    color: #1a1a1a;
+    background: none !important;
+    background-color: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    outline: none !important;
+    color: #1a1a1a !important;
 }
 
 body.light-theme .message.assistant {
@@ -1032,19 +1035,27 @@ body.attestation-mode .btn-attestation-exit {
 
 .message.user {
     align-self: flex-end;
-    background: transparent;
-    border: none;
-    color: #e0e0e0;
+    background: none !important;
+    background-color: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    outline: none !important;
+    color: #e0e0e0 !important;
 }
 
 .message.user .message-content :not(pre) > code {
-    background: rgba(255, 255, 255, 0.12);
-    border-color: rgba(255, 255, 255, 0.22);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.16);
 }
 
 body.light-theme .message.user .message-content :not(pre) > code {
-    background: rgba(0, 0, 0, 0.06);
+    background: rgba(0, 0, 0, 0.08);
     border-color: rgba(0, 0, 0, 0.16);
+}
+
+.message.user a,
+body.light-theme .message.user a {
+    color: inherit;
 }
 
 .message.assistant {
