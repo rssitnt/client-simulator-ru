@@ -64,7 +64,8 @@ body.light-theme .chat-panel {
 }
 
 body.light-theme .message.user {
-    background: #e3e8ff;
+    background: #eef0f3;
+    border: 1px solid #dde2e8;
     color: #1a1a1a;
 }
 
@@ -1031,13 +1032,19 @@ body.attestation-mode .btn-attestation-exit {
 
 .message.user {
     align-self: flex-end;
-    background: var(--color-accent);
-    color: #fff;
+    background: #343840;
+    border: 1px solid #4a4f59;
+    color: #f5f7fa;
 }
 
 .message.user .message-content :not(pre) > code {
-    background: rgba(127, 150, 255, 0.3);
-    border-color: var(--color-accent);
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.22);
+}
+
+body.light-theme .message.user .message-content :not(pre) > code {
+    background: rgba(0, 0, 0, 0.06);
+    border-color: rgba(0, 0, 0, 0.16);
 }
 
 .message.assistant {
