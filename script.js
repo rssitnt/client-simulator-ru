@@ -548,6 +548,25 @@ function debounce(func, wait) {
         };
 }
 
+function setCustomTooltip(element, text) {
+    if (!element) return;
+    const tooltipText = String(text || '').trim();
+    if (!tooltipText) return;
+    element.classList.add('custom-tooltip-target');
+    element.dataset.tooltipInit = '1';
+    element.setAttribute('data-tooltip', tooltipText);
+    element.setAttribute('aria-label', tooltipText);
+    element.removeAttribute('title');
+}
+
+function prepareCustomTooltips(root = document) {
+    root.querySelectorAll('[title]').forEach((element) => {
+        const title = element.getAttribute('title');
+        if (!title || !title.trim()) return;
+        setCustomTooltip(element, title);
+    });
+}
+
 function unescapeMarkdown(text) {
     if (!text) return text;
     return text
@@ -697,11 +716,12 @@ function updatePromptVisibilityButton() {
 
     promptVisibilityBtn.style.display = '';
     const isLocal = !!activeVariation.isLocal;
-    promptVisibilityBtn.textContent = isLocal ? 'Опубликовать' : 'Сделать локальным';
-    promptVisibilityBtn.classList.toggle('is-local', isLocal);
-    promptVisibilityBtn.title = isLocal
-        ? 'Опубликовать промпт для всех пользователей'
-        : 'Сделать промпт локальным (только для вас)';
+    promptVisibilityBtn.textContent = isLocal ? '🙈' : '👁';
+    promptVisibilityBtn.classList.toggle('state-hidden', isLocal);
+    const tooltipText = isLocal
+        ? 'Показать промпт пользователям'
+        : 'Скрыть промпт от пользователей';
+    setCustomTooltip(promptVisibilityBtn, tooltipText);
 }
 
 function buildLocalPromptName(name) {
@@ -778,7 +798,7 @@ function toggleActivePromptVisibility() {
     renderVariations();
     updateEditorContent(role);
     updatePromptVisibilityButton();
-    showCopyNotification(action === 'publish' ? 'Промпт опубликован' : 'Промпт сделан локальным');
+    showCopyNotification(action === 'publish' ? 'Промпт снова виден пользователям' : 'Промпт скрыт от пользователей');
 }
 
 function updatePromptLock() {
@@ -1112,7 +1132,7 @@ function renderVariations() {
         const addBtn = document.createElement('button');
         addBtn.className = 'add-variation-btn';
         addBtn.textContent = '+';
-        addBtn.title = 'Добавить вариант промпта';
+        setCustomTooltip(addBtn, 'Добавить вариант промпта');
         addBtn.addEventListener('click', () => addVariation(role));
         fragment.appendChild(addBtn);
     }
@@ -1167,6 +1187,7 @@ function renderPromptHistory() {
             e.stopPropagation();
             restorePromptVersion(entry.id);
         });
+        prepareCustomTooltips(item);
         promptChangesList.appendChild(item);
     });
 }
@@ -3529,6 +3550,7 @@ loadPrompts();
 initSpeechRecognition();
 userInput.focus();
 autoResizeTextarea(userInput);
+prepareCustomTooltips();
 
 setupDragAndDrop(systemPromptInput);
 setupDragAndDrop(managerPromptInput);

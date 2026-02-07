@@ -358,10 +358,6 @@
                 </select>
                 
                 <div class="header-buttons">
-                    <button id="promptVisibilityBtn" class="btn-scope-toggle" title="Переключить видимость промпта">Опубликовать</button>
-                    <button id="aiImproveBtn" class="btn-icon btn-ai-improve" title="Улучшить инструкцию с AI">
-                        <span style="font-size: 28px;">✦</span>
-                    </button>
                     <div style="position: relative;">
                         <button id="exportCurrentPrompt" class="btn-icon btn-export" title="Экспорт инструкции">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -405,6 +401,9 @@
                     <button class="toolbar-btn" data-action="quote" title="Цитата">"</button>
                     <button class="toolbar-btn" data-action="code" title="Код">&lt;/&gt;</button>
                     <button class="toolbar-btn" data-action="hr" title="Горизонтальная линия">—</button>
+                    <span class="toolbar-divider"></span>
+                    <button id="promptVisibilityBtn" class="toolbar-btn toolbar-btn-eye" title="Скрыть промпт от пользователей" aria-label="Скрыть промпт от пользователей">👁</button>
+                    <button id="aiImproveBtn" class="toolbar-btn toolbar-btn-ai" title="Улучшить инструкцию с AI" aria-label="Улучшить инструкцию с AI">✦</button>
                 </div>
 
                 <div class="prompt-wrapper instruction-editor active preview-mode" data-instruction="client">
