@@ -1239,6 +1239,7 @@ function updateSendBtnState() {
 }
 
 function lockDialogInput() {
+    const inputWrapper = userInput.closest('.input-wrapper');
     userInput.disabled = true;
     sendBtn.disabled = true;
     voiceBtn.disabled = true;
@@ -1247,15 +1248,25 @@ function lockDialogInput() {
     rateChatBtn.disabled = false;
     userInput.placeholder = 'Очистите чат для нового диалога';
     userInput.classList.add('disabled');
+    userInput.classList.add('locked-dialog');
+    inputWrapper?.classList.add('is-locked');
+    userInput.scrollTop = 0;
+    requestAnimationFrame(() => {
+        userInput.scrollTop = 0;
+    });
 }
 
 function unlockDialogInput() {
+    const inputWrapper = userInput.closest('.input-wrapper');
     userInput.disabled = false;
     voiceBtn.disabled = false;
     aiAssistBtn.disabled = false;
     rateChatBtn.disabled = false;
     userInput.placeholder = '';
     userInput.classList.remove('disabled');
+    userInput.classList.remove('locked-dialog');
+    inputWrapper?.classList.remove('is-locked');
+    userInput.scrollTop = 0;
     updateSendBtnState();
 }
 
