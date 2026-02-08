@@ -93,6 +93,15 @@
         </div>
     </div>
 
+    <!-- Модальное окно истории текущего промпта -->
+    <div id="promptHistoryModal" class="modal-overlay">
+        <div class="modal-content prompt-history-modal">
+            <button class="modal-close" id="promptHistoryModalClose">&times;</button>
+            <h3 id="promptHistoryTitle">История промпта</h3>
+            <div id="promptHistoryList" class="prompt-history-list"></div>
+        </div>
+    </div>
+
     <!-- Модальное окно голосового режима -->
     <div id="voiceModeModal" class="modal-overlay">
         <div class="modal-content voice-mode-modal">
@@ -225,11 +234,6 @@
                 </div>
             </div>
 
-            <!-- Изменения промптов -->
-            <div class="settings-section changes-section">
-                <div class="changes-header">Изменения</div>
-                <div id="promptChangesList" class="changes-list"></div>
-            </div>
         </div>
     </div>
 
@@ -409,6 +413,7 @@
                         </svg>
                     </button>
                     <button id="aiImproveBtn" class="toolbar-btn toolbar-btn-ai" title="Улучшить инструкцию с AI" aria-label="Улучшить инструкцию с AI">✦</button>
+                    <button id="promptHistoryBtn" class="toolbar-btn toolbar-btn-history" title="История текущего промпта" aria-label="История текущего промпта">🔄</button>
                     <span class="toolbar-divider"></span>
                     <button class="toolbar-btn" data-action="h1" title="Заголовок 1">H1</button>
                     <button class="toolbar-btn" data-action="h2" title="Заголовок 2">H2</button>

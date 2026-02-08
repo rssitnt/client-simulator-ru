@@ -219,10 +219,15 @@ const promptVariationsContainer = document.getElementById('promptVariations');
 
 // AI Improve Modal Elements
 const aiImproveBtn = document.getElementById('aiImproveBtn');
+const promptHistoryBtn = document.getElementById('promptHistoryBtn');
 const aiImproveModal = document.getElementById('aiImproveModal');
 const aiImproveModalClose = document.getElementById('aiImproveModalClose');
 const aiImproveModalTitle = document.getElementById('aiImproveModalTitle');
 const aiImproveModalDescription = document.getElementById('aiImproveModalDescription');
+const promptHistoryModal = document.getElementById('promptHistoryModal');
+const promptHistoryModalClose = document.getElementById('promptHistoryModalClose');
+const promptHistoryTitle = document.getElementById('promptHistoryTitle');
+const promptHistoryList = document.getElementById('promptHistoryList');
 const voiceModeModal = document.getElementById('voiceModeModal');
 const voiceModeModalClose = document.getElementById('voiceModeModalClose');
 const voiceModeStartBtn = document.getElementById('voiceModeStartBtn');
@@ -252,8 +257,6 @@ const roleChangeConfirmBtn = document.getElementById('roleChangeConfirmBtn');
 const roleChangeError = document.getElementById('roleChangeError');
 const exportChatSettings = document.getElementById('exportChatSettings');
 const exportPromptSettings = document.getElementById('exportPromptSettings');
-const promptChangesList = document.getElementById('promptChangesList');
-const changesSection = document.querySelector('.changes-section');
 const exportMenu = document.getElementById('exportMenu');
 const exportPromptMenu = document.getElementById('exportPromptMenu');
 const exportChatSettingsMenu = document.getElementById('exportChatSettingsMenu');
@@ -333,6 +336,7 @@ let lockedPromptVariationId = null;
 let recognition = null;
 let isRecording = false;
 let isSpeechRecognitionAvailable = false;
+let reratePromptElement = null;
 let publicActiveIds = {
     client: null,
     manager: null,
@@ -399,10 +403,6 @@ function applyRoleRestrictions() {
             exportPromptSettings.style.display = 'none';
         }
 
-        if (changesSection) {
-            changesSection.style.display = 'none';
-        }
-
         if (exitAttestationBtn) {
             exitAttestationBtn.style.display = '';
         }
@@ -415,9 +415,6 @@ function applyRoleRestrictions() {
         if (exportPromptSettings) {
             exportPromptSettings.style.display = '';
         }
-        if (changesSection) {
-            changesSection.style.display = 'block';
-        }
         if (exitAttestationBtn) {
             exitAttestationBtn.style.display = '';
         }
@@ -427,6 +424,7 @@ function applyRoleRestrictions() {
     }
 
     updatePromptVisibilityButton();
+    updatePromptHistoryButton();
 }
 
 // Configure marked.js
@@ -602,7 +600,7 @@ function prepareCustomTooltips(root = document) {
     });
 }
 
-const TOOLTIP_SHOW_DELAY_MS = 320;
+const TOOLTIP_SHOW_DELAY_MS = 0;
 const TOOLTIP_GAP_PX = 12;
 const TOOLTIP_EDGE_OFFSET_PX = 12;
 const SUPPORTS_POPOVER = typeof HTMLElement !== 'undefined' && 'showPopover' in HTMLElement.prototype;
@@ -744,12 +742,17 @@ function scheduleTooltip(target) {
         return;
     }
 
+    if (TOOLTIP_SHOW_DELAY_MS <= 0) {
+        showTooltip(target);
+        return;
+    }
+
     tooltipShowTimer = setTimeout(() => {
         showTooltip(target);
     }, TOOLTIP_SHOW_DELAY_MS);
 }
 
-function hideTooltip(immediate = false) {
+function hideTooltip(immediate = true) {
     if (!tooltipLayer) return;
     if (tooltipShowTimer) {
         clearTimeout(tooltipShowTimer);
@@ -775,21 +778,14 @@ function hideTooltip(immediate = false) {
         return;
     }
 
-    if (tooltipHideTimer) {
-        clearTimeout(tooltipHideTimer);
+    if (SUPPORTS_POPOVER && isTooltipPopoverOpen()) {
+        try {
+            tooltipLayer.hidePopover();
+        } catch (e) {}
     }
-    tooltipHideTimer = setTimeout(() => {
-        if (!tooltipLayer.classList.contains('visible')) {
-            if (SUPPORTS_POPOVER && isTooltipPopoverOpen()) {
-                try {
-                    tooltipLayer.hidePopover();
-                } catch (e) {}
-            }
-            if (!SUPPORTS_POPOVER) {
-                tooltipLayer.hidden = true;
-            }
-        }
-    }, 180);
+    if (!SUPPORTS_POPOVER) {
+        tooltipLayer.hidden = true;
+    }
 }
 
 function initCustomTooltipLayer() {
@@ -840,6 +836,30 @@ function initCustomTooltipLayer() {
             if (currentTarget.matches(':hover') || currentTarget.matches(':focus-within')) return;
             hideTooltip();
         });
+    }, true);
+
+    document.addEventListener('pointermove', (event) => {
+        if (event.pointerType === 'touch') return;
+        if (!tooltipActiveTarget || !tooltipLayer) return;
+        if (!document.contains(tooltipActiveTarget)) {
+            hideTooltip(true);
+            return;
+        }
+        const rect = tooltipActiveTarget.getBoundingClientRect();
+        const insideTarget =
+            event.clientX >= rect.left &&
+            event.clientX <= rect.right &&
+            event.clientY >= rect.top &&
+            event.clientY <= rect.bottom;
+        if (!insideTarget && !tooltipActiveTarget.matches(':focus-within')) {
+            hideTooltip(true);
+        }
+    }, true);
+
+    document.addEventListener('pointerdown', (event) => {
+        if (!tooltipActiveTarget) return;
+        if (event.target instanceof Element && tooltipActiveTarget.contains(event.target)) return;
+        hideTooltip(true);
     }, true);
 
     document.addEventListener('focusin', (event) => {
@@ -1026,6 +1046,18 @@ function updatePromptVisibilityButton() {
         ? 'Показать промпт пользователям'
         : 'Скрыть промпт от пользователей';
     setCustomTooltip(promptVisibilityBtn, tooltipText);
+}
+
+function updatePromptHistoryButton() {
+    if (!promptHistoryBtn) return;
+
+    if (!isAdmin()) {
+        promptHistoryBtn.style.display = 'none';
+        return;
+    }
+
+    const activeVariation = getActiveVariation();
+    promptHistoryBtn.style.display = activeVariation ? '' : 'none';
 }
 
 function buildLocalPromptName(name) {
@@ -1398,6 +1430,7 @@ function initPromptsData(firebaseData = {}) {
     renderVariations();
     updateAllPreviews();
     updatePromptVisibilityButton();
+    updatePromptHistoryButton();
 }
 
 function renderVariations() {
@@ -1485,6 +1518,10 @@ function renderVariations() {
 
     promptVariationsContainer.replaceChildren(fragment);
     updatePromptVisibilityButton();
+    updatePromptHistoryButton();
+    if (promptHistoryModal?.classList.contains('active')) {
+        renderPromptHistory();
+    }
 }
 
 function formatHistoryTime(ts) {
@@ -1502,21 +1539,40 @@ function getRoleLabel(role) {
     return role;
 }
 
-function renderPromptHistory() {
-    if (!promptChangesList) return;
-    const isAdminUser = isAdmin();
-    if (changesSection) {
-        changesSection.style.display = isAdminUser ? 'block' : 'none';
-    }
-    if (!isAdminUser) return;
+function getPromptHistoryKey(role, variationId) {
+    return `${role}:${variationId}`;
+}
 
-    if (!promptHistory.length) {
-        promptChangesList.innerHTML = '<div class="changes-empty">Пока нет изменений.</div>';
+function getPromptHistoryEntries(role, variationId) {
+    if (!role || !variationId) return [];
+    const key = getPromptHistoryKey(role, variationId);
+    return promptHistory.filter(item => getPromptHistoryKey(item.role, item.variationId) === key);
+}
+
+function renderPromptHistory() {
+    if (!promptHistoryList || !promptHistoryTitle) return;
+    if (!isAdmin()) {
+        promptHistoryList.innerHTML = '';
         return;
     }
 
-    const items = promptHistory.slice(0, HISTORY_LIMIT);
-    promptChangesList.innerHTML = '';
+    const role = getActiveRole();
+    const activeVariation = getActiveVariation(role);
+    if (!activeVariation) {
+        promptHistoryTitle.textContent = 'История промпта';
+        promptHistoryList.innerHTML = '<div class="changes-empty">Выберите промпт.</div>';
+        return;
+    }
+
+    promptHistoryTitle.textContent = `История: ${getRoleLabel(role)} · ${activeVariation.name || 'Без названия'}`;
+
+    const items = getPromptHistoryEntries(role, activeVariation.id).slice(0, HISTORY_LIMIT);
+    promptHistoryList.innerHTML = '';
+    if (!items.length) {
+        promptHistoryList.innerHTML = '<div class="changes-empty">Пока нет изменений у этого промпта.</div>';
+        return;
+    }
+
     items.forEach(entry => {
         const item = document.createElement('div');
         item.className = 'change-item';
@@ -1531,24 +1587,33 @@ function renderPromptHistory() {
         `;
         item.querySelector('.btn-restore').addEventListener('click', (e) => {
             e.stopPropagation();
-            restorePromptVersion(entry.id);
+            restorePromptVersion(entry.id, role, activeVariation.id);
         });
         prepareCustomTooltips(item);
-        promptChangesList.appendChild(item);
+        promptHistoryList.appendChild(item);
     });
 }
 
 function savePromptHistory() {
     if (!promptHistory) return;
-    if (promptHistory.length > HISTORY_LIMIT) {
-        promptHistory = promptHistory.slice(0, HISTORY_LIMIT);
-    }
+
+    // Лимитируем историю отдельно для каждого промпта, а не глобально.
+    const perPromptCount = new Map();
+    const trimmedHistory = [];
+    promptHistory.forEach(entry => {
+        const key = getPromptHistoryKey(entry.role, entry.variationId);
+        const used = perPromptCount.get(key) || 0;
+        if (used >= HISTORY_LIMIT) return;
+        perPromptCount.set(key, used + 1);
+        trimmedHistory.push(entry);
+    });
+    promptHistory = trimmedHistory;
+
+    localStorage.setItem('promptHistory', JSON.stringify(promptHistory));
     if (db) {
         set(ref(db, 'prompt_history'), promptHistory)
             .then(() => console.log('Prompt history synced'))
             .catch(e => console.error('Failed to sync history:', e));
-                } else {
-        localStorage.setItem('promptHistory', JSON.stringify(promptHistory));
     }
 }
 
@@ -1571,15 +1636,21 @@ function recordPromptHistory(role, variation) {
     promptHistory.unshift(entry);
     lastHistoryContent[role][variation.id] = content;
     savePromptHistory();
-    renderPromptHistory();
+    if (promptHistoryModal?.classList.contains('active')) {
+        renderPromptHistory();
+    }
 }
 
-function restorePromptVersion(entryId) {
+function restorePromptVersion(entryId, role = getActiveRole(), variationId = getActiveVariation(role)?.id) {
     if (!isAdmin()) return;
-    const entry = promptHistory.find(item => item.id === entryId);
+    const entry = promptHistory.find(item =>
+        item.id === entryId &&
+        (!role || item.role === role) &&
+        (!variationId || item.variationId === variationId)
+    );
     if (!entry) return;
 
-    const role = entry.role;
+    role = entry.role;
     const variations = promptsData[role]?.variations || [];
     let targetVar = variations.find(v => v.id === entry.variationId);
     if (!targetVar) {
@@ -1597,6 +1668,9 @@ function restorePromptVersion(entryId) {
     renderVariations();
     updateEditorContent(role);
     savePromptsToFirebaseNow();
+    if (promptHistoryModal?.classList.contains('active')) {
+        renderPromptHistory();
+    }
 }
 
 function addVariation(role) {
@@ -2038,6 +2112,17 @@ function hideVoiceModeModal() {
     voiceModeModal.classList.remove('active');
 }
 
+function showPromptHistoryModal() {
+    if (!promptHistoryModal) return;
+    renderPromptHistory();
+    promptHistoryModal.classList.add('active');
+}
+
+function hidePromptHistoryModal() {
+    if (!promptHistoryModal) return;
+    promptHistoryModal.classList.remove('active');
+}
+
 // ============ SETTINGS MODAL FUNCTIONS ============
 
 function showSettingsModal() {
@@ -2054,7 +2139,6 @@ function showSettingsModal() {
     roleChangeError.style.display = 'none';
     
     settingsModal.classList.add('active');
-    renderPromptHistory();
 }
 
 const nameInputMeasureCanvas = document.createElement('canvas');
@@ -2290,6 +2374,9 @@ function applyImprovedPrompt() {
 }
 
 aiImproveBtn.addEventListener('click', showAiImproveModal);
+if (promptHistoryBtn) {
+    promptHistoryBtn.addEventListener('click', showPromptHistoryModal);
+}
 if (promptVisibilityBtn) {
     promptVisibilityBtn.addEventListener('click', toggleActivePromptVisibility);
 }
@@ -2298,6 +2385,9 @@ aiImproveCancel.addEventListener('click', hideAiImproveModal);
 aiImproveSubmit.addEventListener('click', improvePromptWithAI);
 if (voiceModeModalClose) {
     voiceModeModalClose.addEventListener('click', hideVoiceModeModal);
+}
+if (promptHistoryModalClose) {
+    promptHistoryModalClose.addEventListener('click', hidePromptHistoryModal);
 }
 if (voiceModeStartBtn) {
     voiceModeStartBtn.addEventListener('click', () => {
@@ -2530,6 +2620,13 @@ if (voiceModeModal) {
         }
     });
 }
+if (promptHistoryModal) {
+    promptHistoryModal.addEventListener('click', (e) => {
+        if (e.target === promptHistoryModal) {
+            hidePromptHistoryModal();
+        }
+    });
+}
 
 // ============ CHAT FUNCTIONS ============
 
@@ -2568,6 +2665,7 @@ function clearChat() {
     conversationHistory = [];
     lastRating = null;
     isDialogRated = false;
+    removeReratePrompt();
     updatePromptLock();
     unlockDialogInput();
     rateChatBtn.classList.remove('rated');
@@ -2717,7 +2815,116 @@ async function startConversationHandler() {
     }
 }
 
-async function rateChat() {
+function removeReratePrompt() {
+    if (reratePromptElement) {
+        reratePromptElement.remove();
+        reratePromptElement = null;
+    }
+}
+
+function showReratePrompt() {
+    removeReratePrompt();
+    const wrapper = document.createElement('div');
+    wrapper.className = 'message system-action rerate-confirm';
+    wrapper.innerHTML = `
+        <div class="rerate-confirm-box">
+            <div class="rerate-confirm-text">Оценка уже получена, оценить заново?</div>
+            <button class="btn-rerate-confirm">Оценить</button>
+        </div>
+    `;
+    const confirmBtn = wrapper.querySelector('.btn-rerate-confirm');
+    confirmBtn?.addEventListener('click', () => {
+        removeReratePrompt();
+        rateChat({ force: true });
+    });
+    chatMessages.appendChild(wrapper);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    reratePromptElement = wrapper;
+}
+
+function resetRatingUiForRerun() {
+    chatMessages.querySelectorAll('.message.rating, .message.improve-message, .message.rerate-confirm').forEach(el => el.remove());
+    lastRating = null;
+    isDialogRated = false;
+    rateChatBtn.classList.remove('rated');
+    unlockDialogInput();
+    removeReratePrompt();
+}
+
+function buildDialogText() {
+    let dialogText = '';
+    conversationHistory.forEach((msg) => {
+        const role = msg.role === 'user' ? 'Менеджер' : 'Клиент';
+        dialogText += `${role}: ${msg.content}\n\n`;
+    });
+    return dialogText.trim();
+}
+
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function isRetryableRatingError(error) {
+    const status = Number(error?.httpStatus || 0);
+    if (status === 408 || status === 429 || status >= 500) return true;
+    const message = String(error?.message || '').toLowerCase();
+    return (
+        message.includes('failed to fetch') ||
+        message.includes('networkerror') ||
+        message.includes('timeout') ||
+        message.includes('таймаут') ||
+        message.includes('пустой ответ')
+    );
+}
+
+async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = 3) {
+    const requestId = `rating_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+            const response = await fetchWithTimeout(RATE_WEBHOOK_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    dialog: dialogText,
+                    raterPrompt,
+                    sessionId: raterSessionId,
+                    requestId,
+                    attempt,
+                    sentAt: new Date().toISOString()
+                })
+            });
+
+            if (!response.ok) {
+                const err = new Error(`HTTP ${response.status}`);
+                err.httpStatus = response.status;
+                throw err;
+            }
+
+            let ratingMessage = await readWebhookResponse(response);
+            ratingMessage = normalizeStructuredJsonText(ratingMessage);
+            if (!ratingMessage || ratingMessage.trim() === '') {
+                const err = new Error('Пустой ответ');
+                err.httpStatus = 204;
+                throw err;
+            }
+            return ratingMessage.trim();
+        } catch (error) {
+            lastError = error;
+            if (attempt >= maxAttempts || !isRetryableRatingError(error)) {
+                throw lastError;
+            }
+            console.warn(`Rating webhook attempt ${attempt}/${maxAttempts} failed, retrying...`, error);
+            await delay(600 * attempt);
+        }
+    }
+
+    throw lastError || new Error('Не удалось получить оценку');
+}
+
+async function rateChat(options = {}) {
+    const { force = false } = options;
     if (conversationHistory.length === 0) {
         alert('Нет диалога для оценки');
         return;
@@ -2725,9 +2932,12 @@ async function rateChat() {
     if (isProcessing) return;
     
     // If already rated, cancel the rating
-    if (isDialogRated) {
-        showCopyNotification('Оценка уже получена');
+    if (isDialogRated && !force) {
+        showReratePrompt();
         return;
+    }
+    if (force) {
+        resetRatingUiForRerun();
     }
 
     const raterPrompt = validatePromptBeforeWebhook('rater', raterPromptInput.value);
@@ -2741,31 +2951,8 @@ async function rateChat() {
     const loadingMsg = addMessage('', 'loading');
     
     try {
-        let dialogText = '';
-        conversationHistory.forEach((msg) => {
-            const role = msg.role === 'user' ? 'Менеджер' : 'Клиент';
-            dialogText += `${role}: ${msg.content}\n\n`;
-        });
-
-        const response = await fetchWithTimeout(RATE_WEBHOOK_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                dialog: dialogText.trim(),
-                raterPrompt: raterPrompt,
-                sessionId: raterSessionId
-            })
-        });
-        
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        
-        let ratingMessage = await readWebhookResponse(response);
-        ratingMessage = normalizeStructuredJsonText(ratingMessage);
-        
-        if (!ratingMessage || ratingMessage.trim() === '') {
-            throw new Error('Пустой ответ');
-        }
-        ratingMessage = ratingMessage.trim();
+        const dialogText = buildDialogText();
+        const ratingMessage = await requestRatingWithRetry(dialogText, raterPrompt, 3);
         
         loadingMsg.remove();
         lastRating = ratingMessage;
