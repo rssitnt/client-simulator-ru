@@ -1694,8 +1694,13 @@ body.user-mode .prompt-preview {
 }
 
 .toolbar-btn-history {
-    font-size: 16px;
     line-height: 1;
+}
+
+.toolbar-btn-history svg {
+    width: 16px;
+    height: 16px;
+    display: block;
 }
 
 .toolbar-divider {
@@ -1734,7 +1739,12 @@ body.light-theme .toolbar-btn-eye.state-hidden {
 }
 
 .prompt-panel.compact-toolbar .toolbar-btn-history {
-    font-size: 14px;
+    font-size: inherit;
+}
+
+.prompt-panel.compact-toolbar .toolbar-btn-history svg {
+    width: 14px;
+    height: 14px;
 }
 
 .instruction-editor {
