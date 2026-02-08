@@ -400,6 +400,16 @@
 
                 <!-- Markdown Toolbar -->
                 <div class="markdown-toolbar">
+                    <button id="promptVisibilityBtn" class="toolbar-btn toolbar-btn-eye" title="Скрыть промпт от пользователей" aria-label="Скрыть промпт от пользователей">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M3 3l18 18"></path>
+                            <path d="M10.58 10.58a2 2 0 0 0 2.83 2.83"></path>
+                            <path d="M9.9 4.24A10.9 10.9 0 0 1 12 4c7 0 11 8 11 8a21.2 21.2 0 0 1-5.08 5.94"></path>
+                            <path d="M6.61 6.61A20.7 20.7 0 0 0 1 12s4 8 11 8a10.9 10.9 0 0 0 5.08-1.24"></path>
+                        </svg>
+                    </button>
+                    <button id="aiImproveBtn" class="toolbar-btn toolbar-btn-ai" title="Улучшить инструкцию с AI" aria-label="Улучшить инструкцию с AI">✦</button>
+                    <span class="toolbar-divider"></span>
                     <button class="toolbar-btn" data-action="h1" title="Заголовок 1">H1</button>
                     <button class="toolbar-btn" data-action="h2" title="Заголовок 2">H2</button>
                     <button class="toolbar-btn" data-action="h3" title="Заголовок 3">H3</button>
@@ -413,9 +423,6 @@
                     <button class="toolbar-btn" data-action="quote" title="Цитата">"</button>
                     <button class="toolbar-btn" data-action="code" title="Код">&lt;/&gt;</button>
                     <button class="toolbar-btn" data-action="hr" title="Горизонтальная линия">—</button>
-                    <span class="toolbar-divider"></span>
-                    <button id="promptVisibilityBtn" class="toolbar-btn toolbar-btn-eye" title="Скрыть промпт от пользователей" aria-label="Скрыть промпт от пользователей">👁</button>
-                    <button id="aiImproveBtn" class="toolbar-btn toolbar-btn-ai" title="Улучшить инструкцию с AI" aria-label="Улучшить инструкцию с AI">✦</button>
                 </div>
 
                 <div class="prompt-wrapper instruction-editor active preview-mode" data-instruction="client">

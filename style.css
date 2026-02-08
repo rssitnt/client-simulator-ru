@@ -1652,6 +1652,12 @@ body.user-mode .prompt-preview {
     color: #ff8a8a;
 }
 
+.toolbar-btn-eye svg {
+    width: 16px;
+    height: 16px;
+    display: block;
+}
+
 .toolbar-btn-ai {
     font-size: 18px;
     line-height: 1;

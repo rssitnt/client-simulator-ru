@@ -287,6 +287,22 @@ const VOICE_MODE_BUTTON_ICON = `
     </svg>
 `;
 
+const EYE_OPEN_ICON = `
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"></path>
+        <circle cx="12" cy="12" r="3"></circle>
+    </svg>
+`;
+
+const EYE_OFF_ICON = `
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 3l18 18"></path>
+        <path d="M10.58 10.58a2 2 0 0 0 2.83 2.83"></path>
+        <path d="M9.9 4.24A10.9 10.9 0 0 1 12 4c7 0 11 8 11 8a21.2 21.2 0 0 1-5.08 5.94"></path>
+        <path d="M6.61 6.61A20.7 20.7 0 0 0 1 12s4 8 11 8a10.9 10.9 0 0 0 5.08-1.24"></path>
+    </svg>
+`;
+
 let pendingImprovedPrompt = null;
 let pendingRole = null;
 let pendingName = null;
@@ -1004,7 +1020,7 @@ function updatePromptVisibilityButton() {
 
     promptVisibilityBtn.style.display = '';
     const isLocal = !!activeVariation.isLocal;
-    promptVisibilityBtn.textContent = isLocal ? '🙈' : '👁';
+    promptVisibilityBtn.innerHTML = isLocal ? EYE_OPEN_ICON : EYE_OFF_ICON;
     promptVisibilityBtn.classList.toggle('state-hidden', isLocal);
     const tooltipText = isLocal
         ? 'Показать промпт пользователям'
