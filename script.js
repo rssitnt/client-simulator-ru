@@ -858,15 +858,20 @@ function initCustomTooltipLayer() {
         }
     }, true);
 
-    document.addEventListener('pointerdown', (event) => {
+    document.addEventListener('pointerdown', () => {
         if (!tooltipActiveTarget) return;
-        if (event.target instanceof Element && tooltipActiveTarget.contains(event.target)) return;
+        hideTooltip(true);
+    }, true);
+
+    document.addEventListener('click', () => {
+        if (!tooltipActiveTarget) return;
         hideTooltip(true);
     }, true);
 
     document.addEventListener('focusin', (event) => {
         const target = getTooltipTarget(event.target);
         if (!target) return;
+        if (typeof target.matches === 'function' && !target.matches(':focus-visible')) return;
         scheduleTooltip(target);
     }, true);
 
@@ -2088,6 +2093,7 @@ function resetPendingImproveState() {
 }
 
 function showAiImproveModal(options = {}) {
+    hideTooltip(true);
     const { mode = 'default', context = null } = options;
     aiImproveMode = mode;
     pendingRatingImproveContext = mode === 'rating' ? context : null;
@@ -2113,6 +2119,7 @@ function hideAiImproveModal() {
 }
 
 function showVoiceModeModal() {
+    hideTooltip(true);
     if (!voiceModeModal) return;
     voiceModeModal.classList.add('active');
 }
@@ -2123,6 +2130,7 @@ function hideVoiceModeModal() {
 }
 
 function showPromptHistoryModal() {
+    hideTooltip(true);
     if (!promptHistoryModal) return;
     renderPromptHistory();
     promptHistoryModal.classList.add('active');
@@ -2136,6 +2144,7 @@ function hidePromptHistoryModal() {
 // ============ SETTINGS MODAL FUNCTIONS ============
 
 function showSettingsModal() {
+    hideTooltip(true);
     const savedName = localStorage.getItem('managerName') || '';
     const userRole = localStorage.getItem('userRole') || 'user';
     
