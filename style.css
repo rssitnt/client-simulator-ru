@@ -3181,10 +3181,43 @@ body.light-theme .more-colors-popup {
     margin-top: 8px; /* Дополнительный отступ сверху */
 }
 
-.admin-panel {
-    margin-top: 18px;
-    padding-top: 16px;
+.admin-accordion {
+    margin-top: 14px;
+    padding-top: 12px;
     border-top: 1px solid #333;
+}
+
+.admin-accordion-trigger {
+    list-style: none;
+    cursor: pointer;
+    color: #bdbdbd;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    line-height: 1.2;
+    padding: 0;
+}
+
+.admin-accordion-trigger::-webkit-details-marker {
+    display: none;
+}
+
+.admin-accordion-trigger::after {
+    content: '▾';
+    color: #888;
+    transition: transform 0.2s ease;
+}
+
+.admin-accordion:not([open]) .admin-accordion-trigger::after {
+    transform: rotate(-90deg);
+}
+
+.admin-panel {
+    margin-top: 12px;
+    padding-top: 0;
+    border-top: none;
 }
 
 .admin-panel-header {
@@ -3483,8 +3516,20 @@ body.light-theme .btn-export:hover {
     color: #333;
 }
 
-body.light-theme .admin-panel {
+body.light-theme .admin-accordion {
     border-color: #ececec;
+}
+
+body.light-theme .admin-accordion-trigger {
+    color: #666;
+}
+
+body.light-theme .admin-accordion-trigger::after {
+    color: #777;
+}
+
+body.light-theme .admin-panel {
+    border-color: transparent;
 }
 
 body.light-theme .admin-panel-title {

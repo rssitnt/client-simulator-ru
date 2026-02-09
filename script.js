@@ -311,6 +311,7 @@ const exportMenu = document.getElementById('exportMenu');
 const exportPromptMenu = document.getElementById('exportPromptMenu');
 const exportChatSettingsMenu = document.getElementById('exportChatSettingsMenu');
 const exportPromptSettingsMenu = document.getElementById('exportPromptSettingsMenu');
+const adminPanelAccordion = document.getElementById('adminPanelAccordion');
 const adminPanel = document.getElementById('adminPanel');
 const adminRefreshBtn = document.getElementById('adminRefreshBtn');
 const adminUsersTableBody = document.getElementById('adminUsersTableBody');
@@ -1098,7 +1099,7 @@ async function flushActiveTime(force = false) {
     pendingActiveMs = 0;
     currentUser.activeMs = Math.max(0, Number(currentUser.activeMs) + increment);
 
-    if (isAdmin() && adminPanel?.style.display !== 'none') {
+    if (isAdmin() && adminPanelAccordion?.style.display !== 'none') {
         renderAdminUsersTable();
     }
     await patchUserRecord(currentUser.login, {
@@ -1204,11 +1205,16 @@ async function renderAdminUsersTable() {
     if (!adminPanel || !adminUsersTableBody) return;
 
     if (!isAdmin()) {
-        adminPanel.style.display = 'none';
+        if (adminPanelAccordion) {
+            adminPanelAccordion.style.display = 'none';
+            adminPanelAccordion.removeAttribute('open');
+        }
         return;
     }
 
-    adminPanel.style.display = '';
+    if (adminPanelAccordion) {
+        adminPanelAccordion.style.display = '';
+    }
     adminUsersTableBody.innerHTML = '<tr><td colspan="3" class="admin-empty">Загрузка...</td></tr>';
 
     const users = await listAllUserRecords();
@@ -1539,8 +1545,9 @@ function applyRoleRestrictions() {
     updatePromptHistoryButton();
     if (isAdminUser) {
         renderAdminUsersTable();
-    } else if (adminPanel) {
-        adminPanel.style.display = 'none';
+    } else if (adminPanelAccordion) {
+        adminPanelAccordion.style.display = 'none';
+        adminPanelAccordion.removeAttribute('open');
     }
 }
 
@@ -3221,10 +3228,14 @@ function showSettingsModal() {
     roleChangePasswordInput.value = '';
     roleChangeError.style.display = 'none';
 
+    if (adminPanelAccordion) {
+        adminPanelAccordion.removeAttribute('open');
+    }
+
     if (isAdmin()) {
         renderAdminUsersTable();
-    } else if (adminPanel) {
-        adminPanel.style.display = 'none';
+    } else if (adminPanelAccordion) {
+        adminPanelAccordion.style.display = 'none';
     }
 
     settingsModal.classList.add('active');
