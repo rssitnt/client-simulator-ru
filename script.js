@@ -1167,19 +1167,10 @@ function formatInviteExpiry(iso) {
 }
 
 function getAccessSourceLabel(login, user, invite) {
-    const labels = [];
-    if (user?.role === 'admin') {
-        labels.push('Админ');
-    } else if (isCorporateEmail(login)) {
-        labels.push('Корп. почта');
-    }
     if (invite) {
-        labels.push(invite.expiresAt ? `По ссылке до ${formatInviteExpiry(invite.expiresAt)}` : 'По ссылке');
+        return invite.expiresAt ? `По ссылке до ${formatInviteExpiry(invite.expiresAt)}` : 'По ссылке';
     }
-    if (!labels.length) {
-        labels.push('Локально');
-    }
-    return labels.join(' + ');
+    return 'по корп.почте';
 }
 
 function getAccessState(login, user, invite) {
