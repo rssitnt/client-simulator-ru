@@ -2541,10 +2541,19 @@ function updatePromptHistoryButton() {
     promptHistoryBtn.style.display = activeVariation ? '' : 'none';
 }
 
+const LOCAL_PROMPT_MARKER = '🔒';
+
+function stripLocalPromptMarker(name) {
+    return String(name || '')
+        .replace(/\(локальный\)/giu, ' ')
+        .replace(/🔒/gu, ' ')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+}
+
 function buildLocalPromptName(name) {
-    const baseName = (name || 'Локальный').trim();
-    if (/\(локальный\)$/i.test(baseName)) return baseName;
-    return `${baseName} (локальный)`;
+    const baseName = stripLocalPromptMarker(name) || 'Промпт';
+    return `${baseName} ${LOCAL_PROMPT_MARKER}`;
 }
 
 function getUniqueVariationName(role, baseName) {
@@ -2585,7 +2594,7 @@ function publishActiveLocalPrompt(role) {
     activeVariation.isLocal = false;
     activeVariation.name = getUniqueVariationName(
         role,
-        (activeVariation.name || '').replace(/\s*\(локальный\)$/i, '').trim() || 'Промпт'
+        stripLocalPromptMarker(activeVariation.name) || 'Промпт'
     );
     publicActiveIds[role] = activeVariation.id;
     saveLocalPromptsData();
@@ -2864,6 +2873,7 @@ function initPromptsData(firebaseData = {}) {
             return {
                 ...v,
                 id: uniqueId,
+                name: buildLocalPromptName(v.name),
                 isLocal: true
             };
         });
@@ -2964,7 +2974,7 @@ function renderVariations() {
                 e.stopPropagation();
                 const newName = prompt('Название промпта:', v.name);
                 if (newName && newName.trim()) {
-                    v.name = newName.trim();
+                    v.name = v.isLocal ? buildLocalPromptName(newName.trim()) : newName.trim();
                     renderVariations();
                     if (v.isLocal) {
                         saveLocalPromptsData();
