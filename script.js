@@ -224,6 +224,7 @@ const modalLoginInput = document.getElementById('modalLoginInput');
 const modalNameSubmit = document.getElementById('modalNameSubmit');
 const nameModalStep1 = document.getElementById('nameModalStep1');
 const modalPasswordInput = document.getElementById('modalPasswordInput');
+const togglePasswordVisibilityBtn = document.getElementById('togglePasswordVisibility');
 const authErrorText = document.getElementById('passwordError');
 const promptVariationsContainer = document.getElementById('promptVariations');
 
@@ -2460,6 +2461,17 @@ async function loadPrompts() {
 
 // ============ NAME MODAL ============
 
+function setPasswordVisibility(isVisible) {
+    if (!modalPasswordInput) return;
+    const visible = !!isVisible;
+    modalPasswordInput.type = visible ? 'text' : 'password';
+    if (!togglePasswordVisibilityBtn) return;
+    togglePasswordVisibilityBtn.classList.toggle('is-visible', visible);
+    const label = visible ? 'Скрыть пароль' : 'Показать пароль';
+    togglePasswordVisibilityBtn.setAttribute('aria-label', label);
+    togglePasswordVisibilityBtn.setAttribute('title', label);
+}
+
 function showNameModal() {
     if (!nameModal) return;
     nameModal.classList.add('active');
@@ -2475,6 +2487,7 @@ function showNameModal() {
     if (modalPasswordInput) {
         modalPasswordInput.value = '';
     }
+    setPasswordVisibility(false);
     setAuthError('');
     setTimeout(() => modalNameInput?.focus(), 100);
 }
@@ -2498,6 +2511,14 @@ if (modalNameSubmit) {
         }
     });
 });
+
+if (togglePasswordVisibilityBtn) {
+    togglePasswordVisibilityBtn.addEventListener('click', () => {
+        const nextVisible = modalPasswordInput?.type === 'password';
+        setPasswordVisibility(nextVisible);
+        modalPasswordInput?.focus();
+    });
+}
 
 // ============ AI IMPROVE MODAL ============
 
