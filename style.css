@@ -2885,8 +2885,31 @@ body.light-theme input:checked + .toggle-slider .sun {
     background: rgba(255, 255, 255, 0.05);
 }
 
+.btn-danger-subtle {
+    color: #ff7d7d;
+}
+
+.btn-danger-subtle:hover {
+    color: #ffd0d0;
+    background: rgba(255, 64, 64, 0.12);
+}
+
+.btn-danger-subtle:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
 body.light-theme .btn-change:hover {
     color: #333;
+}
+
+body.light-theme .btn-danger-subtle {
+    color: #c53030;
+}
+
+body.light-theme .btn-danger-subtle:hover {
+    color: #fff;
+    background: rgba(197, 48, 48, 0.9);
 }
 
 /* Theme & Color Section */

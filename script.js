@@ -289,6 +289,7 @@ const partnerInviteEmailInput = document.getElementById('partnerInviteEmailInput
 const partnerInviteRoleSelect = document.getElementById('partnerInviteRoleSelect');
 const partnerInviteDaysInput = document.getElementById('partnerInviteDaysInput');
 const partnerInviteAddBtn = document.getElementById('partnerInviteAddBtn');
+const closePartnerAccessBtn = document.getElementById('closePartnerAccessBtn');
 const partnerInvitesTableBody = document.getElementById('partnerInvitesTableBody');
 const instructionSelectEl = document.getElementById('instructionSelect');
 const panelsContainer = document.querySelector('.panels-container');
@@ -1283,6 +1284,30 @@ async function handleCreatePartnerInvite() {
     if (partnerInviteEmailInput) partnerInviteEmailInput.value = '';
     await renderPartnerInvitesTable();
     await renderAdminUsersTable();
+}
+
+async function handleClosePartnerAccess() {
+    if (!isAdmin()) return;
+    const invites = await listPartnerInvites();
+    const activeInvites = invites.filter((invite) => isPartnerInviteActive(invite));
+    if (!activeInvites.length) {
+        showCopyNotification('Активных партнерских доступов нет');
+        return;
+    }
+
+    const confirmed = confirm(`Закрыть доступ для ${activeInvites.length} партнеров?`);
+    if (!confirmed) return;
+
+    if (closePartnerAccessBtn) closePartnerAccessBtn.disabled = true;
+    try {
+        await Promise.all(
+            activeInvites.map((invite) => patchPartnerInvite(invite.login, { status: 'revoked' }))
+        );
+        showCopyNotification(`Доступ закрыт для ${activeInvites.length} партнеров`);
+        await renderPartnerInvitesTable();
+    } finally {
+        if (closePartnerAccessBtn) closePartnerAccessBtn.disabled = false;
+    }
 }
 
 async function handleAuthSubmit() {
@@ -3675,6 +3700,12 @@ if (adminRefreshBtn) {
 if (partnerInviteAddBtn) {
     partnerInviteAddBtn.addEventListener('click', () => {
         handleCreatePartnerInvite();
+    });
+}
+
+if (closePartnerAccessBtn) {
+    closePartnerAccessBtn.addEventListener('click', () => {
+        handleClosePartnerAccess();
     });
 }
 
