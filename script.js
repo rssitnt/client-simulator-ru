@@ -1179,7 +1179,7 @@ async function renderPartnerInvitesTable() {
         const actionCell = document.createElement('td');
         const actionBtn = document.createElement('button');
         actionBtn.className = 'btn-change';
-        actionBtn.textContent = activeNow ? 'Отозвать' : 'Активировать';
+        actionBtn.textContent = activeNow ? 'Закрыть доступ' : 'Активировать';
         actionBtn.addEventListener('click', async () => {
             actionBtn.disabled = true;
             const nextStatus = activeNow ? 'revoked' : 'active';
