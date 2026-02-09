@@ -180,16 +180,13 @@ body.light-theme .prompt-preview.drag-over {
 }
 
 body.light-theme .prompt-variation-chip {
-    background: linear-gradient(180deg, #f4f6fa 0%, #e8ecf4 100%);
-    border: 1px solid #d5dbe6;
-    color: #495062;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 6px 14px rgba(16, 24, 40, 0.08);
+    background: #f0f0f0;
+    color: #666;
 }
 
 body.light-theme .prompt-variation-chip.active {
-    background: linear-gradient(180deg, #eef2fb 0%, #e4e9f7 100%);
-    color: #2a3040;
-    border-color: #bfc8dc;
+    background: var(--color-accent);
+    color: #fff;
 }
 
 body.light-theme .markdown-toolbar {
@@ -378,15 +375,12 @@ body.light-theme .modal-close:hover {
 
 /* Кнопка добавления вариации промпта */
 body.light-theme .add-variation-btn {
-    color: #6d7588 !important;
-    border-color: #c3cada !important;
-    background: rgba(245, 247, 251, 0.9);
+    color: #666 !important;
 }
 
 body.light-theme .add-variation-btn:hover {
-    background: #edf1f8 !important;
-    color: #2a3040 !important;
-    border-color: #8d99b2 !important;
+    background: #e0e0e0 !important;
+    color: #1a1a1a !important;
 }
 
 /* Кнопка улучшения отзыва */
@@ -1553,100 +1547,91 @@ body.light-theme .dropdown-option.active {
 .prompt-variations-container {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
-    padding: 12px 16px 8px;
+    gap: 8px;
+    padding: 8px 16px;
     background: transparent;
     flex-shrink: 0;
     align-items: center;
-    min-height: 50px;
+    min-height: 34px;
 }
 
 .prompt-variation-chip {
-    min-height: 40px;
-    padding: 0 14px;
-    background: linear-gradient(180deg, #333844 0%, #242a33 100%);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 999px;
-    color: #c6cbd8;
-    font-size: 16px;
-    font-weight: 500;
+    padding: 4px 12px;
+    background: #1a1a1a;
+    border: none;
+    border-radius: 14px;
+    color: #888;
+    font-size: 12px;
     cursor: pointer;
     white-space: nowrap;
-    transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+    transition: all 0.2s;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     line-height: 1;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 6px 18px rgba(0,0,0,0.28);
 }
 
 .prompt-variation-chip .chip-name {
-    position: static;
-    top: 0;
+    position: relative;
+    top: -1px;
 }
 
 .prompt-variation-chip:hover {
-    background: linear-gradient(180deg, #3a4150 0%, #2a303b 100%);
-    color: #f0f3fa;
-    border-color: rgba(255, 255, 255, 0.22);
+    background: #252525;
+    color: #e0e0e0;
 }
 
 .prompt-variation-chip.active {
-    background: linear-gradient(180deg, #414857 0%, #2f3644 100%);
-    color: #f4f6fb;
-    border-color: rgba(255, 255, 255, 0.24);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 8px 22px rgba(0,0,0,0.34);
+    background: var(--color-accent);
+    color: #fff;
 }
 
 .prompt-variation-chip .delete-variation {
-    width: 22px;
-    height: 22px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: rgba(12, 15, 21, 0.42);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(0,0,0,0.25);
     color: inherit;
-    font-size: 16px;
-    font-weight: 400;
+    font-size: 12px;
+    font-weight: 500;
     line-height: 1;
     align-self: center;
     position: static;
-    margin-left: 6px;
-    margin-right: -2px;
-    opacity: 0.8;
+    margin-left: 4px;
+    margin-right: -3px;
+    opacity: 0.7;
     transform: none;
 }
 
 .prompt-variation-chip .delete-variation:hover {
     opacity: 1;
-    background: rgba(20, 24, 31, 0.7);
+    background: rgba(0,0,0,0.4);
 }
 
 .add-variation-btn {
-    width: 38px;
-    min-width: 38px;
-    height: 38px;
+    width: 22px;
+    min-width: 22px; /* Не сжимается */
+    height: 22px;
     border-radius: 50%;
-    border: 1px dashed #5f6677;
-    background: rgba(28, 33, 43, 0.68);
-    color: #8f97aa;
+    border: 1px dashed #444;
+    background: transparent;
+    color: #555;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     flex-shrink: 0;
-    transition: border-color 0.18s ease, color 0.18s ease, background 0.18s ease;
-    font-size: 20px;
-    font-weight: 300;
+    transition: all 0.2s;
+    font-size: 14px;
     line-height: 1;
 }
 
 .add-variation-btn:hover {
-    color: #e8ecf7;
-    border-color: #a2adc3;
-    background: rgba(37, 43, 56, 0.8);
+    color: var(--color-accent);
+    border-color: var(--color-accent);
 }
 
 /* Instruction content container */
@@ -2172,31 +2157,6 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
         flex-shrink: 0;
         min-height: 64px;
         height: 64px;
-    }
-
-    .prompt-variations-container {
-        padding: 10px 12px 6px;
-        gap: 8px;
-        min-height: 44px;
-    }
-
-    .prompt-variation-chip {
-        min-height: 34px;
-        padding: 0 12px;
-        font-size: 14px;
-    }
-
-    .prompt-variation-chip .delete-variation {
-        width: 20px;
-        height: 20px;
-        font-size: 14px;
-    }
-
-    .add-variation-btn {
-        width: 34px;
-        min-width: 34px;
-        height: 34px;
-        font-size: 18px;
     }
 
     #instructionsPanel .panel-header {
