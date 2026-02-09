@@ -3956,8 +3956,10 @@ themeToggle.addEventListener('change', () => {
 function setAccentColor(color) {
     // Вычисляем hover цвет (темнее на 15%)
     const hoverColor = adjustBrightness(color, -15);
+    const accentRgb = hexToRgb(color);
     document.documentElement.style.setProperty('--color-accent', color);
     document.documentElement.style.setProperty('--color-accent-hover', hoverColor);
+    document.documentElement.style.setProperty('--color-accent-rgb', accentRgb);
 }
 
 function adjustBrightness(hex, percent) {
@@ -3967,6 +3969,21 @@ function adjustBrightness(hex, percent) {
     const G = Math.max(0, Math.min(255, ((num >> 8) & 0x00FF) + amt));
     const B = Math.max(0, Math.min(255, (num & 0x0000FF) + amt));
     return '#' + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
+}
+
+function hexToRgb(hex) {
+    const cleanHex = (hex || '').trim().replace('#', '');
+    if (!/^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$/.test(cleanHex)) {
+        return '127, 150, 255';
+    }
+    const normalized = cleanHex.length === 3
+        ? cleanHex.split('').map(ch => ch + ch).join('')
+        : cleanHex;
+    const value = parseInt(normalized, 16);
+    const r = (value >> 16) & 255;
+    const g = (value >> 8) & 255;
+    const b = value & 255;
+    return `${r}, ${g}, ${b}`;
 }
 
 // Color presets
