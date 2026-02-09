@@ -230,10 +230,11 @@ body.light-theme #nameModal .auth-modal-content input:-webkit-autofill,
 body.light-theme #nameModal .auth-modal-content input:-webkit-autofill:hover,
 body.light-theme #nameModal .auth-modal-content input:-webkit-autofill:focus,
 body.light-theme #nameModal .auth-modal-content input:-webkit-autofill:active {
-    -webkit-text-fill-color: #1a1a1a;
-    -webkit-box-shadow: 0 0 0 1000px #f5f5f5 inset;
-    box-shadow: 0 0 0 1000px #f5f5f5 inset;
-    border: 1px solid #dddddd;
+    -webkit-text-fill-color: #1a1a1a !important;
+    -webkit-box-shadow: 0 0 0 1000px #f5f5f5 inset !important;
+    box-shadow: 0 0 0 1000px #f5f5f5 inset !important;
+    border: 1px solid #dddddd !important;
+    caret-color: #1a1a1a;
 }
 
 body.light-theme .auth-password-toggle {
@@ -243,6 +244,14 @@ body.light-theme .auth-password-toggle {
 body.light-theme .auth-password-toggle:hover {
     color: #222;
     background: rgba(0, 0, 0, 0.08);
+}
+
+body.light-theme #modalLoginInput,
+body.light-theme #modalLoginInput:-webkit-autofill,
+body.light-theme #modalLoginInput:-webkit-autofill:hover,
+body.light-theme #modalLoginInput:-webkit-autofill:focus,
+body.light-theme #modalLoginInput:-webkit-autofill:active {
+    background-color: #f5f5f5 !important;
 }
 
 /* Old settings styles removed */
@@ -2313,15 +2322,24 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
 }
 
 #nameModal {
+    position: fixed;
+    inset: 0;
+    width: 100dvw;
+    height: 100dvh;
     padding: 0;
     background: rgba(8, 8, 10, 0.96);
+    align-items: stretch;
+    justify-content: stretch;
 }
 
 #nameModal .auth-modal-content {
-    width: 100vw;
+    position: absolute;
+    inset: 0;
+    width: 100%;
     max-width: none;
-    height: 100vh;
-    border-radius: 0;
+    height: 100%;
+    border-radius: 0 !important;
+    margin: 0;
     padding: clamp(20px, 4vw, 44px);
     transform: none;
     transition: none;
@@ -2355,11 +2373,20 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
 #nameModal .auth-modal-content input:-webkit-autofill:hover,
 #nameModal .auth-modal-content input:-webkit-autofill:focus,
 #nameModal .auth-modal-content input:-webkit-autofill:active {
-    -webkit-text-fill-color: #e0e0e0;
-    -webkit-box-shadow: 0 0 0 1000px #1a1a1a inset;
-    box-shadow: 0 0 0 1000px #1a1a1a inset;
-    border: 1px solid #2a2a2a;
-    transition: background-color 99999s ease-in-out 0s;
+    -webkit-text-fill-color: #e0e0e0 !important;
+    -webkit-box-shadow: 0 0 0 1000px #1a1a1a inset !important;
+    box-shadow: 0 0 0 1000px #1a1a1a inset !important;
+    border: 1px solid #2a2a2a !important;
+    caret-color: #e0e0e0;
+    transition: background-color 99999s ease-in-out 0s !important;
+}
+
+#modalLoginInput,
+#modalLoginInput:-webkit-autofill,
+#modalLoginInput:-webkit-autofill:hover,
+#modalLoginInput:-webkit-autofill:focus,
+#modalLoginInput:-webkit-autofill:active {
+    background-color: #1a1a1a !important;
 }
 
 .auth-password-wrap {
@@ -2372,13 +2399,26 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
     padding-right: 46px;
 }
 
+#modalPasswordInput::-ms-reveal,
+#modalPasswordInput::-ms-clear {
+    display: none;
+}
+
+#modalPasswordInput::-webkit-credentials-auto-fill-button,
+#modalPasswordInput::-webkit-contacts-auto-fill-button,
+#modalPasswordInput::-webkit-caps-lock-indicator {
+    visibility: hidden;
+    display: none !important;
+    pointer-events: none;
+}
+
 .auth-password-toggle {
     position: absolute;
     right: 8px;
     top: 50%;
     transform: translateY(-50%);
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
     border: none;
     background: transparent;
     color: #8d8d8d;
@@ -2388,11 +2428,20 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
     align-items: center;
     justify-content: center;
     padding: 0;
+    z-index: 3;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .auth-password-toggle svg {
-    width: 18px;
-    height: 18px;
+    width: 19px;
+    height: 19px;
+}
+
+.auth-password-toggle .icon-eye,
+.auth-password-toggle .icon-eye-off {
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .auth-password-toggle:hover {

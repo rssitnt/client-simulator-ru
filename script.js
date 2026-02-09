@@ -2469,7 +2469,7 @@ function setPasswordVisibility(isVisible) {
     togglePasswordVisibilityBtn.classList.toggle('is-visible', visible);
     const label = visible ? 'Скрыть пароль' : 'Показать пароль';
     togglePasswordVisibilityBtn.setAttribute('aria-label', label);
-    togglePasswordVisibilityBtn.setAttribute('title', label);
+    togglePasswordVisibilityBtn.removeAttribute('title');
 }
 
 function showNameModal() {
