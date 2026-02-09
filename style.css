@@ -1005,10 +1005,6 @@ body.attestation-mode .btn-attestation-exit {
     font-weight: 600;
 }
 
-.btn-start::before {
-    content: none !important;
-}
-
 .btn-start:hover {
     background: #2a2a2a;
     color: #f1f1f1;
