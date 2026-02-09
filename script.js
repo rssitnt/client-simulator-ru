@@ -175,19 +175,35 @@ Sales / ЗИП: если клиент чётко знает конкретную
 Действия для CRM (следующие шаги: отправить КП, уточнить данные, записать на диагностику и т.д.).
 Метаданные (распознанный статус клиента, является ли торгующей организацией, применялась ли фильтрация торгующих организаций).`;
 
-// Generate unique session ID
-let baseSessionId = localStorage.getItem('sessionId');
-if (!baseSessionId) {
-    baseSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    localStorage.setItem('sessionId', baseSessionId);
+function generateSessionId() {
+    return 'session_' + Date.now() + '_' + Math.random().toString(36).slice(2, 11);
 }
-let clientSessionId = baseSessionId + '_client';
-let managerSessionId = baseSessionId + '_manager';
-let raterSessionId = baseSessionId + '_rater';
+
+// Generate unique session ID
+let baseSessionId = localStorage.getItem('sessionId') || generateSessionId();
+let clientSessionId = '';
+let managerSessionId = '';
+let raterSessionId = '';
+
+function refreshSessionIds(sessionId = baseSessionId) {
+    baseSessionId = String(sessionId || generateSessionId());
+    localStorage.setItem('sessionId', baseSessionId);
+    clientSessionId = `${baseSessionId}_client`;
+    managerSessionId = `${baseSessionId}_manager`;
+    raterSessionId = `${baseSessionId}_rater`;
+}
+
+refreshSessionIds(baseSessionId);
 
 const TEXT_EXTENSIONS = ['.txt', '.md', '.json', '.xml', '.csv', '.html', '.htm', '.rtf', '.log'];
 const ENABLE_AGENT_LOGS = false;
+const ENABLE_DEBUG_LOGS = false;
 const AGENT_LOG_WEBHOOK_URL = 'http://127.0.0.1:7243/ingest/987d1d6f-727d-4fc5-a54f-c42484f79884';
+
+function debugLog(...args) {
+    if (!ENABLE_DEBUG_LOGS) return;
+    console.log(...args);
+}
 
 function agentLog(message, dataFactory, meta = {}) {
     if (!ENABLE_AGENT_LOGS) return;
@@ -209,21 +225,21 @@ function agentLog(message, dataFactory, meta = {}) {
 
 // Utility function for fetch with timeout
 async function fetchWithTimeout(url, options = {}, timeoutMs = 300000) {
-    console.log(`[Fetch] Starting request to: ${url.substring(0, 50)}... with timeout: ${timeoutMs/1000}s`);
+    const requestUrl = typeof url === 'string' ? url : String(url?.url || url || '');
+    debugLog(`[Fetch] Starting request to: ${requestUrl.slice(0, 50)}... with timeout: ${timeoutMs/1000}s`);
     const startTime = Date.now();
-    
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
     try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-        
         const response = await fetch(url, {
             ...options,
             signal: controller.signal
         });
-        
-        clearTimeout(timeoutId);
+
         const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-        console.log(`[Fetch] Request completed in ${duration}s`);
+        debugLog(`[Fetch] Request completed in ${duration}s`);
         return response;
         
     } catch (error) {
@@ -234,6 +250,8 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 300000) {
             throw new Error(`Таймаут запроса (${timeoutMs/1000}с). Проверьте n8n workflow.`);
         }
         throw error;
+    } finally {
+        clearTimeout(timeoutId);
     }
 }
 
@@ -1576,7 +1594,7 @@ function applyRoleRestrictions() {
     document.body.classList.toggle('user-mode', !isAdminUser);
     
     if (!isAdminUser) {
-        console.log('User mode: Prompts are read-only');
+        debugLog('User mode: Prompts are read-only');
         
         // Disable all prompt textareas
         const promptTextareas = document.querySelectorAll('.prompt-editor');
@@ -1624,7 +1642,7 @@ function applyRoleRestrictions() {
         }
         
     } else {
-        console.log('Admin mode: Full editing access');
+        debugLog('Admin mode: Full editing access');
         if (exportPromptSettings) {
             exportPromptSettings.style.display = '';
         }
@@ -2134,7 +2152,7 @@ function unescapeMarkdown(text) {
 }
 
 function generateId() {
-    return 'var_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+    return 'var_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
 }
 
 function getPromptOwnerKey() {
@@ -2836,7 +2854,7 @@ function savePromptHistory() {
     localStorage.setItem('promptHistory', JSON.stringify(promptHistory));
     if (db) {
         set(ref(db, 'prompt_history'), promptHistory)
-            .then(() => console.log('Prompt history synced'))
+            .then(() => debugLog('Prompt history synced'))
             .catch(e => console.error('Failed to sync history:', e));
     }
 }
@@ -3087,7 +3105,7 @@ function savePromptsToFirebaseNow() {
     }
 
     set(ref(db, 'prompts'), payload)
-        .then(() => console.log('Prompts synced to Firebase'))
+        .then(() => debugLog('Prompts synced to Firebase'))
         .catch(e => console.error('Failed to sync:', e));
 }
 
@@ -3101,7 +3119,7 @@ async function loadPrompts() {
         showNameModal();
     } else {
         hideNameModal();
-        console.log(`Welcome back, ${currentUser?.fio || 'user'} (${selectedRole})`);
+        debugLog(`Welcome back, ${currentUser?.fio || 'user'} (${selectedRole})`);
     }
 
     if (db) {
@@ -3114,18 +3132,18 @@ async function loadPrompts() {
                     { hasData: !!data, isUserEditing },
                     { location: 'script.js:loadPrompts.onValue', hypothesisId: 'C' }
                 );
-                console.log('Firebase data received:', data);
+                debugLog('Firebase data received:', data);
                 
                 // Skip update if user is currently editing
                 if (isUserEditing) {
-                    console.log('Skipping Firebase update - user is editing');
+                    debugLog('Skipping Firebase update - user is editing');
                     return;
                 }
                 
                 // Skip if data hasn't changed
                 const dataStr = JSON.stringify(data);
                 if (lastFirebaseData === dataStr) {
-                    console.log('Skipping Firebase update - data unchanged');
+                    debugLog('Skipping Firebase update - data unchanged');
                     return;
                 }
                 lastFirebaseData = dataStr;
@@ -3447,7 +3465,7 @@ async function improvePromptWithAI() {
             data = JSON.parse(responseText);
         } catch (e) {
             // If response is not JSON, assume it's the raw text of the prompt
-            console.log('Response is not JSON, treating as raw text');
+            debugLog('Response is not JSON, treating as raw text');
             data = { output: responseText };
         }
 
@@ -3950,11 +3968,7 @@ function clearChat() {
     unlockDialogInput();
     rateChatBtn.classList.remove('rated');
     
-    baseSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    localStorage.setItem('sessionId', baseSessionId);
-    clientSessionId = baseSessionId + '_client';
-    managerSessionId = baseSessionId + '_manager';
-    raterSessionId = baseSessionId + '_rater';
+    refreshSessionIds(generateSessionId());
     
     chatMessages.innerHTML = `
         <div id="startConversation" class="start-conversation">
@@ -4045,11 +4059,7 @@ async function startConversationHandler() {
     const systemPrompt = validatePromptBeforeWebhook('client', systemPromptInput.value);
     if (!systemPrompt) return;
 
-    baseSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    localStorage.setItem('sessionId', baseSessionId);
-    clientSessionId = baseSessionId + '_client';
-    managerSessionId = baseSessionId + '_manager';
-    raterSessionId = baseSessionId + '_rater';
+    refreshSessionIds(generateSessionId());
     conversationHistory = [];
     lastRating = null;
     updatePromptLock();
@@ -5048,7 +5058,7 @@ const syncWYSIWYGDebounced = debounce(function(previewElement, textarea, callbac
     clearTimeout(editingTimeout);
     editingTimeout = setTimeout(() => {
         isUserEditing = false;
-        console.log('isUserEditing set to false (timeout)');
+        debugLog('isUserEditing set to false (timeout)');
     }, 5000); // Increased to 5s to prevent race conditions with Firebase echo
 }, 300);
         
