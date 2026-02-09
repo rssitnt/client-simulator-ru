@@ -448,18 +448,16 @@ function isValidPassword(value) {
 }
 
 function normalizeRole(value) {
-    return value === 'admin' || value === 'partner' ? value : 'user';
+    return value === 'admin' ? 'admin' : 'user';
 }
 
 function getRoleLabelUi(role) {
     if (role === 'admin') return 'Админ';
-    if (role === 'partner') return 'Партнёр';
     return 'Юзер';
 }
 
 function getRoleIcon(role) {
     if (role === 'admin') return '🔑';
-    if (role === 'partner') return '🤝';
     return '👤';
 }
 
@@ -667,7 +665,7 @@ function normalizePartnerInvite(raw, loginFallback = '') {
     if (!raw || typeof raw !== 'object') return null;
     const login = normalizeLogin(raw.login || raw.email || loginFallback);
     if (!isValidLogin(login)) return null;
-    const role = raw.role === 'partner' ? 'partner' : 'user';
+    const role = 'user';
     const status = raw.status === 'revoked' ? 'revoked' : 'active';
     return {
         login,
@@ -745,7 +743,7 @@ async function patchPartnerInvite(login, patch = {}) {
     const sanitizedPatch = { ...patch };
 
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'role')) {
-        sanitizedPatch.role = sanitizedPatch.role === 'partner' ? 'partner' : 'user';
+        sanitizedPatch.role = 'user';
     }
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'status')) {
         sanitizedPatch.status = sanitizedPatch.status === 'revoked' ? 'revoked' : 'active';
@@ -767,7 +765,7 @@ async function patchPartnerInvite(login, patch = {}) {
 
     const localStore = loadLocalPartnerInvitesStore();
     const merged = {
-        ...(localStore[key] || { login: normalizedLogin, role: 'partner', status: 'active' }),
+        ...(localStore[key] || { login: normalizedLogin, role: 'user', status: 'active' }),
         ...sanitizedPatch,
         login: normalizedLogin
     };
@@ -818,7 +816,7 @@ async function resolveAccessPolicy(login, userRecord = null) {
     if (isPartnerInviteActive(invite)) {
         return {
             type: 'partner',
-            role: invite.role === 'partner' ? 'partner' : 'user',
+            role: 'user',
             invite
         };
     }
@@ -1241,7 +1239,6 @@ async function renderAdminUsersTable() {
         roleSelect.className = 'admin-role-select';
         roleSelect.innerHTML = `
             <option value="user">Юзер</option>
-            <option value="partner">Партнёр</option>
             <option value="admin">Админ</option>
         `;
         roleSelect.value = normalizeRole(user.role);
