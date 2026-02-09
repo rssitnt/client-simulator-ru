@@ -22,6 +22,11 @@ const RATE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/rate-manager';
 const ATTESTATION_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/certification';
 const MANAGER_ASSISTANT_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/manager-simulator';
 const AI_IMPROVE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/prompt-enchancement';
+const ATTESTATION_QUEUE_STORAGE_KEY = 'attestationQueue:v1';
+const ATTESTATION_SEND_ATTEMPTS = 3;
+const ATTESTATION_QUEUE_MAX_FAILURES = 8;
+const ATTESTATION_SEND_RETRY_BASE_MS = 800;
+const ATTESTATION_QUEUE_RETRY_DELAY_MS = 12000;
 
 const RATER_PROMPT_VERSION = '2025-01-30';
 const DEFAULT_RATER_PROMPT = `РОЛЬ
@@ -339,6 +344,9 @@ let recognition = null;
 let isRecording = false;
 let isSpeechRecognitionAvailable = false;
 let reratePromptElement = null;
+let attestationQueue = [];
+let isAttestationQueueFlushInProgress = false;
+let attestationQueueRetryTimer = null;
 let publicActiveIds = {
     client: null,
     manager: null,
@@ -2926,6 +2934,201 @@ function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function buildAttestationRequestId() {
+    return `attestation_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizeAttestationQueueItem(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const dialog = String(raw.dialog || '').trim();
+    const rating = String(raw.rating || '').trim();
+    if (!dialog || !rating) return null;
+    return {
+        id: typeof raw.id === 'string' && raw.id ? raw.id : buildAttestationRequestId(),
+        requestId: typeof raw.requestId === 'string' && raw.requestId ? raw.requestId : (typeof raw.id === 'string' && raw.id ? raw.id : buildAttestationRequestId()),
+        createdAt: typeof raw.createdAt === 'string' && raw.createdAt ? raw.createdAt : new Date().toISOString(),
+        managerName: typeof raw.managerName === 'string' ? raw.managerName : '',
+        dialog,
+        rating,
+        clientPrompt: typeof raw.clientPrompt === 'string' ? raw.clientPrompt : '',
+        managerPrompt: typeof raw.managerPrompt === 'string' ? raw.managerPrompt : '',
+        raterPrompt: typeof raw.raterPrompt === 'string' ? raw.raterPrompt : '',
+        sessionId: typeof raw.sessionId === 'string' ? raw.sessionId : '',
+        failures: Number.isFinite(raw.failures) ? Math.max(0, raw.failures) : 0,
+        lastError: typeof raw.lastError === 'string' ? raw.lastError : '',
+        lastTriedAt: typeof raw.lastTriedAt === 'string' ? raw.lastTriedAt : null
+    };
+}
+
+function saveAttestationQueue() {
+    try {
+        if (!attestationQueue.length) {
+            localStorage.removeItem(ATTESTATION_QUEUE_STORAGE_KEY);
+            return;
+        }
+        localStorage.setItem(ATTESTATION_QUEUE_STORAGE_KEY, JSON.stringify(attestationQueue));
+    } catch (error) {
+        console.error('Failed to persist attestation queue:', error);
+    }
+}
+
+function loadAttestationQueue() {
+    try {
+        const raw = localStorage.getItem(ATTESTATION_QUEUE_STORAGE_KEY);
+        if (!raw) {
+            attestationQueue = [];
+            return;
+        }
+        const parsed = JSON.parse(raw);
+        const normalized = Array.isArray(parsed)
+            ? parsed.map(normalizeAttestationQueueItem).filter(Boolean)
+            : [];
+        attestationQueue = normalized;
+        if (normalized.length !== (Array.isArray(parsed) ? parsed.length : 0)) {
+            saveAttestationQueue();
+        }
+    } catch (error) {
+        console.error('Failed to load attestation queue:', error);
+        attestationQueue = [];
+    }
+}
+
+function enqueueAttestationJob(payload) {
+    const normalized = normalizeAttestationQueueItem(payload);
+    if (!normalized) return null;
+    attestationQueue.push(normalized);
+    saveAttestationQueue();
+    return normalized;
+}
+
+function scheduleAttestationQueueRetry(delayMs = ATTESTATION_QUEUE_RETRY_DELAY_MS) {
+    if (attestationQueueRetryTimer) return;
+    attestationQueueRetryTimer = setTimeout(() => {
+        attestationQueueRetryTimer = null;
+        flushAttestationQueue();
+    }, Math.max(0, delayMs));
+}
+
+function clearAttestationQueueRetryTimer() {
+    if (!attestationQueueRetryTimer) return;
+    clearTimeout(attestationQueueRetryTimer);
+    attestationQueueRetryTimer = null;
+}
+
+function isRetryableAttestationError(error) {
+    const status = Number(error?.httpStatus || 0);
+    if (status === 408 || status === 425 || status === 429 || status >= 500) return true;
+    const message = String(error?.message || '').toLowerCase();
+    return (
+        message.includes('failed to fetch') ||
+        message.includes('networkerror') ||
+        message.includes('timeout') ||
+        message.includes('таймаут') ||
+        message.includes('network request failed')
+    );
+}
+
+async function sendAttestationJobWithRetry(job, maxAttempts = ATTESTATION_SEND_ATTEMPTS) {
+    const { fileName, fileBase64, fileMime } = await buildAttestationDocxPayload(job.dialog, job.rating, {
+        managerName: job.managerName,
+        timestamp: job.createdAt
+    });
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+            const response = await fetchWithTimeout(ATTESTATION_WEBHOOK_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    dialog: job.dialog,
+                    rating: job.rating,
+                    clientPrompt: job.clientPrompt,
+                    managerPrompt: job.managerPrompt,
+                    raterPrompt: job.raterPrompt,
+                    sessionId: job.sessionId,
+                    mode: 'attestation',
+                    requestId: job.requestId,
+                    attempt,
+                    sentAt: new Date().toISOString(),
+                    queuedAt: job.createdAt,
+                    fileName,
+                    fileBase64,
+                    fileMime
+                })
+            });
+
+            if (!response.ok) {
+                const err = new Error(`HTTP ${response.status}`);
+                err.httpStatus = response.status;
+                throw err;
+            }
+            return true;
+        } catch (error) {
+            lastError = error;
+            if (attempt >= maxAttempts || !isRetryableAttestationError(error)) {
+                throw lastError;
+            }
+            console.warn(`Attestation webhook attempt ${attempt}/${maxAttempts} failed, retrying...`, error);
+            await delay(ATTESTATION_SEND_RETRY_BASE_MS * attempt);
+        }
+    }
+
+    throw lastError || new Error('Не удалось отправить отчет аттестации');
+}
+
+async function flushAttestationQueue(options = {}) {
+    const { notifySuccess = false } = options;
+    if (!ATTESTATION_WEBHOOK_URL) return;
+    if (isAttestationQueueFlushInProgress) return;
+    if (!attestationQueue.length) return;
+    if (typeof navigator !== 'undefined' && navigator && navigator.onLine === false) {
+        scheduleAttestationQueueRetry();
+        return;
+    }
+
+    isAttestationQueueFlushInProgress = true;
+    clearAttestationQueueRetryTimer();
+    let deliveredCount = 0;
+    let shouldRetryLater = false;
+    let retryDelayMs = ATTESTATION_QUEUE_RETRY_DELAY_MS;
+
+    try {
+        while (attestationQueue.length > 0) {
+            const job = attestationQueue[0];
+            try {
+                await sendAttestationJobWithRetry(job, ATTESTATION_SEND_ATTEMPTS);
+                attestationQueue.shift();
+                saveAttestationQueue();
+                deliveredCount += 1;
+            } catch (error) {
+                const retryable = isRetryableAttestationError(error);
+                job.failures = (Number(job.failures) || 0) + 1;
+                job.lastError = String(error?.message || error || 'Unknown error');
+                job.lastTriedAt = new Date().toISOString();
+                saveAttestationQueue();
+                if (!retryable) {
+                    console.warn('Attestation send returned non-retryable error, will retry later:', error);
+                }
+                if (job.failures >= ATTESTATION_QUEUE_MAX_FAILURES) {
+                    retryDelayMs = Math.max(retryDelayMs, 30000);
+                }
+                shouldRetryLater = true;
+                break;
+            }
+        }
+    } finally {
+        isAttestationQueueFlushInProgress = false;
+    }
+
+    if (deliveredCount > 0 && notifySuccess) {
+        showCopyNotification(deliveredCount === 1 ? 'Отчет отправлен в Telegram' : 'Отчеты отправлены в Telegram');
+    }
+    if (shouldRetryLater && attestationQueue.length > 0) {
+        scheduleAttestationQueueRetry(retryDelayMs);
+    }
+}
+
 function isRetryableRatingError(error) {
     const status = Number(error?.httpStatus || 0);
     if (status === 408 || status === 429 || status >= 500) return true;
@@ -3097,42 +3300,39 @@ async function sendAttestationResult(dialogText, ratingText) {
         console.warn('ATTESTATION_WEBHOOK_URL is not set');
         return;
     }
-    try {
-        const { fileName, fileBase64, fileMime } = await buildAttestationDocxPayload(dialogText, ratingText);
-        const payload = {
-            dialog: dialogText.trim(),
-            rating: ratingText,
-            clientPrompt: getActiveContent('client'),
-            managerPrompt: getActiveContent('manager'),
-            raterPrompt: getActiveContent('rater'),
-            sessionId: raterSessionId,
-            mode: 'attestation',
-            fileName,
-            fileBase64,
-            fileMime
-        };
-        showCopyNotification('Отправляю отчет в Telegram...');
-        try {
-            await fetchWithTimeout(ATTESTATION_WEBHOOK_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            showCopyNotification('Отчет отправлен в Telegram');
-            return;
-        } catch (primaryError) {
-            console.warn('Attestation primary send failed, trying fallback:', primaryError);
-        }
-        await fetch(ATTESTATION_WEBHOOK_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify(payload)
-        });
-        showCopyNotification('Отчет отправлен (без подтверждения)');
-    } catch (error) {
-        console.error('Attestation webhook error:', error);
+    const dialog = String(dialogText || '').trim();
+    const rating = String(ratingText || '').trim();
+    if (!dialog || !rating) {
+        console.warn('Attestation payload is empty, skipping send');
+        return;
+    }
+
+    const requestId = buildAttestationRequestId();
+    const job = enqueueAttestationJob({
+        id: requestId,
+        requestId,
+        createdAt: new Date().toISOString(),
+        managerName: localStorage.getItem('managerName') || '',
+        dialog,
+        rating,
+        clientPrompt: getActiveContent('client'),
+        managerPrompt: getActiveContent('manager'),
+        raterPrompt: getActiveContent('rater'),
+        sessionId: raterSessionId
+    });
+
+    if (!job) {
         showCopyNotification('Ошибка отправки отчета');
+        return;
+    }
+
+    showCopyNotification('Отправляю отчет в Telegram...');
+    await flushAttestationQueue({ notifySuccess: true });
+
+    const stillPending = attestationQueue.some(item => item.id === job.id);
+    if (stillPending) {
+        showCopyNotification('Отчет в очереди. Повторю отправку автоматически.');
+        scheduleAttestationQueueRetry();
     }
 }
 
@@ -3155,7 +3355,7 @@ function sanitizeFileNamePart(value) {
         .trim();
 }
 
-async function buildAttestationDocxPayload(dialogText, ratingText) {
+async function buildAttestationDocxPayload(dialogText, ratingText, options = {}) {
     if (typeof docx === 'undefined') {
         throw new Error('docx library not loaded');
     }
@@ -3184,8 +3384,9 @@ async function buildAttestationDocxPayload(dialogText, ratingText) {
     const doc = new Document({ sections: [{ properties: {}, children }] });
     const blob = await Packer.toBlob(doc);
     const fileBase64 = await blobToBase64(blob);
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const rawName = localStorage.getItem('managerName') || '';
+    const timestampSource = options.timestamp || new Date().toISOString();
+    const timestamp = timestampSource.replace(/[:.]/g, '-');
+    const rawName = options.managerName || localStorage.getItem('managerName') || '';
     const safeName = sanitizeFileNamePart(rawName) || 'user';
     return {
         fileName: `attestation_${safeName}_${timestamp}.docx`,
@@ -4206,12 +4407,23 @@ document.querySelectorAll('.toolbar-btn').forEach(btn => {
 
 // ============ INITIALIZATION ============
 
+loadAttestationQueue();
 loadPrompts();
 initSpeechRecognition();
 userInput.focus();
 autoResizeTextarea(userInput);
 prepareCustomTooltips();
 initCustomTooltipLayer();
+
+if (attestationQueue.length > 0) {
+    scheduleAttestationQueueRetry(600);
+}
+
+window.addEventListener('online', () => {
+    if (!attestationQueue.length) return;
+    showCopyNotification('Связь восстановлена. Повторяю отправку отчетов...');
+    flushAttestationQueue();
+});
 
 setupDragAndDrop(systemPromptInput);
 setupDragAndDrop(managerPromptInput);
