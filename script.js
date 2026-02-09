@@ -319,8 +319,6 @@ const adminUsersTableBody = document.getElementById('adminUsersTableBody');
 const partnerInviteEmailInput = document.getElementById('partnerInviteEmailInput');
 const partnerInviteDaysInput = document.getElementById('partnerInviteDaysInput');
 const partnerInviteAddBtn = document.getElementById('partnerInviteAddBtn');
-const closePartnerAccessBtn = document.getElementById('closePartnerAccessBtn');
-const partnerInvitesTableBody = document.getElementById('partnerInvitesTableBody');
 const instructionSelectEl = document.getElementById('instructionSelect');
 const panelsContainer = document.querySelector('.panels-container');
 const instructionsPanelElement = document.getElementById('instructionsPanel');
@@ -1168,59 +1166,84 @@ function formatInviteExpiry(iso) {
     return date.toLocaleDateString('ru-RU');
 }
 
-async function renderPartnerInvitesTable() {
-    if (!partnerInvitesTableBody) return;
-    if (!isAdmin()) {
-        partnerInvitesTableBody.innerHTML = '<tr><td colspan="5" class="admin-empty">Нет доступа</td></tr>';
-        return;
+function getAccessSourceLabel(login, user, invite) {
+    const labels = [];
+    if (user?.role === 'admin') {
+        labels.push('Админ');
+    } else if (isCorporateEmail(login)) {
+        labels.push('Корп. почта');
+    }
+    if (invite) {
+        labels.push(invite.expiresAt ? `По ссылке до ${formatInviteExpiry(invite.expiresAt)}` : 'По ссылке');
+    }
+    if (!labels.length) {
+        labels.push('Локально');
+    }
+    return labels.join(' + ');
+}
+
+function getAccessState(login, user, invite) {
+    const blockedByUser = !!user?.isBlocked;
+    const inviteExists = !!invite;
+    const inviteActive = inviteExists ? isPartnerInviteActive(invite) : false;
+    const isAdminUser = user?.role === 'admin';
+    const isCorporate = isCorporateEmail(login);
+
+    const active = !blockedByUser && (isAdminUser || isCorporate || inviteActive);
+    let label = active ? 'Активен' : 'Закрыт';
+    if (!active && !blockedByUser && !inviteExists && !isCorporate && !isAdminUser) {
+        label = 'Нет доступа';
     }
 
-    const invites = await listPartnerInvites();
-    if (!invites.length) {
-        partnerInvitesTableBody.innerHTML = '<tr><td colspan="5" class="admin-empty">Инвайтов нет</td></tr>';
-        return;
+    return {
+        active,
+        label,
+        blockedByUser,
+        inviteExists,
+        inviteActive,
+        isAdminUser,
+        isCorporate
+    };
+}
+
+async function toggleAccessForLogin(login, nextActive, user, invite) {
+    const nowIso = new Date().toISOString();
+    const isAdminUser = user?.role === 'admin';
+    const isCorporate = isCorporateEmail(login);
+
+    if (nextActive && !isCorporate && !isAdminUser && !invite) {
+        throw new Error('Для этого email сначала выдайте доступ по ссылке.');
     }
 
-    partnerInvitesTableBody.innerHTML = '';
-    invites.forEach((invite) => {
-        const row = document.createElement('tr');
-
-        const emailCell = document.createElement('td');
-        emailCell.textContent = invite.login;
-
-        const roleCell = document.createElement('td');
-        roleCell.textContent = 'По ссылке';
-
-        const expiresCell = document.createElement('td');
-        expiresCell.className = 'admin-time';
-        expiresCell.textContent = formatInviteExpiry(invite.expiresAt);
-
-        const statusCell = document.createElement('td');
-        const activeNow = isPartnerInviteActive(invite);
-        statusCell.textContent = activeNow ? 'Активен' : 'Неактивен';
-
-        const actionCell = document.createElement('td');
-        const actionBtn = document.createElement('button');
-        actionBtn.className = 'btn-change';
-        actionBtn.textContent = activeNow ? 'Закрыть доступ' : 'Активировать';
-        actionBtn.addEventListener('click', async () => {
-            actionBtn.disabled = true;
-            const nextStatus = activeNow ? 'revoked' : 'active';
-            await patchPartnerInvite(invite.login, {
-                status: nextStatus
-            });
-            actionBtn.disabled = false;
-            renderPartnerInvitesTable();
+    if (user) {
+        await patchUserRecord(login, {
+            isBlocked: !nextActive,
+            blockedAt: nextActive ? null : nowIso,
+            failedLoginAttempts: nextActive ? 0 : user.failedLoginAttempts,
+            lastSeenAt: nowIso
         });
-        actionCell.appendChild(actionBtn);
+    }
 
-        row.appendChild(emailCell);
-        row.appendChild(roleCell);
-        row.appendChild(expiresCell);
-        row.appendChild(statusCell);
-        row.appendChild(actionCell);
-        partnerInvitesTableBody.appendChild(row);
-    });
+    if (invite) {
+        await patchPartnerInvite(login, {
+            status: nextActive ? 'active' : 'revoked'
+        });
+    }
+
+    if (currentUser && currentUser.login === login) {
+        const refreshedUser = await getUserRecordByLogin(login);
+        if (refreshedUser) {
+            currentUser = normalizeUserRecord({
+                ...currentUser,
+                ...refreshedUser
+            }, login) || currentUser;
+            selectedRole = currentUser.role;
+            localStorage.setItem(USER_ROLE_KEY, currentUser.role);
+            if (currentRoleDisplay) {
+                currentRoleDisplay.textContent = getRoleLabelUi(currentUser.role);
+            }
+        }
+    }
 }
 
 async function renderAdminUsersTable() {
@@ -1237,63 +1260,115 @@ async function renderAdminUsersTable() {
     if (adminPanelAccordion) {
         adminPanelAccordion.style.display = '';
     }
-    adminUsersTableBody.innerHTML = '<tr><td colspan="3" class="admin-empty">Загрузка...</td></tr>';
+    adminUsersTableBody.innerHTML = '<tr><td colspan="6" class="admin-empty">Загрузка...</td></tr>';
 
-    const users = await listAllUserRecords();
-    if (!users.length) {
-        adminUsersTableBody.innerHTML = '<tr><td colspan="3" class="admin-empty">Пользователи не найдены</td></tr>';
+    const [users, invites] = await Promise.all([
+        listAllUserRecords(),
+        listPartnerInvites()
+    ]);
+    const usersByLogin = new Map(users.map((user) => [user.login, user]));
+    const invitesByLogin = new Map(invites.map((invite) => [invite.login, invite]));
+    const allLogins = Array.from(new Set([
+        ...usersByLogin.keys(),
+        ...invitesByLogin.keys()
+    ])).sort((a, b) => a.localeCompare(b));
+
+    if (!allLogins.length) {
+        adminUsersTableBody.innerHTML = '<tr><td colspan="6" class="admin-empty">Пользователи не найдены</td></tr>';
         return;
     }
 
     adminUsersTableBody.innerHTML = '';
-    users.forEach((user) => {
+    allLogins.forEach((login) => {
+        const user = usersByLogin.get(login) || null;
+        const invite = invitesByLogin.get(login) || null;
+        const accessState = getAccessState(login, user, invite);
         const row = document.createElement('tr');
 
         const loginCell = document.createElement('td');
-        loginCell.textContent = user.login;
+        loginCell.textContent = login;
 
         const roleCell = document.createElement('td');
-        const roleSelect = document.createElement('select');
-        roleSelect.className = 'admin-role-select';
-        roleSelect.innerHTML = `
-            <option value="user">Юзер</option>
-            <option value="admin">Админ</option>
-        `;
-        roleSelect.value = normalizeRole(user.role);
-        roleSelect.addEventListener('change', async () => {
-            const nextRole = normalizeRole(roleSelect.value);
-            roleSelect.disabled = true;
-            await patchUserRecord(user.login, {
-                role: nextRole,
-                lastSeenAt: new Date().toISOString()
-            });
-            roleSelect.disabled = false;
+        if (user) {
+            const roleSelect = document.createElement('select');
+            roleSelect.className = 'admin-role-select';
+            roleSelect.innerHTML = `
+                <option value="user">Юзер</option>
+                <option value="admin">Админ</option>
+            `;
+            roleSelect.value = normalizeRole(user.role);
+            roleSelect.addEventListener('change', async () => {
+                const nextRole = normalizeRole(roleSelect.value);
+                roleSelect.disabled = true;
+                await patchUserRecord(user.login, {
+                    role: nextRole,
+                    lastSeenAt: new Date().toISOString()
+                });
+                roleSelect.disabled = false;
 
-            if (currentUser && user.login === currentUser.login) {
-                currentUser.role = nextRole;
-                selectedRole = nextRole;
-                localStorage.setItem(USER_ROLE_KEY, nextRole);
-                if (currentRoleDisplay) {
-                    currentRoleDisplay.textContent = getRoleLabelUi(nextRole);
+                if (currentUser && user.login === currentUser.login) {
+                    currentUser.role = nextRole;
+                    selectedRole = nextRole;
+                    localStorage.setItem(USER_ROLE_KEY, nextRole);
+                    if (currentRoleDisplay) {
+                        currentRoleDisplay.textContent = getRoleLabelUi(nextRole);
+                    }
+                    applyRoleRestrictions();
                 }
-                applyRoleRestrictions();
-            }
-            showCopyNotification(`Роль ${user.login} обновлена`);
-            renderAdminUsersTable();
-        });
-        roleCell.appendChild(roleSelect);
+                showCopyNotification(`Роль ${user.login} обновлена`);
+                renderAdminUsersTable();
+            });
+            roleCell.appendChild(roleSelect);
+        } else {
+            roleCell.className = 'admin-muted';
+            roleCell.textContent = '—';
+        }
+
+        const sourceCell = document.createElement('td');
+        sourceCell.className = 'admin-access-source';
+        sourceCell.textContent = getAccessSourceLabel(login, user, invite);
 
         const timeCell = document.createElement('td');
         timeCell.className = 'admin-time';
-        timeCell.textContent = formatActiveTime(user.activeMs);
+        timeCell.textContent = user ? formatActiveTime(user.activeMs) : '—';
+
+        const statusCell = document.createElement('td');
+        statusCell.className = `admin-access-status ${accessState.active ? 'is-active' : 'is-blocked'}`;
+        statusCell.textContent = accessState.label;
+
+        const actionCell = document.createElement('td');
+        const actionBtn = document.createElement('button');
+        actionBtn.className = `btn-change ${accessState.active ? 'btn-danger-subtle' : ''}`.trim();
+        actionBtn.textContent = accessState.active ? 'Закрыть доступ' : 'Открыть доступ';
+        actionBtn.addEventListener('click', async () => {
+            const nextActive = !accessState.active;
+            if (!nextActive) {
+                const confirmed = confirm(`Закрыть доступ для ${login}?`);
+                if (!confirmed) return;
+            }
+            actionBtn.disabled = true;
+            try {
+                await toggleAccessForLogin(login, nextActive, user, invite);
+                showCopyNotification(nextActive ? `Доступ открыт: ${login}` : `Доступ закрыт: ${login}`);
+                await renderAdminUsersTable();
+            } catch (error) {
+                console.error('Failed to toggle access:', error);
+                const fallback = error?.message ? String(error.message) : 'Не удалось изменить доступ';
+                showCopyNotification(fallback);
+            } finally {
+                actionBtn.disabled = false;
+            }
+        });
+        actionCell.appendChild(actionBtn);
 
         row.appendChild(loginCell);
         row.appendChild(roleCell);
+        row.appendChild(sourceCell);
         row.appendChild(timeCell);
+        row.appendChild(statusCell);
+        row.appendChild(actionCell);
         adminUsersTableBody.appendChild(row);
     });
-
-    await renderPartnerInvitesTable();
 }
 
 async function handleCreatePartnerInvite() {
@@ -1337,37 +1412,12 @@ async function handleCreatePartnerInvite() {
 
         showCopyNotification(`Ссылка отправлена на ${login}`);
         if (partnerInviteEmailInput) partnerInviteEmailInput.value = '';
-        await renderPartnerInvitesTable();
         await renderAdminUsersTable();
     } catch (error) {
         console.error('Failed to send partner invite link:', error);
         showCopyNotification(`Письмо не отправлено. ${getReadableFirebaseAuthError(error, 'invite')}`);
     } finally {
         if (partnerInviteAddBtn) partnerInviteAddBtn.disabled = false;
-    }
-}
-
-async function handleClosePartnerAccess() {
-    if (!isAdmin()) return;
-    const invites = await listPartnerInvites();
-    const activeInvites = invites.filter((invite) => isPartnerInviteActive(invite));
-    if (!activeInvites.length) {
-        showCopyNotification('Активных доступов по ссылке нет');
-        return;
-    }
-
-    const confirmed = confirm(`Закрыть доступ для ${activeInvites.length} пользователей?`);
-    if (!confirmed) return;
-
-    if (closePartnerAccessBtn) closePartnerAccessBtn.disabled = true;
-    try {
-        await Promise.all(
-            activeInvites.map((invite) => patchPartnerInvite(invite.login, { status: 'revoked' }))
-        );
-        showCopyNotification(`Доступ закрыт для ${activeInvites.length} пользователей`);
-        await renderPartnerInvitesTable();
-    } finally {
-        if (closePartnerAccessBtn) closePartnerAccessBtn.disabled = false;
     }
 }
 
@@ -3798,12 +3848,6 @@ if (adminRefreshBtn) {
 if (partnerInviteAddBtn) {
     partnerInviteAddBtn.addEventListener('click', () => {
         handleCreatePartnerInvite();
-    });
-}
-
-if (closePartnerAccessBtn) {
-    closePartnerAccessBtn.addEventListener('click', () => {
-        handleClosePartnerAccess();
     });
 }
 

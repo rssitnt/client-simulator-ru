@@ -253,7 +253,18 @@
                 <summary class="admin-accordion-trigger">Панель администратора</summary>
                 <div id="adminPanel" class="admin-panel">
                     <div class="admin-panel-header">
-                        <span class="admin-panel-title">Пользователи и роли</span>
+                        <span class="admin-panel-title">Доступ по ссылке</span>
+                    </div>
+                    <div class="admin-invite-form">
+                        <input type="email" id="partnerInviteEmailInput" class="admin-invite-input" placeholder="email@example.com" maxlength="120">
+                        <div class="admin-invite-days-wrap" title="Срок доступа в днях">
+                            <input type="number" id="partnerInviteDaysInput" class="admin-invite-days" min="1" max="365" value="30" aria-label="Срок доступа в днях">
+                            <span class="admin-invite-days-unit">дней</span>
+                        </div>
+                        <button id="partnerInviteAddBtn" class="btn-change admin-invite-btn">Выдать доступ</button>
+                    </div>
+                    <div class="admin-panel-header">
+                        <span class="admin-panel-title">Пользователи и доступ</span>
                         <button id="adminRefreshBtn" class="btn-change">Обновить</button>
                     </div>
                     <div class="admin-table-wrap">
@@ -262,47 +273,18 @@
                                 <tr>
                                     <th>Логин</th>
                                     <th>Роль</th>
+                                    <th>Доступ</th>
                                     <th>Активное время</th>
+                                    <th>Статус</th>
+                                    <th></th>
                                 </tr>
                             </thead>
                             <tbody id="adminUsersTableBody">
                                 <tr>
-                                    <td colspan="3" class="admin-empty">Нет данных</td>
+                                    <td colspan="6" class="admin-empty">Нет данных</td>
                                 </tr>
                             </tbody>
                         </table>
-                    </div>
-                    <div class="admin-invite-section">
-                        <div class="admin-panel-header">
-                            <span class="admin-panel-title">Доступ по ссылке</span>
-                            <button id="closePartnerAccessBtn" class="btn-change btn-danger-subtle">Закрыть доступ</button>
-                        </div>
-                        <div class="admin-invite-form">
-                            <input type="email" id="partnerInviteEmailInput" class="admin-invite-input" placeholder="email@example.com" maxlength="120">
-                            <div class="admin-invite-days-wrap" title="Срок доступа в днях">
-                                <input type="number" id="partnerInviteDaysInput" class="admin-invite-days" min="1" max="365" value="30" aria-label="Срок доступа в днях">
-                                <span class="admin-invite-days-unit">дней</span>
-                            </div>
-                            <button id="partnerInviteAddBtn" class="btn-change admin-invite-btn">Выдать доступ</button>
-                        </div>
-                        <div class="admin-table-wrap admin-invites-wrap">
-                            <table class="admin-users-table">
-                                <thead>
-                                    <tr>
-                                        <th>Email</th>
-                                        <th>Тип</th>
-                                        <th>До</th>
-                                        <th>Статус</th>
-                                        <th></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="partnerInvitesTableBody">
-                                    <tr>
-                                        <td colspan="5" class="admin-empty">Инвайтов нет</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
                     </div>
                 </div>
             </details>

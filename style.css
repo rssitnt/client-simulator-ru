@@ -3293,8 +3293,9 @@ body.light-theme .more-colors-popup {
     color: #b3b3b3;
 }
 
-.admin-invite-section {
-    margin-top: 14px;
+.admin-access-source {
+    color: #a7a7a7;
+    white-space: nowrap;
 }
 
 .admin-invite-form {
@@ -3349,8 +3350,25 @@ body.light-theme .more-colors-popup {
     border-radius: 6px;
 }
 
-.admin-invites-wrap {
-    max-height: 180px;
+.admin-access-status {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.admin-access-status.is-active {
+    color: #8fcb8f;
+}
+
+.admin-access-status.is-blocked {
+    color: #e19393;
+}
+
+.admin-muted {
+    color: #7d7d7d !important;
+}
+
+.admin-users-table td:last-child {
+    white-space: nowrap;
 }
 
 @media (max-width: 820px) {
@@ -3579,6 +3597,22 @@ body.light-theme .admin-invite-days-unit {
 
 body.light-theme .admin-time {
     color: #666;
+}
+
+body.light-theme .admin-access-source {
+    color: #666;
+}
+
+body.light-theme .admin-access-status.is-active {
+    color: #2f7a38;
+}
+
+body.light-theme .admin-access-status.is-blocked {
+    color: #b23b3b;
+}
+
+body.light-theme .admin-muted {
+    color: #8f8f8f !important;
 }
 
 body.light-theme .change-item {
