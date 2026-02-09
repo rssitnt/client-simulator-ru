@@ -2810,7 +2810,7 @@ function setPrimaryActionMode(mode) {
 
 function updateSendBtnState() {
     const hasText = !!userInput.value.trim();
-    const showVoiceModeAction = !hasText && !isTextDialogStarted() && !isProcessing && !isDialogRated;
+    const showVoiceModeAction = !hasText && !isProcessing && !isDialogRated;
 
     if (showVoiceModeAction) {
         setPrimaryActionMode('voice');
@@ -5452,6 +5452,14 @@ function sanitizeMarkdownHtml(rawHtml) {
     return template.innerHTML;
 }
 
+function shouldSanitizeRenderedHtml(rawHtml) {
+    const html = String(rawHtml || '');
+    return /<\s*(script|style|iframe|object|embed|link|meta|base|form|img|svg)\b/i.test(html) ||
+        /on[a-z]+\s*=/i.test(html) ||
+        /javascript:/i.test(html) ||
+        /data:text\/html/i.test(html);
+}
+
 function renderMarkdown(text) {
     if (!text) return '<p style="color: #666; font-style: italic;">Промпт пустой...</p>';
     
@@ -5459,7 +5467,11 @@ function renderMarkdown(text) {
     let cleanText = unescapeMarkdown(text);
     
     if (typeof marked !== 'undefined') {
-        return sanitizeMarkdownHtml(marked.parse(cleanText));
+        const parsedHtml = marked.parse(cleanText);
+        if (!shouldSanitizeRenderedHtml(parsedHtml)) {
+            return parsedHtml;
+        }
+        return sanitizeMarkdownHtml(parsedHtml);
     }
     
     // Simple fallback
