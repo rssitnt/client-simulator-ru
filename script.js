@@ -1471,7 +1471,10 @@ async function restoreAuthSession() {
 
 // Check if current user is admin
 function isAdmin() {
-    return selectedRole === 'admin' || localStorage.getItem(USER_ROLE_KEY) === 'admin';
+    const resolvedRole = normalizeRole(
+        currentUser?.role || localStorage.getItem(USER_ROLE_KEY) || selectedRole || 'user'
+    );
+    return resolvedRole === 'admin';
 }
 
 // Apply role-based restrictions
@@ -3213,7 +3216,7 @@ function hidePromptHistoryModal() {
 function showSettingsModal() {
     hideTooltip(true);
     const savedName = currentUser?.fio || localStorage.getItem(USER_NAME_KEY) || '';
-    const userRole = currentUser?.role || localStorage.getItem(USER_ROLE_KEY) || 'user';
+    const userRole = normalizeRole(currentUser?.role || localStorage.getItem(USER_ROLE_KEY) || 'user');
     const loginValue = currentUser?.login || localStorage.getItem(USER_LOGIN_KEY) || '-';
 
     settingsNameInput.value = savedName;
@@ -3221,6 +3224,8 @@ function showSettingsModal() {
         accountLoginValue.textContent = loginValue || '-';
     }
     autoResizeNameInput();
+    selectedRole = userRole;
+    localStorage.setItem(USER_ROLE_KEY, userRole);
     currentRoleDisplay.textContent = getRoleLabelUi(userRole);
     
     // Hide password section
@@ -3232,7 +3237,7 @@ function showSettingsModal() {
         adminPanelAccordion.removeAttribute('open');
     }
 
-    if (isAdmin()) {
+    if (userRole === 'admin') {
         renderAdminUsersTable();
     } else if (adminPanelAccordion) {
         adminPanelAccordion.style.display = 'none';
