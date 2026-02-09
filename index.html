@@ -256,7 +256,10 @@
                             <option value="partner">Партнёр</option>
                             <option value="user">Юзер</option>
                         </select>
-                        <input type="number" id="partnerInviteDaysInput" class="admin-invite-days" min="1" max="365" value="30">
+                        <div class="admin-invite-days-wrap" title="Срок доступа в днях">
+                            <input type="number" id="partnerInviteDaysInput" class="admin-invite-days" min="1" max="365" value="30" aria-label="Срок доступа в днях">
+                            <span class="admin-invite-days-unit">дней</span>
+                        </div>
                         <button id="partnerInviteAddBtn" class="btn-change admin-invite-btn">Выдать доступ</button>
                     </div>
                     <div class="admin-table-wrap admin-invites-wrap">

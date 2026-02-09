@@ -3217,7 +3217,7 @@ body.light-theme .more-colors-popup {
 
 .admin-invite-form {
     display: grid;
-    grid-template-columns: 1fr 120px 76px auto;
+    grid-template-columns: 1fr 120px 112px auto;
     gap: 8px;
     margin-bottom: 10px;
     align-items: center;
@@ -3236,8 +3236,30 @@ body.light-theme .more-colors-popup {
     box-sizing: border-box;
 }
 
+.admin-invite-days-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    background: #2c2c2c;
+    border-radius: 6px;
+    padding: 0 10px;
+    box-sizing: border-box;
+}
+
 .admin-invite-days {
+    width: 48px;
+    min-width: 0;
+    padding: 8px 0;
+    border-radius: 0;
+    background: transparent;
     text-align: center;
+}
+
+.admin-invite-days-unit {
+    color: #8f8f8f;
+    font-size: 12px;
+    white-space: nowrap;
 }
 
 .admin-invite-btn {
@@ -3424,6 +3446,19 @@ body.light-theme .admin-invite-days {
     background: #ffffff;
     color: #222;
     border: 1px solid #ddd;
+}
+
+body.light-theme .admin-invite-days-wrap {
+    background: #ffffff;
+    border: 1px solid #ddd;
+}
+
+body.light-theme .admin-invite-days {
+    border: none;
+}
+
+body.light-theme .admin-invite-days-unit {
+    color: #666;
 }
 
 body.light-theme .admin-time {
