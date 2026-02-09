@@ -3266,7 +3266,7 @@ body.light-theme .more-colors-popup {
 
 .admin-invite-form {
     display: grid;
-    grid-template-columns: 1fr 120px 112px auto;
+    grid-template-columns: 1fr 112px auto;
     gap: 8px;
     margin-bottom: 10px;
     align-items: center;

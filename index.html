@@ -252,15 +252,11 @@
                 </div>
                 <div class="admin-invite-section">
                     <div class="admin-panel-header">
-                        <span class="admin-panel-title">Доступ партнёрам</span>
+                        <span class="admin-panel-title">Доступ по ссылке</span>
                         <button id="closePartnerAccessBtn" class="btn-change btn-danger-subtle">Закрыть доступ</button>
                     </div>
                     <div class="admin-invite-form">
-                        <input type="email" id="partnerInviteEmailInput" class="admin-invite-input" placeholder="partner@example.com" maxlength="120">
-                        <select id="partnerInviteRoleSelect" class="admin-role-select">
-                            <option value="partner">Партнёр</option>
-                            <option value="user">Юзер</option>
-                        </select>
+                        <input type="email" id="partnerInviteEmailInput" class="admin-invite-input" placeholder="email@example.com" maxlength="120">
                         <div class="admin-invite-days-wrap" title="Срок доступа в днях">
                             <input type="number" id="partnerInviteDaysInput" class="admin-invite-days" min="1" max="365" value="30" aria-label="Срок доступа в днях">
                             <span class="admin-invite-days-unit">дней</span>
@@ -272,7 +268,7 @@
                             <thead>
                                 <tr>
                                     <th>Email</th>
-                                    <th>Роль</th>
+                                    <th>Тип</th>
                                     <th>До</th>
                                     <th>Статус</th>
                                     <th></th>

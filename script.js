@@ -315,7 +315,6 @@ const adminPanel = document.getElementById('adminPanel');
 const adminRefreshBtn = document.getElementById('adminRefreshBtn');
 const adminUsersTableBody = document.getElementById('adminUsersTableBody');
 const partnerInviteEmailInput = document.getElementById('partnerInviteEmailInput');
-const partnerInviteRoleSelect = document.getElementById('partnerInviteRoleSelect');
 const partnerInviteDaysInput = document.getElementById('partnerInviteDaysInput');
 const partnerInviteAddBtn = document.getElementById('partnerInviteAddBtn');
 const closePartnerAccessBtn = document.getElementById('closePartnerAccessBtn');
@@ -1167,7 +1166,7 @@ async function renderPartnerInvitesTable() {
         emailCell.textContent = invite.login;
 
         const roleCell = document.createElement('td');
-        roleCell.textContent = getRoleLabelUi(invite.role);
+        roleCell.textContent = 'По ссылке';
 
         const expiresCell = document.createElement('td');
         expiresCell.className = 'admin-time';
@@ -1273,11 +1272,11 @@ async function renderAdminUsersTable() {
 async function handleCreatePartnerInvite() {
     if (!isAdmin()) return;
     const login = normalizeLogin(partnerInviteEmailInput?.value || '');
-    const role = partnerInviteRoleSelect?.value === 'user' ? 'user' : 'partner';
+    const role = 'user';
     const days = Math.max(1, Math.min(365, Number(partnerInviteDaysInput?.value || 30) || 30));
 
     if (!isValidLogin(login)) {
-        showCopyNotification('Укажите корректный email партнера');
+        showCopyNotification('Укажите корректный email');
         partnerInviteEmailInput?.focus();
         return;
     }
@@ -1323,11 +1322,11 @@ async function handleClosePartnerAccess() {
     const invites = await listPartnerInvites();
     const activeInvites = invites.filter((invite) => isPartnerInviteActive(invite));
     if (!activeInvites.length) {
-        showCopyNotification('Активных партнерских доступов нет');
+        showCopyNotification('Активных доступов по ссылке нет');
         return;
     }
 
-    const confirmed = confirm(`Закрыть доступ для ${activeInvites.length} партнеров?`);
+    const confirmed = confirm(`Закрыть доступ для ${activeInvites.length} пользователей?`);
     if (!confirmed) return;
 
     if (closePartnerAccessBtn) closePartnerAccessBtn.disabled = true;
@@ -1335,7 +1334,7 @@ async function handleClosePartnerAccess() {
         await Promise.all(
             activeInvites.map((invite) => patchPartnerInvite(invite.login, { status: 'revoked' }))
         );
-        showCopyNotification(`Доступ закрыт для ${activeInvites.length} партнеров`);
+        showCopyNotification(`Доступ закрыт для ${activeInvites.length} пользователей`);
         await renderPartnerInvitesTable();
     } finally {
         if (closePartnerAccessBtn) closePartnerAccessBtn.disabled = false;
