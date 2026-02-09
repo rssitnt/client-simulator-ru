@@ -33,10 +33,12 @@ const ATTESTATION_SEND_RETRY_BASE_MS = 800;
 const ATTESTATION_QUEUE_RETRY_DELAY_MS = 12000;
 const AUTH_USERS_DB_PATH = 'users';
 const PARTNER_INVITES_DB_PATH = 'partner_invites';
+const USER_LOCAL_PROMPTS_DB_PATH = 'user_local_prompts';
 const AUTH_LOCAL_STORAGE_KEY = 'authUsers:v1';
 const PARTNER_INVITES_STORAGE_KEY = 'partnerInvites:v1';
 const AUTH_SESSION_STORAGE_KEY = 'authSession:v1';
 const EMAIL_LINK_CONTEXT_STORAGE_KEY = 'emailLinkContext:v1';
+const USER_LOCAL_PROMPTS_CACHE_VERSION = 'v1';
 const CORPORATE_EMAIL_DOMAINS = new Set([
     '7271155.ru',
     '7274069.ru',
@@ -388,6 +390,7 @@ let lastRating = null;
 let isDialogRated = false;
 let isUserEditing = false;
 let lastFirebaseData = null;
+let latestPromptsSnapshot = null;
 let selectedRole = 'user';
 let currentUser = null;
 const ADMIN_PASSWORD = '1357246';
@@ -406,6 +409,11 @@ let lastActiveTickAt = Date.now();
 let lastUserActivityAt = Date.now();
 let hasActivityListeners = false;
 let fioSaveTimeout = null;
+let accountLocalPromptsStore = {};
+let accountLocalPromptsOwner = '';
+let localPromptsSyncTimerId = null;
+let lastLocalPromptsSyncedSignature = '';
+let unsubscribeAccountLocalPrompts = null;
 let publicActiveIds = {
     client: null,
     manager: null,
@@ -1520,6 +1528,8 @@ async function handleAuthSubmit() {
 
         setAuthSession(savedUser.login);
         applyAuthenticatedUser(savedUser);
+        await ensureAccountLocalPromptsStore(true);
+        reinitPromptsFromLatestSnapshot();
         hideNameModal();
         startActiveTimeTracking();
     } catch (error) {
@@ -2150,14 +2160,261 @@ function getLocalPromptsStorageKey() {
     return `localPrompts:${LOCAL_PROMPTS_STORAGE_VERSION}:${getPromptOwnerKey()}`;
 }
 
-function loadLocalPromptsStore() {
+function getUserLocalPromptsCacheKey(login) {
+    return `userLocalPrompts:${USER_LOCAL_PROMPTS_CACHE_VERSION}:${normalizeLogin(login)}`;
+}
+
+function normalizeLocalPromptsStore(rawStore = {}) {
+    const normalized = {};
+    PROMPT_ROLES.forEach(role => {
+        const roleVariations = Array.isArray(rawStore?.[role + '_variations'])
+            ? rawStore[role + '_variations']
+            : [];
+        normalized[role + '_variations'] = roleVariations
+            .filter(v => v && typeof v === 'object' && typeof v.id === 'string')
+            .map(v => ({
+                id: String(v.id),
+                name: v.name || 'Локальный',
+                content: String(v.content || ''),
+                isLocal: true
+            }));
+        normalized[role + '_activeId'] =
+            typeof rawStore?.[role + '_activeId'] === 'string'
+                ? rawStore[role + '_activeId']
+                : null;
+    });
+    return normalized;
+}
+
+function hasLocalPromptsData(store = {}) {
+    return PROMPT_ROLES.some((role) => {
+        const roleVariations = Array.isArray(store?.[role + '_variations'])
+            ? store[role + '_variations']
+            : [];
+        return roleVariations.length > 0 || !!store?.[role + '_activeId'];
+    });
+}
+
+function getLocalPromptsOwnerLogin() {
+    return normalizeLogin(currentUser?.login || '');
+}
+
+function loadLegacyLocalPromptsStore() {
     try {
         const raw = localStorage.getItem(getLocalPromptsStorageKey());
-        if (!raw) return {};
+        if (!raw) return normalizeLocalPromptsStore({});
         const parsed = JSON.parse(raw);
-        return parsed && typeof parsed === 'object' ? parsed : {};
+        return normalizeLocalPromptsStore(parsed && typeof parsed === 'object' ? parsed : {});
     } catch (e) {
-        return {};
+        return normalizeLocalPromptsStore({});
+    }
+}
+
+function loadUserLocalPromptsCache(login) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!normalizedLogin) return normalizeLocalPromptsStore({});
+    try {
+        const raw = localStorage.getItem(getUserLocalPromptsCacheKey(normalizedLogin));
+        if (!raw) return normalizeLocalPromptsStore({});
+        const parsed = JSON.parse(raw);
+        return normalizeLocalPromptsStore(parsed && typeof parsed === 'object' ? parsed : {});
+    } catch (e) {
+        return normalizeLocalPromptsStore({});
+    }
+}
+
+function saveUserLocalPromptsCache(login, store) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!normalizedLogin) return;
+    try {
+        localStorage.setItem(
+            getUserLocalPromptsCacheKey(normalizedLogin),
+            JSON.stringify(normalizeLocalPromptsStore(store))
+        );
+    } catch (e) {}
+}
+
+function subscribeAccountLocalPrompts(login) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!db || !normalizedLogin) return;
+
+    if (unsubscribeAccountLocalPrompts) {
+        unsubscribeAccountLocalPrompts();
+        unsubscribeAccountLocalPrompts = null;
+    }
+
+    const path = `${USER_LOCAL_PROMPTS_DB_PATH}/${loginToStorageKey(normalizedLogin)}`;
+    unsubscribeAccountLocalPrompts = onValue(ref(db, path), (snapshot) => {
+        if (normalizeLogin(currentUser?.login || '') !== normalizedLogin) return;
+        const incomingStore = normalizeLocalPromptsStore(snapshot.exists() ? snapshot.val() : {});
+        const incomingSignature = hasLocalPromptsData(incomingStore)
+            ? JSON.stringify(incomingStore)
+            : '{}';
+        const currentSignature = hasLocalPromptsData(accountLocalPromptsStore)
+            ? JSON.stringify(normalizeLocalPromptsStore(accountLocalPromptsStore))
+            : '{}';
+
+        if (incomingSignature === currentSignature) return;
+
+        accountLocalPromptsOwner = normalizedLogin;
+        accountLocalPromptsStore = incomingStore;
+        lastLocalPromptsSyncedSignature = incomingSignature;
+        saveUserLocalPromptsCache(normalizedLogin, incomingStore);
+
+        if (!isUserEditing) {
+            reinitPromptsFromLatestSnapshot();
+        }
+    }, (error) => {
+        console.error('Account local prompts listener error:', error);
+    });
+}
+
+async function syncAccountLocalPromptsToCloud() {
+    if (!db) return;
+    const login = getLocalPromptsOwnerLogin();
+    if (!login) return;
+
+    const payload = normalizeLocalPromptsStore(accountLocalPromptsStore || {});
+    const hasData = hasLocalPromptsData(payload);
+    const signature = hasData ? JSON.stringify(payload) : '{}';
+    if (signature === lastLocalPromptsSyncedSignature) return;
+
+    const path = `${USER_LOCAL_PROMPTS_DB_PATH}/${loginToStorageKey(login)}`;
+    try {
+        await set(ref(db, path), hasData ? payload : null);
+        lastLocalPromptsSyncedSignature = signature;
+        saveUserLocalPromptsCache(login, payload);
+    } catch (error) {
+        console.error('Failed to sync account local prompts:', error);
+    }
+}
+
+function scheduleAccountLocalPromptsSync(immediate = false) {
+    if (localPromptsSyncTimerId) {
+        clearTimeout(localPromptsSyncTimerId);
+    }
+    const delay = immediate ? 0 : 400;
+    localPromptsSyncTimerId = setTimeout(() => {
+        localPromptsSyncTimerId = null;
+        syncAccountLocalPromptsToCloud();
+    }, delay);
+}
+
+async function ensureAccountLocalPromptsStore(force = false) {
+    const login = getLocalPromptsOwnerLogin();
+
+    if (!login) {
+        if (localPromptsSyncTimerId) {
+            clearTimeout(localPromptsSyncTimerId);
+            localPromptsSyncTimerId = null;
+        }
+        if (unsubscribeAccountLocalPrompts) {
+            unsubscribeAccountLocalPrompts();
+            unsubscribeAccountLocalPrompts = null;
+        }
+        accountLocalPromptsOwner = '';
+        accountLocalPromptsStore = normalizeLocalPromptsStore(loadLegacyLocalPromptsStore());
+        lastLocalPromptsSyncedSignature = '';
+        return accountLocalPromptsStore;
+    }
+
+    if (!force && accountLocalPromptsOwner === login) {
+        return normalizeLocalPromptsStore(accountLocalPromptsStore);
+    }
+
+    if (localPromptsSyncTimerId) {
+        clearTimeout(localPromptsSyncTimerId);
+        localPromptsSyncTimerId = null;
+    }
+
+    if (unsubscribeAccountLocalPrompts) {
+        unsubscribeAccountLocalPrompts();
+        unsubscribeAccountLocalPrompts = null;
+    }
+
+    accountLocalPromptsOwner = login;
+
+    let loadedFromCloud = false;
+    let selectedStore = normalizeLocalPromptsStore(loadUserLocalPromptsCache(login));
+
+    if (db) {
+        try {
+            const path = `${USER_LOCAL_PROMPTS_DB_PATH}/${loginToStorageKey(login)}`;
+            const snapshot = await get(ref(db, path));
+            if (snapshot.exists()) {
+                selectedStore = normalizeLocalPromptsStore(snapshot.val());
+                loadedFromCloud = true;
+            }
+        } catch (error) {
+            console.error('Failed to load account local prompts from Firebase:', error);
+        }
+    }
+
+    if (!loadedFromCloud && !hasLocalPromptsData(selectedStore)) {
+        selectedStore = normalizeLocalPromptsStore(loadLegacyLocalPromptsStore());
+    }
+
+    accountLocalPromptsStore = selectedStore;
+    saveUserLocalPromptsCache(login, selectedStore);
+    lastLocalPromptsSyncedSignature = loadedFromCloud
+        ? (hasLocalPromptsData(selectedStore) ? JSON.stringify(selectedStore) : '{}')
+        : '';
+
+    subscribeAccountLocalPrompts(login);
+
+    if (!loadedFromCloud && hasLocalPromptsData(selectedStore)) {
+        scheduleAccountLocalPromptsSync(true);
+    }
+
+    return normalizeLocalPromptsStore(accountLocalPromptsStore);
+}
+
+function loadLocalPromptsStore() {
+    return normalizeLocalPromptsStore(accountLocalPromptsStore || {});
+}
+
+function persistLegacyLocalPromptsStore(store, hasLocalData) {
+    try {
+        if (hasLocalData) {
+            localStorage.setItem(getLocalPromptsStorageKey(), JSON.stringify(store));
+        } else {
+            localStorage.removeItem(getLocalPromptsStorageKey());
+        }
+    } catch (e) {}
+}
+
+function saveLocalPromptsData() {
+    const payload = normalizeLocalPromptsStore({});
+    let hasLocalData = false;
+
+    PROMPT_ROLES.forEach(role => {
+        const localVariations = (promptsData[role]?.variations || [])
+            .filter(v => v && v.isLocal)
+            .map(v => ({
+                id: v.id,
+                name: v.name || 'Локальный',
+                content: v.content || '',
+                isLocal: true
+            }));
+        const activeId = localVariations.some(v => v.id === promptsData[role].activeId)
+            ? promptsData[role].activeId
+            : null;
+
+        payload[role + '_variations'] = localVariations;
+        payload[role + '_activeId'] = activeId;
+        if (localVariations.length > 0 || activeId) {
+            hasLocalData = true;
+        }
+    });
+
+    accountLocalPromptsStore = normalizeLocalPromptsStore(payload);
+    persistLegacyLocalPromptsStore(accountLocalPromptsStore, hasLocalData);
+
+    const login = getLocalPromptsOwnerLogin();
+    if (login) {
+        accountLocalPromptsOwner = login;
+        saveUserLocalPromptsCache(login, accountLocalPromptsStore);
+        scheduleAccountLocalPromptsSync();
     }
 }
 
@@ -3091,6 +3348,14 @@ function savePromptsToFirebaseNow() {
         .catch(e => console.error('Failed to sync:', e));
 }
 
+function reinitPromptsFromLatestSnapshot() {
+    if (latestPromptsSnapshot === null) return;
+    const source = latestPromptsSnapshot && typeof latestPromptsSnapshot === 'object'
+        ? latestPromptsSnapshot
+        : {};
+    initPromptsData(source);
+}
+
 async function loadPrompts() {
     await consumeEmailVerificationLinkIfPresent();
 
@@ -3104,11 +3369,14 @@ async function loadPrompts() {
         console.log(`Welcome back, ${currentUser?.fio || 'user'} (${selectedRole})`);
     }
 
+    await ensureAccountLocalPromptsStore(true);
+
     if (db) {
         try {
             const promptsRef = ref(db, 'prompts');
             onValue(promptsRef, (snapshot) => {
                 const data = snapshot.val();
+                latestPromptsSnapshot = data && typeof data === 'object' ? data : {};
                 agentLog(
                     'Firebase onValue triggered',
                     { hasData: !!data, isUserEditing },
@@ -3158,6 +3426,7 @@ async function loadPrompts() {
             initPromptsData({});
         }
     } else {
+        latestPromptsSnapshot = {};
         initPromptsData({});
         const localHistory = localStorage.getItem('promptHistory');
         if (localHistory) {
