@@ -28,8 +28,11 @@ const ATTESTATION_QUEUE_MAX_FAILURES = 8;
 const ATTESTATION_SEND_RETRY_BASE_MS = 800;
 const ATTESTATION_QUEUE_RETRY_DELAY_MS = 12000;
 const AUTH_USERS_DB_PATH = 'users';
+const PARTNER_INVITES_DB_PATH = 'partner_invites';
 const AUTH_LOCAL_STORAGE_KEY = 'authUsers:v1';
+const PARTNER_INVITES_STORAGE_KEY = 'partnerInvites:v1';
 const AUTH_SESSION_STORAGE_KEY = 'authSession:v1';
+const CORPORATE_EMAIL_DOMAIN = 'tradicia-k.ru';
 const USER_ROLE_KEY = 'userRole';
 const USER_NAME_KEY = 'managerName';
 const USER_LOGIN_KEY = 'managerLogin';
@@ -277,6 +280,11 @@ const exportPromptSettingsMenu = document.getElementById('exportPromptSettingsMe
 const adminPanel = document.getElementById('adminPanel');
 const adminRefreshBtn = document.getElementById('adminRefreshBtn');
 const adminUsersTableBody = document.getElementById('adminUsersTableBody');
+const partnerInviteEmailInput = document.getElementById('partnerInviteEmailInput');
+const partnerInviteRoleSelect = document.getElementById('partnerInviteRoleSelect');
+const partnerInviteDaysInput = document.getElementById('partnerInviteDaysInput');
+const partnerInviteAddBtn = document.getElementById('partnerInviteAddBtn');
+const partnerInvitesTableBody = document.getElementById('partnerInvitesTableBody');
 const instructionSelectEl = document.getElementById('instructionSelect');
 const panelsContainer = document.querySelector('.panels-container');
 const instructionsPanelElement = document.getElementById('instructionsPanel');
@@ -383,7 +391,10 @@ function normalizeFio(value) {
 }
 
 function normalizeLogin(value) {
-    return String(value || '').trim().toLowerCase();
+    return String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[<>"]/g, '');
 }
 
 function isValidFio(value) {
@@ -393,11 +404,33 @@ function isValidFio(value) {
 }
 
 function isValidLogin(value) {
-    return /^[a-z0-9._-]{3,32}$/i.test(normalizeLogin(value));
+    const email = normalizeLogin(value);
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function isValidPassword(value) {
     return String(value || '').length >= 6;
+}
+
+function normalizeRole(value) {
+    return value === 'admin' || value === 'partner' ? value : 'user';
+}
+
+function getRoleLabelUi(role) {
+    if (role === 'admin') return 'Админ';
+    if (role === 'partner') return 'Партнёр';
+    return 'Юзер';
+}
+
+function getRoleIcon(role) {
+    if (role === 'admin') return '🔑';
+    if (role === 'partner') return '🤝';
+    return '👤';
+}
+
+function isCorporateEmail(login) {
+    const email = normalizeLogin(login);
+    return email.endsWith(`@${CORPORATE_EMAIL_DOMAIN}`) && email.length > CORPORATE_EMAIL_DOMAIN.length + 1;
 }
 
 function loginToStorageKey(login) {
@@ -448,6 +481,183 @@ function saveLocalUsersStore(store) {
     }
 }
 
+function loadLocalPartnerInvitesStore() {
+    try {
+        const raw = localStorage.getItem(PARTNER_INVITES_STORAGE_KEY);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (error) {
+        return {};
+    }
+}
+
+function saveLocalPartnerInvitesStore(store) {
+    try {
+        localStorage.setItem(PARTNER_INVITES_STORAGE_KEY, JSON.stringify(store || {}));
+    } catch (error) {
+        console.error('Failed to persist local partner invites store:', error);
+    }
+}
+
+function normalizePartnerInvite(raw, loginFallback = '') {
+    if (!raw || typeof raw !== 'object') return null;
+    const login = normalizeLogin(raw.login || raw.email || loginFallback);
+    if (!isValidLogin(login)) return null;
+    const role = raw.role === 'partner' ? 'partner' : 'user';
+    const status = raw.status === 'revoked' ? 'revoked' : 'active';
+    return {
+        login,
+        role,
+        status,
+        createdAt: raw.createdAt || new Date().toISOString(),
+        createdBy: normalizeLogin(raw.createdBy || ''),
+        expiresAt: raw.expiresAt || null,
+        note: String(raw.note || '')
+    };
+}
+
+function isPartnerInviteActive(invite) {
+    if (!invite || invite.status !== 'active') return false;
+    if (!invite.expiresAt) return true;
+    const expiresAt = new Date(invite.expiresAt).getTime();
+    if (!Number.isFinite(expiresAt)) return false;
+    return expiresAt > Date.now();
+}
+
+async function getPartnerInviteByLogin(login) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!isValidLogin(normalizedLogin)) return null;
+    const key = loginToStorageKey(normalizedLogin);
+
+    if (db) {
+        try {
+            const snapshot = await get(ref(db, `${PARTNER_INVITES_DB_PATH}/${key}`));
+            if (snapshot.exists()) {
+                return normalizePartnerInvite(snapshot.val(), normalizedLogin);
+            }
+        } catch (error) {
+            console.error('Failed to load partner invite from Firebase:', error);
+        }
+    }
+
+    const localStore = loadLocalPartnerInvitesStore();
+    return normalizePartnerInvite(localStore[key], normalizedLogin);
+}
+
+async function savePartnerInvite(invite) {
+    const normalized = normalizePartnerInvite(invite, invite?.login);
+    if (!normalized) throw new Error('Invalid partner invite');
+    const key = loginToStorageKey(normalized.login);
+    const payload = {
+        login: normalized.login,
+        role: normalized.role,
+        status: normalized.status,
+        createdAt: normalized.createdAt,
+        createdBy: normalized.createdBy,
+        expiresAt: normalized.expiresAt,
+        note: normalized.note
+    };
+
+    if (db) {
+        try {
+            await set(ref(db, `${PARTNER_INVITES_DB_PATH}/${key}`), payload);
+        } catch (error) {
+            console.error('Failed to save partner invite to Firebase:', error);
+        }
+    }
+
+    const localStore = loadLocalPartnerInvitesStore();
+    localStore[key] = payload;
+    saveLocalPartnerInvitesStore(localStore);
+    return payload;
+}
+
+async function patchPartnerInvite(login, patch = {}) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!isValidLogin(normalizedLogin)) return null;
+    const key = loginToStorageKey(normalizedLogin);
+    const sanitizedPatch = { ...patch };
+
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'role')) {
+        sanitizedPatch.role = sanitizedPatch.role === 'partner' ? 'partner' : 'user';
+    }
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'status')) {
+        sanitizedPatch.status = sanitizedPatch.status === 'revoked' ? 'revoked' : 'active';
+    }
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'expiresAt')) {
+        sanitizedPatch.expiresAt = sanitizedPatch.expiresAt || null;
+    }
+
+    if (db) {
+        try {
+            await update(ref(db, `${PARTNER_INVITES_DB_PATH}/${key}`), sanitizedPatch);
+        } catch (error) {
+            console.error('Failed to patch partner invite in Firebase:', error);
+        }
+    }
+
+    const localStore = loadLocalPartnerInvitesStore();
+    const merged = {
+        ...(localStore[key] || { login: normalizedLogin, role: 'partner', status: 'active' }),
+        ...sanitizedPatch,
+        login: normalizedLogin
+    };
+    localStore[key] = merged;
+    saveLocalPartnerInvitesStore(localStore);
+    return normalizePartnerInvite(merged, normalizedLogin);
+}
+
+async function listPartnerInvites() {
+    if (db) {
+        try {
+            const snapshot = await get(ref(db, PARTNER_INVITES_DB_PATH));
+            if (snapshot.exists()) {
+                const raw = snapshot.val();
+                const invites = Object.values(raw || {})
+                    .map((item) => normalizePartnerInvite(item))
+                    .filter(Boolean)
+                    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+                if (invites.length > 0) {
+                    return invites;
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load partner invites from Firebase:', error);
+        }
+    }
+
+    const localStore = loadLocalPartnerInvitesStore();
+    return Object.values(localStore || {})
+        .map((item) => normalizePartnerInvite(item))
+        .filter(Boolean)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+async function resolveAccessPolicy(login, userRecord = null) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!isValidLogin(normalizedLogin)) return null;
+
+    if (userRecord?.role === 'admin') {
+        return { type: 'admin', role: 'admin', invite: null };
+    }
+
+    if (isCorporateEmail(normalizedLogin)) {
+        return { type: 'corporate', role: 'user', invite: null };
+    }
+
+    const invite = await getPartnerInviteByLogin(normalizedLogin);
+    if (isPartnerInviteActive(invite)) {
+        return {
+            type: 'partner',
+            role: invite.role === 'partner' ? 'partner' : 'user',
+            invite
+        };
+    }
+
+    return null;
+}
+
 async function hashPassword(login, password) {
     const normalizedLogin = normalizeLogin(login);
     const value = `${normalizedLogin}::${String(password || '')}`;
@@ -468,11 +678,11 @@ async function hashPassword(login, password) {
 function normalizeUserRecord(raw, loginFallback = '') {
     if (!raw || typeof raw !== 'object') return null;
     const login = normalizeLogin(raw.login || loginFallback);
-    if (!login) return null;
+    if (!isValidLogin(login)) return null;
     return {
         login,
         fio: normalizeFio(raw.fio || ''),
-        role: raw.role === 'admin' ? 'admin' : 'user',
+        role: normalizeRole(raw.role),
         passwordHash: String(raw.passwordHash || ''),
         createdAt: raw.createdAt || new Date().toISOString(),
         lastLoginAt: raw.lastLoginAt || null,
@@ -540,7 +750,7 @@ async function patchUserRecord(login, patch = {}) {
         sanitizedPatch.fio = normalizeFio(sanitizedPatch.fio);
     }
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'role')) {
-        sanitizedPatch.role = sanitizedPatch.role === 'admin' ? 'admin' : 'user';
+        sanitizedPatch.role = normalizeRole(sanitizedPatch.role);
     }
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'activeMs')) {
         sanitizedPatch.activeMs = Math.max(0, Number(sanitizedPatch.activeMs) || 0);
@@ -602,7 +812,7 @@ function applyAuthenticatedUser(user) {
     managerNameInput.value = normalized.fio;
 
     if (currentRoleDisplay) {
-        currentRoleDisplay.textContent = normalized.role === 'admin' ? 'Админ' : 'Юзер';
+        currentRoleDisplay.textContent = getRoleLabelUi(normalized.role);
     }
     if (settingsNameInput) {
         settingsNameInput.value = normalized.fio;
@@ -709,6 +919,68 @@ function formatActiveTime(ms) {
     return `${seconds}с`;
 }
 
+function formatInviteExpiry(iso) {
+    if (!iso) return 'Без срока';
+    const date = new Date(iso);
+    if (!Number.isFinite(date.getTime())) return 'Без срока';
+    return date.toLocaleDateString('ru-RU');
+}
+
+async function renderPartnerInvitesTable() {
+    if (!partnerInvitesTableBody) return;
+    if (!isAdmin()) {
+        partnerInvitesTableBody.innerHTML = '<tr><td colspan="5" class="admin-empty">Нет доступа</td></tr>';
+        return;
+    }
+
+    const invites = await listPartnerInvites();
+    if (!invites.length) {
+        partnerInvitesTableBody.innerHTML = '<tr><td colspan="5" class="admin-empty">Инвайтов нет</td></tr>';
+        return;
+    }
+
+    partnerInvitesTableBody.innerHTML = '';
+    invites.forEach((invite) => {
+        const row = document.createElement('tr');
+
+        const emailCell = document.createElement('td');
+        emailCell.textContent = invite.login;
+
+        const roleCell = document.createElement('td');
+        roleCell.textContent = getRoleLabelUi(invite.role);
+
+        const expiresCell = document.createElement('td');
+        expiresCell.className = 'admin-time';
+        expiresCell.textContent = formatInviteExpiry(invite.expiresAt);
+
+        const statusCell = document.createElement('td');
+        const activeNow = isPartnerInviteActive(invite);
+        statusCell.textContent = activeNow ? 'Активен' : 'Неактивен';
+
+        const actionCell = document.createElement('td');
+        const actionBtn = document.createElement('button');
+        actionBtn.className = 'btn-change';
+        actionBtn.textContent = activeNow ? 'Отозвать' : 'Активировать';
+        actionBtn.addEventListener('click', async () => {
+            actionBtn.disabled = true;
+            const nextStatus = activeNow ? 'revoked' : 'active';
+            await patchPartnerInvite(invite.login, {
+                status: nextStatus
+            });
+            actionBtn.disabled = false;
+            renderPartnerInvitesTable();
+        });
+        actionCell.appendChild(actionBtn);
+
+        row.appendChild(emailCell);
+        row.appendChild(roleCell);
+        row.appendChild(expiresCell);
+        row.appendChild(statusCell);
+        row.appendChild(actionCell);
+        partnerInvitesTableBody.appendChild(row);
+    });
+}
+
 async function renderAdminUsersTable() {
     if (!adminPanel || !adminUsersTableBody) return;
 
@@ -738,11 +1010,12 @@ async function renderAdminUsersTable() {
         roleSelect.className = 'admin-role-select';
         roleSelect.innerHTML = `
             <option value="user">Юзер</option>
+            <option value="partner">Партнёр</option>
             <option value="admin">Админ</option>
         `;
-        roleSelect.value = user.role === 'admin' ? 'admin' : 'user';
+        roleSelect.value = normalizeRole(user.role);
         roleSelect.addEventListener('change', async () => {
-            const nextRole = roleSelect.value === 'admin' ? 'admin' : 'user';
+            const nextRole = normalizeRole(roleSelect.value);
             roleSelect.disabled = true;
             await patchUserRecord(user.login, {
                 role: nextRole,
@@ -755,7 +1028,7 @@ async function renderAdminUsersTable() {
                 selectedRole = nextRole;
                 localStorage.setItem(USER_ROLE_KEY, nextRole);
                 if (currentRoleDisplay) {
-                    currentRoleDisplay.textContent = nextRole === 'admin' ? 'Админ' : 'Юзер';
+                    currentRoleDisplay.textContent = getRoleLabelUi(nextRole);
                 }
                 applyRoleRestrictions();
             }
@@ -773,6 +1046,48 @@ async function renderAdminUsersTable() {
         row.appendChild(timeCell);
         adminUsersTableBody.appendChild(row);
     });
+
+    await renderPartnerInvitesTable();
+}
+
+async function handleCreatePartnerInvite() {
+    if (!isAdmin()) return;
+    const login = normalizeLogin(partnerInviteEmailInput?.value || '');
+    const role = partnerInviteRoleSelect?.value === 'user' ? 'user' : 'partner';
+    const days = Math.max(1, Math.min(365, Number(partnerInviteDaysInput?.value || 30) || 30));
+
+    if (!isValidLogin(login)) {
+        showCopyNotification('Укажите корректный email партнера');
+        partnerInviteEmailInput?.focus();
+        return;
+    }
+    if (isCorporateEmail(login)) {
+        showCopyNotification('Для корпоративной почты инвайт не нужен');
+        return;
+    }
+
+    const expiresAtDate = new Date();
+    expiresAtDate.setDate(expiresAtDate.getDate() + days);
+    const expiresAt = expiresAtDate.toISOString();
+
+    await savePartnerInvite({
+        login,
+        role,
+        status: 'active',
+        expiresAt,
+        createdAt: new Date().toISOString(),
+        createdBy: currentUser?.login || ''
+    });
+
+    const existingUser = await getUserRecordByLogin(login);
+    if (existingUser && existingUser.role !== 'admin') {
+        await patchUserRecord(login, { role });
+    }
+
+    if (partnerInviteEmailInput) partnerInviteEmailInput.value = '';
+    showCopyNotification('Доступ партнёру выдан');
+    renderPartnerInvitesTable();
+    renderAdminUsersTable();
 }
 
 async function handleAuthSubmit() {
@@ -787,7 +1102,7 @@ async function handleAuthSubmit() {
         return;
     }
     if (!isValidLogin(login)) {
-        setAuthError('Логин: 3-32 символа, латиница/цифры и . _ -');
+        setAuthError('Введите корректный email.');
         modalLoginInput?.focus();
         return;
     }
@@ -802,6 +1117,11 @@ async function handleAuthSubmit() {
 
     try {
         const existingUser = await getUserRecordByLogin(login);
+        const accessPolicy = await resolveAccessPolicy(login, existingUser);
+        if (!accessPolicy) {
+            throw new Error(`Доступ разрешен только для @${CORPORATE_EMAIL_DOMAIN} или партнеров по инвайту.`);
+        }
+
         const passwordHash = await hashPassword(login, password);
         const nowIso = new Date().toISOString();
         let targetUser = null;
@@ -810,17 +1130,22 @@ async function handleAuthSubmit() {
             if (existingUser.passwordHash !== passwordHash) {
                 throw new Error('Неверный логин или пароль.');
             }
+            const resolvedRole = existingUser.role === 'admin'
+                ? 'admin'
+                : normalizeRole(accessPolicy.role || existingUser.role);
             targetUser = {
                 ...existingUser,
+                role: resolvedRole,
                 fio,
                 lastLoginAt: nowIso,
                 lastSeenAt: nowIso
             };
         } else {
+            const resolvedRole = normalizeRole(accessPolicy.role || 'user');
             targetUser = {
                 login,
                 fio,
-                role: 'user',
+                role: resolvedRole,
                 passwordHash,
                 activeMs: 0,
                 createdAt: nowIso,
@@ -849,6 +1174,14 @@ async function restoreAuthSession() {
     if (!user) {
         clearAuthSession();
         return false;
+    }
+    const accessPolicy = await resolveAccessPolicy(user.login, user);
+    if (!accessPolicy) {
+        clearAuthSession();
+        return false;
+    }
+    if (user.role !== 'admin') {
+        user.role = normalizeRole(accessPolicy.role || user.role);
     }
     applyAuthenticatedUser(user);
     startActiveTimeTracking();
@@ -2604,7 +2937,7 @@ function showSettingsModal() {
         accountLoginValue.textContent = loginValue || '-';
     }
     autoResizeNameInput();
-    currentRoleDisplay.textContent = userRole === 'admin' ? 'Админ' : 'Юзер';
+    currentRoleDisplay.textContent = getRoleLabelUi(userRole);
     
     // Hide password section
     roleChangePassword.style.display = 'none';
@@ -2634,8 +2967,8 @@ function hideSettingsModal() {
 
 function updateUserNameDisplay() {
     const name = currentUser?.fio || localStorage.getItem(USER_NAME_KEY) || 'Гость';
-    const role = currentUser?.role || localStorage.getItem(USER_ROLE_KEY) || 'user';
-    const roleIcon = role === 'admin' ? '🔑' : '👤';
+    const role = normalizeRole(currentUser?.role || localStorage.getItem(USER_ROLE_KEY) || 'user');
+    const roleIcon = getRoleIcon(role);
     currentUserName.textContent = `${roleIcon} ${name}`;
 }
 
@@ -3068,7 +3401,7 @@ changeRoleBtn.addEventListener('click', () => {
 // Helper function to switch role
 async function switchRole(newRole) {
     if (!currentUser) return;
-    const role = newRole === 'admin' ? 'admin' : 'user';
+    const role = normalizeRole(newRole);
     const patched = await patchUserRecord(currentUser.login, {
         role,
         lastSeenAt: new Date().toISOString()
@@ -3080,9 +3413,9 @@ async function switchRole(newRole) {
     }, currentUser.login);
     selectedRole = role;
     localStorage.setItem(USER_ROLE_KEY, role);
-    currentRoleDisplay.textContent = role === 'admin' ? 'Админ' : 'Юзер';
+    currentRoleDisplay.textContent = getRoleLabelUi(role);
     applyRoleRestrictions();
-    showCopyNotification(role === 'admin' ? 'Роль изменена на Админ' : 'Роль изменена на Юзер');
+    showCopyNotification(`Роль изменена на ${getRoleLabelUi(role)}`);
 }
 
 // Cancel role change
@@ -3115,6 +3448,21 @@ roleChangeConfirmBtn.addEventListener('click', () => {
 if (adminRefreshBtn) {
     adminRefreshBtn.addEventListener('click', () => {
         renderAdminUsersTable();
+    });
+}
+
+if (partnerInviteAddBtn) {
+    partnerInviteAddBtn.addEventListener('click', () => {
+        handleCreatePartnerInvite();
+    });
+}
+
+if (partnerInviteEmailInput) {
+    partnerInviteEmailInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleCreatePartnerInvite();
+        }
     });
 }
 

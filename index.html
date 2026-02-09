@@ -33,9 +33,9 @@
                     <li>Создавать ИИ-симуляторов клиента для тренировки ассистентов и ИИ-ассистентов на вымышленных диалогах</li>
                     <li>Оценивать диалоги ассистента по вашему регламенту</li>
                 </ol>
-                <p>Введите полное ФИО, логин и пароль:</p>
+                <p>Введите полное ФИО, рабочий email и пароль:</p>
                 <input type="text" id="modalNameInput" placeholder="ФИО (например: Иванов Иван Иванович)" maxlength="120" autofocus>
-                <input type="text" id="modalLoginInput" placeholder="Логин (латиница, цифры, . _ -)" maxlength="40" autocomplete="username">
+                <input type="email" id="modalLoginInput" placeholder="Email (корп: @tradicia-k.ru или партнер по инвайту)" maxlength="120" autocomplete="username">
                 <div class="auth-password-wrap">
                     <input type="password" id="modalPasswordInput" placeholder="Пароль (минимум 6 символов)" maxlength="80" autocomplete="current-password">
                     <button type="button" id="togglePasswordVisibility" class="auth-password-toggle" aria-label="Показать пароль">
@@ -244,6 +244,38 @@
                             </tr>
                         </tbody>
                     </table>
+                </div>
+                <div class="admin-invite-section">
+                    <div class="admin-panel-header">
+                        <span class="admin-panel-title">Доступ партнёрам</span>
+                    </div>
+                    <div class="admin-invite-form">
+                        <input type="email" id="partnerInviteEmailInput" class="admin-invite-input" placeholder="partner@example.com" maxlength="120">
+                        <select id="partnerInviteRoleSelect" class="admin-role-select">
+                            <option value="partner">Партнёр</option>
+                            <option value="user">Юзер</option>
+                        </select>
+                        <input type="number" id="partnerInviteDaysInput" class="admin-invite-days" min="1" max="365" value="30">
+                        <button id="partnerInviteAddBtn" class="btn-change admin-invite-btn">Выдать доступ</button>
+                    </div>
+                    <div class="admin-table-wrap admin-invites-wrap">
+                        <table class="admin-users-table">
+                            <thead>
+                                <tr>
+                                    <th>Email</th>
+                                    <th>Роль</th>
+                                    <th>До</th>
+                                    <th>Статус</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="partnerInvitesTableBody">
+                                <tr>
+                                    <td colspan="5" class="admin-empty">Инвайтов нет</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
