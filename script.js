@@ -617,6 +617,12 @@ function getReadableFirebaseAuthError(error, context = 'generic') {
     if (code === 'auth/network-request-failed') {
         return 'Ошибка сети при обращении к Firebase. Проверьте интернет и повторите попытку.';
     }
+    if (code === 'auth/too-many-requests' || code === 'auth/quota-exceeded') {
+        return 'Превышен лимит отправки писем Firebase. Подождите и повторите позже или проверьте квоты в Authentication -> Usage.';
+    }
+    if (code === 'auth/invalid-continue-uri' || code === 'auth/missing-continue-uri' || code === 'auth/unauthorized-continue-uri') {
+        return 'Ссылка продолжения настроена неверно. Проверьте authorized domains и URL приложения в настройках Firebase Auth.';
+    }
     if (code === 'auth/expired-action-code' || code === 'auth/invalid-action-code') {
         return 'Ссылка подтверждения устарела. Запросите новую и повторите вход.';
     }
@@ -1295,32 +1301,35 @@ async function handleCreatePartnerInvite() {
     expiresAtDate.setDate(expiresAtDate.getDate() + days);
     const expiresAt = expiresAtDate.toISOString();
 
-    await savePartnerInvite({
-        login,
-        role,
-        status: 'active',
-        expiresAt,
-        emailVerifiedAt: null,
-        createdAt: new Date().toISOString(),
-        createdBy: currentUser?.login || ''
-    });
-
-    const existingUser = await getUserRecordByLogin(login);
-    if (existingUser && existingUser.role !== 'admin') {
-        await patchUserRecord(login, { role });
-    }
-
+    if (partnerInviteAddBtn) partnerInviteAddBtn.disabled = true;
     try {
         await sendMagicLinkToEmail(login, 'invite');
-        showCopyNotification('Инвайт создан, ссылка отправлена на email');
+
+        await savePartnerInvite({
+            login,
+            role,
+            status: 'active',
+            expiresAt,
+            emailVerifiedAt: null,
+            createdAt: new Date().toISOString(),
+            createdBy: currentUser?.login || ''
+        });
+
+        const existingUser = await getUserRecordByLogin(login);
+        if (existingUser && existingUser.role !== 'admin') {
+            await patchUserRecord(login, { role });
+        }
+
+        showCopyNotification(`Ссылка отправлена на ${login}`);
+        if (partnerInviteEmailInput) partnerInviteEmailInput.value = '';
+        await renderPartnerInvitesTable();
+        await renderAdminUsersTable();
     } catch (error) {
         console.error('Failed to send partner invite link:', error);
-        showCopyNotification(`Инвайт создан, но письмо не отправлено. ${getReadableFirebaseAuthError(error, 'invite')}`);
+        showCopyNotification(`Письмо не отправлено. ${getReadableFirebaseAuthError(error, 'invite')}`);
+    } finally {
+        if (partnerInviteAddBtn) partnerInviteAddBtn.disabled = false;
     }
-
-    if (partnerInviteEmailInput) partnerInviteEmailInput.value = '';
-    await renderPartnerInvitesTable();
-    await renderAdminUsersTable();
 }
 
 async function handleClosePartnerAccess() {
