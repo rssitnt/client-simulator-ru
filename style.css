@@ -2575,6 +2575,12 @@ body.light-theme .btn-settings-floating:hover {
     color: #333;
 }
 
+#nameModal.active ~ .btn-clear-floating,
+#nameModal.active ~ .btn-settings-floating {
+    display: none !important;
+    pointer-events: none !important;
+}
+
 /* Мобильная версия - кнопки в одной линии с табами */
 @media (max-width: 768px) {
     .btn-clear-floating {
