@@ -205,6 +205,11 @@ function debugLog(...args) {
     console.log(...args);
 }
 
+function bindEvent(element, eventName, handler, options) {
+    if (!element) return;
+    element.addEventListener(eventName, handler, options);
+}
+
 function agentLog(message, dataFactory, meta = {}) {
     if (!ENABLE_AGENT_LOGS) return;
     try {
@@ -340,6 +345,11 @@ const partnerInviteAddBtn = document.getElementById('partnerInviteAddBtn');
 const instructionSelectEl = document.getElementById('instructionSelect');
 const panelsContainer = document.querySelector('.panels-container');
 const instructionsPanelElement = document.getElementById('instructionsPanel');
+const instructionTabs = Array.from(document.querySelectorAll('.instruction-tab'));
+const instructionEditors = Array.from(document.querySelectorAll('.instruction-editor'));
+const instructionOptions = Array.from(document.querySelectorAll('.dropdown-option'));
+const selectedInstructionText = document.getElementById('selectedInstructionText');
+const instructionDropdown = document.getElementById('instructionDropdown');
 
 const promptInputsByRole = {
     client: systemPromptInput,
@@ -3532,9 +3542,6 @@ function showSemanticDiff(textWithMarkers) {
 }
 
 function activateInstructionEditor(role) {
-    const instructionTabs = document.querySelectorAll('.instruction-tab');
-    const instructionEditors = document.querySelectorAll('.instruction-editor');
-    
     instructionTabs.forEach(tab => {
         if (tab.dataset.instruction === role) {
             tab.classList.add('active');
@@ -3554,11 +3561,10 @@ function activateInstructionEditor(role) {
     if (instructionSelectEl) {
         instructionSelectEl.value = role;
     }
-    const selectedText = document.getElementById('selectedInstructionText');
-    if (selectedText) {
-        selectedText.innerText = getRoleLabel(role);
+    if (selectedInstructionText) {
+        selectedInstructionText.innerText = getRoleLabel(role);
     }
-    document.querySelectorAll('.dropdown-option').forEach(opt => {
+    instructionOptions.forEach(opt => {
         opt.classList.toggle('active', opt.dataset.value === role);
     });
 }
@@ -3622,42 +3628,28 @@ function applyImprovedPrompt(targetMode = 'new') {
     showCopyNotification(notificationText);
 }
 
-aiImproveBtn.addEventListener('click', showAiImproveModal);
-if (promptHistoryBtn) {
-    promptHistoryBtn.addEventListener('click', showPromptHistoryModal);
-}
-if (promptVisibilityBtn) {
-    promptVisibilityBtn.addEventListener('click', toggleActivePromptVisibility);
-}
-aiImproveModalClose.addEventListener('click', hideAiImproveModal);
-aiImproveCancel.addEventListener('click', hideAiImproveModal);
-aiImproveSubmit.addEventListener('click', improvePromptWithAI);
-if (voiceModeModalClose) {
-    voiceModeModalClose.addEventListener('click', hideVoiceModeModal);
-}
-if (promptHistoryModalClose) {
-    promptHistoryModalClose.addEventListener('click', hidePromptHistoryModal);
-}
-if (voiceModeStartBtn) {
-    voiceModeStartBtn.addEventListener('click', () => {
-        hideVoiceModeModal();
-        showCopyNotification('Голосовой режим находится в разработке.');
-    });
-}
-
-aiImproveBack.addEventListener('click', () => {
-    aiImproveStep1.style.display = 'block';
-    aiImproveStep2.style.display = 'none';
+bindEvent(aiImproveBtn, 'click', showAiImproveModal);
+bindEvent(promptHistoryBtn, 'click', showPromptHistoryModal);
+bindEvent(promptVisibilityBtn, 'click', toggleActivePromptVisibility);
+bindEvent(aiImproveModalClose, 'click', hideAiImproveModal);
+bindEvent(aiImproveCancel, 'click', hideAiImproveModal);
+bindEvent(aiImproveSubmit, 'click', improvePromptWithAI);
+bindEvent(voiceModeModalClose, 'click', hideVoiceModeModal);
+bindEvent(promptHistoryModalClose, 'click', hidePromptHistoryModal);
+bindEvent(voiceModeStartBtn, 'click', () => {
+    hideVoiceModeModal();
+    showCopyNotification('Голосовой режим находится в разработке.');
 });
 
-if (aiImproveApplyNew) {
-    aiImproveApplyNew.addEventListener('click', () => applyImprovedPrompt('new'));
-}
-if (aiImproveApplyCurrent) {
-    aiImproveApplyCurrent.addEventListener('click', () => applyImprovedPrompt('current'));
-}
+bindEvent(aiImproveBack, 'click', () => {
+    if (aiImproveStep1) aiImproveStep1.style.display = 'block';
+    if (aiImproveStep2) aiImproveStep2.style.display = 'none';
+});
 
-aiImproveInput.addEventListener('keydown', (e) => {
+bindEvent(aiImproveApplyNew, 'click', () => applyImprovedPrompt('new'));
+bindEvent(aiImproveApplyCurrent, 'click', () => applyImprovedPrompt('current'));
+
+bindEvent(aiImproveInput, 'keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         improvePromptWithAI();
@@ -3666,17 +3658,17 @@ aiImproveInput.addEventListener('keydown', (e) => {
 
 // ============ SETTINGS MODAL EVENT LISTENERS ============
 
-settingsBtn.addEventListener('click', showSettingsModal);
+bindEvent(settingsBtn, 'click', showSettingsModal);
 
 // Close settings modal on overlay click
-settingsModal.addEventListener('click', (e) => {
+bindEvent(settingsModal, 'click', (e) => {
     if (e.target === settingsModal) {
         hideSettingsModal();
     }
 });
 
 // Автосохранение имени при вводе
-settingsNameInput.addEventListener('input', () => {
+bindEvent(settingsNameInput, 'input', () => {
     autoResizeNameInput();
     const newName = normalizeFio(settingsNameInput.value);
     if (!newName || !currentUser) return;
@@ -3695,7 +3687,7 @@ settingsNameInput.addEventListener('input', () => {
 });
 
 // Theme toggle
-themeToggle.addEventListener('change', () => {
+bindEvent(themeToggle, 'change', () => {
     const isLight = themeToggle.checked;
     document.body.classList.toggle('light-theme', isLight);
     localStorage.setItem('theme', isLight ? 'light' : 'dark');
@@ -5263,16 +5255,16 @@ function handlePrimaryActionClick() {
     sendMessage();
 }
 
-sendBtn.addEventListener('click', handlePrimaryActionClick);
-userInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
-userInput.addEventListener('input', () => {
+bindEvent(sendBtn, 'click', handlePrimaryActionClick);
+bindEvent(userInput, 'keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+bindEvent(userInput, 'input', () => {
     autoResizeTextarea(userInput);
     updateSendBtnState();
     });
-clearChatBtn.addEventListener('click', () => { if (confirm('Очистить чат?')) clearChat(); });
-startBtn.addEventListener('click', startConversationHandler);
-rateChatBtn.addEventListener('click', rateChat);
-aiAssistBtn.addEventListener('click', generateAIResponse);
+bindEvent(clearChatBtn, 'click', () => { if (confirm('Очистить чат?')) clearChat(); });
+bindEvent(startBtn, 'click', startConversationHandler);
+bindEvent(rateChatBtn, 'click', rateChat);
+bindEvent(aiAssistBtn, 'click', generateAIResponse);
 if (exitAttestationBtn) {
     exitAttestationBtn.addEventListener('click', () => {
         setAttestationMode(false);
@@ -5284,12 +5276,12 @@ if (startAttestationBtn) {
     });
 }
 
-exportChatBtn.addEventListener('click', (e) => {
+bindEvent(exportChatBtn, 'click', (e) => {
     e.stopPropagation();
     exportMenu?.classList.toggle('show');
     });
 
-exportCurrentPromptBtn.addEventListener('click', (e) => {
+bindEvent(exportCurrentPromptBtn, 'click', (e) => {
     e.stopPropagation();
     exportPromptMenu?.classList.toggle('show');
 });
@@ -5316,9 +5308,6 @@ document.querySelectorAll('.dropdown-item[data-prompt-format]').forEach(item => 
 });
 
 // Instruction tabs
-const instructionTabs = document.querySelectorAll('.instruction-tab');
-const instructionEditors = document.querySelectorAll('.instruction-editor');
-
 instructionTabs.forEach(tab => {
     tab.addEventListener('click', () => {
         const instructionType = tab.dataset.instruction;
@@ -5340,14 +5329,12 @@ instructionTabs.forEach(tab => {
             instructionSelectEl.value = instructionType;
         }
         
-        const selectedText = document.getElementById('selectedInstructionText');
-        if (selectedText) {
+        if (selectedInstructionText) {
             const tabText = tab.innerText;
-            selectedText.innerText = tabText;
+            selectedInstructionText.innerText = tabText;
         }
         
-        const dropdownOptions = document.querySelectorAll('.dropdown-option');
-        dropdownOptions.forEach(opt => {
+        instructionOptions.forEach(opt => {
             opt.classList.toggle('active', opt.dataset.value === instructionType);
         });
         
@@ -5357,10 +5344,6 @@ instructionTabs.forEach(tab => {
 });
 
 // Instruction dropdown for compact mode (custom implementation)
-const instructionDropdown = document.getElementById('instructionDropdown');
-const selectedInstructionText = document.getElementById('selectedInstructionText');
-const instructionOptions = document.querySelectorAll('.dropdown-option');
-
 if (instructionDropdown) {
     // Toggle dropdown
     instructionDropdown.addEventListener('click', (e) => {
@@ -5411,15 +5394,25 @@ if (instructionDropdown) {
 }
 
 // Check if tabs need compact mode
+let compactTabsState = null;
+let compactToolbarState = null;
 function checkTabsCompactMode() {
     if (!instructionsPanelElement) return;
     
     const panelWidth = instructionsPanelElement.getBoundingClientRect().width;
+    const shouldCompactTabs = panelWidth < 420;
+    const shouldCompactToolbar = panelWidth < 560;
     
     // При ширине панели меньше 420px - включаем компактный режим
-    instructionsPanelElement.classList.toggle('compact-tabs', panelWidth < 420);
+    if (compactTabsState !== shouldCompactTabs) {
+        instructionsPanelElement.classList.toggle('compact-tabs', shouldCompactTabs);
+        compactTabsState = shouldCompactTabs;
+    }
     // Для узкой правой панели адаптируем и toolbar форматирования
-    instructionsPanelElement.classList.toggle('compact-toolbar', panelWidth < 560);
+    if (compactToolbarState !== shouldCompactToolbar) {
+        instructionsPanelElement.classList.toggle('compact-toolbar', shouldCompactToolbar);
+        compactToolbarState = shouldCompactToolbar;
+    }
 }
 
 // Also check on panel resize via ResizeObserver
@@ -5436,6 +5429,7 @@ window.addEventListener('resize', debounce(checkTabsCompactMode, 100));
 
 // Textarea input listeners for sync
 [systemPromptInput, managerPromptInput, raterPromptInput].forEach(input => {
+    if (!input) return;
     input.addEventListener('input', () => {
         isUserEditing = true;
         const wrapper = input.closest('.prompt-wrapper');
