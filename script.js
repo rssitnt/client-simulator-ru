@@ -37,7 +37,36 @@ const AUTH_LOCAL_STORAGE_KEY = 'authUsers:v1';
 const PARTNER_INVITES_STORAGE_KEY = 'partnerInvites:v1';
 const AUTH_SESSION_STORAGE_KEY = 'authSession:v1';
 const EMAIL_LINK_CONTEXT_STORAGE_KEY = 'emailLinkContext:v1';
-const CORPORATE_EMAIL_DOMAIN = 'tradicia-k.ru';
+const CORPORATE_EMAIL_DOMAINS = new Set([
+    '7271155.ru',
+    '7274069.ru',
+    '9263541.ru',
+    'butoboy.ru',
+    'd-m.com.tr',
+    'delta-makina.com',
+    'deltaparts.ru',
+    'gidromolot.ru',
+    'hammer-kaz.kz',
+    'hammer-master.ru',
+    'hammer-rus.ru',
+    'hammerkaz.kz',
+    'hammermaster.kz',
+    'hammermaster.ru',
+    'hhammer.ru',
+    'im-pulse.cn',
+    'impulse-evo.com',
+    'impulse.su',
+    'impulse120.ru',
+    'mirdelta.ru',
+    'roxwell.ru',
+    'tradicia-k.kz',
+    'tradicia-k.ru',
+    'tradicia-m.ru',
+    'tradidgit.ru',
+    'wearblade.ru',
+    'wearscrew.ru',
+    'wearservice.ru'
+]);
 const USER_ROLE_KEY = 'userRole';
 const USER_NAME_KEY = 'managerName';
 const USER_LOGIN_KEY = 'managerLogin';
@@ -436,7 +465,10 @@ function getRoleIcon(role) {
 
 function isCorporateEmail(login) {
     const email = normalizeLogin(login);
-    return email.endsWith(`@${CORPORATE_EMAIL_DOMAIN}`) && email.length > CORPORATE_EMAIL_DOMAIN.length + 1;
+    const atIndex = email.lastIndexOf('@');
+    if (atIndex <= 0 || atIndex === email.length - 1) return false;
+    const domain = email.slice(atIndex + 1);
+    return CORPORATE_EMAIL_DOMAINS.has(domain);
 }
 
 function loginToStorageKey(login) {
@@ -1339,7 +1371,7 @@ async function handleAuthSubmit() {
         let existingUser = await getUserRecordByLogin(login);
         const accessPolicy = await resolveAccessPolicy(login, existingUser);
         if (!accessPolicy) {
-            throw new Error(`Доступ разрешен только для @${CORPORATE_EMAIL_DOMAIN} или партнеров по инвайту.`);
+            throw new Error('Доступ разрешен только для корпоративной почты компании или партнеров по инвайту.');
         }
 
         const passwordHash = await hashPassword(login, password);
