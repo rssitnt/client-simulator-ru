@@ -34,6 +34,11 @@
                     <li>Оценивать диалоги ассистента по вашему регламенту</li>
                 </ol>
                 <p>Введите полное ФИО, рабочий email и пароль:</p>
+                <details class="auth-mail-help" open>
+                    <summary>Где письмо и куда нажимать</summary>
+                    <img src="1.jpeg" alt="Пример письма подтверждения с выделенной ссылкой входа" loading="lazy" onerror="this.style.display='none'">
+                    <p class="auth-mail-help-caption">После нажатия «Войти» откройте письмо и нажмите ссылку <strong>Sign in to client-simulator</strong>.</p>
+                </details>
                 <input type="text" id="modalNameInput" name="fio" placeholder="ФИО (например: Иванов Иван Иванович)" maxlength="120" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" autofocus>
                 <input type="email" id="modalLoginInput" name="email" placeholder="Рабочий email компании или партнер по инвайту" maxlength="120" autocomplete="email" inputmode="email" autocapitalize="none" spellcheck="false">
                 <div class="auth-password-wrap">
