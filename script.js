@@ -570,6 +570,33 @@ function cleanupEmailLinkUrl() {
     } catch (error) {}
 }
 
+function getReadableFirebaseAuthError(error, context = 'generic') {
+    const code = String(error?.code || '').trim();
+    if (code === 'auth/configuration-not-found' || code === 'auth/operation-not-allowed') {
+        return 'Email-подтверждение не настроено в Firebase. Включите Authentication -> Sign-in method -> Email link (passwordless) и добавьте домен сайта в Authorized domains.';
+    }
+    if (code === 'auth/unauthorized-domain') {
+        return 'Домен сайта не разрешен в Firebase Auth. Добавьте текущий домен в Authorized domains.';
+    }
+    if (code === 'auth/invalid-email') {
+        return 'Укажите корректный email.';
+    }
+    if (code === 'auth/network-request-failed') {
+        return 'Ошибка сети при обращении к Firebase. Проверьте интернет и повторите попытку.';
+    }
+    if (code === 'auth/expired-action-code' || code === 'auth/invalid-action-code') {
+        return 'Ссылка подтверждения устарела. Запросите новую и повторите вход.';
+    }
+
+    const fallback = String(error?.message || '').trim();
+    if (!fallback) {
+        if (context === 'invite') return 'Не удалось отправить инвайт-письмо.';
+        if (context === 'verify') return 'Не удалось отправить письмо подтверждения.';
+        return 'Ошибка авторизации.';
+    }
+    return fallback;
+}
+
 async function sendMagicLinkToEmail(email, purpose = 'verify') {
     const normalizedEmail = normalizeLogin(email);
     if (!isValidLogin(normalizedEmail)) {
@@ -798,7 +825,7 @@ async function consumeEmailVerificationLinkIfPresent() {
         }
     } catch (error) {
         console.error('Email link verification error:', error);
-        setAuthError('Ссылка подтверждения недействительна или устарела.');
+        setAuthError(getReadableFirebaseAuthError(error, 'consume_link'));
     } finally {
         clearEmailLinkContext();
         cleanupEmailLinkUrl();
@@ -1250,7 +1277,7 @@ async function handleCreatePartnerInvite() {
         showCopyNotification('Инвайт создан, ссылка отправлена на email');
     } catch (error) {
         console.error('Failed to send partner invite link:', error);
-        showCopyNotification('Инвайт создан, но ссылка не отправлена');
+        showCopyNotification(`Инвайт создан, но письмо не отправлено. ${getReadableFirebaseAuthError(error, 'invite')}`);
     }
 
     if (partnerInviteEmailInput) partnerInviteEmailInput.value = '';
@@ -1347,7 +1374,7 @@ async function handleAuthSubmit() {
         startActiveTimeTracking();
     } catch (error) {
         console.error('Auth error:', error);
-        setAuthError(error?.message || 'Ошибка авторизации');
+        setAuthError(getReadableFirebaseAuthError(error, 'login'));
     } finally {
         modalNameSubmit.disabled = false;
     }
