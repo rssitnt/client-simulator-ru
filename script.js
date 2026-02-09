@@ -1,13 +1,17 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getDatabase, ref, onValue, set, get, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+import { getAuth, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
 
 // Initialize Firebase
 let db = null;
+let firebaseApp = null;
+let auth = null;
 try {
     if (firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("EXAMPLE")) {
-        const app = initializeApp(firebaseConfig);
-        db = getDatabase(app);
+        firebaseApp = initializeApp(firebaseConfig);
+        db = getDatabase(firebaseApp);
+        auth = getAuth(firebaseApp);
         console.log("Firebase initialized");
     } else {
         console.warn("Firebase config is using placeholders.");
@@ -32,6 +36,7 @@ const PARTNER_INVITES_DB_PATH = 'partner_invites';
 const AUTH_LOCAL_STORAGE_KEY = 'authUsers:v1';
 const PARTNER_INVITES_STORAGE_KEY = 'partnerInvites:v1';
 const AUTH_SESSION_STORAGE_KEY = 'authSession:v1';
+const EMAIL_LINK_CONTEXT_STORAGE_KEY = 'emailLinkContext:v1';
 const CORPORATE_EMAIL_DOMAIN = 'tradicia-k.ru';
 const USER_ROLE_KEY = 'userRole';
 const USER_NAME_KEY = 'managerName';
@@ -500,6 +505,98 @@ function saveLocalPartnerInvitesStore(store) {
     }
 }
 
+function saveEmailLinkContext(context) {
+    try {
+        localStorage.setItem(EMAIL_LINK_CONTEXT_STORAGE_KEY, JSON.stringify(context || {}));
+    } catch (error) {}
+}
+
+function getEmailLinkContext() {
+    try {
+        const raw = localStorage.getItem(EMAIL_LINK_CONTEXT_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (error) {
+        return null;
+    }
+}
+
+function clearEmailLinkContext() {
+    localStorage.removeItem(EMAIL_LINK_CONTEXT_STORAGE_KEY);
+}
+
+function getAppBaseUrl() {
+    return `${window.location.origin}${window.location.pathname}`;
+}
+
+function getEmailFromCurrentLink(rawUrl = window.location.href) {
+    const readFromUrl = (urlValue) => {
+        try {
+            const parsedUrl = new URL(urlValue);
+            const candidates = [
+                parsedUrl.searchParams.get('email'),
+                parsedUrl.searchParams.get('invited_email'),
+                parsedUrl.searchParams.get('login')
+            ];
+            const email = candidates.map(normalizeLogin).find(isValidLogin);
+            if (email) return email;
+            const continueUrl = parsedUrl.searchParams.get('continueUrl');
+            if (!continueUrl) return null;
+            const decodedContinue = decodeURIComponent(continueUrl);
+            const continueParsed = new URL(decodedContinue);
+            const nestedCandidates = [
+                continueParsed.searchParams.get('email'),
+                continueParsed.searchParams.get('invited_email'),
+                continueParsed.searchParams.get('login')
+            ];
+            return nestedCandidates.map(normalizeLogin).find(isValidLogin) || null;
+        } catch (error) {
+            return null;
+        }
+    };
+
+    const fromUrl = readFromUrl(rawUrl);
+    if (fromUrl) return fromUrl;
+    const fromContext = normalizeLogin(getEmailLinkContext()?.email || '');
+    if (isValidLogin(fromContext)) return fromContext;
+    return null;
+}
+
+function cleanupEmailLinkUrl() {
+    try {
+        const cleanUrl = getAppBaseUrl();
+        window.history.replaceState({}, document.title, cleanUrl);
+    } catch (error) {}
+}
+
+async function sendMagicLinkToEmail(email, purpose = 'verify') {
+    const normalizedEmail = normalizeLogin(email);
+    if (!isValidLogin(normalizedEmail)) {
+        throw new Error('Некорректный email');
+    }
+    if (!auth) {
+        throw new Error('Email-сервис не инициализирован. Проверьте Firebase Auth.');
+    }
+
+    const actionUrl = new URL(getAppBaseUrl());
+    actionUrl.searchParams.set('auth_link', '1');
+    actionUrl.searchParams.set('email_action', purpose);
+    actionUrl.searchParams.set('email', normalizedEmail);
+
+    const actionCodeSettings = {
+        url: actionUrl.toString(),
+        handleCodeInApp: true
+    };
+
+    await sendSignInLinkToEmail(auth, normalizedEmail, actionCodeSettings);
+    saveEmailLinkContext({
+        email: normalizedEmail,
+        purpose,
+        sentAt: new Date().toISOString()
+    });
+}
+
 function normalizePartnerInvite(raw, loginFallback = '') {
     if (!raw || typeof raw !== 'object') return null;
     const login = normalizeLogin(raw.login || raw.email || loginFallback);
@@ -513,6 +610,7 @@ function normalizePartnerInvite(raw, loginFallback = '') {
         createdAt: raw.createdAt || new Date().toISOString(),
         createdBy: normalizeLogin(raw.createdBy || ''),
         expiresAt: raw.expiresAt || null,
+        emailVerifiedAt: raw.emailVerifiedAt || null,
         note: String(raw.note || '')
     };
 }
@@ -556,6 +654,7 @@ async function savePartnerInvite(invite) {
         createdAt: normalized.createdAt,
         createdBy: normalized.createdBy,
         expiresAt: normalized.expiresAt,
+        emailVerifiedAt: normalized.emailVerifiedAt,
         note: normalized.note
     };
 
@@ -587,6 +686,9 @@ async function patchPartnerInvite(login, patch = {}) {
     }
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'expiresAt')) {
         sanitizedPatch.expiresAt = sanitizedPatch.expiresAt || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'emailVerifiedAt')) {
+        sanitizedPatch.emailVerifiedAt = sanitizedPatch.emailVerifiedAt || null;
     }
 
     if (db) {
@@ -658,6 +760,54 @@ async function resolveAccessPolicy(login, userRecord = null) {
     return null;
 }
 
+async function consumeEmailVerificationLinkIfPresent() {
+    if (!auth) return;
+    if (!isSignInWithEmailLink(auth, window.location.href)) return;
+
+    const login = getEmailFromCurrentLink(window.location.href);
+    if (!isValidLogin(login)) {
+        setAuthError('Не удалось определить email из ссылки подтверждения.');
+        cleanupEmailLinkUrl();
+        clearEmailLinkContext();
+        return;
+    }
+
+    try {
+        await signInWithEmailLink(auth, login, window.location.href);
+        const nowIso = new Date().toISOString();
+
+        const existingUser = await getUserRecordByLogin(login);
+        if (existingUser) {
+            await patchUserRecord(login, {
+                emailVerifiedAt: nowIso,
+                lastSeenAt: nowIso
+            });
+        }
+
+        const invite = await getPartnerInviteByLogin(login);
+        if (invite) {
+            await patchPartnerInvite(login, {
+                emailVerifiedAt: nowIso
+            });
+        }
+
+        showCopyNotification('Email подтвержден. Теперь войдите с паролем.');
+        setAuthError('Email подтвержден. Введите пароль для входа.');
+        if (modalLoginInput) {
+            modalLoginInput.value = login;
+        }
+    } catch (error) {
+        console.error('Email link verification error:', error);
+        setAuthError('Ссылка подтверждения недействительна или устарела.');
+    } finally {
+        clearEmailLinkContext();
+        cleanupEmailLinkUrl();
+        if (auth) {
+            signOut(auth).catch(() => {});
+        }
+    }
+}
+
 async function hashPassword(login, password) {
     const normalizedLogin = normalizeLogin(login);
     const value = `${normalizedLogin}::${String(password || '')}`;
@@ -684,6 +834,8 @@ function normalizeUserRecord(raw, loginFallback = '') {
         fio: normalizeFio(raw.fio || ''),
         role: normalizeRole(raw.role),
         passwordHash: String(raw.passwordHash || ''),
+        emailVerifiedAt: raw.emailVerifiedAt || null,
+        emailVerificationSentAt: raw.emailVerificationSentAt || null,
         createdAt: raw.createdAt || new Date().toISOString(),
         lastLoginAt: raw.lastLoginAt || null,
         lastSeenAt: raw.lastSeenAt || null,
@@ -721,6 +873,8 @@ async function saveUserRecord(record) {
         fio: normalized.fio,
         role: normalized.role,
         passwordHash: normalized.passwordHash,
+        emailVerifiedAt: normalized.emailVerifiedAt,
+        emailVerificationSentAt: normalized.emailVerificationSentAt,
         createdAt: normalized.createdAt,
         lastLoginAt: normalized.lastLoginAt,
         lastSeenAt: normalized.lastSeenAt,
@@ -754,6 +908,12 @@ async function patchUserRecord(login, patch = {}) {
     }
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'activeMs')) {
         sanitizedPatch.activeMs = Math.max(0, Number(sanitizedPatch.activeMs) || 0);
+    }
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'emailVerifiedAt')) {
+        sanitizedPatch.emailVerifiedAt = sanitizedPatch.emailVerifiedAt || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'emailVerificationSentAt')) {
+        sanitizedPatch.emailVerificationSentAt = sanitizedPatch.emailVerificationSentAt || null;
     }
 
     if (db) {
@@ -1075,6 +1235,7 @@ async function handleCreatePartnerInvite() {
         role,
         status: 'active',
         expiresAt,
+        emailVerifiedAt: null,
         createdAt: new Date().toISOString(),
         createdBy: currentUser?.login || ''
     });
@@ -1084,10 +1245,17 @@ async function handleCreatePartnerInvite() {
         await patchUserRecord(login, { role });
     }
 
+    try {
+        await sendMagicLinkToEmail(login, 'invite');
+        showCopyNotification('Инвайт создан, ссылка отправлена на email');
+    } catch (error) {
+        console.error('Failed to send partner invite link:', error);
+        showCopyNotification('Инвайт создан, но ссылка не отправлена');
+    }
+
     if (partnerInviteEmailInput) partnerInviteEmailInput.value = '';
-    showCopyNotification('Доступ партнёру выдан');
-    renderPartnerInvitesTable();
-    renderAdminUsersTable();
+    await renderPartnerInvitesTable();
+    await renderAdminUsersTable();
 }
 
 async function handleAuthSubmit() {
@@ -1116,7 +1284,7 @@ async function handleAuthSubmit() {
     modalNameSubmit.disabled = true;
 
     try {
-        const existingUser = await getUserRecordByLogin(login);
+        let existingUser = await getUserRecordByLogin(login);
         const accessPolicy = await resolveAccessPolicy(login, existingUser);
         if (!accessPolicy) {
             throw new Error(`Доступ разрешен только для @${CORPORATE_EMAIL_DOMAIN} или партнеров по инвайту.`);
@@ -1127,26 +1295,33 @@ async function handleAuthSubmit() {
         let targetUser = null;
 
         if (existingUser) {
-            if (existingUser.passwordHash !== passwordHash) {
+            const existingIsVerified = !!existingUser.emailVerifiedAt;
+            if (existingIsVerified && existingUser.passwordHash !== passwordHash) {
                 throw new Error('Неверный логин или пароль.');
             }
             const resolvedRole = existingUser.role === 'admin'
                 ? 'admin'
                 : normalizeRole(accessPolicy.role || existingUser.role);
+            const verifiedAt = existingUser.emailVerifiedAt || accessPolicy?.invite?.emailVerifiedAt || null;
             targetUser = {
                 ...existingUser,
                 role: resolvedRole,
                 fio,
+                passwordHash: existingIsVerified ? existingUser.passwordHash : passwordHash,
+                emailVerifiedAt: verifiedAt,
                 lastLoginAt: nowIso,
                 lastSeenAt: nowIso
             };
         } else {
             const resolvedRole = normalizeRole(accessPolicy.role || 'user');
+            const verifiedAt = accessPolicy?.invite?.emailVerifiedAt || null;
             targetUser = {
                 login,
                 fio,
                 role: resolvedRole,
                 passwordHash,
+                emailVerifiedAt: verifiedAt,
+                emailVerificationSentAt: null,
                 activeMs: 0,
                 createdAt: nowIso,
                 lastLoginAt: nowIso,
@@ -1154,7 +1329,18 @@ async function handleAuthSubmit() {
             };
         }
 
-        const savedUser = await saveUserRecord(targetUser);
+        let savedUser = await saveUserRecord(targetUser);
+
+        const isVerified = !!savedUser.emailVerifiedAt;
+        if (!isVerified) {
+            await sendMagicLinkToEmail(login, 'verify');
+            savedUser = await patchUserRecord(login, {
+                emailVerificationSentAt: nowIso
+            }) || savedUser;
+            setAuthError('Мы отправили ссылку подтверждения на email. Откройте письмо и повторите вход.');
+            return;
+        }
+
         setAuthSession(savedUser.login);
         applyAuthenticatedUser(savedUser);
         hideNameModal();
@@ -1180,9 +1366,15 @@ async function restoreAuthSession() {
         clearAuthSession();
         return false;
     }
+    const verifiedAt = user.emailVerifiedAt || accessPolicy?.invite?.emailVerifiedAt || null;
+    if (!verifiedAt) {
+        clearAuthSession();
+        return false;
+    }
     if (user.role !== 'admin') {
         user.role = normalizeRole(accessPolicy.role || user.role);
     }
+    user.emailVerifiedAt = verifiedAt;
     applyAuthenticatedUser(user);
     startActiveTimeTracking();
     return true;
@@ -2715,6 +2907,8 @@ function savePromptsToFirebaseNow() {
 }
 
 async function loadPrompts() {
+    await consumeEmailVerificationLinkIfPresent();
+
     const restored = await restoreAuthSession();
     if (!restored) {
         selectedRole = 'user';
