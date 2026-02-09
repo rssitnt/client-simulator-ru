@@ -266,7 +266,6 @@ const nameModalStep1 = document.getElementById('nameModalStep1');
 const modalPasswordInput = document.getElementById('modalPasswordInput');
 const togglePasswordVisibilityBtn = document.getElementById('togglePasswordVisibility');
 const authErrorText = document.getElementById('passwordError');
-const authMailHelpImage = document.querySelector('.auth-mail-help img');
 const promptVariationsContainer = document.getElementById('promptVariations');
 
 // AI Improve Modal Elements
@@ -394,6 +393,7 @@ let lastFirebaseData = null;
 let latestPromptsSnapshot = null;
 let selectedRole = 'user';
 let currentUser = null;
+const ADMIN_PASSWORD = '1357246';
 let lockedPromptRole = null;
 let lockedPromptVariationId = null;
 let recognition = null;
@@ -436,7 +436,7 @@ function normalizeLogin(value) {
     return String(value || '')
         .trim()
         .toLowerCase()
-        .replace(/[<>"'`]/g, '');
+        .replace(/[<>"]/g, '');
 }
 
 function isValidFio(value) {
@@ -456,10 +456,6 @@ function isValidPassword(value) {
 
 function normalizeRole(value) {
     return value === 'admin' ? 'admin' : 'user';
-}
-
-function getCurrentRole() {
-    return normalizeRole(currentUser?.role || 'user');
 }
 
 function getRoleLabelUi(role) {
@@ -987,11 +983,7 @@ async function patchUserRecord(login, patch = {}) {
         sanitizedPatch.fio = normalizeFio(sanitizedPatch.fio);
     }
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'role')) {
-        if (isAdmin()) {
-            sanitizedPatch.role = normalizeRole(sanitizedPatch.role);
-        } else {
-            delete sanitizedPatch.role;
-        }
+        sanitizedPatch.role = normalizeRole(sanitizedPatch.role);
     }
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'activeMs')) {
         sanitizedPatch.activeMs = Math.max(0, Number(sanitizedPatch.activeMs) || 0);
@@ -1581,7 +1573,10 @@ async function restoreAuthSession() {
 
 // Check if current user is admin
 function isAdmin() {
-    return getCurrentRole() === 'admin';
+    const resolvedRole = normalizeRole(
+        currentUser?.role || localStorage.getItem(USER_ROLE_KEY) || selectedRole || 'user'
+    );
+    return resolvedRole === 'admin';
 }
 
 // Apply role-based restrictions
@@ -2153,15 +2148,12 @@ function generateId() {
 }
 
 function getPromptOwnerKey() {
-    const login = normalizeLogin(currentUser?.login || localStorage.getItem(USER_LOGIN_KEY) || '');
-    if (isValidLogin(login)) {
-        return login;
-    }
-    const storedName = (localStorage.getItem(USER_NAME_KEY) || managerNameInput?.value || 'guest')
+    const storedName = (localStorage.getItem('managerName') || managerNameInput?.value || 'guest')
         .trim()
         .toLowerCase()
         .replace(/\s+/g, '_');
-    return `guest:${storedName || 'guest'}`;
+    const role = localStorage.getItem('userRole') || selectedRole || 'user';
+    return `${role}:${storedName || 'guest'}`;
 }
 
 function getLocalPromptsStorageKey() {
@@ -3077,30 +3069,14 @@ function renderPromptHistory() {
         item.className = 'change-item';
         const title = `${getRoleLabel(entry.role)} · ${entry.variationName || 'Без названия'}`;
         const time = formatHistoryTime(entry.ts);
-
-        const meta = document.createElement('div');
-        meta.className = 'change-meta';
-
-        const titleDiv = document.createElement('div');
-        titleDiv.className = 'change-title';
-        titleDiv.title = title;
-        titleDiv.textContent = title;
-
-        const timeDiv = document.createElement('div');
-        timeDiv.className = 'change-time';
-        timeDiv.textContent = time;
-
-        const restoreBtn = document.createElement('button');
-        restoreBtn.className = 'btn-restore';
-        restoreBtn.dataset.id = String(entry.id || '');
-        restoreBtn.textContent = 'Восстановить';
-
-        meta.appendChild(titleDiv);
-        meta.appendChild(timeDiv);
-        item.appendChild(meta);
-        item.appendChild(restoreBtn);
-
-        restoreBtn.addEventListener('click', (e) => {
+        item.innerHTML = `
+            <div class="change-meta">
+                <div class="change-title" title="${title}">${title}</div>
+                <div class="change-time">${time}</div>
+            </div>
+            <button class="btn-restore" data-id="${entry.id}">Восстановить</button>
+        `;
+        item.querySelector('.btn-restore').addEventListener('click', (e) => {
             e.stopPropagation();
             restorePromptVersion(entry.id, role, activeVariation.id);
         });
@@ -3611,7 +3587,7 @@ function hidePromptHistoryModal() {
 function showSettingsModal() {
     hideTooltip(true);
     const savedName = currentUser?.fio || localStorage.getItem(USER_NAME_KEY) || '';
-    const userRole = getCurrentRole();
+    const userRole = normalizeRole(currentUser?.role || localStorage.getItem(USER_ROLE_KEY) || 'user');
     const loginValue = currentUser?.login || localStorage.getItem(USER_LOGIN_KEY) || '-';
 
     settingsNameInput.value = savedName;
@@ -3620,6 +3596,7 @@ function showSettingsModal() {
     }
     autoResizeNameInput();
     selectedRole = userRole;
+    localStorage.setItem(USER_ROLE_KEY, userRole);
     currentRoleDisplay.textContent = getRoleLabelUi(userRole);
     
     // Hide password section
@@ -3654,7 +3631,7 @@ function hideSettingsModal() {
 
 function updateUserNameDisplay() {
     const name = currentUser?.fio || localStorage.getItem(USER_NAME_KEY) || 'Гость';
-    const role = getCurrentRole();
+    const role = normalizeRole(currentUser?.role || localStorage.getItem(USER_ROLE_KEY) || 'user');
     const roleIcon = getRoleIcon(role);
     currentUserName.textContent = `${roleIcon} ${name}`;
 }
@@ -4088,17 +4065,39 @@ if (savedTheme === 'light') {
 
 // Change role button
 changeRoleBtn.addEventListener('click', () => {
-    roleChangePassword.style.display = 'none';
-    roleChangePasswordInput.value = '';
-    roleChangeError.style.display = 'none';
-
-    if (!isAdmin()) {
-        showCopyNotification('Роль может менять только администратор в панели администратора.');
-        return;
+    const currentRole = currentUser?.role || localStorage.getItem(USER_ROLE_KEY) || 'user';
+    
+    if (currentRole === 'admin') {
+        // Admin -> User (no password needed)
+        if (confirm('Вы уверены, что хотите переключиться на роль Пользователя?')) {
+            switchRole('user');
+        }
+    } else {
+        // User -> Admin (require password)
+        roleChangePassword.style.display = 'block';
+        roleChangePasswordInput.focus();
     }
-
-    showCopyNotification('Роли меняются в блоке «Панель администратора → Пользователи и доступ».');
 });
+
+// Helper function to switch role
+async function switchRole(newRole) {
+    if (!currentUser) return;
+    const role = normalizeRole(newRole);
+    const patched = await patchUserRecord(currentUser.login, {
+        role,
+        lastSeenAt: new Date().toISOString()
+    });
+    currentUser = normalizeUserRecord({
+        ...currentUser,
+        ...(patched || {}),
+        role
+    }, currentUser.login);
+    selectedRole = role;
+    localStorage.setItem(USER_ROLE_KEY, role);
+    currentRoleDisplay.textContent = getRoleLabelUi(role);
+    applyRoleRestrictions();
+    showCopyNotification(`Роль изменена на ${getRoleLabelUi(role)}`);
+}
 
 // Cancel role change
 roleChangeCancelBtn.addEventListener('click', () => {
@@ -4109,10 +4108,22 @@ roleChangeCancelBtn.addEventListener('click', () => {
 
 // Confirm role change (for User -> Admin)
 roleChangeConfirmBtn.addEventListener('click', () => {
-    roleChangePassword.style.display = 'none';
-    roleChangePasswordInput.value = '';
-    roleChangeError.style.display = 'none';
-    showCopyNotification('Повышение роли по паролю отключено из соображений безопасности.');
+    const password = roleChangePasswordInput.value.trim();
+    
+    if (password === ADMIN_PASSWORD) {
+        switchRole('admin');
+        roleChangePassword.style.display = 'none';
+        roleChangePasswordInput.value = '';
+        roleChangeError.style.display = 'none';
+    } else {
+        roleChangeError.style.display = 'block';
+        roleChangePasswordInput.value = '';
+        roleChangePasswordInput.style.borderColor = '#ff5555';
+        setTimeout(() => {
+            roleChangePasswordInput.style.borderColor = '';
+            roleChangeError.style.display = 'none';
+        }, 2000);
+    }
 });
 
 if (adminRefreshBtn) {
@@ -4192,11 +4203,6 @@ if (promptHistoryModal) {
         }
     });
 }
-if (authMailHelpImage) {
-    authMailHelpImage.addEventListener('error', () => {
-        authMailHelpImage.style.display = 'none';
-    });
-}
 
 // ============ CHAT FUNCTIONS ============
 
@@ -4211,14 +4217,13 @@ function autoResizeTextarea(textarea) {
 }
 
 function addMessage(content, role, isMarkdown = false) {
-    const safeRole = ['user', 'assistant', 'error', 'loading'].includes(role) ? role : 'assistant';
     const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${safeRole}`;
+    messageDiv.className = `message ${role}`;
     
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
     
-    if (safeRole === 'loading') {
+    if (role === 'loading') {
         contentDiv.innerHTML = `<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>`;
     } else if (isMarkdown) {
         contentDiv.innerHTML = renderMarkdown(content);
@@ -5056,22 +5061,15 @@ function exportToRtf(messages, filename) {
 function exportToPdf(messages, filename) {
     const content = messages.map(msg => {
         const roleColor = msg.role === 'ОЦЕНКА ДИАЛОГА' ? '#ff9900' : '#2e74b5';
-        const safeRole = escapeHtml(msg.role);
-        const safeContent = escapeHtml(msg.content).replace(/\n/g, '<br>');
-        return `<div style="margin-bottom: 16px;"><strong style="color: ${roleColor};">${safeRole}:</strong><br>${safeContent}</div>`;
+        return `<div style="margin-bottom: 16px;"><strong style="color: ${roleColor};">${msg.role}:</strong><br>${msg.content.replace(/\n/g, '<br>')}</div>`;
     }).join('');
     
     const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-        alert('Не удалось открыть окно печати. Разрешите всплывающие окна для сайта.');
-        return;
-    }
-    const safeTitle = escapeHtml(filename);
     printWindow.document.write(`
         <!DOCTYPE html>
         <html>
         <head>
-            <title>${safeTitle}</title>
+            <title>${filename}</title>
             <style>
                 body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; line-height: 1.6; }
                 h1 { text-align: center; margin-bottom: 30px; }
@@ -5093,16 +5091,11 @@ function exportPromptToPdf(text, filename) {
     const content = renderMarkdown(text);
     
     const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-        alert('Не удалось открыть окно печати. Разрешите всплывающие окна для сайта.');
-        return;
-    }
-    const safeTitle = escapeHtml(filename);
     printWindow.document.write(`
         <!DOCTYPE html>
         <html>
         <head>
-            <title>${safeTitle}</title>
+            <title>${filename}</title>
             <style>
                 body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; line-height: 1.6; }
                 h1, h2, h3 { margin-top: 24px; margin-bottom: 12px; }
@@ -5305,112 +5298,8 @@ async function copyPromptToClipboard(text, label) {
         alert('Ошибка копирования');
     }
     }
-
+    
 // ============ MARKDOWN RENDERING ============
-
-function escapeHtml(value) {
-    return String(value || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
-
-const MARKDOWN_ALLOWED_TAGS = new Set([
-    'a', 'blockquote', 'br', 'code', 'del', 'div', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-    'hr', 'i', 'li', 'ol', 'p', 'pre', 's', 'span', 'strong', 'table', 'tbody', 'td', 'th',
-    'thead', 'tr', 'u', 'ul'
-]);
-const MARKDOWN_STRIP_WITH_CONTENT_TAGS = new Set(['script', 'style', 'iframe', 'object', 'embed', 'link', 'meta', 'base', 'form']);
-
-function isSafeLinkHref(href) {
-    const value = String(href || '').trim();
-    if (!value) return false;
-    if (value.startsWith('#') || value.startsWith('/')) return true;
-    try {
-        const url = new URL(value, window.location.origin);
-        return ['http:', 'https:', 'mailto:', 'tel:'].includes(url.protocol);
-    } catch (error) {
-        return false;
-    }
-}
-
-function sanitizeMarkdownHtml(rawHtml) {
-    const template = document.createElement('template');
-    template.innerHTML = String(rawHtml || '');
-
-    const elements = Array.from(template.content.querySelectorAll('*'));
-    elements.forEach((element) => {
-        const tag = element.tagName.toLowerCase();
-
-        if (MARKDOWN_STRIP_WITH_CONTENT_TAGS.has(tag)) {
-            element.remove();
-            return;
-        }
-
-        if (!MARKDOWN_ALLOWED_TAGS.has(tag)) {
-            const fragment = document.createDocumentFragment();
-            while (element.firstChild) {
-                fragment.appendChild(element.firstChild);
-            }
-            element.replaceWith(fragment);
-            return;
-        }
-
-        Array.from(element.attributes).forEach((attribute) => {
-            const name = attribute.name.toLowerCase();
-            const value = attribute.value;
-
-            if (name.startsWith('on') || name === 'style' || name === 'id') {
-                element.removeAttribute(attribute.name);
-                return;
-            }
-
-            if (name === 'class') {
-                const safeClasses = value
-                    .split(/\s+/)
-                    .map(cls => cls.trim())
-                    .filter(Boolean)
-                    .filter(cls =>
-                        cls === 'diff-added' ||
-                        cls === 'diff-removed' ||
-                        cls === 'hljs' ||
-                        cls.startsWith('hljs-') ||
-                        cls.startsWith('language-')
-                    );
-                if (safeClasses.length > 0) {
-                    element.setAttribute('class', safeClasses.join(' '));
-                } else {
-                    element.removeAttribute('class');
-                }
-                return;
-            }
-
-            if (tag === 'a' && name === 'href') {
-                if (!isSafeLinkHref(value)) {
-                    element.removeAttribute('href');
-                    return;
-                }
-                element.setAttribute('rel', 'noopener noreferrer nofollow');
-                element.setAttribute('target', '_blank');
-                return;
-            }
-
-            if (tag === 'a' && (name === 'rel' || name === 'target' || name === 'title')) {
-                return;
-            }
-
-            if ((tag === 'th' || tag === 'td') && (name === 'colspan' || name === 'rowspan')) {
-                return;
-            }
-
-            element.removeAttribute(attribute.name);
-        });
-    });
-
-    return template.innerHTML;
-}
 
 function renderMarkdown(text) {
     if (!text) return '<p style="color: #666; font-style: italic;">Промпт пустой...</p>';
@@ -5418,13 +5307,10 @@ function renderMarkdown(text) {
     // Unescape any escaped markdown characters first
     let cleanText = unescapeMarkdown(text);
     
-    if (typeof marked !== 'undefined') {
-        return sanitizeMarkdownHtml(marked.parse(cleanText));
-    }
+    if (typeof marked !== 'undefined') return marked.parse(cleanText);
     
     // Simple fallback
-    const safeText = escapeHtml(cleanText);
-    return '<p>' + safeText
+    return '<p>' + cleanText
         .replace(/^###\s+(.+)$/gm, '<h3>$1</h3>')
         .replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
         .replace(/^#\s+(.+)$/gm, '<h1>$1</h1>')
@@ -5515,7 +5401,7 @@ function setupWYSIWYG(previewElement, textarea, callback) {
             if (html) {
                 // Handle HTML paste to preserve formatting
                 const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = sanitizeMarkdownHtml(html);
+                tempDiv.innerHTML = html;
                 const fragment = document.createDocumentFragment();
                 while (tempDiv.firstChild) fragment.appendChild(tempDiv.firstChild);
                 range.insertNode(fragment);
