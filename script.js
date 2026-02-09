@@ -70,6 +70,7 @@ const CORPORATE_EMAIL_DOMAINS = new Set([
 const USER_ROLE_KEY = 'userRole';
 const USER_NAME_KEY = 'managerName';
 const USER_LOGIN_KEY = 'managerLogin';
+const MAX_FAILED_PASSWORD_ATTEMPTS = 15;
 const ACTIVE_IDLE_TIMEOUT_MS = 60000;
 const ACTIVE_TICK_MS = 5000;
 const ACTIVE_FLUSH_MS = 15000;
@@ -893,6 +894,8 @@ function normalizeUserRecord(raw, loginFallback = '') {
     if (!raw || typeof raw !== 'object') return null;
     const login = normalizeLogin(raw.login || loginFallback);
     if (!isValidLogin(login)) return null;
+    const failedLoginAttempts = Math.max(0, Number(raw.failedLoginAttempts) || 0);
+    const isBlocked = !!raw.isBlocked;
     return {
         login,
         fio: normalizeFio(raw.fio || ''),
@@ -900,6 +903,9 @@ function normalizeUserRecord(raw, loginFallback = '') {
         passwordHash: String(raw.passwordHash || ''),
         emailVerifiedAt: raw.emailVerifiedAt || null,
         emailVerificationSentAt: raw.emailVerificationSentAt || null,
+        failedLoginAttempts,
+        isBlocked,
+        blockedAt: isBlocked ? (raw.blockedAt || new Date().toISOString()) : null,
         createdAt: raw.createdAt || new Date().toISOString(),
         lastLoginAt: raw.lastLoginAt || null,
         lastSeenAt: raw.lastSeenAt || null,
@@ -939,6 +945,9 @@ async function saveUserRecord(record) {
         passwordHash: normalized.passwordHash,
         emailVerifiedAt: normalized.emailVerifiedAt,
         emailVerificationSentAt: normalized.emailVerificationSentAt,
+        failedLoginAttempts: normalized.failedLoginAttempts,
+        isBlocked: normalized.isBlocked,
+        blockedAt: normalized.blockedAt,
         createdAt: normalized.createdAt,
         lastLoginAt: normalized.lastLoginAt,
         lastSeenAt: normalized.lastSeenAt,
@@ -978,6 +987,15 @@ async function patchUserRecord(login, patch = {}) {
     }
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'emailVerificationSentAt')) {
         sanitizedPatch.emailVerificationSentAt = sanitizedPatch.emailVerificationSentAt || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'failedLoginAttempts')) {
+        sanitizedPatch.failedLoginAttempts = Math.max(0, Number(sanitizedPatch.failedLoginAttempts) || 0);
+    }
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'isBlocked')) {
+        sanitizedPatch.isBlocked = !!sanitizedPatch.isBlocked;
+    }
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'blockedAt')) {
+        sanitizedPatch.blockedAt = sanitizedPatch.blockedAt || null;
     }
 
     if (db) {
@@ -1390,9 +1408,26 @@ async function handleAuthSubmit() {
         let targetUser = null;
 
         if (existingUser) {
+            if (existingUser.isBlocked) {
+                throw new Error('Сайт заблокирован для этого аккаунта после 15 неверных попыток ввода пароля. Обратитесь к администратору.');
+            }
             const existingIsVerified = !!existingUser.emailVerifiedAt;
             if (existingIsVerified && existingUser.passwordHash !== passwordHash) {
-                throw new Error('Неверный логин или пароль.');
+                const failedAttempts = Math.max(0, Number(existingUser.failedLoginAttempts) || 0) + 1;
+                const shouldBlock = failedAttempts >= MAX_FAILED_PASSWORD_ATTEMPTS;
+                await patchUserRecord(login, {
+                    failedLoginAttempts: failedAttempts,
+                    isBlocked: shouldBlock,
+                    blockedAt: shouldBlock ? nowIso : null,
+                    lastSeenAt: nowIso
+                });
+
+                if (shouldBlock) {
+                    throw new Error('Сайт заблокирован для этого аккаунта после 15 неверных попыток ввода пароля. Обратитесь к администратору.');
+                }
+
+                const attemptsLeft = Math.max(0, MAX_FAILED_PASSWORD_ATTEMPTS - failedAttempts);
+                throw new Error(`Неверный логин или пароль. Осталось попыток до блокировки: ${attemptsLeft}.`);
             }
             const resolvedRole = existingUser.role === 'admin'
                 ? 'admin'
@@ -1404,6 +1439,9 @@ async function handleAuthSubmit() {
                 fio,
                 passwordHash: existingIsVerified ? existingUser.passwordHash : passwordHash,
                 emailVerifiedAt: verifiedAt,
+                failedLoginAttempts: 0,
+                isBlocked: false,
+                blockedAt: null,
                 lastLoginAt: nowIso,
                 lastSeenAt: nowIso
             };
@@ -1417,6 +1455,9 @@ async function handleAuthSubmit() {
                 passwordHash,
                 emailVerifiedAt: verifiedAt,
                 emailVerificationSentAt: null,
+                failedLoginAttempts: 0,
+                isBlocked: false,
+                blockedAt: null,
                 activeMs: 0,
                 createdAt: nowIso,
                 lastLoginAt: nowIso,
@@ -1453,6 +1494,10 @@ async function restoreAuthSession() {
     if (!session?.login) return false;
     const user = await getUserRecordByLogin(session.login);
     if (!user) {
+        clearAuthSession();
+        return false;
+    }
+    if (user.isBlocked) {
         clearAuthSession();
         return false;
     }
