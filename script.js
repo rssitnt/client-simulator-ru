@@ -210,6 +210,48 @@ function agentLog(message, dataFactory, meta = {}) {
 }
 
 // Utility function for fetch with timeout
+function getFetchTargetLabel(url) {
+    try {
+        const parsed = new URL(String(url), window.location.href);
+        return parsed.host || parsed.href;
+    } catch (error) {
+        return String(url || '');
+    }
+}
+
+function isNetworkFetchError(error) {
+    const message = String(error?.message || '').toLowerCase();
+    return (
+        error instanceof TypeError ||
+        message.includes('failed to fetch') ||
+        message.includes('networkerror') ||
+        message.includes('network request failed') ||
+        message.includes('load failed')
+    );
+}
+
+function toReadableFetchError(error, url, timeoutMs) {
+    if (error?.name === 'AbortError') {
+        const timeoutError = new Error(`Таймаут запроса (${timeoutMs / 1000}с). Проверьте n8n workflow.`);
+        timeoutError.code = 'FETCH_TIMEOUT';
+        return timeoutError;
+    }
+
+    if (isNetworkFetchError(error)) {
+        const target = getFetchTargetLabel(url);
+        const offline = typeof navigator !== 'undefined' && navigator && navigator.onLine === false;
+        const details = offline
+            ? 'Похоже, нет интернет-соединения.'
+            : `Не удалось получить ответ от ${target}. Если в логах n8n запрос виден, проверьте CORS/SSL на вебхуке.`;
+        const networkError = new Error(`Failed to fetch: ${details}`);
+        networkError.code = offline ? 'FETCH_OFFLINE' : 'FETCH_NETWORK';
+        networkError.originalMessage = String(error?.message || '');
+        return networkError;
+    }
+
+    return error instanceof Error ? error : new Error(String(error || 'Unknown error'));
+}
+
 async function fetchWithTimeout(url, options = {}, timeoutMs = 300000) {
     console.log(`[Fetch] Starting request to: ${url.substring(0, 50)}... with timeout: ${timeoutMs/1000}s`);
     const startTime = Date.now();
@@ -231,11 +273,7 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 300000) {
     } catch (error) {
         const duration = ((Date.now() - startTime) / 1000).toFixed(2);
         console.error(`[Fetch] Request failed after ${duration}s:`, error);
-        
-        if (error.name === 'AbortError') {
-            throw new Error(`Таймаут запроса (${timeoutMs/1000}с). Проверьте n8n workflow.`);
-        }
-        throw error;
+        throw toReadableFetchError(error, url, timeoutMs);
     }
 }
 
@@ -4519,6 +4557,7 @@ function clearAttestationQueueRetryTimer() {
 function isRetryableAttestationError(error) {
     const status = Number(error?.httpStatus || 0);
     if (status === 408 || status === 425 || status === 429 || status >= 500) return true;
+    if (String(error?.code || '').startsWith('FETCH_')) return true;
     const message = String(error?.message || '').toLowerCase();
     return (
         message.includes('failed to fetch') ||
@@ -4633,6 +4672,7 @@ async function flushAttestationQueue(options = {}) {
 function isRetryableRatingError(error) {
     const status = Number(error?.httpStatus || 0);
     if (status === 408 || status === 429 || status >= 500) return true;
+    if (String(error?.code || '').startsWith('FETCH_')) return true;
     const message = String(error?.message || '').toLowerCase();
     return (
         message.includes('failed to fetch') ||
