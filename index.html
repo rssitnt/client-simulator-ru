@@ -23,7 +23,7 @@
     <link rel="shortcut icon" href="favicon/favicon.ico">
 </head>
 <body>
-    <!-- Модальное окно для ввода имени -->
+    <!-- Модальное окно авторизации -->
     <div id="nameModal" class="modal-overlay">
         <div class="modal-content">
             <div id="nameModalStep1">
@@ -33,27 +33,13 @@
                     <li>Создавать ИИ-симуляторов клиента для тренировки ассистентов и ИИ-ассистентов на вымышленных диалогах</li>
                     <li>Оценивать диалоги ассистента по вашему регламенту</li>
                 </ol>
-                <p>Введите ваше имя для начала работы:</p>
-                <input type="text" id="modalNameInput" placeholder="Например: Кирилл" maxlength="50" autofocus>
-                
-                <p style="margin-top: 20px;">Выберите вашу роль:</p>
-                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-                    <button id="roleUserBtn" class="btn-role" style="flex: 1;">Пользователь</button>
-                    <button id="roleAdminBtn" class="btn-role" style="flex: 1;">Админ</button>
-                </div>
-                
-                <button id="modalNameSubmit" class="btn-modal-submit" disabled>Продолжить</button>
-            </div>
-            
-            <div id="nameModalStep2" style="display: none;">
-                <h3>Вход для администратора</h3>
-                <p>Введите пароль:</p>
-                <input type="password" id="modalPasswordInput" placeholder="Пароль" maxlength="20">
-                <p id="passwordError" style="color: red; font-size: 14px; display: none; margin-top: 10px;">Неверный пароль!</p>
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button id="modalPasswordBack" class="btn-modal-cancel">Назад</button>
-                    <button id="modalPasswordSubmit" class="btn-modal-submit">Войти</button>
-                </div>
+                <p>Введите полное ФИО, логин и пароль:</p>
+                <input type="text" id="modalNameInput" placeholder="ФИО (например: Иванов Иван Иванович)" maxlength="120" autofocus>
+                <input type="text" id="modalLoginInput" placeholder="Логин (латиница, цифры, . _ -)" maxlength="40" autocomplete="username">
+                <input type="password" id="modalPasswordInput" placeholder="Пароль (минимум 6 символов)" maxlength="80" autocomplete="current-password">
+                <p id="passwordError" style="color: red; font-size: 14px; display: none; margin-top: 10px;">Ошибка авторизации</p>
+
+                <button id="modalNameSubmit" class="btn-modal-submit">Войти</button>
             </div>
         </div>
     </div>
@@ -193,9 +179,13 @@
                 </div>
             </div>
 
-            <!-- Имя -->
-            <div class="settings-row">
-                <input type="text" id="settingsNameInput" class="name-input" placeholder="Имя" maxlength="30">
+            <!-- Аккаунт -->
+            <div class="settings-row account-row">
+                <span class="settings-label">Аккаунт:</span>
+                <div class="account-block">
+                    <div class="account-line">Логин: <span id="accountLoginValue">-</span></div>
+                    <input type="text" id="settingsNameInput" class="name-input" placeholder="ФИО" maxlength="120">
+                </div>
             </div>
 
             <!-- Роль -->
@@ -212,6 +202,30 @@
                 <div class="password-buttons">
                     <button id="roleChangeCancelBtn" class="btn-cancel">Отмена</button>
                     <button id="roleChangeConfirmBtn" class="btn-confirm">OK</button>
+                </div>
+            </div>
+
+            <!-- Панель администратора -->
+            <div id="adminPanel" class="admin-panel" style="display: none;">
+                <div class="admin-panel-header">
+                    <span class="admin-panel-title">Панель администратора</span>
+                    <button id="adminRefreshBtn" class="btn-change">Обновить</button>
+                </div>
+                <div class="admin-table-wrap">
+                    <table class="admin-users-table">
+                        <thead>
+                            <tr>
+                                <th>Логин</th>
+                                <th>Роль</th>
+                                <th>Активное время</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminUsersTableBody">
+                            <tr>
+                                <td colspan="3" class="admin-empty">Нет данных</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 

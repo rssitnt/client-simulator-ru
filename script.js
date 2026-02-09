@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+import { getDatabase, ref, onValue, set, get, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 import { firebaseConfig } from "./firebase-config.js";
 
 // Initialize Firebase
@@ -27,6 +27,15 @@ const ATTESTATION_SEND_ATTEMPTS = 3;
 const ATTESTATION_QUEUE_MAX_FAILURES = 8;
 const ATTESTATION_SEND_RETRY_BASE_MS = 800;
 const ATTESTATION_QUEUE_RETRY_DELAY_MS = 12000;
+const AUTH_USERS_DB_PATH = 'users';
+const AUTH_LOCAL_STORAGE_KEY = 'authUsers:v1';
+const AUTH_SESSION_STORAGE_KEY = 'authSession:v1';
+const USER_ROLE_KEY = 'userRole';
+const USER_NAME_KEY = 'managerName';
+const USER_LOGIN_KEY = 'managerLogin';
+const ACTIVE_IDLE_TIMEOUT_MS = 60000;
+const ACTIVE_TICK_MS = 5000;
+const ACTIVE_FLUSH_MS = 15000;
 
 const RATER_PROMPT_VERSION = '2025-01-30';
 const DEFAULT_RATER_PROMPT = `РОЛЬ
@@ -211,15 +220,11 @@ const exitAttestationBtn = document.getElementById('exitAttestationBtn');
 const startAttestationBtn = document.getElementById('startAttestationBtn');
 const nameModal = document.getElementById('nameModal');
 const modalNameInput = document.getElementById('modalNameInput');
+const modalLoginInput = document.getElementById('modalLoginInput');
 const modalNameSubmit = document.getElementById('modalNameSubmit');
 const nameModalStep1 = document.getElementById('nameModalStep1');
-const nameModalStep2 = document.getElementById('nameModalStep2');
-const roleUserBtn = document.getElementById('roleUserBtn');
-const roleAdminBtn = document.getElementById('roleAdminBtn');
 const modalPasswordInput = document.getElementById('modalPasswordInput');
-const modalPasswordSubmit = document.getElementById('modalPasswordSubmit');
-const modalPasswordBack = document.getElementById('modalPasswordBack');
-const passwordError = document.getElementById('passwordError');
+const authErrorText = document.getElementById('passwordError');
 const promptVariationsContainer = document.getElementById('promptVariations');
 
 // AI Improve Modal Elements
@@ -253,6 +258,7 @@ const settingsBtn = document.getElementById('settingsBtn');
 const settingsModal = document.getElementById('settingsModal');
 const currentUserName = document.getElementById('currentUserName');
 const settingsNameInput = document.getElementById('settingsNameInput');
+const accountLoginValue = document.getElementById('accountLoginValue');
 const themeToggle = document.getElementById('themeToggle');
 const currentRoleDisplay = document.getElementById('currentRoleDisplay');
 const changeRoleBtn = document.getElementById('changeRoleBtn');
@@ -267,6 +273,9 @@ const exportMenu = document.getElementById('exportMenu');
 const exportPromptMenu = document.getElementById('exportPromptMenu');
 const exportChatSettingsMenu = document.getElementById('exportChatSettingsMenu');
 const exportPromptSettingsMenu = document.getElementById('exportPromptSettingsMenu');
+const adminPanel = document.getElementById('adminPanel');
+const adminRefreshBtn = document.getElementById('adminRefreshBtn');
+const adminUsersTableBody = document.getElementById('adminUsersTableBody');
 const instructionSelectEl = document.getElementById('instructionSelect');
 const panelsContainer = document.querySelector('.panels-container');
 const instructionsPanelElement = document.getElementById('instructionsPanel');
@@ -336,7 +345,8 @@ let lastRating = null;
 let isDialogRated = false;
 let isUserEditing = false;
 let lastFirebaseData = null;
-let selectedRole = null; // 'user' or 'admin'
+let selectedRole = 'user';
+let currentUser = null;
 const ADMIN_PASSWORD = '1357246';
 let lockedPromptRole = null;
 let lockedPromptVariationId = null;
@@ -347,6 +357,12 @@ let reratePromptElement = null;
 let attestationQueue = [];
 let isAttestationQueueFlushInProgress = false;
 let attestationQueueRetryTimer = null;
+let activeTickTimerId = null;
+let pendingActiveMs = 0;
+let lastActiveTickAt = Date.now();
+let lastUserActivityAt = Date.now();
+let hasActivityListeners = false;
+let fioSaveTimeout = null;
 let publicActiveIds = {
     client: null,
     manager: null,
@@ -361,9 +377,486 @@ let promptsData = {
     rater: { variations: [], activeId: null }
 };
 
+function normalizeFio(value) {
+    return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
+function normalizeLogin(value) {
+    return String(value || '').trim().toLowerCase();
+}
+
+function isValidFio(value) {
+    const fio = normalizeFio(value);
+    if (fio.length < 8) return false;
+    return fio.split(' ').filter(Boolean).length >= 2;
+}
+
+function isValidLogin(value) {
+    return /^[a-z0-9._-]{3,32}$/i.test(normalizeLogin(value));
+}
+
+function isValidPassword(value) {
+    return String(value || '').length >= 6;
+}
+
+function loginToStorageKey(login) {
+    const normalized = normalizeLogin(login);
+    return Array.from(normalized)
+        .map((char) => char.codePointAt(0).toString(16))
+        .join('_');
+}
+
+function setAuthSession(login) {
+    localStorage.setItem(AUTH_SESSION_STORAGE_KEY, JSON.stringify({
+        login: normalizeLogin(login),
+        signedAt: new Date().toISOString()
+    }));
+}
+
+function getAuthSession() {
+    try {
+        const raw = localStorage.getItem(AUTH_SESSION_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed.login === 'string' ? parsed : null;
+    } catch (error) {
+        return null;
+    }
+}
+
+function clearAuthSession() {
+    localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
+}
+
+function loadLocalUsersStore() {
+    try {
+        const raw = localStorage.getItem(AUTH_LOCAL_STORAGE_KEY);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (error) {
+        return {};
+    }
+}
+
+function saveLocalUsersStore(store) {
+    try {
+        localStorage.setItem(AUTH_LOCAL_STORAGE_KEY, JSON.stringify(store || {}));
+    } catch (error) {
+        console.error('Failed to persist local auth store:', error);
+    }
+}
+
+async function hashPassword(login, password) {
+    const normalizedLogin = normalizeLogin(login);
+    const value = `${normalizedLogin}::${String(password || '')}`;
+    try {
+        if (window.crypto?.subtle && typeof TextEncoder !== 'undefined') {
+            const data = new TextEncoder().encode(value);
+            const digest = await window.crypto.subtle.digest('SHA-256', data);
+            return Array.from(new Uint8Array(digest))
+                .map((b) => b.toString(16).padStart(2, '0'))
+                .join('');
+        }
+    } catch (error) {
+        console.warn('crypto.subtle hash failed, fallback used', error);
+    }
+    return btoa(unescape(encodeURIComponent(value)));
+}
+
+function normalizeUserRecord(raw, loginFallback = '') {
+    if (!raw || typeof raw !== 'object') return null;
+    const login = normalizeLogin(raw.login || loginFallback);
+    if (!login) return null;
+    return {
+        login,
+        fio: normalizeFio(raw.fio || ''),
+        role: raw.role === 'admin' ? 'admin' : 'user',
+        passwordHash: String(raw.passwordHash || ''),
+        createdAt: raw.createdAt || new Date().toISOString(),
+        lastLoginAt: raw.lastLoginAt || null,
+        lastSeenAt: raw.lastSeenAt || null,
+        activeMs: Number.isFinite(raw.activeMs) ? Math.max(0, Number(raw.activeMs)) : 0
+    };
+}
+
+async function getUserRecordByLogin(login) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!normalizedLogin) return null;
+    const key = loginToStorageKey(normalizedLogin);
+
+    if (db) {
+        try {
+            const snapshot = await get(ref(db, `${AUTH_USERS_DB_PATH}/${key}`));
+            if (snapshot.exists()) {
+                const record = normalizeUserRecord(snapshot.val(), normalizedLogin);
+                if (record) return record;
+            }
+        } catch (error) {
+            console.error('Failed to load user from Firebase:', error);
+        }
+    }
+
+    const localStore = loadLocalUsersStore();
+    return normalizeUserRecord(localStore[key], normalizedLogin);
+}
+
+async function saveUserRecord(record) {
+    const normalized = normalizeUserRecord(record, record?.login);
+    if (!normalized) throw new Error('Invalid user record');
+    const key = loginToStorageKey(normalized.login);
+    const payload = {
+        login: normalized.login,
+        fio: normalized.fio,
+        role: normalized.role,
+        passwordHash: normalized.passwordHash,
+        createdAt: normalized.createdAt,
+        lastLoginAt: normalized.lastLoginAt,
+        lastSeenAt: normalized.lastSeenAt,
+        activeMs: normalized.activeMs
+    };
+
+    if (db) {
+        try {
+            await set(ref(db, `${AUTH_USERS_DB_PATH}/${key}`), payload);
+        } catch (error) {
+            console.error('Failed to save user to Firebase:', error);
+        }
+    }
+
+    const localStore = loadLocalUsersStore();
+    localStore[key] = payload;
+    saveLocalUsersStore(localStore);
+    return payload;
+}
+
+async function patchUserRecord(login, patch = {}) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!normalizedLogin) return null;
+    const key = loginToStorageKey(normalizedLogin);
+    const sanitizedPatch = { ...patch };
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'fio')) {
+        sanitizedPatch.fio = normalizeFio(sanitizedPatch.fio);
+    }
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'role')) {
+        sanitizedPatch.role = sanitizedPatch.role === 'admin' ? 'admin' : 'user';
+    }
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'activeMs')) {
+        sanitizedPatch.activeMs = Math.max(0, Number(sanitizedPatch.activeMs) || 0);
+    }
+
+    if (db) {
+        try {
+            await update(ref(db, `${AUTH_USERS_DB_PATH}/${key}`), sanitizedPatch);
+        } catch (error) {
+            console.error('Failed to patch user in Firebase:', error);
+        }
+    }
+
+    const localStore = loadLocalUsersStore();
+    const merged = {
+        ...(localStore[key] || { login: normalizedLogin, role: 'user', activeMs: 0 }),
+        ...sanitizedPatch,
+        login: normalizedLogin
+    };
+    localStore[key] = merged;
+    saveLocalUsersStore(localStore);
+    return normalizeUserRecord(merged, normalizedLogin);
+}
+
+async function listAllUserRecords() {
+    if (db) {
+        try {
+            const snapshot = await get(ref(db, AUTH_USERS_DB_PATH));
+            if (snapshot.exists()) {
+                const raw = snapshot.val();
+                const records = Object.values(raw || {})
+                    .map((item) => normalizeUserRecord(item))
+                    .filter(Boolean);
+                if (records.length > 0) {
+                    return records.sort((a, b) => a.login.localeCompare(b.login));
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load users list from Firebase:', error);
+        }
+    }
+
+    const localStore = loadLocalUsersStore();
+    return Object.values(localStore || {})
+        .map((item) => normalizeUserRecord(item))
+        .filter(Boolean)
+        .sort((a, b) => a.login.localeCompare(b.login));
+}
+
+function applyAuthenticatedUser(user) {
+    const normalized = normalizeUserRecord(user, user?.login);
+    if (!normalized) return;
+
+    currentUser = normalized;
+    selectedRole = normalized.role;
+    localStorage.setItem(USER_ROLE_KEY, normalized.role);
+    localStorage.setItem(USER_NAME_KEY, normalized.fio);
+    localStorage.setItem(USER_LOGIN_KEY, normalized.login);
+    managerNameInput.value = normalized.fio;
+
+    if (currentRoleDisplay) {
+        currentRoleDisplay.textContent = normalized.role === 'admin' ? 'Админ' : 'Юзер';
+    }
+    if (settingsNameInput) {
+        settingsNameInput.value = normalized.fio;
+    }
+    if (accountLoginValue) {
+        accountLoginValue.textContent = normalized.login;
+    }
+
+    updateUserNameDisplay();
+    applyRoleRestrictions();
+}
+
+function setAuthError(message = '') {
+    if (!authErrorText) return;
+    if (!message) {
+        authErrorText.textContent = '';
+        authErrorText.style.display = 'none';
+        return;
+    }
+    authErrorText.textContent = message;
+    authErrorText.style.display = 'block';
+}
+
+function markUserActivity() {
+    lastUserActivityAt = Date.now();
+}
+
+function initUserActivityTrackingListeners() {
+    if (hasActivityListeners) return;
+    hasActivityListeners = true;
+
+    const activityEvents = ['pointerdown', 'pointermove', 'keydown', 'scroll', 'touchstart', 'wheel'];
+    activityEvents.forEach((eventName) => {
+        window.addEventListener(eventName, markUserActivity, { passive: true });
+    });
+    window.addEventListener('focus', markUserActivity);
+    document.addEventListener('visibilitychange', () => {
+        markUserActivity();
+        if (document.visibilityState !== 'visible') {
+            flushActiveTime(true);
+        }
+    });
+    window.addEventListener('beforeunload', () => {
+        flushActiveTime(true);
+    });
+    window.addEventListener('pagehide', () => {
+        flushActiveTime(true);
+    });
+}
+
+function isUserCurrentlyActive() {
+    if (!currentUser) return false;
+    if (document.visibilityState !== 'visible') return false;
+    if (!document.hasFocus()) return false;
+    return Date.now() - lastUserActivityAt <= ACTIVE_IDLE_TIMEOUT_MS;
+}
+
+async function flushActiveTime(force = false) {
+    if (!currentUser) return;
+    if (!force && pendingActiveMs < ACTIVE_FLUSH_MS) return;
+    if (pendingActiveMs <= 0) return;
+
+    const increment = Math.max(0, Math.round(pendingActiveMs));
+    pendingActiveMs = 0;
+    currentUser.activeMs = Math.max(0, Number(currentUser.activeMs) + increment);
+
+    if (isAdmin() && adminPanel?.style.display !== 'none') {
+        renderAdminUsersTable();
+    }
+    await patchUserRecord(currentUser.login, {
+        activeMs: currentUser.activeMs,
+        lastSeenAt: new Date().toISOString()
+    });
+}
+
+function startActiveTimeTracking() {
+    initUserActivityTrackingListeners();
+    lastUserActivityAt = Date.now();
+    lastActiveTickAt = Date.now();
+    pendingActiveMs = 0;
+
+    if (activeTickTimerId) {
+        clearInterval(activeTickTimerId);
+        activeTickTimerId = null;
+    }
+
+    activeTickTimerId = setInterval(() => {
+        const now = Date.now();
+        const delta = now - lastActiveTickAt;
+        lastActiveTickAt = now;
+        if (!isUserCurrentlyActive()) return;
+        pendingActiveMs += delta;
+        flushActiveTime(false);
+    }, ACTIVE_TICK_MS);
+}
+
+function formatActiveTime(ms) {
+    const totalSeconds = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    if (hours > 0) return `${hours}ч ${String(minutes).padStart(2, '0')}м`;
+    if (minutes > 0) return `${minutes}м ${String(seconds).padStart(2, '0')}с`;
+    return `${seconds}с`;
+}
+
+async function renderAdminUsersTable() {
+    if (!adminPanel || !adminUsersTableBody) return;
+
+    if (!isAdmin()) {
+        adminPanel.style.display = 'none';
+        return;
+    }
+
+    adminPanel.style.display = '';
+    adminUsersTableBody.innerHTML = '<tr><td colspan="3" class="admin-empty">Загрузка...</td></tr>';
+
+    const users = await listAllUserRecords();
+    if (!users.length) {
+        adminUsersTableBody.innerHTML = '<tr><td colspan="3" class="admin-empty">Пользователи не найдены</td></tr>';
+        return;
+    }
+
+    adminUsersTableBody.innerHTML = '';
+    users.forEach((user) => {
+        const row = document.createElement('tr');
+
+        const loginCell = document.createElement('td');
+        loginCell.textContent = user.login;
+
+        const roleCell = document.createElement('td');
+        const roleSelect = document.createElement('select');
+        roleSelect.className = 'admin-role-select';
+        roleSelect.innerHTML = `
+            <option value="user">Юзер</option>
+            <option value="admin">Админ</option>
+        `;
+        roleSelect.value = user.role === 'admin' ? 'admin' : 'user';
+        roleSelect.addEventListener('change', async () => {
+            const nextRole = roleSelect.value === 'admin' ? 'admin' : 'user';
+            roleSelect.disabled = true;
+            await patchUserRecord(user.login, {
+                role: nextRole,
+                lastSeenAt: new Date().toISOString()
+            });
+            roleSelect.disabled = false;
+
+            if (currentUser && user.login === currentUser.login) {
+                currentUser.role = nextRole;
+                selectedRole = nextRole;
+                localStorage.setItem(USER_ROLE_KEY, nextRole);
+                if (currentRoleDisplay) {
+                    currentRoleDisplay.textContent = nextRole === 'admin' ? 'Админ' : 'Юзер';
+                }
+                applyRoleRestrictions();
+            }
+            showCopyNotification(`Роль ${user.login} обновлена`);
+            renderAdminUsersTable();
+        });
+        roleCell.appendChild(roleSelect);
+
+        const timeCell = document.createElement('td');
+        timeCell.className = 'admin-time';
+        timeCell.textContent = formatActiveTime(user.activeMs);
+
+        row.appendChild(loginCell);
+        row.appendChild(roleCell);
+        row.appendChild(timeCell);
+        adminUsersTableBody.appendChild(row);
+    });
+}
+
+async function handleAuthSubmit() {
+    if (!modalNameSubmit) return;
+    const fio = normalizeFio(modalNameInput?.value || '');
+    const login = normalizeLogin(modalLoginInput?.value || '');
+    const password = String(modalPasswordInput?.value || '');
+
+    if (!isValidFio(fio)) {
+        setAuthError('Введите полное ФИО (минимум 2 слова).');
+        modalNameInput?.focus();
+        return;
+    }
+    if (!isValidLogin(login)) {
+        setAuthError('Логин: 3-32 символа, латиница/цифры и . _ -');
+        modalLoginInput?.focus();
+        return;
+    }
+    if (!isValidPassword(password)) {
+        setAuthError('Пароль должен содержать минимум 6 символов.');
+        modalPasswordInput?.focus();
+        return;
+    }
+
+    setAuthError('');
+    modalNameSubmit.disabled = true;
+
+    try {
+        const existingUser = await getUserRecordByLogin(login);
+        const passwordHash = await hashPassword(login, password);
+        const nowIso = new Date().toISOString();
+        let targetUser = null;
+
+        if (existingUser) {
+            if (existingUser.passwordHash !== passwordHash) {
+                throw new Error('Неверный логин или пароль.');
+            }
+            targetUser = {
+                ...existingUser,
+                fio,
+                lastLoginAt: nowIso,
+                lastSeenAt: nowIso
+            };
+        } else {
+            targetUser = {
+                login,
+                fio,
+                role: 'user',
+                passwordHash,
+                activeMs: 0,
+                createdAt: nowIso,
+                lastLoginAt: nowIso,
+                lastSeenAt: nowIso
+            };
+        }
+
+        const savedUser = await saveUserRecord(targetUser);
+        setAuthSession(savedUser.login);
+        applyAuthenticatedUser(savedUser);
+        hideNameModal();
+        startActiveTimeTracking();
+    } catch (error) {
+        console.error('Auth error:', error);
+        setAuthError(error?.message || 'Ошибка авторизации');
+    } finally {
+        modalNameSubmit.disabled = false;
+    }
+}
+
+async function restoreAuthSession() {
+    const session = getAuthSession();
+    if (!session?.login) return false;
+    const user = await getUserRecordByLogin(session.login);
+    if (!user) {
+        clearAuthSession();
+        return false;
+    }
+    applyAuthenticatedUser(user);
+    startActiveTimeTracking();
+    return true;
+}
+
 // Check if current user is admin
 function isAdmin() {
-    return selectedRole === 'admin' || localStorage.getItem('userRole') === 'admin';
+    return selectedRole === 'admin' || localStorage.getItem(USER_ROLE_KEY) === 'admin';
 }
 
 // Apply role-based restrictions
@@ -435,6 +928,11 @@ function applyRoleRestrictions() {
 
     updatePromptVisibilityButton();
     updatePromptHistoryButton();
+    if (isAdminUser) {
+        renderAdminUsersTable();
+    } else if (adminPanel) {
+        adminPanel.style.display = 'none';
+    }
 }
 
 // Configure marked.js
@@ -1882,23 +2380,15 @@ function savePromptsToFirebaseNow() {
         .catch(e => console.error('Failed to sync:', e));
 }
 
-function loadPrompts() {
-    // Load manager name
-    const savedManagerName = localStorage.getItem('managerName');
-    const savedRole = localStorage.getItem('userRole');
-    
-    if (savedManagerName && savedRole) {
-        managerNameInput.value = savedManagerName;
-        selectedRole = savedRole;
-        console.log(`Welcome back, ${savedManagerName} (${savedRole})`);
-        
-        // Update user name display
-        updateUserNameDisplay();
-        
-        // Apply role-based restrictions
-        applyRoleRestrictions();
-    } else {
+async function loadPrompts() {
+    const restored = await restoreAuthSession();
+    if (!restored) {
+        selectedRole = 'user';
+        localStorage.setItem(USER_ROLE_KEY, 'user');
         showNameModal();
+    } else {
+        hideNameModal();
+        console.log(`Welcome back, ${currentUser?.fio || 'user'} (${selectedRole})`);
     }
 
     if (db) {
@@ -1971,111 +2461,42 @@ function loadPrompts() {
 // ============ NAME MODAL ============
 
 function showNameModal() {
+    if (!nameModal) return;
     nameModal.classList.add('active');
-    setTimeout(() => modalNameInput.focus(), 100);
+    if (nameModalStep1) {
+        nameModalStep1.style.display = 'block';
+    }
+    if (modalNameInput && !modalNameInput.value) {
+        modalNameInput.value = localStorage.getItem(USER_NAME_KEY) || '';
+    }
+    if (modalLoginInput && !modalLoginInput.value) {
+        modalLoginInput.value = localStorage.getItem(USER_LOGIN_KEY) || '';
+    }
+    if (modalPasswordInput) {
+        modalPasswordInput.value = '';
+    }
+    setAuthError('');
+    setTimeout(() => modalNameInput?.focus(), 100);
 }
 
 function hideNameModal() {
+    if (!nameModal) return;
     nameModal.classList.remove('active');
 }
 
-// Role selection
-roleUserBtn.addEventListener('click', () => {
-    selectedRole = 'user';
-    roleUserBtn.classList.add('selected');
-    roleAdminBtn.classList.remove('selected');
-    modalNameSubmit.disabled = false;
-});
+if (modalNameSubmit) {
+    modalNameSubmit.addEventListener('click', () => {
+        handleAuthSubmit();
+    });
+}
 
-roleAdminBtn.addEventListener('click', () => {
-    selectedRole = 'admin';
-    roleAdminBtn.classList.add('selected');
-    roleUserBtn.classList.remove('selected');
-    modalNameSubmit.disabled = false;
-});
-
-// Step 1: Name and role selection
-modalNameSubmit.addEventListener('click', () => {
-    const name = modalNameInput.value.trim();
-    
-    if (!name) {
-        modalNameInput.focus();
-        modalNameInput.style.borderColor = '#ff5555';
-        setTimeout(() => { modalNameInput.style.borderColor = ''; }, 1000);
-        return;
-    }
-    
-    if (!selectedRole) {
-        alert('Выберите роль');
-        return;
-    }
-    
-    // Save name
-    localStorage.setItem('managerName', name);
-    managerNameInput.value = name;
-    
-    if (selectedRole === 'user') {
-        // User - go straight to platform
-        localStorage.setItem('userRole', 'user');
-        hideNameModal();
-        updateUserNameDisplay();
-        applyRoleRestrictions();
-    } else {
-        // Admin - ask for password
-        nameModalStep1.style.display = 'none';
-        nameModalStep2.style.display = 'block';
-        setTimeout(() => modalPasswordInput.focus(), 100);
-    }
-});
-
-modalNameInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') modalNameSubmit.click();
-});
-
-// Step 2: Admin password verification
-modalPasswordSubmit.addEventListener('click', () => {
-    const password = modalPasswordInput.value.trim();
-    
-    if (password === ADMIN_PASSWORD) {
-        // Correct password
-        localStorage.setItem('userRole', 'admin');
-        selectedRole = 'admin';
-        hideNameModal();
-        updateUserNameDisplay();
-        applyRoleRestrictions();
-        // Reset modal for next time
-        nameModalStep1.style.display = 'block';
-        nameModalStep2.style.display = 'none';
-        modalPasswordInput.value = '';
-        passwordError.style.display = 'none';
-    } else {
-        // Wrong password
-        passwordError.style.display = 'block';
-        modalPasswordInput.value = '';
-        modalPasswordInput.focus();
-        modalPasswordInput.style.borderColor = '#ff5555';
-        setTimeout(() => { 
-            modalPasswordInput.style.borderColor = '';
-            passwordError.style.display = 'none';
-        }, 2000);
-    }
-});
-
-modalPasswordInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') modalPasswordSubmit.click();
-});
-
-// Back button in password step
-modalPasswordBack.addEventListener('click', () => {
-    nameModalStep1.style.display = 'block';
-    nameModalStep2.style.display = 'none';
-    modalPasswordInput.value = '';
-    passwordError.style.display = 'none';
-});
-
-managerNameInput.addEventListener('input', () => {
-    const name = managerNameInput.value.trim();
-    if (name) localStorage.setItem('managerName', name);
+[modalNameInput, modalLoginInput, modalPasswordInput].forEach((input) => {
+    input?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleAuthSubmit();
+        }
+    });
 });
 
 // ============ AI IMPROVE MODAL ============
@@ -2153,10 +2574,14 @@ function hidePromptHistoryModal() {
 
 function showSettingsModal() {
     hideTooltip(true);
-    const savedName = localStorage.getItem('managerName') || '';
-    const userRole = localStorage.getItem('userRole') || 'user';
-    
+    const savedName = currentUser?.fio || localStorage.getItem(USER_NAME_KEY) || '';
+    const userRole = currentUser?.role || localStorage.getItem(USER_ROLE_KEY) || 'user';
+    const loginValue = currentUser?.login || localStorage.getItem(USER_LOGIN_KEY) || '-';
+
     settingsNameInput.value = savedName;
+    if (accountLoginValue) {
+        accountLoginValue.textContent = loginValue || '-';
+    }
     autoResizeNameInput();
     currentRoleDisplay.textContent = userRole === 'admin' ? 'Админ' : 'Юзер';
     
@@ -2164,7 +2589,13 @@ function showSettingsModal() {
     roleChangePassword.style.display = 'none';
     roleChangePasswordInput.value = '';
     roleChangeError.style.display = 'none';
-    
+
+    if (isAdmin()) {
+        renderAdminUsersTable();
+    } else if (adminPanel) {
+        adminPanel.style.display = 'none';
+    }
+
     settingsModal.classList.add('active');
 }
 
@@ -2172,12 +2603,8 @@ const nameInputMeasureCanvas = document.createElement('canvas');
 const nameInputMeasureCtx = nameInputMeasureCanvas.getContext('2d');
 
 function autoResizeNameInput() {
-    const input = settingsNameInput;
-    const text = input.value || input.placeholder;
-    if (!nameInputMeasureCtx) return;
-    nameInputMeasureCtx.font = getComputedStyle(input).font;
-    const width = nameInputMeasureCtx.measureText(text).width;
-    input.style.width = Math.max(60, width + 24) + 'px';
+    if (!settingsNameInput) return;
+    settingsNameInput.style.width = '100%';
 }
 
 function hideSettingsModal() {
@@ -2185,8 +2612,8 @@ function hideSettingsModal() {
     }
 
 function updateUserNameDisplay() {
-    const name = localStorage.getItem('managerName') || 'Гость';
-    const role = localStorage.getItem('userRole') || 'user';
+    const name = currentUser?.fio || localStorage.getItem(USER_NAME_KEY) || 'Гость';
+    const role = currentUser?.role || localStorage.getItem(USER_ROLE_KEY) || 'user';
     const roleIcon = role === 'admin' ? '🔑' : '👤';
     currentUserName.textContent = `${roleIcon} ${name}`;
 }
@@ -2494,12 +2921,20 @@ settingsModal.addEventListener('click', (e) => {
 // Автосохранение имени при вводе
 settingsNameInput.addEventListener('input', () => {
     autoResizeNameInput();
-    const newName = settingsNameInput.value.trim();
-    if (newName) {
-        localStorage.setItem('managerName', newName);
-        managerNameInput.value = newName;
-        updateUserNameDisplay();
-    }
+    const newName = normalizeFio(settingsNameInput.value);
+    if (!newName || !currentUser) return;
+    managerNameInput.value = newName;
+    localStorage.setItem(USER_NAME_KEY, newName);
+    currentUser.fio = newName;
+    updateUserNameDisplay();
+
+    if (fioSaveTimeout) clearTimeout(fioSaveTimeout);
+    fioSaveTimeout = setTimeout(() => {
+        patchUserRecord(currentUser.login, {
+            fio: newName,
+            lastSeenAt: new Date().toISOString()
+        });
+    }, 450);
 });
 
 // Theme toggle
@@ -2595,7 +3030,7 @@ if (savedTheme === 'light') {
 
 // Change role button
 changeRoleBtn.addEventListener('click', () => {
-    const currentRole = localStorage.getItem('userRole') || 'user';
+    const currentRole = currentUser?.role || localStorage.getItem(USER_ROLE_KEY) || 'user';
     
     if (currentRole === 'admin') {
         // Admin -> User (no password needed)
@@ -2610,11 +3045,23 @@ changeRoleBtn.addEventListener('click', () => {
 });
 
 // Helper function to switch role
-function switchRole(newRole) {
-    localStorage.setItem('userRole', newRole);
-    
-    // Перезагрузка страницы для применения новой роли
-    location.reload();
+async function switchRole(newRole) {
+    if (!currentUser) return;
+    const role = newRole === 'admin' ? 'admin' : 'user';
+    const patched = await patchUserRecord(currentUser.login, {
+        role,
+        lastSeenAt: new Date().toISOString()
+    });
+    currentUser = normalizeUserRecord({
+        ...currentUser,
+        ...(patched || {}),
+        role
+    }, currentUser.login);
+    selectedRole = role;
+    localStorage.setItem(USER_ROLE_KEY, role);
+    currentRoleDisplay.textContent = role === 'admin' ? 'Админ' : 'Юзер';
+    applyRoleRestrictions();
+    showCopyNotification(role === 'admin' ? 'Роль изменена на Админ' : 'Роль изменена на Юзер');
 }
 
 // Cancel role change
@@ -2630,6 +3077,9 @@ roleChangeConfirmBtn.addEventListener('click', () => {
     
     if (password === ADMIN_PASSWORD) {
         switchRole('admin');
+        roleChangePassword.style.display = 'none';
+        roleChangePasswordInput.value = '';
+        roleChangeError.style.display = 'none';
     } else {
         roleChangeError.style.display = 'block';
         roleChangePasswordInput.value = '';
@@ -2640,6 +3090,12 @@ roleChangeConfirmBtn.addEventListener('click', () => {
         }, 2000);
     }
 });
+
+if (adminRefreshBtn) {
+    adminRefreshBtn.addEventListener('click', () => {
+        renderAdminUsersTable();
+    });
+}
 
 // Export buttons in settings
 exportChatSettings.addEventListener('click', (e) => {
@@ -4408,7 +4864,10 @@ document.querySelectorAll('.toolbar-btn').forEach(btn => {
 // ============ INITIALIZATION ============
 
 loadAttestationQueue();
-loadPrompts();
+loadPrompts().catch((error) => {
+    console.error('Initialization auth/prompts error:', error);
+    showNameModal();
+});
 initSpeechRecognition();
 userInput.focus();
 autoResizeTextarea(userInput);
