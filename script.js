@@ -240,7 +240,8 @@ const aiImproveCancel = document.getElementById('aiImproveCancel');
 const aiImproveStep2 = document.getElementById('aiImproveStep2');
 const aiDiffView = document.getElementById('aiDiffView');
 const aiImproveBack = document.getElementById('aiImproveBack');
-const aiImproveApply = document.getElementById('aiImproveApply');
+const aiImproveApplyNew = document.getElementById('aiImproveApplyNew');
+const aiImproveApplyCurrent = document.getElementById('aiImproveApplyCurrent');
 
 // Settings Modal Elements
 const settingsBtn = document.getElementById('settingsBtn');
@@ -309,6 +310,7 @@ const EYE_OFF_ICON = `
 let pendingImprovedPrompt = null;
 let pendingRole = null;
 let pendingName = null;
+let pendingVariationId = null;
 let pendingRatingImproveContext = null;
 let aiImproveMode = 'default';
 const LOCAL_PROMPTS_STORAGE_VERSION = 'v2';
@@ -2078,6 +2080,13 @@ function setAiImproveModalContent(mode = 'default') {
     }
 }
 
+function resetPendingImproveState() {
+    pendingImprovedPrompt = null;
+    pendingRole = null;
+    pendingName = null;
+    pendingVariationId = null;
+}
+
 function showAiImproveModal(options = {}) {
     const { mode = 'default', context = null } = options;
     aiImproveMode = mode;
@@ -2089,7 +2098,7 @@ function showAiImproveModal(options = {}) {
     // Reset to step 1
     aiImproveStep1.style.display = 'block';
     aiImproveStep2.style.display = 'none';
-    pendingImprovedPrompt = null;
+    resetPendingImproveState();
     aiImproveInput.value = '';
     
     setTimeout(() => aiImproveInput.focus(), 100);
@@ -2100,6 +2109,7 @@ function hideAiImproveModal() {
     pendingRatingImproveContext = null;
     aiImproveMode = 'default';
     setAiImproveModalContent('default');
+    resetPendingImproveState();
 }
 
 function showVoiceModeModal() {
@@ -2273,6 +2283,7 @@ async function improvePromptWithAI() {
         pendingImprovedPrompt = cleanPrompt;
         pendingRole = role;
         pendingName = currentName;
+        pendingVariationId = activeVar ? activeVar.id : null;
         
         // Render diff (using the raw response with markers)
         showSemanticDiff(rawResponse);
@@ -2319,27 +2330,12 @@ function showSemanticDiff(textWithMarkers) {
     aiImproveStep2.style.display = 'block';
 }
 
-function applyImprovedPrompt() {
-    if (!pendingImprovedPrompt || !pendingRole) return;
-    
-    const newId = generateId();
-    const newName = `${pendingName} AI`;
-    const baseVariation = promptsData[pendingRole].variations.find(v => v.id === promptsData[pendingRole].activeId);
-    const shouldBeLocal = !!baseVariation?.isLocal;
-    
-    promptsData[pendingRole].variations.push({
-        id: newId,
-        name: newName,
-        content: pendingImprovedPrompt,
-        isLocal: shouldBeLocal
-    });
-    
-    // Switch to the correct instruction tab (client/manager/rater)
+function activateInstructionEditor(role) {
     const instructionTabs = document.querySelectorAll('.instruction-tab');
     const instructionEditors = document.querySelectorAll('.instruction-editor');
     
     instructionTabs.forEach(tab => {
-        if (tab.dataset.instruction === pendingRole) {
+        if (tab.dataset.instruction === role) {
             tab.classList.add('active');
         } else {
             tab.classList.remove('active');
@@ -2347,30 +2343,82 @@ function applyImprovedPrompt() {
     });
     
     instructionEditors.forEach(editor => {
-        if (editor.dataset.instruction === pendingRole) {
+        if (editor.dataset.instruction === role) {
             editor.classList.add('active');
         } else {
             editor.classList.remove('active');
         }
     });
-    
-    // Switch to new variation and render
-    setActiveVariation(pendingRole, newId);
-    renderVariations();
-    if (shouldBeLocal) {
+
+    if (instructionSelectEl) {
+        instructionSelectEl.value = role;
+    }
+    const selectedText = document.getElementById('selectedInstructionText');
+    if (selectedText) {
+        selectedText.innerText = getRoleLabel(role);
+    }
+    document.querySelectorAll('.dropdown-option').forEach(opt => {
+        opt.classList.toggle('active', opt.dataset.value === role);
+    });
+}
+
+function applyImprovedPrompt(targetMode = 'new') {
+    if (!pendingImprovedPrompt || !pendingRole) return;
+
+    // Сохраняем правки текущего открытого редактора до переключений.
+    syncCurrentEditorNow();
+
+    const roleData = promptsData[pendingRole];
+    if (!roleData || !Array.isArray(roleData.variations)) return;
+
+    const sourceVariation = roleData.variations.find(v => v.id === pendingVariationId)
+        || roleData.variations.find(v => v.id === roleData.activeId)
+        || null;
+
+    let targetVariation = null;
+    let createdNew = false;
+    if (targetMode === 'current' && sourceVariation) {
+        sourceVariation.content = pendingImprovedPrompt;
+        targetVariation = sourceVariation;
+    } else {
+        const baseName = (pendingName || 'Промпт').trim() || 'Промпт';
+        const newName = getUniqueVariationName(pendingRole, `${baseName} AI`);
+        targetVariation = {
+            id: generateId(),
+            name: newName,
+            content: pendingImprovedPrompt,
+            isLocal: !!sourceVariation?.isLocal
+        };
+        roleData.variations.push(targetVariation);
+        createdNew = true;
+    }
+
+    const canSwitchToTarget = !(pendingRole === 'client' && isClientVariationLocked(targetVariation.id));
+    if (canSwitchToTarget) {
+        activateInstructionEditor(pendingRole);
+        roleData.activeId = targetVariation.id;
+        renderVariations();
+        updateEditorContent(pendingRole);
+    } else {
+        renderVariations();
+    }
+
+    if (targetVariation.isLocal) {
         saveLocalPromptsData();
     } else {
         savePromptsToFirebase();
     }
-    
+
     hideAiImproveModal();
-    aiImproveInput.value = ''; // Clear input after successful apply
-    showCopyNotification('Инструкция улучшена!');
-    
-    // Reset pending
-    pendingImprovedPrompt = null;
-    pendingRole = null;
-    pendingName = null;
+    aiImproveInput.value = '';
+    let notificationText =
+        createdNew
+            ? 'Улучшенная инструкция сохранена как новый промпт'
+            : 'Текущий промпт обновлен';
+    if (!canSwitchToTarget) {
+        notificationText += '. Переключение на новый вариант сейчас недоступно';
+    }
+    showCopyNotification(notificationText);
 }
 
 aiImproveBtn.addEventListener('click', showAiImproveModal);
@@ -2401,7 +2449,12 @@ aiImproveBack.addEventListener('click', () => {
     aiImproveStep2.style.display = 'none';
 });
 
-aiImproveApply.addEventListener('click', applyImprovedPrompt);
+if (aiImproveApplyNew) {
+    aiImproveApplyNew.addEventListener('click', () => applyImprovedPrompt('new'));
+}
+if (aiImproveApplyCurrent) {
+    aiImproveApplyCurrent.addEventListener('click', () => applyImprovedPrompt('current'));
+}
 
 aiImproveInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
