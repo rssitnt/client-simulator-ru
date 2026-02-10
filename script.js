@@ -3798,6 +3798,25 @@ function normalizeVoiceDialogForCompare(text) {
     return normalizeVoiceDialogText(text).toLowerCase();
 }
 
+function normalizeVoiceDialogCompact(text) {
+    return normalizeVoiceDialogForCompare(text).replace(/[^a-zа-яё0-9]+/gi, '');
+}
+
+function pickReadableVoiceVariant(a, b) {
+    const first = normalizeVoiceDialogText(a);
+    const second = normalizeVoiceDialogText(b);
+    if (!first) return second;
+    if (!second) return first;
+
+    const score = (value) => {
+        const spaces = (value.match(/\s/g) || []).length;
+        const punctuation = (value.match(/[.,;:!?-]/g) || []).length;
+        return spaces * 2 + punctuation + value.length * 0.01;
+    };
+
+    return score(second) >= score(first) ? second : first;
+}
+
 function clearGeminiFirstReplyHintTimer() {
     if (!geminiVoiceFirstReplyHintTimer) return;
     clearTimeout(geminiVoiceFirstReplyHintTimer);
@@ -3821,9 +3840,16 @@ function mergeVoiceStreamingText(prevText, nextText) {
 
     const prevNorm = normalizeVoiceDialogForCompare(prev);
     const nextNorm = normalizeVoiceDialogForCompare(next);
+    const prevCompact = normalizeVoiceDialogCompact(prev);
+    const nextCompact = normalizeVoiceDialogCompact(next);
     if (!nextNorm) return prev;
     if (!prevNorm) return next.trimStart();
+    if (nextCompact && prevCompact && nextCompact === prevCompact) {
+        return pickReadableVoiceVariant(prev, next);
+    }
     if (nextNorm === prevNorm) return next.length > prev.length ? next : prev;
+    if (nextCompact && prevCompact && nextCompact.startsWith(prevCompact)) return next;
+    if (nextCompact && prevCompact && prevCompact.startsWith(nextCompact)) return prev;
     if (nextNorm.startsWith(prevNorm)) return next;
     if (prevNorm.startsWith(nextNorm)) return prev;
 
@@ -3849,7 +3875,28 @@ function pushGeminiVoiceDialogLine(role, text) {
 
     const lastLine = geminiVoiceDialogLines[geminiVoiceDialogLines.length - 1];
     if (lastLine && lastLine.role === safeRole) {
-        lastLine.text = normalizeVoiceDialogText(`${lastLine.text} ${normalizedText}`);
+        const previousText = normalizeVoiceDialogText(lastLine.text || '');
+        const previousCompact = normalizeVoiceDialogCompact(previousText);
+        const currentCompact = normalizeVoiceDialogCompact(normalizedText);
+
+        if (previousCompact && currentCompact) {
+            if (
+                previousCompact === currentCompact ||
+                previousCompact.includes(currentCompact) ||
+                currentCompact.includes(previousCompact)
+            ) {
+                lastLine.text = pickReadableVoiceVariant(previousText, normalizedText);
+                return;
+            }
+        }
+
+        const merged = normalizeVoiceDialogText(mergeVoiceStreamingText(previousText, normalizedText));
+        if (merged && merged !== previousText) {
+            lastLine.text = merged;
+            return;
+        }
+
+        lastLine.text = normalizeVoiceDialogText(`${previousText} ${normalizedText}`);
         return;
     }
 
@@ -3895,6 +3942,16 @@ function appendGeminiVoiceDialogToChat() {
         const text = normalizeVoiceDialogText(line.text);
         const role = line.role;
         if (!text) continue;
+
+        const lastHistoryItem = conversationHistory[conversationHistory.length - 1];
+        if (
+            lastHistoryItem &&
+            lastHistoryItem.role === role &&
+            normalizeVoiceDialogCompact(lastHistoryItem.content || '') === normalizeVoiceDialogCompact(text)
+        ) {
+            continue;
+        }
+
         addMessage(text, role, false);
         conversationHistory.push({ role, content: text });
         appendedCount += 1;
