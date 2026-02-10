@@ -10,14 +10,10 @@ services:
       - key: NODE_VERSION
         value: "20"
       - key: GEMINI_API_KEY
-        value: ""
         sync: false
       - key: FIREBASE_WEB_API_KEY
-        value: ""
         sync: false
       - key: ALLOWED_ORIGINS
-        value: ""
         sync: false
       - key: ALLOWED_EMAIL_DOMAINS
-        value: ""
         sync: false
