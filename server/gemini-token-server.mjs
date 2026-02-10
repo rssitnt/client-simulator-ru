@@ -4,6 +4,7 @@ import { GoogleGenAI } from '@google/genai';
 const PORT = Number.parseInt(process.env.PORT || '8787', 10);
 const GEMINI_API_KEY = String(process.env.GEMINI_API_KEY || '').trim();
 const FIREBASE_WEB_API_KEY = String(process.env.FIREBASE_WEB_API_KEY || '').trim();
+const FIREBASE_DATABASE_URL = String(process.env.FIREBASE_DATABASE_URL || '').trim().replace(/\/+$/, '');
 const ALLOWED_ORIGINS = String(process.env.ALLOWED_ORIGINS || '')
     .split(',')
     .map((value) => value.trim())
@@ -83,6 +84,69 @@ function isAllowedEmailDomain(email) {
     const normalized = String(email || '').trim().toLowerCase();
     const [, domain = ''] = normalized.split('@');
     return ALLOWED_EMAIL_DOMAINS.includes(domain);
+}
+
+function normalizeLogin(value) {
+    return String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[<>"]/g, '');
+}
+
+function isValidLogin(value) {
+    const email = normalizeLogin(value);
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function loginToStorageKey(login) {
+    const normalized = normalizeLogin(login);
+    return Array.from(normalized)
+        .map((char) => char.codePointAt(0).toString(16))
+        .join('_');
+}
+
+function parseDateMs(value) {
+    const ms = new Date(value || '').getTime();
+    return Number.isFinite(ms) ? ms : null;
+}
+
+async function readDbJson(path) {
+    if (!FIREBASE_DATABASE_URL) return null;
+    const response = await fetch(`${FIREBASE_DATABASE_URL}/${path}.json`);
+    if (!response.ok) return null;
+    return response.json().catch(() => null);
+}
+
+async function verifyLoginFallbackAccess(login) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!isValidLogin(normalizedLogin)) {
+        throw new Error('Invalid login');
+    }
+    const key = loginToStorageKey(normalizedLogin);
+    const [userRaw, inviteRaw] = await Promise.all([
+        readDbJson(`users/${key}`),
+        readDbJson(`partner_invites/${key}`)
+    ]);
+
+    const user = userRaw && typeof userRaw === 'object' ? userRaw : null;
+    const invite = inviteRaw && typeof inviteRaw === 'object' ? inviteRaw : null;
+    const role = String(user?.role || '').trim().toLowerCase();
+    if (role === 'admin') {
+        return { login: normalizedLogin, source: 'admin-user' };
+    }
+
+    if (isAllowedEmailDomain(normalizedLogin)) {
+        return { login: normalizedLogin, source: 'domain-allowlist' };
+    }
+
+    const inviteStatus = String(invite?.status || '').trim().toLowerCase();
+    const expiresAtMs = parseDateMs(invite?.expiresAt);
+    const isInviteActive = inviteStatus === 'active' && (!expiresAtMs || expiresAtMs > Date.now());
+    if (isInviteActive) {
+        return { login: normalizedLogin, source: 'active-invite' };
+    }
+
+    throw new Error('Access denied for this login');
 }
 
 function getClientIp(req) {
@@ -181,24 +245,40 @@ const server = createServer(async (req, res) => {
     }
 
     const idToken = extractBearerToken(req);
-    if (!idToken) {
-        sendJson(res, 401, { error: 'Missing Firebase ID token' }, requestOrigin);
-        return;
-    }
 
     try {
         const requestBody = await readJsonBody(req);
-        const firebaseUser = await verifyFirebaseIdToken(idToken);
+        let authIdentity = null;
+
+        if (idToken) {
+            const firebaseUser = await verifyFirebaseIdToken(idToken);
+            authIdentity = {
+                uid: firebaseUser.localId || null,
+                email: firebaseUser.email || null,
+                login: normalizeLogin(firebaseUser.email || ''),
+                source: 'firebase-id-token'
+            };
+
+            if (!isAllowedEmailDomain(firebaseUser.email)) {
+                sendJson(res, 403, { error: 'Email domain is not allowed' }, requestOrigin);
+                return;
+            }
+        } else {
+            const loginFromBody = normalizeLogin(requestBody?.login || requestBody?.email || '');
+            const fallbackAuth = await verifyLoginFallbackAccess(loginFromBody);
+            authIdentity = {
+                uid: null,
+                email: fallbackAuth.login,
+                login: fallbackAuth.login,
+                source: fallbackAuth.source
+            };
+        }
+
         const clientIp = getClientIp(req);
-        const rateKey = `${firebaseUser.localId || 'unknown'}:${clientIp}`;
+        const rateKey = `${authIdentity.uid || authIdentity.login || 'unknown'}:${clientIp}`;
 
         if (isRateLimited(rateKey)) {
             sendJson(res, 429, { error: 'Too many token requests. Try again in a minute.' }, requestOrigin);
-            return;
-        }
-
-        if (!isAllowedEmailDomain(firebaseUser.email)) {
-            sendJson(res, 403, { error: 'Email domain is not allowed' }, requestOrigin);
             return;
         }
 
@@ -213,11 +293,12 @@ const server = createServer(async (req, res) => {
             expireTime: token?.expireTime || null,
             newSessionExpireTime: token?.newSessionExpireTime || null,
             issuedFor: {
-                uid: firebaseUser.localId || null,
-                email: firebaseUser.email || null
+                uid: authIdentity.uid || null,
+                email: authIdentity.email || null
             },
             requestContext: {
-                source: requestBody?.source || null
+                source: requestBody?.source || null,
+                authSource: authIdentity.source
             }
         };
 

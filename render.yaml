@@ -13,6 +13,8 @@ services:
         sync: false
       - key: FIREBASE_WEB_API_KEY
         sync: false
+      - key: FIREBASE_DATABASE_URL
+        sync: false
       - key: ALLOWED_ORIGINS
         sync: false
       - key: ALLOWED_EMAIL_DOMAINS

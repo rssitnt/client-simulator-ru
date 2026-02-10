@@ -6,7 +6,7 @@
 ## Что делает endpoint
 
 - URL: `POST /api/gemini-live-token`
-- Проверяет Firebase ID token пользователя
+- Проверяет доступ пользователя
 - Выдает short-lived токен для Gemini Live
 
 ## Что уже сделано во фронте
@@ -19,6 +19,14 @@
 
 - `GEMINI_API_KEY`
 - `FIREBASE_WEB_API_KEY`
+- `FIREBASE_DATABASE_URL`
+
+## Авторизация запроса
+
+Сервер поддерживает 2 режима:
+
+1. `Authorization: Bearer <Firebase ID token>` (предпочтительный)
+2. Fallback по `login`/`email` в body, с проверкой доступа через RTDB (`users`, `partner_invites`) и `ALLOWED_EMAIL_DOMAINS`
 
 ## Переменные окружения (рекомендуемые)
 
