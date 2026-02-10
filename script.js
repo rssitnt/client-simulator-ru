@@ -44,6 +44,7 @@ const MARKDOWN_CACHE_MAX_SIZE = 250;
 const MARKDOWN_CACHE_TEXT_LIMIT = 40000;
 const AUTH_USERS_DB_PATH = 'users';
 const PARTNER_INVITES_DB_PATH = 'partner_invites';
+const APP_CONFIG_DB_PATH = 'app_config';
 const AUTH_LOCAL_STORAGE_KEY = 'authUsers:v1';
 const PARTNER_INVITES_STORAGE_KEY = 'partnerInvites:v1';
 const AUTH_SESSION_STORAGE_KEY = 'authSession:v1';
@@ -488,6 +489,9 @@ let lastActiveTickAt = Date.now();
 let lastUserActivityAt = Date.now();
 let hasActivityListeners = false;
 let fioSaveTimeout = null;
+let sharedAppConfig = {
+    geminiTokenEndpoint: ''
+};
 let publicActiveIds = {
     client: null,
     manager: null,
@@ -3262,6 +3266,19 @@ async function loadPrompts() {
                 initPromptsData({});
             });
 
+            const appConfigRef = ref(db, APP_CONFIG_DB_PATH);
+            onValue(appConfigRef, (snapshot) => {
+                const data = snapshot.val() || {};
+                const sharedEndpoint = normalizeGeminiTokenEndpoint(data?.geminiTokenEndpoint || '');
+                setSharedGeminiTokenEndpoint(sharedEndpoint);
+                if (geminiTokenEndpointInput && settingsModal?.classList?.contains('active')) {
+                    geminiTokenEndpointInput.value = getConfiguredGeminiTokenEndpoint();
+                }
+            }, (error) => {
+                console.error('App config read error:', error);
+                setSharedGeminiTokenEndpoint('');
+            });
+
             const historyRef = ref(db, 'prompt_history');
             onValue(historyRef, (snapshot) => {
                 const historyData = snapshot.val();
@@ -3279,6 +3296,7 @@ async function loadPrompts() {
             initPromptsData({});
         }
     } else {
+        setSharedGeminiTokenEndpoint('');
         initPromptsData({});
         const localHistory = localStorage.getItem('promptHistory');
         if (localHistory) {
@@ -3434,6 +3452,18 @@ function getConfiguredGeminiApiKey() {
     ).trim();
 }
 
+function normalizeGeminiTokenEndpoint(value) {
+    return String(value || '').trim();
+}
+
+function getSharedGeminiTokenEndpoint() {
+    return normalizeGeminiTokenEndpoint(sharedAppConfig?.geminiTokenEndpoint || '');
+}
+
+function setSharedGeminiTokenEndpoint(value) {
+    sharedAppConfig.geminiTokenEndpoint = normalizeGeminiTokenEndpoint(value);
+}
+
 function getDefaultGeminiTokenEndpoint() {
     return String(
         (typeof window !== 'undefined' && (window.GEMINI_LIVE_TOKEN_ENDPOINT || window.GEMINI_TOKEN_ENDPOINT)) ||
@@ -3442,10 +3472,13 @@ function getDefaultGeminiTokenEndpoint() {
 }
 
 function getConfiguredGeminiTokenEndpoint() {
-    return String(
-        localStorage.getItem(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY) ||
-        getDefaultGeminiTokenEndpoint()
-    ).trim();
+    const localOverride = normalizeGeminiTokenEndpoint(localStorage.getItem(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY) || '');
+    if (localOverride) return localOverride;
+
+    const sharedEndpoint = getSharedGeminiTokenEndpoint();
+    if (sharedEndpoint) return sharedEndpoint;
+
+    return getDefaultGeminiTokenEndpoint();
 }
 
 function getConfiguredGeminiVoiceName() {
@@ -3468,9 +3501,17 @@ function populateVoiceConfigFields() {
     }
 }
 
-function saveVoiceModeConfigFromInputs() {
+async function saveSharedGeminiTokenEndpointConfig(value) {
+    if (!(db && selectedRole === 'admin')) return false;
+    const normalized = normalizeGeminiTokenEndpoint(value);
+    await set(ref(db, `${APP_CONFIG_DB_PATH}/geminiTokenEndpoint`), normalized || null);
+    setSharedGeminiTokenEndpoint(normalized);
+    return true;
+}
+
+async function saveVoiceModeConfigFromInputs() {
     const apiKey = String(geminiApiKeyInput?.value || '').trim();
-    const tokenEndpoint = String(geminiTokenEndpointInput?.value || '').trim();
+    const tokenEndpoint = normalizeGeminiTokenEndpoint(geminiTokenEndpointInput?.value || '');
     const voiceName = String(geminiVoiceNameInput?.value || '').trim();
 
     if (apiKey) {
@@ -3491,17 +3532,34 @@ function saveVoiceModeConfigFromInputs() {
         localStorage.removeItem(GEMINI_LIVE_VOICE_NAME_STORAGE_KEY);
     }
 
+    let sharedSaved = false;
+    try {
+        sharedSaved = await saveSharedGeminiTokenEndpointConfig(tokenEndpoint);
+    } catch (error) {
+        console.warn('Failed to save shared Gemini token endpoint:', error);
+    }
+
     if (apiKey || tokenEndpoint || voiceName) {
-        showCopyNotification('Настройки Gemini сохранены');
+        showCopyNotification(sharedSaved ? 'Настройки Gemini сохранены для всех пользователей' : 'Настройки Gemini сохранены');
     } else {
         showCopyNotification('Настройки голосового режима очищены');
     }
 }
 
-function clearVoiceModeConfig() {
+async function clearVoiceModeConfig() {
     localStorage.removeItem(GEMINI_LIVE_API_KEY_STORAGE_KEY);
     localStorage.removeItem(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY);
     localStorage.removeItem(GEMINI_LIVE_VOICE_NAME_STORAGE_KEY);
+
+    if (db && selectedRole === 'admin') {
+        try {
+            await set(ref(db, `${APP_CONFIG_DB_PATH}/geminiTokenEndpoint`), null);
+            setSharedGeminiTokenEndpoint('');
+        } catch (error) {
+            console.warn('Failed to clear shared Gemini token endpoint:', error);
+        }
+    }
+
     if (geminiApiKeyInput) geminiApiKeyInput.value = '';
     if (geminiTokenEndpointInput) geminiTokenEndpointInput.value = getConfiguredGeminiTokenEndpoint();
     if (geminiVoiceNameInput) geminiVoiceNameInput.value = '';
@@ -4524,18 +4582,27 @@ bindEvent(settingsNameInput, 'input', () => {
 });
 
 bindEvent(saveVoiceConfigBtn, 'click', () => {
-    saveVoiceModeConfigFromInputs();
+    saveVoiceModeConfigFromInputs().catch((error) => {
+        console.error('Failed to save Gemini voice config:', error);
+        showCopyNotification('Ошибка сохранения настроек Gemini');
+    });
 });
 
 bindEvent(clearVoiceConfigBtn, 'click', () => {
-    clearVoiceModeConfig();
+    clearVoiceModeConfig().catch((error) => {
+        console.error('Failed to clear Gemini voice config:', error);
+        showCopyNotification('Ошибка очистки настроек Gemini');
+    });
 });
 
 [geminiApiKeyInput, geminiTokenEndpointInput, geminiVoiceNameInput].forEach((input) => {
     bindEvent(input, 'keydown', (e) => {
         if (e.key !== 'Enter') return;
         e.preventDefault();
-        saveVoiceModeConfigFromInputs();
+        saveVoiceModeConfigFromInputs().catch((error) => {
+            console.error('Failed to save Gemini voice config:', error);
+            showCopyNotification('Ошибка сохранения настроек Gemini');
+        });
     });
 });
 

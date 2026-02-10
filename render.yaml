@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: client-simulator-gemini-token
+    runtime: node
+    plan: starter
+    rootDir: .
+    buildCommand: npm install
+    startCommand: node server/gemini-token-server.mjs
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: PORT
+        value: "8787"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: FIREBASE_WEB_API_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: ALLOWED_EMAIL_DOMAINS
+        sync: false

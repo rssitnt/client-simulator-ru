@@ -37,6 +37,20 @@ npx http-server -p 3001
 
 Подробно: `server/README.md`.
 
+### Быстрый сценарий для новичка (Render, 10-15 минут)
+
+1. Зайдите в Render и создайте `New +` -> `Blueprint`.
+2. Подключите этот GitHub-репозиторий.
+3. Render сам увидит `render.yaml` и предложит сервис `client-simulator-gemini-token`.
+4. Вставьте env:
+`GEMINI_API_KEY`, `FIREBASE_WEB_API_KEY`, `ALLOWED_ORIGINS`, `ALLOWED_EMAIL_DOMAINS`.
+5. Нажмите `Apply`.
+6. Скопируйте URL сервиса, например `https://client-simulator-gemini-token.onrender.com`.
+7. В приложении откройте настройки под админом и в `Gemini Voice -> Token endpoint` вставьте:
+`https://client-simulator-gemini-token.onrender.com/api/gemini-live-token`, нажмите `Сохранить`.
+
+После этого сотрудники могут использовать голосовой режим без ввода токена.
+
 ## Использование
 
 1. **Настройте системный промпт** в правой панели (с отображением количества символов)

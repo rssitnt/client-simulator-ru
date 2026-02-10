@@ -1,33 +1,44 @@
 # Gemini Token Server
 
-Этот сервер выдает short-lived Gemini ephemeral token для голосового режима, чтобы не хранить `GEMINI_API_KEY` в браузере.
+Этот сервер нужен, чтобы сотрудники не вставляли Gemini API key в браузер.
+Ключ хранится только на сервере, а браузер получает короткоживущий `ephemeral token`.
 
-## Endpoint
+## Что делает endpoint
 
-- `POST /api/gemini-live-token`
+- URL: `POST /api/gemini-live-token`
+- Проверяет Firebase ID token пользователя
+- Выдает short-lived токен для Gemini Live
 
-## Что проверяется
+## Что уже сделано во фронте
 
-- `Authorization: Bearer <Firebase ID token>`
-- валидация токена через Firebase Identity Toolkit (`accounts:lookup`)
-- опционально: whitelist доменов email через `ALLOWED_EMAIL_DOMAINS`
+- Фронт по умолчанию обращается к `"/api/gemini-live-token"`
+- Если endpoint находится на другом домене, админ может указать URL в настройках 1 раз
+- Значение endpoint сохраняется в Firebase и становится общим для всех пользователей
 
-## Переменные окружения
+## Переменные окружения (обязательные)
 
-- `GEMINI_API_KEY` — секретный Gemini API key (обязательно)
-- `FIREBASE_WEB_API_KEY` — Firebase Web API key (обязательно)
-- `ALLOWED_ORIGINS` — список origin через запятую (опционально)
-- `ALLOWED_EMAIL_DOMAINS` — список разрешенных доменов email через запятую (опционально)
-- `PORT` — порт сервера (опционально, по умолчанию `8787`)
+- `GEMINI_API_KEY`
+- `FIREBASE_WEB_API_KEY`
 
-## Локальный запуск
+## Переменные окружения (рекомендуемые)
+
+- `ALLOWED_ORIGINS` — например: `https://client-simulator.ru,https://www.client-simulator.ru`
+- `ALLOWED_EMAIL_DOMAINS` — например: `tradicia-k.ru,tradicia-k.kz`
+- `PORT` — по умолчанию `8787`
+
+## Локальная проверка
 
 ```bash
 npm install
-GEMINI_API_KEY=... \
-FIREBASE_WEB_API_KEY=... \
-ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000 \
-npm run start:token-server
+cp server/.env.example server/.env.local
+# заполните значения в server/.env.local вручную
 ```
 
-По умолчанию фронт будет обращаться к `"/api/gemini-live-token"`.
+Запуск:
+
+```bash
+set -a
+source server/.env.local
+set +a
+npm run start:token-server
+```

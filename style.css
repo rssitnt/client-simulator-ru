@@ -2979,6 +2979,12 @@ body.light-theme input:checked + .toggle-slider .sun {
     width: 100%;
 }
 
+.voice-config-note {
+    color: #777;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
 .voice-config-actions {
     display: flex;
     gap: 8px;
