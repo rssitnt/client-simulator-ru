@@ -4104,12 +4104,21 @@ function appendGeminiVoiceDialogToChat() {
 }
 
 function buildOpenAiSessionConfig() {
+    const activeVoiceClientPrompt = String(getActiveContent('manager_call') || '').trim();
     const activeClientPrompt = String(getActiveContent('client') || '').trim();
+    const effectivePrompt = activeVoiceClientPrompt || activeClientPrompt;
     return {
         model: GEMINI_LIVE_MODEL,
         voice: getConfiguredGeminiVoiceName(),
-        instructions: activeClientPrompt || 'Ты вежливый клиент, веди естественный разговор голосом на русском языке.'
+        instructions: effectivePrompt || 'Ты вежливый клиент, веди естественный разговор голосом на русском языке.'
     };
+}
+
+function buildOpenAiFirstTurnInstructions(sessionInstructions) {
+    const base = normalizeVoiceDialogText(sessionInstructions);
+    const opener = 'Начни разговор первым: коротко поздоровайся и задай один уточняющий вопрос менеджеру. Говори максимально быстрым темпом, но разборчиво.';
+    if (!base) return opener;
+    return `${base}\n\n${opener}`;
 }
 
 function sendOpenAiRealtimeEvent(payload) {
@@ -4525,7 +4534,7 @@ async function startGeminiVoiceMode() {
         });
 
         const responseCreated = requestOpenAiAssistantResponse(
-            'Начни разговор первым: коротко поздоровайся и задай один уточняющий вопрос менеджеру. Говори максимально быстрым темпом, но разборчиво.'
+            buildOpenAiFirstTurnInstructions(sessionConfig.instructions)
         );
 
         if (!sessionUpdated || !responseCreated) {
