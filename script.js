@@ -29,6 +29,7 @@ const AI_IMPROVE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/prompt-enc
 const GEMINI_LIVE_MODEL = 'gemini-2.5-flash-native-audio-preview-12-2025';
 const GEMINI_LIVE_API_KEY_STORAGE_KEY = 'geminiLiveApiKey';
 const GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY = 'geminiLiveTokenEndpoint';
+const GEMINI_LIVE_VOICE_NAME_STORAGE_KEY = 'geminiLiveVoiceName';
 const ATTESTATION_QUEUE_STORAGE_KEY = 'attestationQueue:v1';
 const ATTESTATION_SEND_ATTEMPTS = 3;
 const ATTESTATION_QUEUE_MAX_FAILURES = 8;
@@ -362,6 +363,7 @@ const exportChatSettingsMenu = document.getElementById('exportChatSettingsMenu')
 const exportPromptSettingsMenu = document.getElementById('exportPromptSettingsMenu');
 const geminiApiKeyInput = document.getElementById('geminiApiKeyInput');
 const geminiTokenEndpointInput = document.getElementById('geminiTokenEndpointInput');
+const geminiVoiceNameInput = document.getElementById('geminiVoiceNameInput');
 const saveVoiceConfigBtn = document.getElementById('saveVoiceConfigBtn');
 const clearVoiceConfigBtn = document.getElementById('clearVoiceConfigBtn');
 const adminPanelAccordion = document.getElementById('adminPanelAccordion');
@@ -3433,6 +3435,14 @@ function getConfiguredGeminiTokenEndpoint() {
     ).trim();
 }
 
+function getConfiguredGeminiVoiceName() {
+    return String(
+        (typeof window !== 'undefined' && window.GEMINI_LIVE_VOICE_NAME) ||
+        localStorage.getItem(GEMINI_LIVE_VOICE_NAME_STORAGE_KEY) ||
+        ''
+    ).trim();
+}
+
 function populateVoiceConfigFields() {
     if (geminiApiKeyInput) {
         geminiApiKeyInput.value = localStorage.getItem(GEMINI_LIVE_API_KEY_STORAGE_KEY) || '';
@@ -3440,11 +3450,15 @@ function populateVoiceConfigFields() {
     if (geminiTokenEndpointInput) {
         geminiTokenEndpointInput.value = localStorage.getItem(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY) || '';
     }
+    if (geminiVoiceNameInput) {
+        geminiVoiceNameInput.value = localStorage.getItem(GEMINI_LIVE_VOICE_NAME_STORAGE_KEY) || '';
+    }
 }
 
 function saveVoiceModeConfigFromInputs() {
     const apiKey = String(geminiApiKeyInput?.value || '').trim();
     const tokenEndpoint = String(geminiTokenEndpointInput?.value || '').trim();
+    const voiceName = String(geminiVoiceNameInput?.value || '').trim();
 
     if (apiKey) {
         localStorage.setItem(GEMINI_LIVE_API_KEY_STORAGE_KEY, apiKey);
@@ -3458,10 +3472,14 @@ function saveVoiceModeConfigFromInputs() {
         localStorage.removeItem(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY);
     }
 
-    if (tokenEndpoint) {
-        showCopyNotification('Token endpoint сохранен');
-    } else if (apiKey) {
-        showCopyNotification('Gemini API key сохранен локально');
+    if (voiceName) {
+        localStorage.setItem(GEMINI_LIVE_VOICE_NAME_STORAGE_KEY, voiceName);
+    } else {
+        localStorage.removeItem(GEMINI_LIVE_VOICE_NAME_STORAGE_KEY);
+    }
+
+    if (apiKey || tokenEndpoint || voiceName) {
+        showCopyNotification('Настройки Gemini сохранены');
     } else {
         showCopyNotification('Настройки голосового режима очищены');
     }
@@ -3470,8 +3488,10 @@ function saveVoiceModeConfigFromInputs() {
 function clearVoiceModeConfig() {
     localStorage.removeItem(GEMINI_LIVE_API_KEY_STORAGE_KEY);
     localStorage.removeItem(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY);
+    localStorage.removeItem(GEMINI_LIVE_VOICE_NAME_STORAGE_KEY);
     if (geminiApiKeyInput) geminiApiKeyInput.value = '';
     if (geminiTokenEndpointInput) geminiTokenEndpointInput.value = '';
+    if (geminiVoiceNameInput) geminiVoiceNameInput.value = '';
     showCopyNotification('Данные Gemini удалены на этом устройстве');
 }
 
@@ -3822,15 +3842,27 @@ async function startGeminiVoiceMode() {
 
         const activeClientPrompt = String(getActiveContent('client') || '').trim();
         const systemInstruction = activeClientPrompt || 'Ты вежливый клиент, веди естественный разговор голосом на русском языке.';
+        const configuredVoiceName = getConfiguredGeminiVoiceName();
+        const liveConfig = {
+            responseModalities: [Modality.AUDIO],
+            inputAudioTranscription: {},
+            outputAudioTranscription: {},
+            systemInstruction
+        };
+
+        if (configuredVoiceName) {
+            liveConfig.speechConfig = {
+                voiceConfig: {
+                    prebuiltVoiceConfig: {
+                        voiceName: configuredVoiceName
+                    }
+                }
+            };
+        }
 
         geminiLiveSession = await geminiLiveApiClient.live.connect({
             model: GEMINI_LIVE_MODEL,
-            config: {
-                responseModalities: [Modality.AUDIO],
-                inputAudioTranscription: {},
-                outputAudioTranscription: {},
-                systemInstruction
-            },
+            config: liveConfig,
             callbacks: {
                 onopen: () => {
                     setVoiceModeStatus('Соединение установлено. Говорите.', 'listening');
@@ -4308,7 +4340,7 @@ bindEvent(clearVoiceConfigBtn, 'click', () => {
     clearVoiceModeConfig();
 });
 
-[geminiApiKeyInput, geminiTokenEndpointInput].forEach((input) => {
+[geminiApiKeyInput, geminiTokenEndpointInput, geminiVoiceNameInput].forEach((input) => {
     bindEvent(input, 'keydown', (e) => {
         if (e.key !== 'Enter') return;
         e.preventDefault();

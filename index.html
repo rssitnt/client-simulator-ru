@@ -8,7 +8,7 @@
     <meta name="color-scheme" content="dark">
     <title>Kirillov Client Simulator</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
-    <link rel="stylesheet" href="style.css?v=20260210-13">
+    <link rel="stylesheet" href="style.css?v=20260210-14">
     <!-- Mammoth.js for .docx support -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
     <!-- docx.js for exporting to .docx -->
@@ -226,6 +226,14 @@
                 <div class="voice-config-block">
                     <input type="password" id="geminiApiKeyInput" class="password-input" placeholder="Gemini API key (локально в этом браузере)" autocomplete="off" spellcheck="false">
                     <input type="url" id="geminiTokenEndpointInput" class="password-input" placeholder="Token endpoint (предпочтительно, если есть backend)">
+                    <input type="text" id="geminiVoiceNameInput" class="password-input" placeholder="Голос (например: Puck)" list="geminiVoiceNameOptions" autocomplete="off" spellcheck="false" aria-label="Голос Gemini">
+                    <datalist id="geminiVoiceNameOptions">
+                        <option value="Puck"></option>
+                        <option value="Aoede"></option>
+                        <option value="Charon"></option>
+                        <option value="Fenrir"></option>
+                        <option value="Kore"></option>
+                    </datalist>
                     <div class="voice-config-actions">
                         <button id="saveVoiceConfigBtn" class="btn-change">Сохранить</button>
                         <button id="clearVoiceConfigBtn" class="btn-cancel">Очистить</button>
@@ -536,7 +544,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <!-- Turndown for HTML to Markdown conversion (WYSIWYG editing) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js"></script>
-    <script type="module" src="script.js?v=20260210-13"></script>
+    <script type="module" src="script.js?v=20260210-14"></script>
     <!-- Last deployment trigger: 2026-02-10 14:57 -->
 </body>
 </html>
