@@ -487,6 +487,10 @@ let geminiVoiceFirstReplyHintTimer = null;
 let openAiVoicePeerConnection = null;
 let openAiVoiceDataChannel = null;
 let openAiVoiceRemoteAudio = null;
+let openAiResponsePending = false;
+let openAiResponseQueued = false;
+let openAiPendingUserTurn = '';
+let openAiUserTurnTimer = null;
 let reratePromptElement = null;
 let attestationQueue = [];
 let isAttestationQueueFlushInProgress = false;
@@ -3881,6 +3885,66 @@ function sanitizeUserCompletedTranscript(rawText) {
     return before;
 }
 
+function getRecentUserTranscriptForEchoGuard() {
+    const pendingTurn = normalizeVoiceDialogText(openAiPendingUserTurn);
+    if (pendingTurn) return pendingTurn;
+
+    const preview = normalizeVoiceDialogText(geminiVoiceUserPreview);
+    if (preview) return preview;
+
+    const draft = normalizeVoiceDialogText(geminiVoiceUserDraft);
+    if (draft) return draft;
+
+    for (let i = geminiVoiceDialogLines.length - 1; i >= 0; i -= 1) {
+        const line = geminiVoiceDialogLines[i];
+        if (line?.role !== 'user') continue;
+        const text = normalizeVoiceDialogText(line?.text);
+        if (text) return text;
+    }
+
+    for (let i = conversationHistory.length - 1; i >= 0; i -= 1) {
+        const line = conversationHistory[i];
+        if (line?.role !== 'user') continue;
+        const text = normalizeVoiceDialogText(line?.content);
+        if (text) return text;
+    }
+    return '';
+}
+
+function sanitizeAssistantCompletedTranscript(rawText) {
+    const source = normalizeVoiceDialogText(rawText);
+    if (!source) return '';
+
+    const userText = getRecentUserTranscriptForEchoGuard();
+    if (!userText) return source;
+
+    const sourceCompact = normalizeVoiceDialogCompact(source);
+    const userCompact = normalizeVoiceDialogCompact(userText);
+    if (!sourceCompact || !userCompact || userCompact.length < 20) return source;
+
+    if (sourceCompact === userCompact || userCompact.includes(sourceCompact)) {
+        return '';
+    }
+
+    const sourceNorm = normalizeVoiceDialogForCompare(source);
+    const userNorm = normalizeVoiceDialogForCompare(userText);
+    if (!sourceNorm || !userNorm) return source;
+
+    if (sourceNorm.startsWith(userNorm)) {
+        const tail = normalizeVoiceDialogText(source.slice(userText.length));
+        return tail || source;
+    }
+
+    const userIdx = sourceNorm.indexOf(userNorm);
+    if (userIdx === -1) return source;
+    if (userIdx > Math.floor(sourceNorm.length * 0.4)) return source;
+
+    const before = normalizeVoiceDialogText(source.slice(0, userIdx));
+    const after = normalizeVoiceDialogText(source.slice(userIdx + userText.length));
+    if (!before && after) return after;
+    return source;
+}
+
 function clearGeminiFirstReplyHintTimer() {
     if (!geminiVoiceFirstReplyHintTimer) return;
     clearTimeout(geminiVoiceFirstReplyHintTimer);
@@ -3988,12 +4052,16 @@ function flushGeminiVoiceDraftLine(role) {
 
 function resetGeminiVoiceDialogBuffer() {
     clearGeminiFirstReplyHintTimer();
+    clearOpenAiUserTurnTimer();
     geminiVoiceDialogLines = [];
     geminiVoiceUserDraft = '';
     geminiVoiceAssistantDraft = '';
     geminiVoiceUserPreview = '';
     geminiVoiceAssistantPreview = '';
     geminiVoiceHasAssistantReply = false;
+    openAiPendingUserTurn = '';
+    openAiResponsePending = false;
+    openAiResponseQueued = false;
 }
 
 function appendGeminiVoiceDialogToChat() {
@@ -4077,6 +4145,68 @@ async function waitForOpenAiDataChannelReady(timeoutMs = 8000) {
     });
 }
 
+function clearOpenAiUserTurnTimer() {
+    if (!openAiUserTurnTimer) return;
+    clearTimeout(openAiUserTurnTimer);
+    openAiUserTurnTimer = null;
+}
+
+function requestOpenAiAssistantResponse(instructions = '') {
+    const payload = {
+        modalities: ['audio', 'text']
+    };
+
+    const cleanInstructions = normalizeVoiceDialogText(instructions);
+    if (cleanInstructions) {
+        payload.instructions = cleanInstructions;
+    }
+
+    if (openAiResponsePending) {
+        openAiResponseQueued = true;
+        return true;
+    }
+
+    const sent = sendOpenAiRealtimeEvent({
+        type: 'response.create',
+        response: payload
+    });
+
+    if (sent) {
+        openAiResponsePending = true;
+        openAiResponseQueued = false;
+        geminiVoiceAssistantPreview = '';
+        geminiVoiceAssistantDraft = '';
+        setVoiceModeStatus('ИИ-клиент готовит ответ…', 'waiting');
+    }
+    return sent;
+}
+
+function flushOpenAiPendingUserTurn(options = {}) {
+    const { requestResponse = true } = options;
+    const userText = normalizeVoiceDialogText(openAiPendingUserTurn);
+    openAiPendingUserTurn = '';
+    clearOpenAiUserTurnTimer();
+
+    if (!userText) return false;
+
+    geminiVoiceUserDraft = userText;
+    flushGeminiVoiceDraftLine('user');
+
+    if (!requestResponse) return true;
+    return requestOpenAiAssistantResponse();
+}
+
+function scheduleOpenAiUserTurnFlush(delayMs = 520) {
+    clearOpenAiUserTurnTimer();
+    openAiUserTurnTimer = setTimeout(() => {
+        openAiUserTurnTimer = null;
+        const requested = flushOpenAiPendingUserTurn({ requestResponse: true });
+        if (!requested) {
+            setVoiceModeStatus('Не удалось запросить ответ ИИ-клиента.', 'error');
+        }
+    }, delayMs);
+}
+
 async function handleGeminiLiveMessage(rawMessage) {
     let message = rawMessage;
     if (typeof rawMessage === 'string') {
@@ -4089,6 +4219,15 @@ async function handleGeminiLiveMessage(rawMessage) {
 
     const eventType = String(message?.type || '').trim();
     if (!eventType) return;
+
+    if (eventType === 'response.created') {
+        openAiResponsePending = true;
+        openAiResponseQueued = false;
+        geminiVoiceAssistantPreview = '';
+        geminiVoiceAssistantDraft = '';
+        setVoiceModeStatus('ИИ-клиент готовит ответ…', 'waiting');
+        return;
+    }
 
     if (eventType === 'conversation.item.input_audio_transcription.delta') {
         geminiVoiceUserPreview = mergeVoiceStreamingText(geminiVoiceUserPreview, message?.delta || '');
@@ -4103,8 +4242,10 @@ async function handleGeminiLiveMessage(rawMessage) {
         const userText = sanitizeUserCompletedTranscript(String(message?.transcript || ''));
         geminiVoiceUserPreview = '';
         if (userText) {
-            geminiVoiceUserDraft = userText;
-            flushGeminiVoiceDraftLine('user');
+            openAiPendingUserTurn = normalizeVoiceDialogText(
+                mergeVoiceStreamingText(openAiPendingUserTurn, userText)
+            );
+            scheduleOpenAiUserTurnFlush();
         }
         return;
     }
@@ -4127,28 +4268,38 @@ async function handleGeminiLiveMessage(rawMessage) {
     }
 
     if (eventType === 'response.audio_transcript.done' || eventType === 'response.output_audio_transcript.done') {
-        const assistantDone = String(message?.transcript || '').trim();
+        const assistantDone = sanitizeAssistantCompletedTranscript(String(message?.transcript || ''));
         if (assistantDone.trim()) {
-            geminiVoiceAssistantDraft = normalizeVoiceDialogText(assistantDone);
+            geminiVoiceAssistantDraft = normalizeVoiceDialogText(
+                mergeVoiceStreamingText(geminiVoiceAssistantDraft, assistantDone)
+            );
         } else if (geminiVoiceAssistantPreview.trim()) {
-            geminiVoiceAssistantDraft = normalizeVoiceDialogText(geminiVoiceAssistantPreview);
+            geminiVoiceAssistantDraft = normalizeVoiceDialogText(
+                mergeVoiceStreamingText(geminiVoiceAssistantDraft, geminiVoiceAssistantPreview)
+            );
         }
         geminiVoiceAssistantPreview = '';
-        if (geminiVoiceAssistantDraft.trim()) {
-            flushGeminiVoiceDraftLine('assistant');
-        }
-        setVoiceModeStatus('Слушаю вас… Говорите.', 'listening');
         return;
     }
 
     if (eventType === 'response.done') {
         if (!geminiVoiceAssistantDraft.trim() && geminiVoiceAssistantPreview.trim()) {
-            geminiVoiceAssistantDraft = normalizeVoiceDialogText(geminiVoiceAssistantPreview);
+            geminiVoiceAssistantDraft = normalizeVoiceDialogText(
+                mergeVoiceStreamingText(geminiVoiceAssistantDraft, geminiVoiceAssistantPreview)
+            );
             geminiVoiceAssistantPreview = '';
         }
         if (geminiVoiceAssistantDraft.trim()) {
             flushGeminiVoiceDraftLine('assistant');
         }
+
+        openAiResponsePending = false;
+        if (openAiResponseQueued) {
+            openAiResponseQueued = false;
+            requestOpenAiAssistantResponse();
+            return;
+        }
+
         setVoiceModeStatus('Слушаю вас… Говорите.', 'listening');
         return;
     }
@@ -4307,6 +4458,8 @@ async function stopGeminiVoiceMode(options = {}) {
     teardownGeminiVoiceCapture();
     updateVoiceModeControls();
 
+    flushOpenAiPendingUserTurn({ requestResponse: false });
+
     if (shouldRenderDialog) {
         appendGeminiVoiceDialogToChat();
     }
@@ -4359,7 +4512,7 @@ async function startGeminiVoiceMode() {
                         turn_detection: {
                             type: 'semantic_vad',
                             eagerness: 'high',
-                            create_response: true,
+                            create_response: false,
                             interrupt_response: true
                         }
                     },
@@ -4371,13 +4524,9 @@ async function startGeminiVoiceMode() {
             }
         });
 
-        const responseCreated = sendOpenAiRealtimeEvent({
-            type: 'response.create',
-            response: {
-                modalities: ['audio', 'text'],
-                instructions: 'Начни разговор первым: коротко поздоровайся и задай один уточняющий вопрос менеджеру. Говори максимально быстрым темпом, но разборчиво.'
-            }
-        });
+        const responseCreated = requestOpenAiAssistantResponse(
+            'Начни разговор первым: коротко поздоровайся и задай один уточняющий вопрос менеджеру. Говори максимально быстрым темпом, но разборчиво.'
+        );
 
         if (!sessionUpdated || !responseCreated) {
             throw new Error('Не удалось отправить стартовые команды голосовой сессии');
