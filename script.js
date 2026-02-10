@@ -1210,7 +1210,7 @@ async function flushActiveTime(force = false) {
     currentUser.activeMs = Math.max(0, Number(currentUser.activeMs) + increment);
 
     if (isAdmin() && adminPanelAccordion?.style.display !== 'none') {
-        renderAdminUsersTable();
+        updateAdminUserTimeCell(currentUser.login, currentUser.activeMs);
     }
     await patchUserRecord(currentUser.login, {
         activeMs: currentUser.activeMs,
@@ -1365,6 +1365,7 @@ async function renderAdminUsersTable() {
         const invite = invitesByLogin.get(login) || null;
         const accessState = getAccessState(login, user, invite);
         const row = document.createElement('tr');
+        row.dataset.login = login;
 
         const loginCell = document.createElement('td');
         loginCell.textContent = login;
@@ -1450,6 +1451,18 @@ async function renderAdminUsersTable() {
         row.appendChild(actionCell);
         adminUsersTableBody.appendChild(row);
     });
+}
+
+function updateAdminUserTimeCell(login, activeMs) {
+    if (!adminUsersTableBody) return;
+    const normalizedLogin = normalizeLogin(login);
+    if (!normalizedLogin) return;
+    const safeLoginSelector = normalizedLogin.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const row = adminUsersTableBody.querySelector(`tr[data-login="${safeLoginSelector}"]`);
+    if (!row) return;
+    const timeCell = row.querySelector('.admin-time');
+    if (!timeCell) return;
+    timeCell.textContent = formatActiveTime(activeMs);
 }
 
 async function handleCreatePartnerInvite() {
