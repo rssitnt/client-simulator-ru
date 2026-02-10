@@ -3770,7 +3770,6 @@ async function handleGeminiLiveMessage(message) {
     const inputText = serverContent.inputTranscription?.text;
     if (inputText) {
         upsertGeminiVoiceDialogLine('user', inputText);
-        setVoiceModeStatus(getShortStatusText('Вы:', inputText), 'listening');
     }
 
     const outputText = serverContent.outputTranscription?.text || message?.text;
