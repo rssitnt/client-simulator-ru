@@ -3671,6 +3671,34 @@ function normalizeVoiceDialogText(text) {
     return String(text || '').replace(/\s+/g, ' ').trim();
 }
 
+function joinVoiceDialogFragments(prevText, nextText) {
+    const prev = normalizeVoiceDialogText(prevText);
+    const next = normalizeVoiceDialogText(nextText);
+    if (!prev) return next;
+    if (!next) return prev;
+
+    const prevLower = prev.toLowerCase();
+    const nextLower = next.toLowerCase();
+
+    if (prev === next) return prev;
+    if (nextLower.startsWith(prevLower)) return next;
+    if (prevLower.startsWith(nextLower)) return prev;
+    if (prevLower.includes(nextLower)) return prev;
+    if (nextLower.includes(prevLower)) return next;
+
+    const maxOverlap = Math.min(prev.length, next.length);
+    for (let overlap = maxOverlap; overlap >= 3; overlap -= 1) {
+        const prevSuffix = prevLower.slice(-overlap);
+        const nextPrefix = nextLower.slice(0, overlap);
+        if (prevSuffix === nextPrefix) {
+            return prev + next.slice(overlap);
+        }
+    }
+
+    const needSpace = !/[\s([{«"'-]$/.test(prev) && !/^[\s,.;:!?)}»"'—-]/.test(next);
+    return needSpace ? `${prev} ${next}` : `${prev}${next}`;
+}
+
 function resetGeminiVoiceDialogBuffer() {
     geminiVoiceDialogLines = [];
 }
@@ -3682,14 +3710,8 @@ function upsertGeminiVoiceDialogLine(role, text) {
 
     const lastLine = geminiVoiceDialogLines[geminiVoiceDialogLines.length - 1];
     if (lastLine && lastLine.role === safeRole) {
-        if (normalizedText === lastLine.text) return;
-        if (normalizedText.startsWith(lastLine.text)) {
-            lastLine.text = normalizedText;
-            return;
-        }
-        if (lastLine.text.startsWith(normalizedText)) {
-            return;
-        }
+        lastLine.text = joinVoiceDialogFragments(lastLine.text, normalizedText);
+        return;
     }
 
     geminiVoiceDialogLines.push({
@@ -3706,11 +3728,24 @@ function appendGeminiVoiceDialogToChat() {
     const startDiv = document.getElementById('startConversation');
     if (startDiv) startDiv.style.display = 'none';
 
-    let appendedCount = 0;
-    for (const line of geminiVoiceDialogLines) {
-        const text = normalizeVoiceDialogText(line?.text);
+    const mergedLines = [];
+    for (const rawLine of geminiVoiceDialogLines) {
+        const text = normalizeVoiceDialogText(rawLine?.text);
         if (!text) continue;
-        const role = line?.role === 'assistant' ? 'assistant' : 'user';
+        const role = rawLine?.role === 'assistant' ? 'assistant' : 'user';
+        const prev = mergedLines[mergedLines.length - 1];
+        if (prev && prev.role === role) {
+            prev.text = joinVoiceDialogFragments(prev.text, text);
+        } else {
+            mergedLines.push({ role, text });
+        }
+    }
+
+    let appendedCount = 0;
+    for (const line of mergedLines) {
+        const text = normalizeVoiceDialogText(line.text);
+        const role = line.role;
+        if (!text) continue;
         addMessage(text, role, false);
         conversationHistory.push({ role, content: text });
         appendedCount += 1;
