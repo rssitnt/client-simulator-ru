@@ -3856,6 +3856,10 @@ body.light-theme .btn-ai-improve:focus {
     color: #9ecbff;
 }
 
+.voice-mode-status[data-state="waiting"] {
+    color: #f7c87a;
+}
+
 .voice-mode-status[data-state="error"] {
     color: #ff8f8f;
 }
@@ -3952,6 +3956,10 @@ body.light-theme .voice-mode-status[data-state="ready"] {
 
 body.light-theme .voice-mode-status[data-state="listening"] {
     color: #2563eb;
+}
+
+body.light-theme .voice-mode-status[data-state="waiting"] {
+    color: #b7791f;
 }
 
 body.light-theme .voice-mode-status[data-state="error"] {

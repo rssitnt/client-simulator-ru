@@ -30,6 +30,7 @@ const GEMINI_LIVE_MODEL = 'gemini-2.5-flash-native-audio-preview-12-2025';
 const GEMINI_LIVE_API_KEY_STORAGE_KEY = 'geminiLiveApiKey';
 const GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY = 'geminiLiveTokenEndpoint';
 const GEMINI_LIVE_VOICE_NAME_STORAGE_KEY = 'geminiLiveVoiceName';
+const GEMINI_FIRST_REPLY_HINT_DELAY_MS = 1800;
 const ATTESTATION_QUEUE_STORAGE_KEY = 'attestationQueue:v1';
 const ATTESTATION_SEND_ATTEMPTS = 3;
 const ATTESTATION_QUEUE_MAX_FAILURES = 8;
@@ -472,6 +473,10 @@ let isGeminiVoiceActive = false;
 let geminiVoiceCloseExpected = false;
 let geminiVoiceStartTimestamp = 0;
 let geminiVoiceDialogLines = [];
+let geminiVoiceUserDraft = '';
+let geminiVoiceAssistantDraft = '';
+let geminiVoiceHasAssistantReply = false;
+let geminiVoiceFirstReplyHintTimer = null;
 let reratePromptElement = null;
 let attestationQueue = [];
 let isAttestationQueueFlushInProgress = false;
@@ -3668,49 +3673,69 @@ function getGeminiCloseReasonText(event) {
 }
 
 function normalizeVoiceDialogText(text) {
-    return String(text || '').replace(/\s+/g, ' ').trim();
+    return String(text || '')
+        .replace(/\u00a0/g, ' ')
+        .replace(/\s+/g, ' ')
+        .replace(/\s+([,.;:!?])/g, '$1')
+        .trim();
 }
 
-function joinVoiceDialogFragments(prevText, nextText) {
-    const prev = normalizeVoiceDialogText(prevText);
-    const next = normalizeVoiceDialogText(nextText);
-    if (!prev) return next;
-    if (!next) return prev;
+function normalizeVoiceDialogForCompare(text) {
+    return normalizeVoiceDialogText(text).toLowerCase();
+}
+
+function clearGeminiFirstReplyHintTimer() {
+    if (!geminiVoiceFirstReplyHintTimer) return;
+    clearTimeout(geminiVoiceFirstReplyHintTimer);
+    geminiVoiceFirstReplyHintTimer = null;
+}
+
+function scheduleGeminiFirstReplyHint() {
+    clearGeminiFirstReplyHintTimer();
+    geminiVoiceFirstReplyHintTimer = setTimeout(() => {
+        geminiVoiceFirstReplyHintTimer = null;
+        if (!isGeminiVoiceActive || geminiVoiceHasAssistantReply) return;
+        setVoiceModeStatus('ИИ-клиент формирует первый ответ…', 'waiting');
+    }, GEMINI_FIRST_REPLY_HINT_DELAY_MS);
+}
+
+function mergeVoiceStreamingText(prevText, nextText) {
+    const prev = String(prevText || '');
+    const next = String(nextText || '');
+    if (!next.trim()) return prev;
+    if (!prev.trim()) return next.trimStart();
+
+    const prevNorm = normalizeVoiceDialogForCompare(prev);
+    const nextNorm = normalizeVoiceDialogForCompare(next);
+    if (!nextNorm) return prev;
+    if (!prevNorm) return next.trimStart();
+    if (nextNorm === prevNorm) return next.length > prev.length ? next : prev;
+    if (nextNorm.startsWith(prevNorm)) return next;
+    if (prevNorm.startsWith(nextNorm)) return prev;
 
     const prevLower = prev.toLowerCase();
     const nextLower = next.toLowerCase();
-
-    if (prev === next) return prev;
     if (nextLower.startsWith(prevLower)) return next;
     if (prevLower.startsWith(nextLower)) return prev;
-    if (prevLower.includes(nextLower)) return prev;
-    if (nextLower.includes(prevLower)) return next;
 
-    const maxOverlap = Math.min(prev.length, next.length);
+    const maxOverlap = Math.min(prevLower.length, nextLower.length);
     for (let overlap = maxOverlap; overlap >= 3; overlap -= 1) {
-        const prevSuffix = prevLower.slice(-overlap);
-        const nextPrefix = nextLower.slice(0, overlap);
-        if (prevSuffix === nextPrefix) {
+        if (prevLower.slice(-overlap) === nextLower.slice(0, overlap)) {
             return prev + next.slice(overlap);
         }
     }
 
-    const needSpace = !/[\s([{«"'-]$/.test(prev) && !/^[\s,.;:!?)}»"'—-]/.test(next);
-    return needSpace ? `${prev} ${next}` : `${prev}${next}`;
+    return prev + next;
 }
 
-function resetGeminiVoiceDialogBuffer() {
-    geminiVoiceDialogLines = [];
-}
-
-function upsertGeminiVoiceDialogLine(role, text) {
+function pushGeminiVoiceDialogLine(role, text) {
+    const safeRole = role === 'assistant' ? 'assistant' : 'user';
     const normalizedText = normalizeVoiceDialogText(text);
     if (!normalizedText) return;
-    const safeRole = role === 'assistant' ? 'assistant' : 'user';
 
     const lastLine = geminiVoiceDialogLines[geminiVoiceDialogLines.length - 1];
     if (lastLine && lastLine.role === safeRole) {
-        lastLine.text = joinVoiceDialogFragments(lastLine.text, normalizedText);
+        lastLine.text = normalizeVoiceDialogText(`${lastLine.text} ${normalizedText}`);
         return;
     }
 
@@ -3720,7 +3745,30 @@ function upsertGeminiVoiceDialogLine(role, text) {
     });
 }
 
+function flushGeminiVoiceDraftLine(role) {
+    if (role === 'assistant') {
+        if (!geminiVoiceAssistantDraft.trim()) return;
+        pushGeminiVoiceDialogLine('assistant', geminiVoiceAssistantDraft);
+        geminiVoiceAssistantDraft = '';
+        return;
+    }
+    if (!geminiVoiceUserDraft.trim()) return;
+    pushGeminiVoiceDialogLine('user', geminiVoiceUserDraft);
+    geminiVoiceUserDraft = '';
+}
+
+function resetGeminiVoiceDialogBuffer() {
+    clearGeminiFirstReplyHintTimer();
+    geminiVoiceDialogLines = [];
+    geminiVoiceUserDraft = '';
+    geminiVoiceAssistantDraft = '';
+    geminiVoiceHasAssistantReply = false;
+}
+
 function appendGeminiVoiceDialogToChat() {
+    flushGeminiVoiceDraftLine('user');
+    flushGeminiVoiceDraftLine('assistant');
+
     if (!Array.isArray(geminiVoiceDialogLines) || !geminiVoiceDialogLines.length) {
         return 0;
     }
@@ -3728,21 +3776,8 @@ function appendGeminiVoiceDialogToChat() {
     const startDiv = document.getElementById('startConversation');
     if (startDiv) startDiv.style.display = 'none';
 
-    const mergedLines = [];
-    for (const rawLine of geminiVoiceDialogLines) {
-        const text = normalizeVoiceDialogText(rawLine?.text);
-        if (!text) continue;
-        const role = rawLine?.role === 'assistant' ? 'assistant' : 'user';
-        const prev = mergedLines[mergedLines.length - 1];
-        if (prev && prev.role === role) {
-            prev.text = joinVoiceDialogFragments(prev.text, text);
-        } else {
-            mergedLines.push({ role, text });
-        }
-    }
-
     let appendedCount = 0;
-    for (const line of mergedLines) {
+    for (const line of geminiVoiceDialogLines) {
         const text = normalizeVoiceDialogText(line.text);
         const role = line.role;
         if (!text) continue;
@@ -3769,13 +3804,23 @@ async function handleGeminiLiveMessage(message) {
 
     const inputText = serverContent.inputTranscription?.text;
     if (inputText) {
-        upsertGeminiVoiceDialogLine('user', inputText);
+        geminiVoiceUserDraft = mergeVoiceStreamingText(geminiVoiceUserDraft, inputText);
     }
 
     const outputText = serverContent.outputTranscription?.text || message?.text;
     if (outputText) {
-        upsertGeminiVoiceDialogLine('assistant', outputText);
-        setVoiceModeStatus(getShortStatusText('ИИ-клиент:', outputText), 'ready');
+        if (!geminiVoiceHasAssistantReply) {
+            geminiVoiceHasAssistantReply = true;
+            clearGeminiFirstReplyHintTimer();
+        }
+        if (geminiVoiceUserDraft.trim()) {
+            flushGeminiVoiceDraftLine('user');
+        }
+        geminiVoiceAssistantDraft = mergeVoiceStreamingText(geminiVoiceAssistantDraft, outputText);
+        setVoiceModeStatus(
+            getShortStatusText('ИИ-клиент:', normalizeVoiceDialogText(geminiVoiceAssistantDraft)),
+            'ready'
+        );
     }
 
     const parts = Array.isArray(serverContent.modelTurn?.parts) ? serverContent.modelTurn.parts : [];
@@ -3788,11 +3833,19 @@ async function handleGeminiLiveMessage(message) {
         }
     }
 
+    const hasAudioChunk = playedFromParts || Boolean(message?.data);
+    if (hasAudioChunk && !geminiVoiceHasAssistantReply) {
+        geminiVoiceHasAssistantReply = true;
+        clearGeminiFirstReplyHintTimer();
+        setVoiceModeStatus('ИИ-клиент отвечает…', 'ready');
+    }
+
     if (!playedFromParts && message?.data) {
         await enqueueGeminiAudioPlayback(message.data, 'audio/pcm;rate=24000');
     }
 
     if (serverContent.turnComplete || serverContent.waitingForInput) {
+        flushGeminiVoiceDraftLine('assistant');
         setVoiceModeStatus('Слушаю вас… Говорите.', 'listening');
     }
 }
@@ -3967,7 +4020,7 @@ async function startGeminiVoiceMode() {
             config: liveConfig,
             callbacks: {
                 onopen: () => {
-                    setVoiceModeStatus('Соединение установлено. Говорите.', 'listening');
+                    setVoiceModeStatus('Соединение установлено. Готовлю первый ответ ИИ…', 'waiting');
                 },
                 onmessage: (message) => {
                     handleGeminiLiveMessage(message).catch((error) => {
@@ -3976,6 +4029,7 @@ async function startGeminiVoiceMode() {
                 },
                 onerror: (event) => {
                     console.error('Gemini live error:', event);
+                    clearGeminiFirstReplyHintTimer();
                     setVoiceModeStatus('Ошибка голосового канала. Нажмите «Остановить» и попробуйте снова.', 'error');
                 },
                 onclose: (event) => {
@@ -4006,7 +4060,8 @@ async function startGeminiVoiceMode() {
         isGeminiVoiceConnecting = false;
         isGeminiVoiceActive = true;
         updateVoiceModeControls();
-        setVoiceModeStatus('Слушаю вас… Говорите.', 'listening');
+        setVoiceModeStatus('Запрашиваю первое сообщение от ИИ-клиента…', 'waiting');
+        scheduleGeminiFirstReplyHint();
 
         try {
             geminiLiveSession.sendClientContent({
@@ -4018,6 +4073,8 @@ async function startGeminiVoiceMode() {
             });
         } catch (error) {
             debugLog('Initial live prompt failed', error);
+            clearGeminiFirstReplyHintTimer();
+            setVoiceModeStatus('Не удалось запросить первое сообщение. Нажмите «Остановить» и попробуйте снова.', 'error');
         }
     } catch (error) {
         console.error('Failed to start Gemini voice mode:', error);
