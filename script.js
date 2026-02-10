@@ -4198,6 +4198,15 @@ function flushOpenAiPendingUserTurn(options = {}) {
     return requestOpenAiAssistantResponse();
 }
 
+function queueOpenAiPendingUserTurn(text) {
+    const normalized = normalizeVoiceDialogText(text);
+    if (!normalized) return '';
+    openAiPendingUserTurn = normalizeVoiceDialogText(
+        mergeVoiceStreamingText(openAiPendingUserTurn, normalized)
+    );
+    return openAiPendingUserTurn;
+}
+
 async function handleGeminiLiveMessage(rawMessage) {
     let message = rawMessage;
     if (typeof rawMessage === 'string') {
@@ -4237,19 +4246,24 @@ async function handleGeminiLiveMessage(rawMessage) {
         if (!userText && rawUserText.length >= 16) {
             userText = rawUserText;
         }
-        geminiVoiceUserPreview = '';
         if (userText) {
-            openAiPendingUserTurn = normalizeVoiceDialogText(
-                mergeVoiceStreamingText(openAiPendingUserTurn, userText)
-            );
-            if (!openAiResponsePending) {
-                flushOpenAiPendingUserTurn({ requestResponse: false });
-            }
+            queueOpenAiPendingUserTurn(userText);
+            geminiVoiceUserPreview = '';
+            return;
+        }
+        // If completed text is empty but partial delta exists, keep it for the turn.
+        if (geminiVoiceUserPreview.trim()) {
+            queueOpenAiPendingUserTurn(geminiVoiceUserPreview);
+            geminiVoiceUserPreview = '';
         }
         return;
     }
 
     if (eventType === 'input_audio_buffer.committed') {
+        if (geminiVoiceUserPreview.trim()) {
+            queueOpenAiPendingUserTurn(geminiVoiceUserPreview);
+            geminiVoiceUserPreview = '';
+        }
         if (openAiResponsePending) {
             openAiResponseQueued = true;
             return;
@@ -4518,6 +4532,15 @@ async function startGeminiVoiceMode() {
             type: 'session.update',
             session: {
                 instructions: sessionConfig.instructions,
+                input_audio_transcription: {
+                    model: OPENAI_INPUT_TRANSCRIBE_MODEL
+                },
+                turn_detection: {
+                    type: 'semantic_vad',
+                    eagerness: 'high',
+                    create_response: false,
+                    interrupt_response: true
+                },
                 audio: {
                     input: {
                         transcription: {
