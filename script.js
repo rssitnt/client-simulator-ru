@@ -487,11 +487,14 @@ let publicActiveIds = {
 };
 const PROMPT_ROLES = ['client', 'manager', 'manager_call', 'rater'];
 const ATTESTATION_PROMPT_ROLES = ['client', 'manager', 'rater'];
+const GEMINI_TEXT_MAX_TOKENS = 1000000;
+const APPROX_CHARS_PER_TOKEN = 4;
+const GEMINI_TEXT_MAX_CHARS_ESTIMATE = GEMINI_TEXT_MAX_TOKENS * APPROX_CHARS_PER_TOKEN;
 const PROMPT_MAX_CHARS_BY_ROLE = {
-    client: 60000,
-    manager: 60000,
-    manager_call: 60000,
-    rater: 120000
+    client: GEMINI_TEXT_MAX_CHARS_ESTIMATE,
+    manager: GEMINI_TEXT_MAX_CHARS_ESTIMATE,
+    manager_call: GEMINI_TEXT_MAX_CHARS_ESTIMATE,
+    rater: GEMINI_TEXT_MAX_CHARS_ESTIMATE
 };
 
 // Prompt Variations Data
@@ -2377,7 +2380,7 @@ function updatePromptLengthInfo(role = getActiveRole()) {
     const percent = maxChars > 0 ? (currentLength / maxChars) * 100 : 0;
     const normalizedPercent = Number.isFinite(percent) ? percent : 0;
     const roundedPercent = normalizedPercent > 999 ? '999+' : normalizedPercent.toFixed(1);
-    promptLengthInfo.textContent = `${currentLength.toLocaleString('ru-RU')} символов (${roundedPercent}%) из ${maxChars.toLocaleString('ru-RU')}`;
+    promptLengthInfo.textContent = `${currentLength.toLocaleString('ru-RU')} символов (${roundedPercent}%) из ~${maxChars.toLocaleString('ru-RU')}`;
     promptLengthInfo.classList.toggle('is-over', currentLength > maxChars);
 }
 
