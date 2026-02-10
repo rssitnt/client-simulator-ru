@@ -487,7 +487,7 @@ let publicActiveIds = {
 };
 const PROMPT_ROLES = ['client', 'manager', 'manager_call', 'rater'];
 const ATTESTATION_PROMPT_ROLES = ['client', 'manager', 'rater'];
-const MANAGER_CALL_PROMPT_MAX_CHARS = 4000000;
+const MANAGER_CALL_PROMPT_MAX_CHARS = 4000;
 
 // Prompt Variations Data
 let promptsData = {
