@@ -6273,6 +6273,52 @@ function isSelectionInsideTag(preview, tagName) {
     return !!match && preview.contains(match);
 }
 
+function ensureSelectionInPreview(preview) {
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        const container = range.commonAncestorContainer;
+        const element = container.nodeType === Node.TEXT_NODE ? container.parentElement : container;
+        if (element instanceof Element && preview.contains(element)) {
+            return true;
+        }
+    }
+    preview.focus();
+    const range = document.createRange();
+    range.selectNodeContents(preview);
+    range.collapse(false);
+    const nextSelection = window.getSelection();
+    if (!nextSelection) return false;
+    nextSelection.removeAllRanges();
+    nextSelection.addRange(range);
+    return true;
+}
+
+function execFormatBlock(tagName) {
+    const normalized = String(tagName || '').toUpperCase();
+    const candidates = [`<${normalized}>`, normalized, normalized.toLowerCase()];
+    for (const candidate of candidates) {
+        try {
+            if (document.execCommand('formatBlock', false, candidate)) {
+                return true;
+            }
+        } catch (error) {
+            // noop
+        }
+    }
+    return false;
+}
+
+function toggleHeadingFormat(preview, level) {
+    const tagName = `h${level}`;
+    ensureSelectionInPreview(preview);
+    if (isSelectionInsideTag(preview, tagName)) {
+        execFormatBlock('p');
+        return;
+    }
+    execFormatBlock(tagName);
+}
+
 // Toolbar
 document.querySelectorAll('.toolbar-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -6287,17 +6333,17 @@ document.querySelectorAll('.toolbar-btn').forEach(btn => {
         else if (action === 'strike') document.execCommand('strikeThrough', false, null);
         else if (action === 'ul') document.execCommand('insertUnorderedList', false, null);
         else if (action === 'ol') document.execCommand('insertOrderedList', false, null);
-        else if (action === 'h1') document.execCommand('formatBlock', false, 'h1');
-        else if (action === 'h2') document.execCommand('formatBlock', false, 'h2');
-        else if (action === 'h3') document.execCommand('formatBlock', false, 'h3');
+        else if (action === 'h1') toggleHeadingFormat(preview, 1);
+        else if (action === 'h2') toggleHeadingFormat(preview, 2);
+        else if (action === 'h3') toggleHeadingFormat(preview, 3);
         else if (action === 'quote') {
             if (isSelectionInsideTag(preview, 'blockquote')) {
                 const removed = document.execCommand('outdent', false, null);
                 if (!removed) {
-                    document.execCommand('formatBlock', false, 'p');
+                    execFormatBlock('p');
                 }
             } else {
-                document.execCommand('formatBlock', false, 'blockquote');
+                execFormatBlock('blockquote');
             }
         }
         else if (action === 'hr') document.execCommand('insertHorizontalRule', false, null);

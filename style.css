@@ -1970,8 +1970,9 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
 /* Old preview scrollbar styles removed */
 
 .prompt-preview h1 {
-    font-size: 1.6em;
-    font-weight: 600;
+    font-size: 2.1em;
+    font-weight: 700;
+    line-height: 1.2;
     color: #fff;
     margin: 0 0 16px 0;
     padding-bottom: 8px;
@@ -1979,15 +1980,17 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
 }
 
 .prompt-preview h2 {
-    font-size: 1.35em;
-    font-weight: 600;
+    font-size: 1.65em;
+    font-weight: 700;
+    line-height: 1.25;
     color: #f0f0f0;
     margin: 24px 0 12px 0;
 }
 
 .prompt-preview h3 {
-    font-size: 1.15em;
-    font-weight: 600;
+    font-size: 1.35em;
+    font-weight: 700;
+    line-height: 1.3;
     color: #e8e8e8;
     margin: 20px 0 10px 0;
 }
