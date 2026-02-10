@@ -31,6 +31,11 @@ const ATTESTATION_SEND_ATTEMPTS = 3;
 const ATTESTATION_QUEUE_MAX_FAILURES = 8;
 const ATTESTATION_SEND_RETRY_BASE_MS = 800;
 const ATTESTATION_QUEUE_RETRY_DELAY_MS = 12000;
+const RATING_SEND_ATTEMPTS = 5;
+const RATING_SEND_RETRY_BASE_MS = 700;
+const RATING_SEND_RETRY_MAX_MS = 5000;
+const MARKDOWN_CACHE_MAX_SIZE = 250;
+const MARKDOWN_CACHE_TEXT_LIMIT = 40000;
 const AUTH_USERS_DB_PATH = 'users';
 const PARTNER_INVITES_DB_PATH = 'partner_invites';
 const AUTH_LOCAL_STORAGE_KEY = 'authUsers:v1';
@@ -258,6 +263,19 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 300000) {
     } finally {
         clearTimeout(timeoutId);
     }
+}
+
+function buildRequestId(prefix = 'req') {
+    return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function buildJsonRequestHeaders(requestId, scope = 'request') {
+    const headers = { 'Content-Type': 'application/json' };
+    if (requestId) {
+        headers['X-Request-Id'] = requestId;
+        headers['X-Idempotency-Key'] = `${scope}:${requestId}`;
+    }
+    return headers;
 }
 
 // DOM Elements
@@ -3457,11 +3475,13 @@ async function improvePromptWithAI() {
     }, 2500);
     
     try {
+        const requestId = buildRequestId('improve');
         const response = await fetchWithTimeout(AI_IMPROVE_WEBHOOK_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: buildJsonRequestHeaders(requestId, 'improve'),
             body: JSON.stringify({
-                userMessage
+                userMessage,
+                requestId
             })
         });
         
@@ -4006,15 +4026,17 @@ async function sendMessage() {
             const role = msg.role === 'user' ? 'Менеджер' : 'Клиент';
             dialogHistory += `${role}: ${msg.content}\n\n`;
         });
+        const requestId = buildRequestId('chat');
         
         const response = await fetchWithTimeout(WEBHOOK_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: buildJsonRequestHeaders(requestId, 'chat'),
             body: JSON.stringify({
                 chatInput: userMessage,
                 systemPrompt,
-            dialogHistory: dialogHistory.trim(),
-            sessionId: clientSessionId
+                dialogHistory: dialogHistory.trim(),
+                sessionId: clientSessionId,
+                requestId
             })
         });
         
@@ -4063,14 +4085,16 @@ async function startConversationHandler() {
     const loadingMsg = addMessage('', 'loading');
     
     try {
+        const requestId = buildRequestId('chat_start');
         const response = await fetchWithTimeout(WEBHOOK_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: buildJsonRequestHeaders(requestId, 'chat_start'),
             body: JSON.stringify({
                 chatInput: '/start',
                 systemPrompt,
                 dialogHistory: '',
-                sessionId: clientSessionId
+                sessionId: clientSessionId,
+                requestId
             })
         });
         
@@ -4147,7 +4171,7 @@ function delay(ms) {
 }
 
 function buildAttestationRequestId() {
-    return `attestation_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    return buildRequestId('attestation');
 }
 
 function normalizeAttestationQueueItem(raw) {
@@ -4251,7 +4275,7 @@ async function sendAttestationJobWithRetry(job, maxAttempts = ATTESTATION_SEND_A
         try {
             const response = await fetchWithTimeout(ATTESTATION_WEBHOOK_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: buildJsonRequestHeaders(job.requestId, 'attestation'),
                 body: JSON.stringify({
                     dialog: job.dialog,
                     rating: job.rating,
@@ -4343,7 +4367,7 @@ async function flushAttestationQueue(options = {}) {
 
 function isRetryableRatingError(error) {
     const status = Number(error?.httpStatus || 0);
-    if (status === 408 || status === 429 || status >= 500) return true;
+    if (status === 408 || status === 425 || status === 429 || status >= 500) return true;
     const message = String(error?.message || '').toLowerCase();
     return (
         message.includes('failed to fetch') ||
@@ -4354,15 +4378,15 @@ function isRetryableRatingError(error) {
     );
 }
 
-async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = 3) {
-    const requestId = `rating_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RATING_SEND_ATTEMPTS) {
+    const requestId = buildRequestId('rating');
     let lastError = null;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
         try {
             const response = await fetchWithTimeout(RATE_WEBHOOK_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: buildJsonRequestHeaders(requestId, 'rating'),
                 body: JSON.stringify({
                     dialog: dialogText,
                     raterPrompt,
@@ -4381,6 +4405,11 @@ async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = 3) 
 
             let ratingMessage = await readWebhookResponse(response);
             ratingMessage = normalizeStructuredJsonText(ratingMessage);
+            if (/^\s*<!doctype|^\s*<html/i.test(ratingMessage || '')) {
+                const err = new Error('Некорректный ответ сервера оценки');
+                err.httpStatus = 502;
+                throw err;
+            }
             if (!ratingMessage || ratingMessage.trim() === '') {
                 const err = new Error('Пустой ответ');
                 err.httpStatus = 204;
@@ -4393,7 +4422,12 @@ async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = 3) 
                 throw lastError;
             }
             console.warn(`Rating webhook attempt ${attempt}/${maxAttempts} failed, retrying...`, error);
-            await delay(600 * attempt);
+            const baseDelay = Math.min(
+                RATING_SEND_RETRY_MAX_MS,
+                RATING_SEND_RETRY_BASE_MS * Math.pow(2, attempt - 1)
+            );
+            const jitter = Math.floor(Math.random() * 250);
+            await delay(baseDelay + jitter);
         }
     }
 
@@ -4429,7 +4463,7 @@ async function rateChat(options = {}) {
     
     try {
         const dialogText = buildDialogText();
-        const ratingMessage = await requestRatingWithRetry(dialogText, raterPrompt, 3);
+        const ratingMessage = await requestRatingWithRetry(dialogText, raterPrompt, RATING_SEND_ATTEMPTS);
         
         loadingMsg.remove();
         lastRating = ratingMessage;
@@ -4640,15 +4674,17 @@ async function generateAIResponse() {
         const lastMessage = conversationHistory[conversationHistory.length - 1].content;
         const managerName = getManagerName();
         const fullPrompt = `Тебя зовут ${managerName}.\n\n${basePrompt}`;
+        const requestId = buildRequestId('manager_assist');
         
         const response = await fetchWithTimeout(MANAGER_ASSISTANT_WEBHOOK_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: buildJsonRequestHeaders(requestId, 'manager_assist'),
             body: JSON.stringify({
                 systemPrompt: fullPrompt,
                 userMessage: lastMessage,
                 dialogHistory: dialogHistory.trim(),
-                sessionId: managerSessionId
+                sessionId: managerSessionId,
+                requestId
             })
         });
         
@@ -5007,16 +5043,44 @@ async function copyPromptToClipboard(text, label) {
     
 // ============ MARKDOWN RENDERING ============
 
+const markdownRenderCache = new Map();
+
+function getCachedMarkdown(key) {
+    if (!markdownRenderCache.has(key)) return null;
+    const cached = markdownRenderCache.get(key);
+    // LRU bump
+    markdownRenderCache.delete(key);
+    markdownRenderCache.set(key, cached);
+    return cached;
+}
+
+function setCachedMarkdown(key, html) {
+    markdownRenderCache.set(key, html);
+    if (markdownRenderCache.size <= MARKDOWN_CACHE_MAX_SIZE) return;
+    const oldestKey = markdownRenderCache.keys().next().value;
+    if (oldestKey !== undefined) {
+        markdownRenderCache.delete(oldestKey);
+    }
+}
+
 function renderMarkdown(text) {
     if (!text) return '<p style="color: #666; font-style: italic;">Промпт пустой...</p>';
     
     // Unescape any escaped markdown characters first
     let cleanText = unescapeMarkdown(text);
-    
-    if (typeof marked !== 'undefined') return marked.parse(cleanText);
-    
-    // Simple fallback
-    return '<p>' + cleanText
+
+    const canCache = cleanText.length <= MARKDOWN_CACHE_TEXT_LIMIT;
+    if (canCache) {
+        const cached = getCachedMarkdown(cleanText);
+        if (cached !== null) return cached;
+    }
+
+    let html;
+    if (typeof marked !== 'undefined') {
+        html = marked.parse(cleanText);
+    } else {
+        // Simple fallback
+        html = '<p>' + cleanText
         .replace(/^###\s+(.+)$/gm, '<h3>$1</h3>')
         .replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
         .replace(/^#\s+(.+)$/gm, '<h1>$1</h1>')
@@ -5024,6 +5088,12 @@ function renderMarkdown(text) {
         .replace(/\*(.+?)\*/g, '<em>$1</em>')
         .replace(/\n\n+/g, '</p><p>')
         .replace(/\n/g, '<br>') + '</p>';
+    }
+
+    if (canCache) {
+        setCachedMarkdown(cleanText, html);
+    }
+    return html;
 }
 
 function updatePreview() {
