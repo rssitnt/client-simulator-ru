@@ -2272,6 +2272,20 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
     visibility: visible;
 }
 
+#settingsModal {
+    align-items: flex-start;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+#settingsModal .settings-panel {
+    margin: 0 auto;
+    max-height: calc(100dvh - 40px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
 .modal-content {
     background: #1a1a1a;
     border: none; /* Убрана обводка */
@@ -3421,6 +3435,10 @@ body.light-theme .more-colors-popup {
         min-width: 0;
         max-width: none;
         padding: 16px;
+    }
+
+    #settingsModal .settings-panel {
+        max-height: calc(100dvh - 20px);
     }
 
     .settings-row {
