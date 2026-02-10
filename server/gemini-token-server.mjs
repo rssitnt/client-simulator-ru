@@ -3,6 +3,7 @@ import { GoogleGenAI } from '@google/genai';
 
 const PORT = Number.parseInt(process.env.PORT || '8787', 10);
 const GEMINI_API_KEY = String(process.env.GEMINI_API_KEY || '').trim();
+const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || '').trim();
 const FIREBASE_WEB_API_KEY = String(process.env.FIREBASE_WEB_API_KEY || '').trim();
 const FIREBASE_DATABASE_URL = String(process.env.FIREBASE_DATABASE_URL || '').trim().replace(/\/+$/, '');
 const ALLOWED_ORIGINS = String(process.env.ALLOWED_ORIGINS || '')
@@ -16,12 +17,15 @@ const ALLOWED_EMAIL_DOMAINS = String(process.env.ALLOWED_EMAIL_DOMAINS || '')
 
 const GEMINI_LIVE_MODEL = String(process.env.GEMINI_LIVE_MODEL || 'gemini-2.5-flash-native-audio-preview-09-2025').trim();
 const TOKEN_PATH = '/api/gemini-live-token';
+const OPENAI_TOKEN_PATH = '/api/openai-realtime-session';
+const OPENAI_REALTIME_MODEL = String(process.env.OPENAI_REALTIME_MODEL || 'gpt-4o-realtime-preview-2025-06-03').trim();
+const OPENAI_DEFAULT_VOICE = String(process.env.OPENAI_DEFAULT_VOICE || 'alloy').trim().toLowerCase();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX_REQUESTS = 15;
 const rateLimitBuckets = new Map();
 
-if (!GEMINI_API_KEY) {
-    console.error('[gemini-token-server] GEMINI_API_KEY is required');
+if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
+    console.error('[gemini-token-server] Set at least one API key: GEMINI_API_KEY or OPENAI_API_KEY');
     process.exit(1);
 }
 
@@ -30,10 +34,14 @@ if (!FIREBASE_WEB_API_KEY) {
     process.exit(1);
 }
 
-const ai = new GoogleGenAI({
-    apiKey: GEMINI_API_KEY,
-    httpOptions: { apiVersion: 'v1alpha' }
-});
+const ai = GEMINI_API_KEY
+    ? new GoogleGenAI({
+        apiKey: GEMINI_API_KEY,
+        httpOptions: { apiVersion: 'v1alpha' }
+    })
+    : null;
+
+const OPENAI_ALLOWED_VOICES = new Set(['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse']);
 
 function getCorsOrigin(requestOrigin) {
     if (!requestOrigin) return '';
@@ -195,6 +203,10 @@ async function verifyFirebaseIdToken(idToken) {
 }
 
 async function createGeminiEphemeralToken() {
+    if (!ai) {
+        throw new Error('GEMINI_API_KEY is not configured');
+    }
+
     const now = Date.now();
     const expireTime = new Date(now + 30 * 60 * 1000).toISOString();
     const newSessionExpireTime = new Date(now + 60 * 1000).toISOString();
@@ -214,11 +226,69 @@ async function createGeminiEphemeralToken() {
     });
 }
 
+function sanitizeOpenAiVoiceName(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized) return OPENAI_DEFAULT_VOICE;
+    return OPENAI_ALLOWED_VOICES.has(normalized) ? normalized : OPENAI_DEFAULT_VOICE;
+}
+
+function buildOpenAiRealtimeSessionConfig(requestBody = {}) {
+    const requestedModel = String(requestBody?.model || '').trim();
+    const instructions = String(requestBody?.instructions || '').trim().slice(0, 12000);
+    const voice = sanitizeOpenAiVoiceName(requestBody?.voice);
+
+    const session = {
+        model: requestedModel || OPENAI_REALTIME_MODEL,
+        voice
+    };
+    if (instructions) {
+        session.instructions = instructions;
+    }
+    return session;
+}
+
+async function createOpenAiRealtimeSession(requestBody = {}) {
+    if (!OPENAI_API_KEY) {
+        throw new Error('OPENAI_API_KEY is not configured');
+    }
+
+    const response = await fetch('https://api.openai.com/v1/realtime/sessions', {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${OPENAI_API_KEY}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(buildOpenAiRealtimeSessionConfig(requestBody))
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        const errorMessage = String(payload?.error?.message || payload?.message || 'Failed to create OpenAI realtime session');
+        throw new Error(errorMessage);
+    }
+
+    const clientSecret = String(payload?.client_secret?.value || '').trim();
+    if (!clientSecret) {
+        throw new Error('OpenAI session response is missing client_secret');
+    }
+
+    return {
+        client_secret: {
+            value: clientSecret,
+            expires_at: payload?.client_secret?.expires_at || null
+        },
+        model: String(payload?.model || OPENAI_REALTIME_MODEL),
+        voice: sanitizeOpenAiVoiceName(payload?.voice || OPENAI_DEFAULT_VOICE)
+    };
+}
+
 const server = createServer(async (req, res) => {
     const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
     const requestOrigin = String(req.headers.origin || '');
+    const isGeminiTokenRequest = url.pathname === TOKEN_PATH;
+    const isOpenAiTokenRequest = url.pathname === OPENAI_TOKEN_PATH;
 
-    if (url.pathname !== TOKEN_PATH) {
+    if (!isGeminiTokenRequest && !isOpenAiTokenRequest) {
         res.statusCode = 404;
         res.end('Not found');
         return;
@@ -279,13 +349,31 @@ const server = createServer(async (req, res) => {
             return;
         }
 
+        if (isOpenAiTokenRequest) {
+            const session = await createOpenAiRealtimeSession(requestBody);
+            sendJson(res, 200, {
+                client_secret: session.client_secret,
+                model: session.model,
+                voice: session.voice,
+                issuedFor: {
+                    uid: authIdentity.uid || null,
+                    email: authIdentity.email || null
+                },
+                requestContext: {
+                    source: requestBody?.source || null,
+                    authSource: authIdentity.source
+                }
+            }, requestOrigin);
+            return;
+        }
+
         const token = await createGeminiEphemeralToken();
         const tokenName = String(token?.name || '').trim();
         if (!tokenName) {
             throw new Error('Gemini token response is empty');
         }
 
-        const responsePayload = {
+        sendJson(res, 200, {
             name: tokenName,
             expireTime: token?.expireTime || null,
             newSessionExpireTime: token?.newSessionExpireTime || null,
@@ -297,16 +385,14 @@ const server = createServer(async (req, res) => {
                 source: requestBody?.source || null,
                 authSource: authIdentity.source
             }
-        };
-
-        sendJson(res, 200, responsePayload, requestOrigin);
+        }, requestOrigin);
     } catch (error) {
-        const message = String(error?.message || 'Failed to create Gemini token');
+        const message = String(error?.message || 'Failed to create voice session token');
         const status = /MISSING|INVALID|EXPIRED|TOKEN/i.test(message) ? 401 : 500;
         sendJson(res, status, { error: message }, requestOrigin);
     }
 });
 
 server.listen(PORT, () => {
-    console.log(`[gemini-token-server] listening on http://localhost:${PORT}${TOKEN_PATH}`);
+    console.log(`[gemini-token-server] listening on http://localhost:${PORT} (paths: ${TOKEN_PATH}, ${OPENAI_TOKEN_PATH})`);
 });

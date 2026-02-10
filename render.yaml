@@ -11,11 +11,17 @@ services:
         value: "20"
       - key: GEMINI_API_KEY
         sync: false
+      - key: OPENAI_API_KEY
+        sync: false
       - key: FIREBASE_WEB_API_KEY
         sync: false
       - key: FIREBASE_DATABASE_URL
         sync: false
       - key: GEMINI_LIVE_MODEL
+        sync: false
+      - key: OPENAI_REALTIME_MODEL
+        sync: false
+      - key: OPENAI_DEFAULT_VOICE
         sync: false
       - key: ALLOWED_ORIGINS
         sync: false

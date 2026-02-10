@@ -220,20 +220,23 @@
                 <button id="changeRoleBtn" class="btn-change">Сменить</button>
             </div>
 
-            <!-- Настройки голосового режима Gemini -->
+            <!-- Настройки голосового режима OpenAI -->
             <div class="settings-row voice-config-row">
-                <span class="settings-label">Gemini Voice:</span>
+                <span class="settings-label">OpenAI Voice:</span>
                 <div class="voice-config-block">
-                    <input type="password" id="geminiApiKeyInput" class="password-input" placeholder="Gemini API key (резервный, не обязателен)" autocomplete="off" spellcheck="false">
-                    <input type="text" id="geminiTokenEndpointInput" class="password-input" placeholder="Token endpoint (по умолчанию: /api/gemini-live-token)" autocomplete="off" spellcheck="false">
+                    <input type="password" id="geminiApiKeyInput" class="password-input" placeholder="OpenAI API key (резервный, не обязателен)" autocomplete="off" spellcheck="false">
+                    <input type="text" id="geminiTokenEndpointInput" class="password-input" placeholder="Token endpoint (по умолчанию: /api/openai-realtime-session)" autocomplete="off" spellcheck="false">
                     <div class="voice-config-note">Админ: сохраните endpoint один раз, и он применится для всех пользователей.</div>
-                    <input type="text" id="geminiVoiceNameInput" class="password-input" placeholder="Голос (например: Puck)" list="geminiVoiceNameOptions" autocomplete="off" spellcheck="false" aria-label="Голос Gemini">
+                    <input type="text" id="geminiVoiceNameInput" class="password-input" placeholder="Голос (например: alloy)" list="geminiVoiceNameOptions" autocomplete="off" spellcheck="false" aria-label="Голос OpenAI">
                     <datalist id="geminiVoiceNameOptions">
-                        <option value="Puck"></option>
-                        <option value="Aoede"></option>
-                        <option value="Charon"></option>
-                        <option value="Fenrir"></option>
-                        <option value="Kore"></option>
+                        <option value="alloy"></option>
+                        <option value="ash"></option>
+                        <option value="ballad"></option>
+                        <option value="coral"></option>
+                        <option value="echo"></option>
+                        <option value="sage"></option>
+                        <option value="shimmer"></option>
+                        <option value="verse"></option>
                     </datalist>
                     <div class="voice-config-actions">
                         <button id="saveVoiceConfigBtn" class="btn-change">Сохранить</button>
@@ -545,7 +548,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <!-- Turndown for HTML to Markdown conversion (WYSIWYG editing) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js"></script>
-    <script type="module" src="script.js?v=20260210-23"></script>
-    <!-- Last deployment trigger: 2026-02-10 15:44 -->
+    <script type="module" src="script.js?v=20260210-24"></script>
+    <!-- Last deployment trigger: 2026-02-10 17:12 -->
 </body>
 </html>

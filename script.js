@@ -26,12 +26,14 @@ const RATE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/rate-manager';
 const ATTESTATION_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/certification';
 const MANAGER_ASSISTANT_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/manager-simulator';
 const AI_IMPROVE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/prompt-enchancement';
-const GEMINI_LIVE_MODEL = 'gemini-2.5-flash-native-audio-preview-09-2025';
+const GEMINI_LIVE_MODEL = 'gpt-4o-realtime-preview-2025-06-03';
 const GEMINI_LIVE_API_KEY_STORAGE_KEY = 'geminiLiveApiKey';
 const GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY = 'geminiLiveTokenEndpoint';
 const GEMINI_LIVE_VOICE_NAME_STORAGE_KEY = 'geminiLiveVoiceName';
-const GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT = '/api/gemini-live-token';
+const GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT = '/api/openai-realtime-session';
 const GEMINI_FIRST_REPLY_HINT_DELAY_MS = 1800;
+const OPENAI_DEFAULT_VOICE = 'alloy';
+const OPENAI_VOICE_NAMES = new Set(['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse']);
 const ATTESTATION_QUEUE_STORAGE_KEY = 'attestationQueue:v1';
 const ATTESTATION_SEND_ATTEMPTS = 3;
 const ATTESTATION_QUEUE_MAX_FAILURES = 8;
@@ -479,6 +481,9 @@ let geminiVoiceUserDraft = '';
 let geminiVoiceAssistantDraft = '';
 let geminiVoiceHasAssistantReply = false;
 let geminiVoiceFirstReplyHintTimer = null;
+let openAiVoicePeerConnection = null;
+let openAiVoiceDataChannel = null;
+let openAiVoiceRemoteAudio = null;
 let reratePromptElement = null;
 let attestationQueue = [];
 let isAttestationQueueFlushInProgress = false;
@@ -3466,7 +3471,9 @@ function getConfiguredGeminiApiKey() {
 }
 
 function normalizeGeminiTokenEndpoint(value) {
-    return String(value || '').trim();
+    const normalized = String(value || '').trim();
+    if (!normalized) return '';
+    return normalized.replace(/\/api\/gemini-live-token\/?$/i, '/api/openai-realtime-session');
 }
 
 function getSharedGeminiTokenEndpoint() {
@@ -3479,7 +3486,10 @@ function setSharedGeminiTokenEndpoint(value) {
 
 function getDefaultGeminiTokenEndpoint() {
     return String(
-        (typeof window !== 'undefined' && (window.GEMINI_LIVE_TOKEN_ENDPOINT || window.GEMINI_TOKEN_ENDPOINT)) ||
+        (
+            typeof window !== 'undefined' &&
+            (window.OPENAI_REALTIME_TOKEN_ENDPOINT || window.OPENAI_TOKEN_ENDPOINT || window.GEMINI_LIVE_TOKEN_ENDPOINT || window.GEMINI_TOKEN_ENDPOINT)
+        ) ||
         GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT
     ).trim();
 }
@@ -3495,11 +3505,13 @@ function getConfiguredGeminiTokenEndpoint() {
 }
 
 function getConfiguredGeminiVoiceName() {
-    return String(
+    const value = String(
         (typeof window !== 'undefined' && window.GEMINI_LIVE_VOICE_NAME) ||
         localStorage.getItem(GEMINI_LIVE_VOICE_NAME_STORAGE_KEY) ||
         ''
-    ).trim();
+    ).trim().toLowerCase();
+    if (!value) return OPENAI_DEFAULT_VOICE;
+    return OPENAI_VOICE_NAMES.has(value) ? value : OPENAI_DEFAULT_VOICE;
 }
 
 function populateVoiceConfigFields() {
@@ -3510,7 +3522,7 @@ function populateVoiceConfigFields() {
         geminiTokenEndpointInput.value = getConfiguredGeminiTokenEndpoint();
     }
     if (geminiVoiceNameInput) {
-        geminiVoiceNameInput.value = localStorage.getItem(GEMINI_LIVE_VOICE_NAME_STORAGE_KEY) || '';
+        geminiVoiceNameInput.value = getConfiguredGeminiVoiceName();
     }
 }
 
@@ -3525,7 +3537,8 @@ async function saveSharedGeminiTokenEndpointConfig(value) {
 async function saveVoiceModeConfigFromInputs() {
     const apiKey = String(geminiApiKeyInput?.value || '').trim();
     const tokenEndpoint = normalizeGeminiTokenEndpoint(geminiTokenEndpointInput?.value || '');
-    const voiceName = String(geminiVoiceNameInput?.value || '').trim();
+    const voiceNameRaw = String(geminiVoiceNameInput?.value || '').trim().toLowerCase();
+    const voiceName = voiceNameRaw ? (OPENAI_VOICE_NAMES.has(voiceNameRaw) ? voiceNameRaw : OPENAI_DEFAULT_VOICE) : '';
 
     if (apiKey) {
         localStorage.setItem(GEMINI_LIVE_API_KEY_STORAGE_KEY, apiKey);
@@ -3553,7 +3566,7 @@ async function saveVoiceModeConfigFromInputs() {
     }
 
     if (apiKey || tokenEndpoint || voiceName) {
-        showCopyNotification(sharedSaved ? 'Настройки Gemini сохранены для всех пользователей' : 'Настройки Gemini сохранены');
+        showCopyNotification(sharedSaved ? 'Настройки OpenAI Voice сохранены для всех пользователей' : 'Настройки OpenAI Voice сохранены');
     } else {
         showCopyNotification('Настройки голосового режима очищены');
     }
@@ -3575,8 +3588,8 @@ async function clearVoiceModeConfig() {
 
     if (geminiApiKeyInput) geminiApiKeyInput.value = '';
     if (geminiTokenEndpointInput) geminiTokenEndpointInput.value = getConfiguredGeminiTokenEndpoint();
-    if (geminiVoiceNameInput) geminiVoiceNameInput.value = '';
-    showCopyNotification('Данные Gemini удалены на этом устройстве');
+    if (geminiVoiceNameInput) geminiVoiceNameInput.value = OPENAI_DEFAULT_VOICE;
+    showCopyNotification('Данные голосового режима удалены на этом устройстве');
 }
 
 async function getFirebaseAuthIdToken() {
@@ -3584,12 +3597,12 @@ async function getFirebaseAuthIdToken() {
     try {
         return String(await auth.currentUser.getIdToken()).trim();
     } catch (error) {
-        console.warn('Failed to get Firebase ID token for Gemini endpoint:', error);
+        console.warn('Failed to get Firebase ID token for voice endpoint:', error);
         return '';
     }
 }
 
-async function resolveGeminiLiveApiKey() {
+async function resolveGeminiLiveApiKey(sessionConfig = {}) {
     const tokenEndpoint = getConfiguredGeminiTokenEndpoint();
     if (tokenEndpoint) {
         const idToken = await getFirebaseAuthIdToken();
@@ -3604,7 +3617,10 @@ async function resolveGeminiLiveApiKey() {
             credentials: 'omit',
             body: JSON.stringify({
                 source: 'client-simulator-web',
-                login: currentUser?.login || localStorage.getItem(USER_LOGIN_KEY) || ''
+                login: currentUser?.login || localStorage.getItem(USER_LOGIN_KEY) || '',
+                model: sessionConfig?.model || GEMINI_LIVE_MODEL,
+                voice: sessionConfig?.voice || getConfiguredGeminiVoiceName(),
+                instructions: String(sessionConfig?.instructions || '').trim()
             })
         }, 20000);
         if (!tokenResponse.ok) {
@@ -3613,10 +3629,11 @@ async function resolveGeminiLiveApiKey() {
             if (tokenResponse.status === 401 || tokenResponse.status === 403) {
                 throw new Error(tokenErrorText || 'Нет доступа к голосовому режиму');
             }
-            throw new Error(tokenErrorText || `Не удалось получить токен Gemini (HTTP ${tokenResponse.status})`);
+            throw new Error(tokenErrorText || `Не удалось получить ключ сессии (HTTP ${tokenResponse.status})`);
         }
         const tokenPayload = await tokenResponse.json();
         const token = String(
+            tokenPayload?.client_secret?.value ||
             tokenPayload?.name ||
             tokenPayload?.token ||
             tokenPayload?.accessToken ||
@@ -3624,7 +3641,7 @@ async function resolveGeminiLiveApiKey() {
             ''
         ).trim();
         if (token) return token;
-        throw new Error('Эндпоинт токена Gemini вернул пустой ответ');
+        throw new Error('Эндпоинт ключа сессии вернул пустой ответ');
     }
 
     const directApiKey = getConfiguredGeminiApiKey();
@@ -3633,12 +3650,6 @@ async function resolveGeminiLiveApiKey() {
     throw new Error(
         'Голосовой режим не настроен: недоступен token endpoint и не задан резервный API key'
     );
-}
-
-async function loadGeminiSdkModule() {
-    if (geminiSdkModulePromise) return geminiSdkModulePromise;
-    geminiSdkModulePromise = import('https://cdn.jsdelivr.net/npm/@google/genai/+esm');
-    return geminiSdkModulePromise;
 }
 
 function uint8ToBase64(bytes) {
@@ -3897,75 +3908,131 @@ function appendGeminiVoiceDialogToChat() {
     return appendedCount;
 }
 
-async function handleGeminiLiveMessage(message) {
-    const serverContent = message?.serverContent;
-    if (!serverContent) return;
+function buildOpenAiSessionConfig() {
+    const activeClientPrompt = String(getActiveContent('client') || '').trim();
+    return {
+        model: GEMINI_LIVE_MODEL,
+        voice: getConfiguredGeminiVoiceName(),
+        instructions: activeClientPrompt || 'Ты вежливый клиент, веди естественный разговор голосом на русском языке.'
+    };
+}
 
-    if (serverContent.interrupted) {
-        resetGeminiPlaybackCursor();
+function sendOpenAiRealtimeEvent(payload) {
+    if (!openAiVoiceDataChannel || openAiVoiceDataChannel.readyState !== 'open') return false;
+    try {
+        openAiVoiceDataChannel.send(JSON.stringify(payload));
+        return true;
+    } catch (error) {
+        debugLog('Failed to send OpenAI realtime event', error);
+        return false;
+    }
+}
+
+async function waitForOpenAiDataChannelReady(timeoutMs = 8000) {
+    if (openAiVoiceDataChannel?.readyState === 'open') return true;
+    return new Promise((resolve) => {
+        let settled = false;
+        const channel = openAiVoiceDataChannel;
+        if (!channel) {
+            resolve(false);
+            return;
+        }
+        const finish = (value) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeoutId);
+            channel.removeEventListener('open', handleOpen);
+            resolve(value);
+        };
+        const handleOpen = () => finish(true);
+        const timeoutId = setTimeout(() => finish(false), timeoutMs);
+        channel.addEventListener('open', handleOpen, { once: true });
+    });
+}
+
+async function handleGeminiLiveMessage(rawMessage) {
+    let message = rawMessage;
+    if (typeof rawMessage === 'string') {
+        try {
+            message = JSON.parse(rawMessage);
+        } catch {
+            return;
+        }
     }
 
-    const inputText = serverContent.inputTranscription?.text;
-    if (inputText) {
-        geminiVoiceUserDraft = mergeVoiceStreamingText(geminiVoiceUserDraft, inputText);
+    const eventType = String(message?.type || '').trim();
+    if (!eventType) return;
+
+    if (eventType === 'conversation.item.input_audio_transcription.delta') {
+        geminiVoiceUserDraft = mergeVoiceStreamingText(geminiVoiceUserDraft, message?.delta || '');
+        return;
     }
 
-    const outputText = serverContent.outputTranscription?.text || message?.text;
-    if (outputText) {
+    if (eventType === 'conversation.item.input_audio_transcription.completed') {
+        const userText = String(message?.transcript || '').trim();
+        if (userText) {
+            geminiVoiceUserDraft = mergeVoiceStreamingText(geminiVoiceUserDraft, userText);
+            flushGeminiVoiceDraftLine('user');
+        }
+        return;
+    }
+
+    if (eventType === 'response.audio_transcript.delta' || eventType === 'response.output_audio_transcript.delta') {
+        const assistantDelta = String(message?.delta || '').trim();
+        if (!assistantDelta) return;
+
         if (!geminiVoiceHasAssistantReply) {
             geminiVoiceHasAssistantReply = true;
             clearGeminiFirstReplyHintTimer();
         }
+
         if (geminiVoiceUserDraft.trim()) {
             flushGeminiVoiceDraftLine('user');
         }
-        geminiVoiceAssistantDraft = mergeVoiceStreamingText(geminiVoiceAssistantDraft, outputText);
+
+        geminiVoiceAssistantDraft = mergeVoiceStreamingText(geminiVoiceAssistantDraft, assistantDelta);
         setVoiceModeStatus(
             getShortStatusText('ИИ-клиент:', normalizeVoiceDialogText(geminiVoiceAssistantDraft)),
             'ready'
         );
+        return;
     }
 
-    const parts = Array.isArray(serverContent.modelTurn?.parts) ? serverContent.modelTurn.parts : [];
-    let playedFromParts = false;
-    for (const part of parts) {
-        const inlineData = part?.inlineData;
-        if (inlineData?.data) {
-            playedFromParts = true;
-            await enqueueGeminiAudioPlayback(inlineData.data, inlineData.mimeType || 'audio/pcm;rate=24000');
+    if (eventType === 'response.audio_transcript.done' || eventType === 'response.output_audio_transcript.done') {
+        const assistantDone = String(message?.transcript || '').trim();
+        if (assistantDone) {
+            geminiVoiceAssistantDraft = mergeVoiceStreamingText(geminiVoiceAssistantDraft, assistantDone);
         }
-    }
-
-    const hasAudioChunk = playedFromParts || Boolean(message?.data);
-    if (hasAudioChunk && !geminiVoiceHasAssistantReply) {
-        geminiVoiceHasAssistantReply = true;
-        clearGeminiFirstReplyHintTimer();
-        setVoiceModeStatus('ИИ-клиент отвечает…', 'ready');
-    }
-
-    if (!playedFromParts && message?.data) {
-        await enqueueGeminiAudioPlayback(message.data, 'audio/pcm;rate=24000');
-    }
-
-    if (serverContent.turnComplete || serverContent.waitingForInput) {
-        flushGeminiVoiceDraftLine('assistant');
+        if (geminiVoiceAssistantDraft.trim()) {
+            flushGeminiVoiceDraftLine('assistant');
+        }
         setVoiceModeStatus('Слушаю вас… Говорите.', 'listening');
+        return;
+    }
+
+    if (eventType === 'response.done') {
+        if (geminiVoiceAssistantDraft.trim()) {
+            flushGeminiVoiceDraftLine('assistant');
+        }
+        setVoiceModeStatus('Слушаю вас… Говорите.', 'listening');
+        return;
+    }
+
+    if (eventType === 'error') {
+        const errorMessage = String(message?.error?.message || message?.message || '').trim();
+        if (errorMessage) {
+            setVoiceModeStatus(`Ошибка голосового канала: ${errorMessage}`, 'error');
+        }
     }
 }
 
-async function initGeminiVoiceCapture() {
+async function initGeminiVoiceCapture(clientSecret, sessionConfig) {
     const mediaDevices = navigator.mediaDevices;
     if (!mediaDevices?.getUserMedia) {
         throw new Error('Браузер не поддерживает доступ к микрофону');
     }
-
-    if (!geminiVoiceAudioContext) {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (!AudioCtx) throw new Error('Web Audio API не поддерживается в этом браузере');
-        geminiVoiceAudioContext = new AudioCtx();
-    }
-    if (geminiVoiceAudioContext.state === 'suspended') {
-        await geminiVoiceAudioContext.resume();
+    if (typeof window.RTCPeerConnection !== 'function') {
+        throw new Error('Браузер не поддерживает WebRTC');
     }
 
     geminiVoiceInputStream = await mediaDevices.getUserMedia({
@@ -3977,62 +4044,114 @@ async function initGeminiVoiceCapture() {
         }
     });
 
-    geminiVoiceSourceNode = geminiVoiceAudioContext.createMediaStreamSource(geminiVoiceInputStream);
-    geminiVoiceProcessorNode = geminiVoiceAudioContext.createScriptProcessor(4096, 1, 1);
-    geminiVoiceSilenceGain = geminiVoiceAudioContext.createGain();
-    geminiVoiceSilenceGain.gain.value = 0;
+    const peerConnection = new RTCPeerConnection();
+    openAiVoicePeerConnection = peerConnection;
+    geminiLiveSession = peerConnection;
 
-    const inputSampleRate = geminiVoiceAudioContext.sampleRate || 48000;
+    geminiVoiceInputStream.getTracks().forEach((track) => {
+        peerConnection.addTrack(track, geminiVoiceInputStream);
+    });
 
-    geminiVoiceProcessorNode.onaudioprocess = (event) => {
-        if (!isGeminiVoiceActive || !geminiLiveSession) return;
-        const inputData = event.inputBuffer.getChannelData(0);
-        if (!inputData || !inputData.length) return;
+    openAiVoiceRemoteAudio = document.createElement('audio');
+    openAiVoiceRemoteAudio.autoplay = true;
+    openAiVoiceRemoteAudio.playsInline = true;
 
-        const rms = calculateRms(inputData);
-        if (rms < 0.0055) return;
-
-        const downsampled = downsampleAudioBuffer(inputData, inputSampleRate, 16000);
-        if (!downsampled.length) return;
-
-        const pcm = float32ToInt16Pcm(downsampled);
-        try {
-            geminiLiveSession.sendRealtimeInput({
-                audio: {
-                    data: uint8ToBase64(pcm),
-                    mimeType: 'audio/pcm;rate=16000'
-                }
-            });
-        } catch (error) {
-            debugLog('Failed to send realtime audio chunk', error);
+    peerConnection.ontrack = (event) => {
+        const [stream] = event.streams || [];
+        if (stream) {
+            openAiVoiceRemoteAudio.srcObject = stream;
+            openAiVoiceRemoteAudio.play().catch(() => {});
         }
     };
 
-    geminiVoiceSourceNode.connect(geminiVoiceProcessorNode);
-    geminiVoiceProcessorNode.connect(geminiVoiceSilenceGain);
-    geminiVoiceSilenceGain.connect(geminiVoiceAudioContext.destination);
+    peerConnection.onconnectionstatechange = () => {
+        const state = String(peerConnection.connectionState || '');
+        if (state === 'connected') {
+            setVoiceModeStatus('Соединение установлено. Говорите.', 'listening');
+            return;
+        }
+        if (!['failed', 'disconnected'].includes(state)) return;
+        const expectedClose = geminiVoiceCloseExpected;
+        if (expectedClose || (!isGeminiVoiceActive && !isGeminiVoiceConnecting)) return;
+
+        stopGeminiVoiceMode({ silent: true, expectedClose }).catch(() => {}).finally(() => {
+            setVoiceModeStatus('Соединение прервано. Нажмите «Начать», чтобы подключиться снова.', 'error');
+            geminiVoiceCloseExpected = false;
+        });
+    };
+
+    openAiVoiceDataChannel = peerConnection.createDataChannel('oai-events');
+    openAiVoiceDataChannel.onmessage = (event) => {
+        handleGeminiLiveMessage(event?.data).catch((error) => {
+            console.error('OpenAI realtime message handling error:', error);
+        });
+    };
+    openAiVoiceDataChannel.onerror = (error) => {
+        console.error('OpenAI realtime data channel error:', error);
+    };
+
+    const offer = await peerConnection.createOffer({
+        offerToReceiveAudio: true
+    });
+    await peerConnection.setLocalDescription(offer);
+
+    const response = await fetchWithTimeout(
+        `https://api.openai.com/v1/realtime?model=${encodeURIComponent(sessionConfig.model)}`,
+        {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${clientSecret}`,
+                'Content-Type': 'application/sdp'
+            },
+            body: String(offer.sdp || '')
+        },
+        30000
+    );
+
+    if (!response.ok) {
+        const errorText = String(await response.text().catch(() => '')).trim();
+        throw new Error(errorText || `OpenAI Realtime SDP error (HTTP ${response.status})`);
+    }
+
+    const answerSdp = await response.text();
+    await peerConnection.setRemoteDescription({
+        type: 'answer',
+        sdp: answerSdp
+    });
 }
 
 function teardownGeminiVoiceCapture() {
-    if (geminiVoiceProcessorNode) {
-        try { geminiVoiceProcessorNode.disconnect(); } catch (e) {}
-        geminiVoiceProcessorNode.onaudioprocess = null;
-        geminiVoiceProcessorNode = null;
+    if (openAiVoiceDataChannel) {
+        try { openAiVoiceDataChannel.close(); } catch (e) {}
+        openAiVoiceDataChannel = null;
     }
-    if (geminiVoiceSourceNode) {
-        try { geminiVoiceSourceNode.disconnect(); } catch (e) {}
-        geminiVoiceSourceNode = null;
+
+    if (openAiVoicePeerConnection) {
+        try {
+            openAiVoicePeerConnection.getSenders().forEach((sender) => {
+                try { sender.track?.stop(); } catch (e) {}
+            });
+            openAiVoicePeerConnection.close();
+        } catch (e) {}
+        openAiVoicePeerConnection = null;
     }
-    if (geminiVoiceSilenceGain) {
-        try { geminiVoiceSilenceGain.disconnect(); } catch (e) {}
-        geminiVoiceSilenceGain = null;
-    }
+
     if (geminiVoiceInputStream) {
-        geminiVoiceInputStream.getTracks().forEach(track => {
+        geminiVoiceInputStream.getTracks().forEach((track) => {
             try { track.stop(); } catch (e) {}
         });
         geminiVoiceInputStream = null;
     }
+
+    if (openAiVoiceRemoteAudio) {
+        try {
+            openAiVoiceRemoteAudio.pause();
+            openAiVoiceRemoteAudio.srcObject = null;
+        } catch (e) {}
+        openAiVoiceRemoteAudio = null;
+    }
+
+    geminiLiveSession = null;
     resetGeminiPlaybackCursor();
 }
 
@@ -4041,7 +4160,7 @@ async function stopGeminiVoiceMode(options = {}) {
     geminiVoiceCloseExpected = !!expectedClose;
     const shouldRenderDialog = !silent;
 
-    if (!isGeminiVoiceActive && !isGeminiVoiceConnecting && !geminiLiveSession) {
+    if (!isGeminiVoiceActive && !isGeminiVoiceConnecting && !geminiLiveSession && !openAiVoicePeerConnection) {
         resetGeminiVoiceDialogBuffer();
         return;
     }
@@ -4050,20 +4169,8 @@ async function stopGeminiVoiceMode(options = {}) {
     isGeminiVoiceActive = false;
     updateVoiceModeControls();
 
-    try {
-        if (geminiLiveSession) {
-            try {
-                geminiLiveSession.sendRealtimeInput({ audioStreamEnd: true });
-            } catch (e) {}
-            geminiLiveSession.close();
-        }
-    } catch (error) {
-        debugLog('Error while closing Gemini voice session', error);
-    } finally {
-        geminiLiveSession = null;
-        teardownGeminiVoiceCapture();
-        updateVoiceModeControls();
-    }
+    teardownGeminiVoiceCapture();
+    updateVoiceModeControls();
 
     if (shouldRenderDialog) {
         appendGeminiVoiceDialogToChat();
@@ -4087,100 +4194,48 @@ async function startGeminiVoiceMode() {
     resetGeminiVoiceDialogBuffer();
     isGeminiVoiceConnecting = true;
     updateVoiceModeControls();
-    setVoiceModeStatus('Подключаюсь к Gemini Live…', 'idle');
+    setVoiceModeStatus('Подключаюсь к OpenAI Realtime…', 'idle');
 
     try {
-        const { GoogleGenAI, Modality } = await loadGeminiSdkModule();
-        const apiKey = await resolveGeminiLiveApiKey();
-        const apiVersion = apiKey.startsWith('auth_tokens/') ? 'v1alpha' : 'v1beta';
-        geminiLiveApiClient = new GoogleGenAI({
-            apiKey,
-            httpOptions: { apiVersion }
-        });
+        const sessionConfig = buildOpenAiSessionConfig();
+        const clientSecret = await resolveGeminiLiveApiKey(sessionConfig);
+        await initGeminiVoiceCapture(clientSecret, sessionConfig);
 
-        const activeClientPrompt = String(getActiveContent('client') || '').trim();
-        const systemInstruction = activeClientPrompt || 'Ты вежливый клиент, веди естественный разговор голосом на русском языке.';
-        const configuredVoiceName = getConfiguredGeminiVoiceName();
-        const liveConfig = {
-            responseModalities: [Modality.AUDIO],
-            inputAudioTranscription: {},
-            outputAudioTranscription: {},
-            systemInstruction
-        };
-
-        if (configuredVoiceName) {
-            liveConfig.speechConfig = {
-                voiceConfig: {
-                    prebuiltVoiceConfig: {
-                        voiceName: configuredVoiceName
-                    }
-                }
-            };
-        }
-
-        geminiLiveSession = await geminiLiveApiClient.live.connect({
-            model: GEMINI_LIVE_MODEL,
-            config: liveConfig,
-            callbacks: {
-                onopen: () => {
-                    setVoiceModeStatus('Соединение установлено. Готовлю первый ответ ИИ…', 'waiting');
-                },
-                onmessage: (message) => {
-                    handleGeminiLiveMessage(message).catch((error) => {
-                        console.error('Gemini live message handling error:', error);
-                    });
-                },
-                onerror: (event) => {
-                    console.error('Gemini live error:', event);
-                    clearGeminiFirstReplyHintTimer();
-                    setVoiceModeStatus('Ошибка голосового канала. Нажмите «Остановить» и попробуйте снова.', 'error');
-                },
-                onclose: (event) => {
-                    const closeReasonText = getGeminiCloseReasonText(event);
-                    const expectedClose = geminiVoiceCloseExpected;
-                    if (isGeminiVoiceActive || isGeminiVoiceConnecting || geminiLiveSession) {
-                        stopGeminiVoiceMode({ silent: true, expectedClose }).catch(() => {}).finally(() => {
-                            if (!expectedClose) {
-                                const livedMs = geminiVoiceStartTimestamp ? Date.now() - geminiVoiceStartTimestamp : 0;
-                                const prefix = livedMs > 0 && livedMs < 2500
-                                    ? 'Соединение оборвалось сразу после запуска'
-                                    : 'Соединение прервано';
-                                setVoiceModeStatus(`${prefix}${closeReasonText}. Проверьте ключ и настройки модели Gemini, затем попробуйте снова.`, 'error');
-                            }
-                            geminiVoiceCloseExpected = false;
-                        });
-                        return;
-                    }
-                    if (!expectedClose) {
-                        setVoiceModeStatus(`Голосовой канал закрылся${closeReasonText}. Нажмите «Начать» снова.`, 'error');
-                    }
-                    geminiVoiceCloseExpected = false;
-                }
-            }
-        });
-
-        await initGeminiVoiceCapture();
         isGeminiVoiceConnecting = false;
         isGeminiVoiceActive = true;
         updateVoiceModeControls();
         setVoiceModeStatus('Запрашиваю первое сообщение от ИИ-клиента…', 'waiting');
         scheduleGeminiFirstReplyHint();
 
-        try {
-            geminiLiveSession.sendClientContent({
-                turns: [{
-                    role: 'user',
-                    parts: [{ text: 'Начни разговор первым: коротко поздоровайся и задай один уточняющий вопрос менеджеру.' }]
-                }],
-                turnComplete: true
-            });
-        } catch (error) {
-            debugLog('Initial live prompt failed', error);
-            clearGeminiFirstReplyHintTimer();
-            setVoiceModeStatus('Не удалось запросить первое сообщение. Нажмите «Остановить» и попробуйте снова.', 'error');
+        const isChannelReady = await waitForOpenAiDataChannelReady(8000);
+        if (!isChannelReady) {
+            throw new Error('Канал данных OpenAI не открылся вовремя');
+        }
+
+        const sessionUpdated = sendOpenAiRealtimeEvent({
+            type: 'session.update',
+            session: {
+                instructions: sessionConfig.instructions,
+                voice: sessionConfig.voice,
+                input_audio_transcription: {
+                    model: 'gpt-4o-mini-transcribe'
+                }
+            }
+        });
+
+        const responseCreated = sendOpenAiRealtimeEvent({
+            type: 'response.create',
+            response: {
+                modalities: ['audio', 'text'],
+                instructions: 'Начни разговор первым: коротко поздоровайся и задай один уточняющий вопрос менеджеру.'
+            }
+        });
+
+        if (!sessionUpdated || !responseCreated) {
+            throw new Error('Не удалось отправить стартовые команды голосовой сессии');
         }
     } catch (error) {
-        console.error('Failed to start Gemini voice mode:', error);
+        console.error('Failed to start voice mode:', error);
         isGeminiVoiceConnecting = false;
         isGeminiVoiceActive = false;
         await stopGeminiVoiceMode({ silent: true, expectedClose: true });
@@ -4597,15 +4652,15 @@ bindEvent(settingsNameInput, 'input', () => {
 
 bindEvent(saveVoiceConfigBtn, 'click', () => {
     saveVoiceModeConfigFromInputs().catch((error) => {
-        console.error('Failed to save Gemini voice config:', error);
-        showCopyNotification('Ошибка сохранения настроек Gemini');
+        console.error('Failed to save voice config:', error);
+        showCopyNotification('Ошибка сохранения настроек OpenAI Voice');
     });
 });
 
 bindEvent(clearVoiceConfigBtn, 'click', () => {
     clearVoiceModeConfig().catch((error) => {
-        console.error('Failed to clear Gemini voice config:', error);
-        showCopyNotification('Ошибка очистки настроек Gemini');
+        console.error('Failed to clear voice config:', error);
+        showCopyNotification('Ошибка очистки настроек OpenAI Voice');
     });
 });
 
@@ -4614,8 +4669,8 @@ bindEvent(clearVoiceConfigBtn, 'click', () => {
         if (e.key !== 'Enter') return;
         e.preventDefault();
         saveVoiceModeConfigFromInputs().catch((error) => {
-            console.error('Failed to save Gemini voice config:', error);
-            showCopyNotification('Ошибка сохранения настроек Gemini');
+            console.error('Failed to save voice config:', error);
+            showCopyNotification('Ошибка сохранения настроек OpenAI Voice');
         });
     });
 });

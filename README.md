@@ -29,11 +29,11 @@ npx http-server -p 3001
 
 ## Безопасный голосовой режим (без API key в браузере)
 
-Чтобы сотрудники не вводили Gemini API key вручную:
+Чтобы сотрудники не вводили API key вручную:
 
 1. Поднимите сервер выдачи ephemeral токенов из `server/gemini-token-server.mjs`.
-2. Держите `GEMINI_API_KEY` только на сервере (env/secret manager).
-3. Фронт по умолчанию дергает `POST /api/gemini-live-token` и отправляет Firebase ID token в `Authorization`.
+2. Держите `OPENAI_API_KEY` только на сервере (env/secret manager).
+3. Фронт по умолчанию дергает `POST /api/openai-realtime-session` и отправляет Firebase ID token в `Authorization`.
 
 Подробно: `server/README.md`.
 
@@ -43,11 +43,11 @@ npx http-server -p 3001
 2. Подключите этот GitHub-репозиторий.
 3. Render сам увидит `render.yaml` и предложит сервис `client-simulator-gemini-token`.
 4. Вставьте env:
-`GEMINI_API_KEY`, `FIREBASE_WEB_API_KEY`, `FIREBASE_DATABASE_URL`, `ALLOWED_ORIGINS`, `ALLOWED_EMAIL_DOMAINS`, `GEMINI_LIVE_MODEL`.
+`OPENAI_API_KEY`, `FIREBASE_WEB_API_KEY`, `FIREBASE_DATABASE_URL`, `ALLOWED_ORIGINS`, `ALLOWED_EMAIL_DOMAINS`, `OPENAI_REALTIME_MODEL`.
 5. Нажмите `Apply`.
 6. Скопируйте URL сервиса, например `https://client-simulator-gemini-token.onrender.com`.
-7. В приложении откройте настройки под админом и в `Gemini Voice -> Token endpoint` вставьте:
-`https://client-simulator-gemini-token.onrender.com/api/gemini-live-token`, нажмите `Сохранить`.
+7. В приложении откройте настройки под админом и в `OpenAI Voice -> Token endpoint` вставьте:
+`https://client-simulator-gemini-token.onrender.com/api/openai-realtime-session`, нажмите `Сохранить`.
 
 После этого сотрудники могут использовать голосовой режим без ввода токена.
 
