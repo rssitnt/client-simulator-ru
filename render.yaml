@@ -1,7 +1,7 @@
 services:
   - type: web
     name: client-simulator-gemini-token
-    runtime: node
+    env: node
     plan: starter
     rootDir: .
     buildCommand: npm install
