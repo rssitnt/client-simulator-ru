@@ -34,7 +34,7 @@ const GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT = '/api/openai-realtime-session';
 const GEMINI_FIRST_REPLY_HINT_DELAY_MS = 1800;
 const OPENAI_DEFAULT_VOICE = 'alloy';
 const OPENAI_VOICE_NAMES = new Set(['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse']);
-const OPENAI_OUTPUT_SPEECH_SPEED = 1.3;
+const OPENAI_OUTPUT_SPEECH_SPEED = 1.5;
 const ATTESTATION_QUEUE_STORAGE_KEY = 'attestationQueue:v1';
 const ATTESTATION_SEND_ATTEMPTS = 3;
 const ATTESTATION_QUEUE_MAX_FAILURES = 8;
@@ -4298,7 +4298,7 @@ async function startGeminiVoiceMode() {
             type: 'response.create',
             response: {
                 modalities: ['audio', 'text'],
-                instructions: 'Начни разговор первым: коротко поздоровайся и задай один уточняющий вопрос менеджеру. Говори чуть быстрее среднего темпа.'
+                instructions: 'Начни разговор первым: коротко поздоровайся и задай один уточняющий вопрос менеджеру. Говори максимально быстрым темпом, но разборчиво.'
             }
         });
 
