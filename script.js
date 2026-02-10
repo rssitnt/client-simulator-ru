@@ -27,6 +27,7 @@ const ATTESTATION_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/certifica
 const MANAGER_ASSISTANT_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/manager-simulator';
 const AI_IMPROVE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/prompt-enchancement';
 const GEMINI_LIVE_MODEL = 'gemini-2.5-flash-native-audio-preview-12-2025';
+const GEMINI_LIVE_SYSTEM_PROMPT_MAX_CHARS = 12000;
 const GEMINI_LIVE_API_KEY_STORAGE_KEY = 'geminiLiveApiKey';
 const GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY = 'geminiLiveTokenEndpoint';
 const ATTESTATION_QUEUE_STORAGE_KEY = 'attestationQueue:v1';
@@ -462,6 +463,8 @@ let geminiVoiceSilenceGain = null;
 let geminiVoicePlaybackCursor = 0;
 let isGeminiVoiceConnecting = false;
 let isGeminiVoiceActive = false;
+let geminiVoiceCloseExpected = false;
+let geminiVoiceStartTimestamp = 0;
 let reratePromptElement = null;
 let attestationQueue = [];
 let isAttestationQueueFlushInProgress = false;
@@ -3586,6 +3589,33 @@ function getShortStatusText(prefix, text, maxLength = 140) {
     return `${prefix} ${clean.slice(0, maxLength)}...`;
 }
 
+function buildGeminiLiveSystemInstruction(rawPrompt) {
+    const fallback = 'Ты вежливый клиент, веди естественный разговор голосом на русском языке.';
+    const normalized = String(rawPrompt || '').trim();
+    if (!normalized) return { text: fallback, truncated: false };
+    if (normalized.length <= GEMINI_LIVE_SYSTEM_PROMPT_MAX_CHARS) {
+        return { text: normalized, truncated: false };
+    }
+    return {
+        text: normalized.slice(0, GEMINI_LIVE_SYSTEM_PROMPT_MAX_CHARS).trimEnd(),
+        truncated: true
+    };
+}
+
+function getGeminiCloseReasonText(event) {
+    const code = Number(event?.code);
+    const reason = String(event?.reason || event?.message || '').trim();
+    const details = [];
+    if (Number.isFinite(code) && code > 0 && code !== 1000) {
+        details.push(`код ${code}`);
+    }
+    if (reason) {
+        details.push(reason);
+    }
+    if (!details.length) return '';
+    return ` (${details.join(', ')})`;
+}
+
 async function handleGeminiLiveMessage(message) {
     const serverContent = message?.serverContent;
     if (!serverContent) return;
@@ -3707,7 +3737,9 @@ function teardownGeminiVoiceCapture() {
 }
 
 async function stopGeminiVoiceMode(options = {}) {
-    const { silent = false } = options;
+    const { silent = false, expectedClose = true } = options;
+    geminiVoiceCloseExpected = !!expectedClose;
+
     if (!isGeminiVoiceActive && !isGeminiVoiceConnecting && !geminiLiveSession) {
         return;
     }
@@ -3743,6 +3775,8 @@ async function startGeminiVoiceMode() {
         return;
     }
 
+    geminiVoiceCloseExpected = false;
+    geminiVoiceStartTimestamp = Date.now();
     isGeminiVoiceConnecting = true;
     updateVoiceModeControls();
     setVoiceModeStatus('Подключаюсь к Gemini Live…', 'idle');
@@ -3757,7 +3791,10 @@ async function startGeminiVoiceMode() {
         });
 
         const activeClientPrompt = String(getActiveContent('client') || '').trim();
-        const systemInstruction = activeClientPrompt || 'Ты вежливый клиент, веди естественный разговор голосом на русском языке.';
+        const { text: systemInstruction, truncated } = buildGeminiLiveSystemInstruction(activeClientPrompt);
+        if (truncated) {
+            showCopyNotification('Инструкция для голосового режима слишком длинная, использована сокращенная версия');
+        }
 
         geminiLiveSession = await geminiLiveApiClient.live.connect({
             model: GEMINI_LIVE_MODEL,
@@ -3780,10 +3817,26 @@ async function startGeminiVoiceMode() {
                     console.error('Gemini live error:', event);
                     setVoiceModeStatus('Ошибка голосового канала. Нажмите «Остановить» и попробуйте снова.', 'error');
                 },
-                onclose: () => {
-                    if (isGeminiVoiceActive || isGeminiVoiceConnecting) {
-                        stopGeminiVoiceMode({ silent: true }).catch(() => {});
+                onclose: (event) => {
+                    const closeReasonText = getGeminiCloseReasonText(event);
+                    const expectedClose = geminiVoiceCloseExpected;
+                    if (isGeminiVoiceActive || isGeminiVoiceConnecting || geminiLiveSession) {
+                        stopGeminiVoiceMode({ silent: true, expectedClose }).catch(() => {}).finally(() => {
+                            if (!expectedClose) {
+                                const livedMs = geminiVoiceStartTimestamp ? Date.now() - geminiVoiceStartTimestamp : 0;
+                                const prefix = livedMs > 0 && livedMs < 2500
+                                    ? 'Соединение оборвалось сразу после запуска'
+                                    : 'Соединение прервано';
+                                setVoiceModeStatus(`${prefix}${closeReasonText}. Проверьте ключ Gemini и попробуйте снова.`, 'error');
+                            }
+                            geminiVoiceCloseExpected = false;
+                        });
+                        return;
                     }
+                    if (!expectedClose) {
+                        setVoiceModeStatus(`Голосовой канал закрылся${closeReasonText}. Нажмите «Начать» снова.`, 'error');
+                    }
+                    geminiVoiceCloseExpected = false;
                 }
             }
         });
@@ -3809,7 +3862,8 @@ async function startGeminiVoiceMode() {
         console.error('Failed to start Gemini voice mode:', error);
         isGeminiVoiceConnecting = false;
         isGeminiVoiceActive = false;
-        await stopGeminiVoiceMode({ silent: true });
+        await stopGeminiVoiceMode({ silent: true, expectedClose: true });
+        geminiVoiceCloseExpected = false;
         setVoiceModeStatus(
             `Не удалось запустить голосовой режим: ${error?.message || 'неизвестная ошибка'}`,
             'error'
