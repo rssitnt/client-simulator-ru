@@ -27,7 +27,6 @@ const ATTESTATION_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/certifica
 const MANAGER_ASSISTANT_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/manager-simulator';
 const AI_IMPROVE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/prompt-enchancement';
 const GEMINI_LIVE_MODEL = 'gemini-2.5-flash-native-audio-preview-12-2025';
-const GEMINI_LIVE_SYSTEM_PROMPT_MAX_CHARS = 12000;
 const GEMINI_LIVE_API_KEY_STORAGE_KEY = 'geminiLiveApiKey';
 const GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY = 'geminiLiveTokenEndpoint';
 const ATTESTATION_QUEUE_STORAGE_KEY = 'attestationQueue:v1';
@@ -290,6 +289,7 @@ const clearChatBtn = document.getElementById('clearChat');
 const systemPromptInput = document.getElementById('systemPrompt');
 const raterPromptInput = document.getElementById('raterPrompt');
 const managerPromptInput = document.getElementById('managerPrompt');
+const managerCallPromptInput = document.getElementById('managerCallPrompt');
 const exportChatBtn = document.getElementById('exportChat');
 const exportCurrentPromptBtn = document.getElementById('exportCurrentPrompt');
 const promptVisibilityBtn = document.getElementById('promptVisibilityBtn');
@@ -382,12 +382,14 @@ const instructionDropdown = document.getElementById('instructionDropdown');
 const promptInputsByRole = {
     client: systemPromptInput,
     manager: managerPromptInput,
+    manager_call: managerCallPromptInput,
     rater: raterPromptInput
 };
 
 const promptPreviewByRole = {
     client: document.getElementById('systemPromptPreview'),
     manager: document.getElementById('managerPromptPreview'),
+    manager_call: document.getElementById('managerCallPromptPreview'),
     rater: document.getElementById('raterPromptPreview')
 };
 
@@ -432,6 +434,7 @@ let promptHistory = [];
 let lastHistoryContent = {
     client: {},
     manager: {},
+    manager_call: {},
     rater: {}
 };
 let isAttestationMode = false;
@@ -478,14 +481,17 @@ let fioSaveTimeout = null;
 let publicActiveIds = {
     client: null,
     manager: null,
+    manager_call: null,
     rater: null
 };
-const PROMPT_ROLES = ['client', 'manager', 'rater'];
+const PROMPT_ROLES = ['client', 'manager', 'manager_call', 'rater'];
+const ATTESTATION_PROMPT_ROLES = ['client', 'manager', 'rater'];
 
 // Prompt Variations Data
 let promptsData = {
     client: { variations: [], activeId: null },
     manager: { variations: [], activeId: null },
+    manager_call: { variations: [], activeId: null },
     rater: { variations: [], activeId: null }
 };
 
@@ -2482,7 +2488,7 @@ function ensureAttestationVariation(role) {
 }
 
 function applyAttestationPrompts() {
-    for (const role of PROMPT_ROLES) {
+    for (const role of ATTESTATION_PROMPT_ROLES) {
         const variation = ensureAttestationVariation(role);
         if (!variation) {
             showCopyNotification('Аттестационные промпты не настроены. Обратитесь к администратору.');
@@ -2500,6 +2506,7 @@ function setAttestationMode(enabled) {
         attestationPrevState = {
             client: promptsData.client.activeId,
             manager: promptsData.manager.activeId,
+            manager_call: promptsData.manager_call.activeId,
             rater: promptsData.rater.activeId
         };
         isAttestationMode = true;
@@ -2517,6 +2524,7 @@ function setAttestationMode(enabled) {
         if (attestationPrevState) {
             promptsData.client.activeId = attestationPrevState.client;
             promptsData.manager.activeId = attestationPrevState.manager;
+            promptsData.manager_call.activeId = attestationPrevState.manager_call;
             promptsData.rater.activeId = attestationPrevState.rater;
             PROMPT_ROLES.forEach(updateEditorContent);
             renderVariations();
@@ -2625,7 +2633,11 @@ function initPromptsData(firebaseData = {}) {
     let didRestorePublicPrompt = false;
 
     PROMPT_ROLES.forEach(role => {
-        const legacyKey = role === 'client' ? 'systemPrompt' : role + 'Prompt';
+        const legacyKey = role === 'client'
+            ? 'systemPrompt'
+            : role === 'manager_call'
+                ? 'managerCallPrompt'
+                : role + 'Prompt';
         const legacyContent = firebaseData[role + '_prompt'] || localStorage.getItem(legacyKey) || '';
         const rawPublicVariations = Array.isArray(firebaseData[role + '_variations'])
             ? firebaseData[role + '_variations']
@@ -2828,6 +2840,7 @@ function formatHistoryTime(ts) {
 function getRoleLabel(role) {
     if (role === 'client') return 'Клиент';
     if (role === 'manager') return 'Менеджер';
+    if (role === 'manager_call') return 'Менеджер звонок';
     if (role === 'rater') return 'Оценщик';
     return role;
 }
@@ -3098,7 +3111,9 @@ function validatePromptBeforeWebhook(role, promptValue) {
         ? 'клиента'
         : role === 'manager'
             ? 'менеджера'
-            : 'оценщика';
+            : role === 'manager_call'
+                ? 'менеджера звонка'
+                : 'оценщика';
     addMessage(`Ошибка: промпт ${roleLabel} пустой. Заполните инструкцию.`, 'error', false);
     return null;
 }
@@ -3133,12 +3148,15 @@ function savePromptsToFirebaseNow() {
     const payload = {
         client_prompt: getPublicActiveContent('client'),
         manager_prompt: getPublicActiveContent('manager'),
+        manager_call_prompt: getPublicActiveContent('manager_call'),
         rater_prompt: getPublicActiveContent('rater'),
 
         client_variations: getPublicVariations('client'),
         client_activeId: getPublicActiveId('client'),
         manager_variations: getPublicVariations('manager'),
         manager_activeId: getPublicActiveId('manager'),
+        manager_call_variations: getPublicVariations('manager_call'),
+        manager_call_activeId: getPublicActiveId('manager_call'),
         rater_variations: getPublicVariations('rater'),
         rater_activeId: getPublicActiveId('rater')
     };
@@ -3589,19 +3607,6 @@ function getShortStatusText(prefix, text, maxLength = 140) {
     return `${prefix} ${clean.slice(0, maxLength)}...`;
 }
 
-function buildGeminiLiveSystemInstruction(rawPrompt) {
-    const fallback = 'Ты вежливый клиент, веди естественный разговор голосом на русском языке.';
-    const normalized = String(rawPrompt || '').trim();
-    if (!normalized) return { text: fallback, truncated: false };
-    if (normalized.length <= GEMINI_LIVE_SYSTEM_PROMPT_MAX_CHARS) {
-        return { text: normalized, truncated: false };
-    }
-    return {
-        text: normalized.slice(0, GEMINI_LIVE_SYSTEM_PROMPT_MAX_CHARS).trimEnd(),
-        truncated: true
-    };
-}
-
 function getGeminiCloseReasonText(event) {
     const code = Number(event?.code);
     const reason = String(event?.reason || event?.message || '').trim();
@@ -3791,10 +3796,7 @@ async function startGeminiVoiceMode() {
         });
 
         const activeClientPrompt = String(getActiveContent('client') || '').trim();
-        const { text: systemInstruction, truncated } = buildGeminiLiveSystemInstruction(activeClientPrompt);
-        if (truncated) {
-            showCopyNotification('Инструкция для голосового режима слишком длинная, использована сокращенная версия');
-        }
+        const systemInstruction = activeClientPrompt || 'Ты вежливый клиент, веди естественный разговор голосом на русском языке.';
 
         geminiLiveSession = await geminiLiveApiClient.live.connect({
             model: GEMINI_LIVE_MODEL,
@@ -4004,7 +4006,13 @@ async function improvePromptWithAI() {
 
     if (aiImproveMode === 'rating' && pendingRatingImproveContext) {
         const { dialogText = '', ratingText = '' } = pendingRatingImproveContext;
-        const roleLabel = role === 'client' ? 'клиента' : role === 'manager' ? 'менеджера' : 'оценщика';
+        const roleLabel = role === 'client'
+            ? 'клиента'
+            : role === 'manager'
+                ? 'менеджера'
+                : role === 'manager_call'
+                    ? 'менеджера звонка'
+                    : 'оценщика';
         userMessage = `Текущая инструкция ИИ-${roleLabel}:\n\n${currentPrompt}\n\n---\n\nДиалог менеджера с клиентом:\n\n${dialogText}\n\n---\n\nОценка диалога:\n\n${ratingText}\n\n---\n\nЗапрос на улучшение от пользователя:\n${improvementRequest}\n\n---\n\nНа основе этого диалога и его оценки улучши инструкцию ${roleLabel}. Учти ошибки, которые были допущены, и добавь рекомендации, чтобы избежать их в будущем.\n\nВАЖНО: Верни ПОЛНЫЙ текст улучшенного промпта. Подсвети изменения так:\n1. Удаленный/измененный текст оберни в ~~ (например: ~~старый текст~~)\n2. Новый/добавленный текст оберни в ++ (например: ++новый текст++)\n3. Остальной текст оставь без изменений.\nНе используй markdown код-блоки.`;
     }
     
@@ -5096,6 +5104,7 @@ function addImproveFromRatingButton(dialogText, ratingText) {
         </div>
         <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
             <button class="btn-improve-from-rating" data-role="manager">Менеджер</button>
+            <button class="btn-improve-from-rating" data-role="manager_call">Менеджер звонок</button>
             <button class="btn-improve-from-rating" data-role="client">Клиент</button>
             <button class="btn-improve-from-rating" data-role="rater">Оценщик</button>
         </div>
@@ -5441,7 +5450,13 @@ function exportCurrentPrompt(format = 'txt') {
     const promptText = getActiveContent(role);
     if (!promptText) { alert('Инструкция пуста'); return; }
     
-    let fileName = role === 'client' ? 'промпт-клиента' : role === 'manager' ? 'промпт-менеджера' : 'промпт-оценщика';
+    let fileName = role === 'client'
+        ? 'промпт-клиента'
+        : role === 'manager'
+            ? 'промпт-менеджера'
+            : role === 'manager_call'
+                ? 'промпт-менеджера-звонка'
+                : 'промпт-оценщика';
     const activeVar = promptsData[role].variations.find(v => v.id === promptsData[role].activeId);
     if (activeVar) fileName += `-${activeVar.name.replace(/\s+/g, '_')}`;
     
@@ -5783,6 +5798,7 @@ function initWYSIWYGMode() {
 
     setupWYSIWYG(promptPreviewByRole.client, systemPromptInput, (c) => syncContentToData('client', c));
     setupWYSIWYG(promptPreviewByRole.manager, managerPromptInput, (c) => syncContentToData('manager', c));
+    setupWYSIWYG(promptPreviewByRole.manager_call, managerCallPromptInput, (c) => syncContentToData('manager_call', c));
     setupWYSIWYG(promptPreviewByRole.rater, raterPromptInput, (c) => syncContentToData('rater', c));
 }
 
@@ -6075,7 +6091,7 @@ checkTabsCompactMode();
 window.addEventListener('resize', debounce(checkTabsCompactMode, 100));
 
 // Textarea input listeners for sync
-[systemPromptInput, managerPromptInput, raterPromptInput].forEach(input => {
+[systemPromptInput, managerPromptInput, managerCallPromptInput, raterPromptInput].forEach(input => {
     if (!input) return;
     input.addEventListener('input', () => {
         isUserEditing = true;
@@ -6293,11 +6309,13 @@ window.addEventListener('online', () => {
 
 setupDragAndDrop(systemPromptInput);
 setupDragAndDrop(managerPromptInput);
+setupDragAndDrop(managerCallPromptInput);
 setupDragAndDrop(raterPromptInput);
 
 // Setup drag and drop for preview elements (WYSIWYG mode)
 setupDragAndDropForPreview(promptPreviewByRole.client, systemPromptInput);
 setupDragAndDropForPreview(promptPreviewByRole.manager, managerPromptInput);
+setupDragAndDropForPreview(promptPreviewByRole.manager_call, managerCallPromptInput);
 setupDragAndDropForPreview(promptPreviewByRole.rater, raterPromptInput);
 
         setTimeout(() => {

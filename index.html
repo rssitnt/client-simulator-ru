@@ -8,7 +8,7 @@
     <meta name="color-scheme" content="dark">
     <title>Kirillov Client Simulator</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
-    <link rel="stylesheet" href="style.css?v=20260210-5">
+    <link rel="stylesheet" href="style.css?v=20260210-6">
     <!-- Mammoth.js for .docx support -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
     <!-- docx.js for exporting to .docx -->
@@ -420,6 +420,7 @@
                 <div class="instruction-tabs" style="background: transparent; padding: 0; border: none;">
                     <button class="instruction-tab active" data-instruction="client">Клиент</button>
                     <button class="instruction-tab" data-instruction="manager">Менеджер</button>
+                    <button class="instruction-tab" data-instruction="manager_call">Менеджер звонок</button>
                     <button class="instruction-tab" data-instruction="rater">Оценщик</button>
                 </div>
                 <!-- Выпадающий список для узких экранов (кастомный) -->
@@ -433,6 +434,7 @@
                     <div class="dropdown-options" id="instructionOptions">
                         <div class="dropdown-option active" data-value="client">Клиент</div>
                         <div class="dropdown-option" data-value="manager">Менеджер</div>
+                        <div class="dropdown-option" data-value="manager_call">Менеджер звонок</div>
                         <div class="dropdown-option" data-value="rater">Оценщик</div>
                     </div>
                 </div>
@@ -440,6 +442,7 @@
                 <select class="instruction-select-hidden" id="instructionSelect" style="display: none;">
                     <option value="client" selected>Клиент</option>
                     <option value="manager">Менеджер</option>
+                    <option value="manager_call">Менеджер звонок</option>
                     <option value="rater">Оценщик</option>
                 </select>
                 
@@ -514,6 +517,10 @@
                     <textarea id="managerPrompt" class="prompt-editor" placeholder="Введите инструкцию для ИИ-ассистента менеджера..."></textarea>
                     <div id="managerPromptPreview" class="prompt-preview"></div>
                 </div>
+                <div class="prompt-wrapper instruction-editor preview-mode" data-instruction="manager_call">
+                    <textarea id="managerCallPrompt" class="prompt-editor" placeholder="Введите инструкцию для менеджера в звонке..."></textarea>
+                    <div id="managerCallPromptPreview" class="prompt-preview"></div>
+                </div>
                 <div class="prompt-wrapper instruction-editor preview-mode" data-instruction="rater">
                     <textarea id="raterPrompt" class="prompt-editor" placeholder="Введите инструкцию для оценщика диалогов..."></textarea>
                     <div id="raterPromptPreview" class="prompt-preview"></div>
@@ -528,7 +535,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <!-- Turndown for HTML to Markdown conversion (WYSIWYG editing) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js"></script>
-    <script type="module" src="script.js?v=20260210-5"></script>
-    <!-- Last deployment trigger: 2026-02-10 13:21 -->
+    <script type="module" src="script.js?v=20260210-6"></script>
+    <!-- Last deployment trigger: 2026-02-10 13:49 -->
 </body>
 </html>
