@@ -4241,20 +4241,18 @@ async function handleGeminiLiveMessage(rawMessage) {
 
     if (eventType === 'conversation.item.input_audio_transcription.completed') {
         const rawUserText = normalizeVoiceDialogText(String(message?.transcript || ''));
-        let userText = sanitizeUserCompletedTranscript(rawUserText);
-        // Fallback: never drop a long meaningful transcript even if echo-guard was too aggressive.
-        if (!userText && rawUserText.length >= 16) {
-            userText = rawUserText;
-        }
+        const userText = rawUserText;
         if (userText) {
             queueOpenAiPendingUserTurn(userText);
             geminiVoiceUserPreview = '';
+            flushOpenAiPendingUserTurn({ requestResponse: false });
             return;
         }
         // If completed text is empty but partial delta exists, keep it for the turn.
         if (geminiVoiceUserPreview.trim()) {
             queueOpenAiPendingUserTurn(geminiVoiceUserPreview);
             geminiVoiceUserPreview = '';
+            flushOpenAiPendingUserTurn({ requestResponse: false });
         }
         return;
     }
@@ -4263,6 +4261,7 @@ async function handleGeminiLiveMessage(rawMessage) {
         if (geminiVoiceUserPreview.trim()) {
             queueOpenAiPendingUserTurn(geminiVoiceUserPreview);
             geminiVoiceUserPreview = '';
+            flushOpenAiPendingUserTurn({ requestResponse: false });
         }
         if (openAiResponsePending) {
             openAiResponseQueued = true;
