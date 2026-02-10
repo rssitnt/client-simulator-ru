@@ -35,6 +35,7 @@ const GEMINI_FIRST_REPLY_HINT_DELAY_MS = 1800;
 const OPENAI_DEFAULT_VOICE = 'alloy';
 const OPENAI_VOICE_NAMES = new Set(['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse']);
 const OPENAI_OUTPUT_SPEECH_SPEED = 2.0;
+const OPENAI_INPUT_TRANSCRIBE_MODEL = 'gpt-4o-transcribe';
 const OPENAI_FAST_PACE_INSTRUCTIONS = 'Говори максимально быстро и энергично, но разборчиво. Отвечай кратко: 1-2 предложения без повторов.';
 const ATTESTATION_QUEUE_STORAGE_KEY = 'attestationQueue:v1';
 const ATTESTATION_SEND_ATTEMPTS = 3;
@@ -4230,20 +4231,32 @@ async function handleGeminiLiveMessage(rawMessage) {
     }
 
     if (eventType === 'conversation.item.input_audio_transcription.completed') {
-        const userText = sanitizeUserCompletedTranscript(String(message?.transcript || ''));
+        const rawUserText = normalizeVoiceDialogText(String(message?.transcript || ''));
+        let userText = sanitizeUserCompletedTranscript(rawUserText);
+        // Fallback: never drop a long meaningful transcript even if echo-guard was too aggressive.
+        if (!userText && rawUserText.length >= 16) {
+            userText = rawUserText;
+        }
         geminiVoiceUserPreview = '';
         if (userText) {
             openAiPendingUserTurn = normalizeVoiceDialogText(
                 mergeVoiceStreamingText(openAiPendingUserTurn, userText)
             );
             if (!openAiResponsePending) {
-                const requested = requestOpenAiAssistantResponse();
-                if (!requested) {
-                    setVoiceModeStatus('Не удалось запросить ответ ИИ-клиента.', 'error');
-                }
-            } else {
-                openAiResponseQueued = true;
+                flushOpenAiPendingUserTurn({ requestResponse: false });
             }
+        }
+        return;
+    }
+
+    if (eventType === 'input_audio_buffer.committed') {
+        if (openAiResponsePending) {
+            openAiResponseQueued = true;
+            return;
+        }
+        const requested = requestOpenAiAssistantResponse();
+        if (!requested) {
+            setVoiceModeStatus('Не удалось запросить ответ ИИ-клиента.', 'error');
         }
         return;
     }
@@ -4508,7 +4521,7 @@ async function startGeminiVoiceMode() {
                 audio: {
                     input: {
                         transcription: {
-                            model: 'gpt-4o-mini-transcribe'
+                            model: OPENAI_INPUT_TRANSCRIBE_MODEL
                         },
                         turn_detection: {
                             type: 'semantic_vad',
