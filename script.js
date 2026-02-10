@@ -4234,14 +4234,15 @@ function showSettingsModal() {
     roleChangeError.style.display = 'none';
     populateVoiceConfigFields();
 
-    if (adminPanelAccordion) {
-        adminPanelAccordion.removeAttribute('open');
-    }
-
     if (userRole === 'admin') {
+        if (adminPanelAccordion) {
+            adminPanelAccordion.style.display = '';
+            adminPanelAccordion.setAttribute('open', '');
+        }
         renderAdminUsersTable();
     } else if (adminPanelAccordion) {
         adminPanelAccordion.style.display = 'none';
+        adminPanelAccordion.removeAttribute('open');
     }
 
     settingsModal.classList.add('active');
