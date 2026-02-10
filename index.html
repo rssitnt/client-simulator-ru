@@ -224,8 +224,8 @@
             <div class="settings-row voice-config-row">
                 <span class="settings-label">Gemini Voice:</span>
                 <div class="voice-config-block">
-                    <input type="password" id="geminiApiKeyInput" class="password-input" placeholder="Gemini API key (локально в этом браузере)" autocomplete="off" spellcheck="false">
-                    <input type="url" id="geminiTokenEndpointInput" class="password-input" placeholder="Token endpoint (предпочтительно, если есть backend)">
+                    <input type="password" id="geminiApiKeyInput" class="password-input" placeholder="Gemini API key (резервный, не обязателен)" autocomplete="off" spellcheck="false">
+                    <input type="text" id="geminiTokenEndpointInput" class="password-input" placeholder="Token endpoint (по умолчанию: /api/gemini-live-token)" autocomplete="off" spellcheck="false">
                     <input type="text" id="geminiVoiceNameInput" class="password-input" placeholder="Голос (например: Puck)" list="geminiVoiceNameOptions" autocomplete="off" spellcheck="false" aria-label="Голос Gemini">
                     <datalist id="geminiVoiceNameOptions">
                         <option value="Puck"></option>
@@ -544,7 +544,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <!-- Turndown for HTML to Markdown conversion (WYSIWYG editing) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js"></script>
-    <script type="module" src="script.js?v=20260210-18"></script>
+    <script type="module" src="script.js?v=20260210-19"></script>
     <!-- Last deployment trigger: 2026-02-10 14:57 -->
 </body>
 </html>

@@ -30,6 +30,7 @@ const GEMINI_LIVE_MODEL = 'gemini-2.5-flash-native-audio-preview-12-2025';
 const GEMINI_LIVE_API_KEY_STORAGE_KEY = 'geminiLiveApiKey';
 const GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY = 'geminiLiveTokenEndpoint';
 const GEMINI_LIVE_VOICE_NAME_STORAGE_KEY = 'geminiLiveVoiceName';
+const GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT = '/api/gemini-live-token';
 const GEMINI_FIRST_REPLY_HINT_DELAY_MS = 1800;
 const ATTESTATION_QUEUE_STORAGE_KEY = 'attestationQueue:v1';
 const ATTESTATION_SEND_ATTEMPTS = 3;
@@ -3433,11 +3434,17 @@ function getConfiguredGeminiApiKey() {
     ).trim();
 }
 
-function getConfiguredGeminiTokenEndpoint() {
+function getDefaultGeminiTokenEndpoint() {
     return String(
         (typeof window !== 'undefined' && (window.GEMINI_LIVE_TOKEN_ENDPOINT || window.GEMINI_TOKEN_ENDPOINT)) ||
+        GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT
+    ).trim();
+}
+
+function getConfiguredGeminiTokenEndpoint() {
+    return String(
         localStorage.getItem(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY) ||
-        ''
+        getDefaultGeminiTokenEndpoint()
     ).trim();
 }
 
@@ -3454,7 +3461,7 @@ function populateVoiceConfigFields() {
         geminiApiKeyInput.value = localStorage.getItem(GEMINI_LIVE_API_KEY_STORAGE_KEY) || '';
     }
     if (geminiTokenEndpointInput) {
-        geminiTokenEndpointInput.value = localStorage.getItem(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY) || '';
+        geminiTokenEndpointInput.value = getConfiguredGeminiTokenEndpoint();
     }
     if (geminiVoiceNameInput) {
         geminiVoiceNameInput.value = localStorage.getItem(GEMINI_LIVE_VOICE_NAME_STORAGE_KEY) || '';
@@ -3496,21 +3503,46 @@ function clearVoiceModeConfig() {
     localStorage.removeItem(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY);
     localStorage.removeItem(GEMINI_LIVE_VOICE_NAME_STORAGE_KEY);
     if (geminiApiKeyInput) geminiApiKeyInput.value = '';
-    if (geminiTokenEndpointInput) geminiTokenEndpointInput.value = '';
+    if (geminiTokenEndpointInput) geminiTokenEndpointInput.value = getConfiguredGeminiTokenEndpoint();
     if (geminiVoiceNameInput) geminiVoiceNameInput.value = '';
     showCopyNotification('Данные Gemini удалены на этом устройстве');
+}
+
+async function getFirebaseAuthIdToken() {
+    if (!auth?.currentUser || typeof auth.currentUser.getIdToken !== 'function') return '';
+    try {
+        return String(await auth.currentUser.getIdToken()).trim();
+    } catch (error) {
+        console.warn('Failed to get Firebase ID token for Gemini endpoint:', error);
+        return '';
+    }
 }
 
 async function resolveGeminiLiveApiKey() {
     const tokenEndpoint = getConfiguredGeminiTokenEndpoint();
     if (tokenEndpoint) {
+        const idToken = await getFirebaseAuthIdToken();
+        const headers = { 'Content-Type': 'application/json' };
+        if (idToken) {
+            headers.Authorization = `Bearer ${idToken}`;
+        }
+
         const tokenResponse = await fetchWithTimeout(tokenEndpoint, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include'
+            headers,
+            credentials: 'omit',
+            body: JSON.stringify({
+                source: 'client-simulator-web',
+                login: currentUser?.login || localStorage.getItem(USER_LOGIN_KEY) || ''
+            })
         }, 20000);
         if (!tokenResponse.ok) {
-            throw new Error(`Не удалось получить токен Gemini (HTTP ${tokenResponse.status})`);
+            const tokenErrorPayload = await tokenResponse.json().catch(() => ({}));
+            const tokenErrorText = String(tokenErrorPayload?.error || '').trim();
+            if (tokenResponse.status === 401 || tokenResponse.status === 403) {
+                throw new Error(tokenErrorText || 'Нет доступа к голосовому режиму');
+            }
+            throw new Error(tokenErrorText || `Не удалось получить токен Gemini (HTTP ${tokenResponse.status})`);
         }
         const tokenPayload = await tokenResponse.json();
         const token = String(
@@ -3528,7 +3560,7 @@ async function resolveGeminiLiveApiKey() {
     if (directApiKey) return directApiKey;
 
     throw new Error(
-        'Голосовой режим не настроен: укажите window.GEMINI_LIVE_TOKEN_ENDPOINT или window.GEMINI_LIVE_API_KEY'
+        'Голосовой режим не настроен: недоступен token endpoint и не задан резервный API key'
     );
 }
 

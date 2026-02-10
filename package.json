@@ -1,0 +1,12 @@
+{
+  "name": "client-simulator-ru",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start:token-server": "node server/gemini-token-server.mjs"
+  },
+  "dependencies": {
+    "@google/genai": "^1.29.0"
+  }
+}

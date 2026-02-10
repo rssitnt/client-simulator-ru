@@ -27,6 +27,16 @@
 npx http-server -p 3001
 ```
 
+## Безопасный голосовой режим (без API key в браузере)
+
+Чтобы сотрудники не вводили Gemini API key вручную:
+
+1. Поднимите сервер выдачи ephemeral токенов из `server/gemini-token-server.mjs`.
+2. Держите `GEMINI_API_KEY` только на сервере (env/secret manager).
+3. Фронт по умолчанию дергает `POST /api/gemini-live-token` и отправляет Firebase ID token в `Authorization`.
+
+Подробно: `server/README.md`.
+
 ## Использование
 
 1. **Настройте системный промпт** в правой панели (с отображением количества символов)
@@ -84,4 +94,3 @@ npx http-server -p 3001
 ```
 https://n8n-api.tradicia-k.ru/webhook/1f0629dc-22be-496b-bf2b-2d7090578a3c
 ```
-
