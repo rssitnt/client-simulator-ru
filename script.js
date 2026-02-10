@@ -480,6 +480,8 @@ let geminiVoiceStartTimestamp = 0;
 let geminiVoiceDialogLines = [];
 let geminiVoiceUserDraft = '';
 let geminiVoiceAssistantDraft = '';
+let geminiVoiceUserPreview = '';
+let geminiVoiceAssistantPreview = '';
 let geminiVoiceHasAssistantReply = false;
 let geminiVoiceFirstReplyHintTimer = null;
 let openAiVoicePeerConnection = null;
@@ -3924,6 +3926,8 @@ function resetGeminiVoiceDialogBuffer() {
     geminiVoiceDialogLines = [];
     geminiVoiceUserDraft = '';
     geminiVoiceAssistantDraft = '';
+    geminiVoiceUserPreview = '';
+    geminiVoiceAssistantPreview = '';
     geminiVoiceHasAssistantReply = false;
 }
 
@@ -4022,14 +4026,19 @@ async function handleGeminiLiveMessage(rawMessage) {
     if (!eventType) return;
 
     if (eventType === 'conversation.item.input_audio_transcription.delta') {
-        geminiVoiceUserDraft = mergeVoiceStreamingText(geminiVoiceUserDraft, message?.delta || '');
+        geminiVoiceUserPreview = mergeVoiceStreamingText(geminiVoiceUserPreview, message?.delta || '');
+        const previewText = normalizeVoiceDialogText(geminiVoiceUserPreview);
+        if (previewText) {
+            setVoiceModeStatus(getShortStatusText('Вы:', previewText), 'listening');
+        }
         return;
     }
 
     if (eventType === 'conversation.item.input_audio_transcription.completed') {
         const userText = String(message?.transcript || '').trim();
+        geminiVoiceUserPreview = '';
         if (userText) {
-            geminiVoiceUserDraft = mergeVoiceStreamingText(geminiVoiceUserDraft, userText);
+            geminiVoiceUserDraft = normalizeVoiceDialogText(userText);
             flushGeminiVoiceDraftLine('user');
         }
         return;
@@ -4044,13 +4053,9 @@ async function handleGeminiLiveMessage(rawMessage) {
             clearGeminiFirstReplyHintTimer();
         }
 
-        if (geminiVoiceUserDraft.trim()) {
-            flushGeminiVoiceDraftLine('user');
-        }
-
-        geminiVoiceAssistantDraft = mergeVoiceStreamingText(geminiVoiceAssistantDraft, assistantDelta);
+        geminiVoiceAssistantPreview = mergeVoiceStreamingText(geminiVoiceAssistantPreview, assistantDelta);
         setVoiceModeStatus(
-            getShortStatusText('ИИ-клиент:', normalizeVoiceDialogText(geminiVoiceAssistantDraft)),
+            getShortStatusText('ИИ-клиент:', normalizeVoiceDialogText(geminiVoiceAssistantPreview)),
             'ready'
         );
         return;
@@ -4058,9 +4063,12 @@ async function handleGeminiLiveMessage(rawMessage) {
 
     if (eventType === 'response.audio_transcript.done' || eventType === 'response.output_audio_transcript.done') {
         const assistantDone = String(message?.transcript || '').trim();
-        if (assistantDone) {
-            geminiVoiceAssistantDraft = mergeVoiceStreamingText(geminiVoiceAssistantDraft, assistantDone);
+        if (assistantDone.trim()) {
+            geminiVoiceAssistantDraft = normalizeVoiceDialogText(assistantDone);
+        } else if (geminiVoiceAssistantPreview.trim()) {
+            geminiVoiceAssistantDraft = normalizeVoiceDialogText(geminiVoiceAssistantPreview);
         }
+        geminiVoiceAssistantPreview = '';
         if (geminiVoiceAssistantDraft.trim()) {
             flushGeminiVoiceDraftLine('assistant');
         }
@@ -4069,6 +4077,10 @@ async function handleGeminiLiveMessage(rawMessage) {
     }
 
     if (eventType === 'response.done') {
+        if (!geminiVoiceAssistantDraft.trim() && geminiVoiceAssistantPreview.trim()) {
+            geminiVoiceAssistantDraft = normalizeVoiceDialogText(geminiVoiceAssistantPreview);
+            geminiVoiceAssistantPreview = '';
+        }
         if (geminiVoiceAssistantDraft.trim()) {
             flushGeminiVoiceDraftLine('assistant');
         }
