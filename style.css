@@ -3732,11 +3732,46 @@ body.light-theme .btn-ai-improve:focus {
 .voice-mode-actions {
     display: flex;
     justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
 .voice-mode-actions .btn-modal-submit {
     width: auto;
     min-width: 140px;
+}
+
+.voice-mode-actions .btn-modal-cancel {
+    width: auto;
+    min-width: 140px;
+}
+
+.voice-mode-status {
+    margin: 0 0 14px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    color: #bdbdbd;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.voice-mode-status[data-state="ready"] {
+    color: #b7e5c8;
+}
+
+.voice-mode-status[data-state="listening"] {
+    color: #9ecbff;
+}
+
+.voice-mode-status[data-state="error"] {
+    color: #ff8f8f;
+}
+
+.voice-mode-hint {
+    margin: 12px 0 0;
+    color: #8f8f8f;
+    font-size: 12px;
 }
 
 .modal-close {
@@ -3818,6 +3853,27 @@ body.light-theme .ai-improve-actions .btn-ai-apply-current:hover {
 
 body.light-theme .voice-mode-modal p {
     color: #555;
+}
+
+body.light-theme .voice-mode-status {
+    background: rgba(0, 0, 0, 0.05);
+    color: #616161;
+}
+
+body.light-theme .voice-mode-status[data-state="ready"] {
+    color: #237a4f;
+}
+
+body.light-theme .voice-mode-status[data-state="listening"] {
+    color: #2563eb;
+}
+
+body.light-theme .voice-mode-status[data-state="error"] {
+    color: #c62828;
+}
+
+body.light-theme .voice-mode-hint {
+    color: #7a7a7a;
 }
 
 body.light-theme .prompt-history-modal {
