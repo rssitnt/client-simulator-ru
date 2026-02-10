@@ -3824,7 +3824,7 @@ function showVoiceModeModal() {
     if (!voiceModeModal) return;
     updateVoiceModeControls();
     if (!isGeminiVoiceActive && !isGeminiVoiceConnecting) {
-        setVoiceModeStatus('Нажмите «Начать», чтобы запустить диалог с ИИ-клиентом.', 'idle');
+        setVoiceModeStatus('', 'idle');
     }
     voiceModeModal.classList.add('active');
 }
@@ -6225,7 +6225,7 @@ autoResizeTextarea(userInput);
 prepareCustomTooltips();
 initCustomTooltipLayer();
 updateVoiceModeControls();
-setVoiceModeStatus('Нажмите «Начать», чтобы запустить диалог с ИИ-клиентом.', 'idle');
+setVoiceModeStatus('', 'idle');
 
 if (attestationQueue.length > 0) {
     scheduleAttestationQueueRetry(600);

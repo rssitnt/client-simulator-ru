@@ -3794,6 +3794,10 @@ body.light-theme .btn-ai-improve:focus {
     line-height: 1.45;
 }
 
+.voice-mode-status:empty {
+    display: none;
+}
+
 .voice-mode-status[data-state="ready"] {
     color: #b7e5c8;
 }
@@ -3804,12 +3808,6 @@ body.light-theme .btn-ai-improve:focus {
 
 .voice-mode-status[data-state="error"] {
     color: #ff8f8f;
-}
-
-.voice-mode-hint {
-    margin: 12px 0 0;
-    color: #8f8f8f;
-    font-size: 12px;
 }
 
 .modal-close {
@@ -3908,10 +3906,6 @@ body.light-theme .voice-mode-status[data-state="listening"] {
 
 body.light-theme .voice-mode-status[data-state="error"] {
     color: #c62828;
-}
-
-body.light-theme .voice-mode-hint {
-    color: #7a7a7a;
 }
 
 body.light-theme .prompt-history-modal {
