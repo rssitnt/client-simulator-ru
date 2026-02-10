@@ -358,6 +358,10 @@ const exportMenu = document.getElementById('exportMenu');
 const exportPromptMenu = document.getElementById('exportPromptMenu');
 const exportChatSettingsMenu = document.getElementById('exportChatSettingsMenu');
 const exportPromptSettingsMenu = document.getElementById('exportPromptSettingsMenu');
+const geminiApiKeyInput = document.getElementById('geminiApiKeyInput');
+const geminiTokenEndpointInput = document.getElementById('geminiTokenEndpointInput');
+const saveVoiceConfigBtn = document.getElementById('saveVoiceConfigBtn');
+const clearVoiceConfigBtn = document.getElementById('clearVoiceConfigBtn');
 const adminPanelAccordion = document.getElementById('adminPanelAccordion');
 const adminPanel = document.getElementById('adminPanel');
 const adminRefreshBtn = document.getElementById('adminRefreshBtn');
@@ -3383,6 +3387,48 @@ function getConfiguredGeminiTokenEndpoint() {
     ).trim();
 }
 
+function populateVoiceConfigFields() {
+    if (geminiApiKeyInput) {
+        geminiApiKeyInput.value = localStorage.getItem(GEMINI_LIVE_API_KEY_STORAGE_KEY) || '';
+    }
+    if (geminiTokenEndpointInput) {
+        geminiTokenEndpointInput.value = localStorage.getItem(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY) || '';
+    }
+}
+
+function saveVoiceModeConfigFromInputs() {
+    const apiKey = String(geminiApiKeyInput?.value || '').trim();
+    const tokenEndpoint = String(geminiTokenEndpointInput?.value || '').trim();
+
+    if (apiKey) {
+        localStorage.setItem(GEMINI_LIVE_API_KEY_STORAGE_KEY, apiKey);
+    } else {
+        localStorage.removeItem(GEMINI_LIVE_API_KEY_STORAGE_KEY);
+    }
+
+    if (tokenEndpoint) {
+        localStorage.setItem(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY, tokenEndpoint);
+    } else {
+        localStorage.removeItem(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY);
+    }
+
+    if (tokenEndpoint) {
+        showCopyNotification('Token endpoint сохранен');
+    } else if (apiKey) {
+        showCopyNotification('Gemini API key сохранен локально');
+    } else {
+        showCopyNotification('Настройки голосового режима очищены');
+    }
+}
+
+function clearVoiceModeConfig() {
+    localStorage.removeItem(GEMINI_LIVE_API_KEY_STORAGE_KEY);
+    localStorage.removeItem(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY);
+    if (geminiApiKeyInput) geminiApiKeyInput.value = '';
+    if (geminiTokenEndpointInput) geminiTokenEndpointInput.value = '';
+    showCopyNotification('Данные Gemini удалены на этом устройстве');
+}
+
 async function resolveGeminiLiveApiKey() {
     const tokenEndpoint = getConfiguredGeminiTokenEndpoint();
     if (tokenEndpoint) {
@@ -3824,6 +3870,7 @@ function showSettingsModal() {
     roleChangePassword.style.display = 'none';
     roleChangePasswordInput.value = '';
     roleChangeError.style.display = 'none';
+    populateVoiceConfigFields();
 
     if (adminPanelAccordion) {
         adminPanelAccordion.removeAttribute('open');
@@ -4164,6 +4211,22 @@ bindEvent(settingsNameInput, 'input', () => {
             lastSeenAt: new Date().toISOString()
         });
     }, 450);
+});
+
+bindEvent(saveVoiceConfigBtn, 'click', () => {
+    saveVoiceModeConfigFromInputs();
+});
+
+bindEvent(clearVoiceConfigBtn, 'click', () => {
+    clearVoiceModeConfig();
+});
+
+[geminiApiKeyInput, geminiTokenEndpointInput].forEach((input) => {
+    bindEvent(input, 'keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        saveVoiceModeConfigFromInputs();
+    });
 });
 
 // Theme toggle

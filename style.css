@@ -2922,6 +2922,35 @@ body.light-theme input:checked + .toggle-slider .sun {
     margin-left: 0;
 }
 
+.voice-config-row {
+    align-items: flex-start;
+}
+
+.voice-config-block {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.voice-config-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 2px;
+}
+
+.voice-config-actions .btn-change,
+.voice-config-actions .btn-cancel {
+    height: 30px;
+    padding: 0 12px;
+    border-radius: 6px;
+}
+
+.voice-config-actions .btn-cancel {
+    flex: 0 0 auto;
+    border: none;
+}
+
 .role-text {
     color: #ccc;
     font-size: 14px;
@@ -2966,6 +2995,15 @@ body.light-theme input:checked + .toggle-slider .sun {
 
 body.light-theme .btn-change:hover {
     color: #333;
+}
+
+body.light-theme .voice-config-actions .btn-cancel {
+    background: #e6e6e6;
+    color: #555;
+}
+
+body.light-theme .voice-config-actions .btn-cancel:hover {
+    background: #d7d7d7;
 }
 
 body.light-theme .btn-danger-subtle {

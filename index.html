@@ -8,7 +8,7 @@
     <meta name="color-scheme" content="dark">
     <title>Kirillov Client Simulator</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
-    <link rel="stylesheet" href="style.css?v=20260210-1">
+    <link rel="stylesheet" href="style.css?v=20260210-2">
     <!-- Mammoth.js for .docx support -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
     <!-- docx.js for exporting to .docx -->
@@ -219,6 +219,19 @@
                 <span class="settings-label">Роль:</span>
                 <span id="currentRoleDisplay" class="role-text"></span>
                 <button id="changeRoleBtn" class="btn-change">Сменить</button>
+            </div>
+
+            <!-- Настройки голосового режима Gemini -->
+            <div class="settings-row voice-config-row">
+                <span class="settings-label">Gemini Voice:</span>
+                <div class="voice-config-block">
+                    <input type="password" id="geminiApiKeyInput" class="password-input" placeholder="Gemini API key (локально в этом браузере)" autocomplete="off" spellcheck="false">
+                    <input type="url" id="geminiTokenEndpointInput" class="password-input" placeholder="Token endpoint (предпочтительно, если есть backend)">
+                    <div class="voice-config-actions">
+                        <button id="saveVoiceConfigBtn" class="btn-change">Сохранить</button>
+                        <button id="clearVoiceConfigBtn" class="btn-cancel">Очистить</button>
+                    </div>
+                </div>
             </div>
 
             <!-- Пароль для смены роли -->
@@ -516,7 +529,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <!-- Turndown for HTML to Markdown conversion (WYSIWYG editing) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js"></script>
-    <script type="module" src="script.js?v=20260210-1"></script>
-    <!-- Last deployment trigger: 2026-02-10 12:20 -->
+    <script type="module" src="script.js?v=20260210-2"></script>
+    <!-- Last deployment trigger: 2026-02-10 12:38 -->
 </body>
 </html>
