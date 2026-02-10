@@ -310,6 +310,7 @@ const modalPasswordInput = document.getElementById('modalPasswordInput');
 const togglePasswordVisibilityBtn = document.getElementById('togglePasswordVisibility');
 const authErrorText = document.getElementById('passwordError');
 const promptVariationsContainer = document.getElementById('promptVariations');
+const promptLengthInfo = document.getElementById('promptLengthInfo');
 
 // AI Improve Modal Elements
 const aiImproveBtn = document.getElementById('aiImproveBtn');
@@ -486,6 +487,12 @@ let publicActiveIds = {
 };
 const PROMPT_ROLES = ['client', 'manager', 'manager_call', 'rater'];
 const ATTESTATION_PROMPT_ROLES = ['client', 'manager', 'rater'];
+const PROMPT_MAX_CHARS_BY_ROLE = {
+    client: 60000,
+    manager: 60000,
+    manager_call: 60000,
+    rater: 120000
+};
 
 // Prompt Variations Data
 let promptsData = {
@@ -2359,6 +2366,21 @@ function updatePromptHistoryButton() {
     promptHistoryBtn.style.display = activeVariation ? '' : 'none';
 }
 
+function getPromptMaxChars(role) {
+    return PROMPT_MAX_CHARS_BY_ROLE[role] || 60000;
+}
+
+function updatePromptLengthInfo(role = getActiveRole()) {
+    if (!promptLengthInfo) return;
+    const currentLength = String(getActiveContent(role) || '').length;
+    const maxChars = getPromptMaxChars(role);
+    const percent = maxChars > 0 ? (currentLength / maxChars) * 100 : 0;
+    const normalizedPercent = Number.isFinite(percent) ? percent : 0;
+    const roundedPercent = normalizedPercent > 999 ? '999+' : normalizedPercent.toFixed(1);
+    promptLengthInfo.textContent = `${currentLength.toLocaleString('ru-RU')} символов (${roundedPercent}%) из ${maxChars.toLocaleString('ru-RU')}`;
+    promptLengthInfo.classList.toggle('is-over', currentLength > maxChars);
+}
+
 function buildLocalPromptName(name) {
     const baseName = (name || 'Локальный').trim();
     if (/\(локальный\)$/i.test(baseName)) return baseName;
@@ -2824,6 +2846,7 @@ function renderVariations() {
     promptVariationsContainer.replaceChildren(fragment);
     updatePromptVisibilityButton();
     updatePromptHistoryButton();
+    updatePromptLengthInfo(role);
     if (promptHistoryModal?.classList.contains('active')) {
         renderPromptHistory();
     }
@@ -3073,6 +3096,10 @@ function updateEditorContent(role) {
             }
         }
     }
+
+    if (role === getActiveRole()) {
+        updatePromptLengthInfo(role);
+    }
 }
 
 function syncContentToData(role, content) {
@@ -3094,6 +3121,9 @@ function syncContentToData(role, content) {
             saveLocalPromptsData();
         } else {
             savePromptsToFirebase();
+        }
+        if (role === getActiveRole()) {
+            updatePromptLengthInfo(role);
         }
     }
 }

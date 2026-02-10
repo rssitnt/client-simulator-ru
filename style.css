@@ -1644,6 +1644,7 @@ body.light-theme .dropdown-option.active {
 }
 
 body.user-mode .markdown-toolbar,
+body.user-mode .prompt-length-info,
 body.user-mode .prompt-wrapper,
 body.user-mode .prompt-editor,
 body.user-mode .prompt-preview {
@@ -1742,7 +1743,30 @@ body.user-mode .prompt-preview {
     flex: 0 0 auto;
 }
 
+.prompt-length-info {
+    color: #7a7a7a;
+    font-size: 12px;
+    line-height: 1.35;
+    padding: 0 12px 8px;
+    flex-shrink: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.prompt-length-info.is-over {
+    color: #ff6f6f;
+}
+
 body.light-theme .toolbar-btn-eye.state-hidden {
+    color: #d32f2f;
+}
+
+body.light-theme .prompt-length-info {
+    color: #777;
+}
+
+body.light-theme .prompt-length-info.is-over {
     color: #d32f2f;
 }
 
@@ -1776,6 +1800,11 @@ body.light-theme .toolbar-btn-eye.state-hidden {
 .prompt-panel.compact-toolbar .toolbar-btn-history svg {
     width: 14px;
     height: 14px;
+}
+
+.prompt-panel.compact-toolbar .prompt-length-info {
+    padding: 0 10px 6px;
+    font-size: 11px;
 }
 
 .instruction-editor {
