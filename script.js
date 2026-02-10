@@ -2858,7 +2858,7 @@ function formatHistoryTime(ts) {
 function getRoleLabel(role) {
     if (role === 'client') return 'Клиент';
     if (role === 'manager') return 'Менеджер';
-    if (role === 'manager_call') return 'Менеджер звонок';
+    if (role === 'manager_call') return 'Клиент звонок';
     if (role === 'rater') return 'Оценщик';
     return role;
 }
@@ -3137,7 +3137,7 @@ function validatePromptBeforeWebhook(role, promptValue) {
         : role === 'manager'
             ? 'менеджера'
             : role === 'manager_call'
-                ? 'менеджера звонка'
+                ? 'клиента звонка'
                 : 'оценщика';
     addMessage(`Ошибка: промпт ${roleLabel} пустой. Заполните инструкцию.`, 'error', false);
     return null;
@@ -4036,7 +4036,7 @@ async function improvePromptWithAI() {
             : role === 'manager'
                 ? 'менеджера'
                 : role === 'manager_call'
-                    ? 'менеджера звонка'
+                    ? 'клиента звонка'
                     : 'оценщика';
         userMessage = `Текущая инструкция ИИ-${roleLabel}:\n\n${currentPrompt}\n\n---\n\nДиалог менеджера с клиентом:\n\n${dialogText}\n\n---\n\nОценка диалога:\n\n${ratingText}\n\n---\n\nЗапрос на улучшение от пользователя:\n${improvementRequest}\n\n---\n\nНа основе этого диалога и его оценки улучши инструкцию ${roleLabel}. Учти ошибки, которые были допущены, и добавь рекомендации, чтобы избежать их в будущем.\n\nВАЖНО: Верни ПОЛНЫЙ текст улучшенного промпта. Подсвети изменения так:\n1. Удаленный/измененный текст оберни в ~~ (например: ~~старый текст~~)\n2. Новый/добавленный текст оберни в ++ (например: ++новый текст++)\n3. Остальной текст оставь без изменений.\nНе используй markdown код-блоки.`;
     }
@@ -5129,7 +5129,7 @@ function addImproveFromRatingButton(dialogText, ratingText) {
         </div>
         <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
             <button class="btn-improve-from-rating" data-role="manager">Менеджер</button>
-            <button class="btn-improve-from-rating" data-role="manager_call">Менеджер звонок</button>
+            <button class="btn-improve-from-rating" data-role="manager_call">Клиент звонок</button>
             <button class="btn-improve-from-rating" data-role="client">Клиент</button>
             <button class="btn-improve-from-rating" data-role="rater">Оценщик</button>
         </div>
@@ -5480,7 +5480,7 @@ function exportCurrentPrompt(format = 'txt') {
         : role === 'manager'
             ? 'промпт-менеджера'
             : role === 'manager_call'
-                ? 'промпт-менеджера-звонка'
+                ? 'промпт-клиента-звонка'
                 : 'промпт-оценщика';
     const activeVar = promptsData[role].variations.find(v => v.id === promptsData[role].activeId);
     if (activeVar) fileName += `-${activeVar.name.replace(/\s+/g, '_')}`;
