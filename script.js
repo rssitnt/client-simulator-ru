@@ -490,7 +490,6 @@ let openAiVoiceRemoteAudio = null;
 let openAiResponsePending = false;
 let openAiResponseQueued = false;
 let openAiPendingUserTurn = '';
-let openAiUserTurnTimer = null;
 let reratePromptElement = null;
 let attestationQueue = [];
 let isAttestationQueueFlushInProgress = false;
@@ -4052,7 +4051,6 @@ function flushGeminiVoiceDraftLine(role) {
 
 function resetGeminiVoiceDialogBuffer() {
     clearGeminiFirstReplyHintTimer();
-    clearOpenAiUserTurnTimer();
     geminiVoiceDialogLines = [];
     geminiVoiceUserDraft = '';
     geminiVoiceAssistantDraft = '';
@@ -4154,12 +4152,6 @@ async function waitForOpenAiDataChannelReady(timeoutMs = 8000) {
     });
 }
 
-function clearOpenAiUserTurnTimer() {
-    if (!openAiUserTurnTimer) return;
-    clearTimeout(openAiUserTurnTimer);
-    openAiUserTurnTimer = null;
-}
-
 function requestOpenAiAssistantResponse(instructions = '') {
     const payload = {
         modalities: ['audio', 'text']
@@ -4194,7 +4186,6 @@ function flushOpenAiPendingUserTurn(options = {}) {
     const { requestResponse = true } = options;
     const userText = normalizeVoiceDialogText(openAiPendingUserTurn);
     openAiPendingUserTurn = '';
-    clearOpenAiUserTurnTimer();
 
     if (!userText) return false;
 
@@ -4203,17 +4194,6 @@ function flushOpenAiPendingUserTurn(options = {}) {
 
     if (!requestResponse) return true;
     return requestOpenAiAssistantResponse();
-}
-
-function scheduleOpenAiUserTurnFlush(delayMs = 520) {
-    clearOpenAiUserTurnTimer();
-    openAiUserTurnTimer = setTimeout(() => {
-        openAiUserTurnTimer = null;
-        const requested = flushOpenAiPendingUserTurn({ requestResponse: true });
-        if (!requested) {
-            setVoiceModeStatus('Не удалось запросить ответ ИИ-клиента.', 'error');
-        }
-    }, delayMs);
 }
 
 async function handleGeminiLiveMessage(rawMessage) {
@@ -4230,6 +4210,7 @@ async function handleGeminiLiveMessage(rawMessage) {
     if (!eventType) return;
 
     if (eventType === 'response.created') {
+        flushOpenAiPendingUserTurn({ requestResponse: false });
         openAiResponsePending = true;
         openAiResponseQueued = false;
         geminiVoiceAssistantPreview = '';
@@ -4254,7 +4235,14 @@ async function handleGeminiLiveMessage(rawMessage) {
             openAiPendingUserTurn = normalizeVoiceDialogText(
                 mergeVoiceStreamingText(openAiPendingUserTurn, userText)
             );
-            scheduleOpenAiUserTurnFlush();
+            if (!openAiResponsePending) {
+                const requested = requestOpenAiAssistantResponse();
+                if (!requested) {
+                    setVoiceModeStatus('Не удалось запросить ответ ИИ-клиента.', 'error');
+                }
+            } else {
+                openAiResponseQueued = true;
+            }
         }
         return;
     }
@@ -4292,6 +4280,9 @@ async function handleGeminiLiveMessage(rawMessage) {
     }
 
     if (eventType === 'response.done') {
+        if (openAiPendingUserTurn.trim()) {
+            flushOpenAiPendingUserTurn({ requestResponse: false });
+        }
         if (!geminiVoiceAssistantDraft.trim() && geminiVoiceAssistantPreview.trim()) {
             geminiVoiceAssistantDraft = normalizeVoiceDialogText(
                 mergeVoiceStreamingText(geminiVoiceAssistantDraft, geminiVoiceAssistantPreview)
