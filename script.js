@@ -487,6 +487,7 @@ let publicActiveIds = {
 };
 const PROMPT_ROLES = ['client', 'manager', 'manager_call', 'rater'];
 const ATTESTATION_PROMPT_ROLES = ['client', 'manager', 'rater'];
+const MANAGER_CALL_PROMPT_MAX_CHARS = 4000000;
 
 // Prompt Variations Data
 let promptsData = {
@@ -2371,8 +2372,8 @@ function updatePromptLengthInfo(role = getActiveRole()) {
 
     promptLengthInfo.style.display = '';
     const currentLength = String(getActiveContent(role) || '').length;
-    promptLengthInfo.textContent = `${currentLength.toLocaleString('ru-RU')} символов`;
-    promptLengthInfo.classList.remove('is-over');
+    promptLengthInfo.textContent = `${currentLength.toLocaleString('ru-RU')} символов из ${MANAGER_CALL_PROMPT_MAX_CHARS.toLocaleString('ru-RU')}`;
+    promptLengthInfo.classList.toggle('is-over', currentLength > MANAGER_CALL_PROMPT_MAX_CHARS);
 }
 
 function buildLocalPromptName(name) {
