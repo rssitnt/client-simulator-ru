@@ -43,7 +43,7 @@ npx http-server -p 3001
 2. Подключите этот GitHub-репозиторий.
 3. Render сам увидит `render.yaml` и предложит сервис `client-simulator-gemini-token`.
 4. Вставьте env:
-`GEMINI_API_KEY`, `FIREBASE_WEB_API_KEY`, `FIREBASE_DATABASE_URL`, `ALLOWED_ORIGINS`, `ALLOWED_EMAIL_DOMAINS`.
+`GEMINI_API_KEY`, `FIREBASE_WEB_API_KEY`, `FIREBASE_DATABASE_URL`, `ALLOWED_ORIGINS`, `ALLOWED_EMAIL_DOMAINS`, `GEMINI_LIVE_MODEL`.
 5. Нажмите `Apply`.
 6. Скопируйте URL сервиса, например `https://client-simulator-gemini-token.onrender.com`.
 7. В приложении откройте настройки под админом и в `Gemini Voice -> Token endpoint` вставьте:

@@ -14,7 +14,7 @@ const ALLOWED_EMAIL_DOMAINS = String(process.env.ALLOWED_EMAIL_DOMAINS || '')
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean);
 
-const GEMINI_LIVE_MODEL = 'gemini-2.5-flash-native-audio-preview-12-2025';
+const GEMINI_LIVE_MODEL = String(process.env.GEMINI_LIVE_MODEL || 'gemini-2.5-flash-native-audio-preview-09-2025').trim();
 const TOKEN_PATH = '/api/gemini-live-token';
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX_REQUESTS = 15;
@@ -205,10 +205,7 @@ async function createGeminiEphemeralToken() {
             expireTime,
             newSessionExpireTime,
             liveConnectConstraints: {
-                model: GEMINI_LIVE_MODEL,
-                config: {
-                    responseModalities: ['AUDIO']
-                }
+                model: GEMINI_LIVE_MODEL
             },
             httpOptions: {
                 apiVersion: 'v1alpha'

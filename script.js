@@ -26,7 +26,7 @@ const RATE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/rate-manager';
 const ATTESTATION_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/certification';
 const MANAGER_ASSISTANT_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/manager-simulator';
 const AI_IMPROVE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/prompt-enchancement';
-const GEMINI_LIVE_MODEL = 'gemini-2.5-flash-native-audio-preview-12-2025';
+const GEMINI_LIVE_MODEL = 'gemini-2.5-flash-native-audio-preview-09-2025';
 const GEMINI_LIVE_API_KEY_STORAGE_KEY = 'geminiLiveApiKey';
 const GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY = 'geminiLiveTokenEndpoint';
 const GEMINI_LIVE_VOICE_NAME_STORAGE_KEY = 'geminiLiveVoiceName';
@@ -4145,7 +4145,7 @@ async function startGeminiVoiceMode() {
                                 const prefix = livedMs > 0 && livedMs < 2500
                                     ? 'Соединение оборвалось сразу после запуска'
                                     : 'Соединение прервано';
-                                setVoiceModeStatus(`${prefix}${closeReasonText}. Проверьте ключ Gemini и попробуйте снова.`, 'error');
+                                setVoiceModeStatus(`${prefix}${closeReasonText}. Проверьте ключ и настройки модели Gemini, затем попробуйте снова.`, 'error');
                             }
                             geminiVoiceCloseExpected = false;
                         });

@@ -32,6 +32,7 @@
 
 - `ALLOWED_ORIGINS` — например: `https://client-simulator.ru,https://www.client-simulator.ru`
 - `ALLOWED_EMAIL_DOMAINS` — например: `tradicia-k.ru,tradicia-k.kz`
+- `GEMINI_LIVE_MODEL` — по умолчанию `gemini-2.5-flash-native-audio-preview-09-2025`
 - `PORT` — по умолчанию `8787`
 
 ## Локальная проверка
