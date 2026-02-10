@@ -34,7 +34,8 @@ const GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT = '/api/openai-realtime-session';
 const GEMINI_FIRST_REPLY_HINT_DELAY_MS = 1800;
 const OPENAI_DEFAULT_VOICE = 'alloy';
 const OPENAI_VOICE_NAMES = new Set(['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse']);
-const OPENAI_OUTPUT_SPEECH_SPEED = 1.5;
+const OPENAI_OUTPUT_SPEECH_SPEED = 2.0;
+const OPENAI_FAST_PACE_INSTRUCTIONS = 'Говори максимально быстро и энергично, но разборчиво. Отвечай кратко: 1-2 предложения без повторов.';
 const ATTESTATION_QUEUE_STORAGE_KEY = 'attestationQueue:v1';
 const ATTESTATION_SEND_ATTEMPTS = 3;
 const ATTESTATION_QUEUE_MAX_FAILURES = 8;
@@ -4158,9 +4159,9 @@ function requestOpenAiAssistantResponse(instructions = '') {
     };
 
     const cleanInstructions = normalizeVoiceDialogText(instructions);
-    if (cleanInstructions) {
-        payload.instructions = cleanInstructions;
-    }
+    payload.instructions = cleanInstructions
+        ? `${cleanInstructions}\n\n${OPENAI_FAST_PACE_INSTRUCTIONS}`
+        : OPENAI_FAST_PACE_INSTRUCTIONS;
 
     if (openAiResponsePending) {
         openAiResponseQueued = true;
