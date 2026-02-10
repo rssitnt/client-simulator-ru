@@ -3820,6 +3820,67 @@ function pickReadableVoiceVariant(a, b) {
     return score(second) >= score(first) ? second : first;
 }
 
+function hasCompactBoundaryOverlap(a, b, minOverlap = 8) {
+    const first = normalizeVoiceDialogCompact(a);
+    const second = normalizeVoiceDialogCompact(b);
+    if (!first || !second) return false;
+    if (first.includes(second) || second.includes(first)) return true;
+
+    const maxOverlap = Math.min(first.length, second.length);
+    for (let overlap = maxOverlap; overlap >= minOverlap; overlap -= 1) {
+        if (first.slice(-overlap) === second.slice(0, overlap)) return true;
+        if (second.slice(-overlap) === first.slice(0, overlap)) return true;
+    }
+    return false;
+}
+
+function getRecentAssistantTranscriptForEchoGuard() {
+    const preview = normalizeVoiceDialogText(geminiVoiceAssistantPreview);
+    if (preview) return preview;
+
+    const draft = normalizeVoiceDialogText(geminiVoiceAssistantDraft);
+    if (draft) return draft;
+
+    for (let i = geminiVoiceDialogLines.length - 1; i >= 0; i -= 1) {
+        const line = geminiVoiceDialogLines[i];
+        if (line?.role !== 'assistant') continue;
+        const text = normalizeVoiceDialogText(line?.text);
+        if (text) return text;
+    }
+
+    for (let i = conversationHistory.length - 1; i >= 0; i -= 1) {
+        const line = conversationHistory[i];
+        if (line?.role !== 'assistant') continue;
+        const text = normalizeVoiceDialogText(line?.content);
+        if (text) return text;
+    }
+    return '';
+}
+
+function sanitizeUserCompletedTranscript(rawText) {
+    const source = normalizeVoiceDialogText(rawText);
+    if (!source) return '';
+
+    const assistantText = getRecentAssistantTranscriptForEchoGuard();
+    if (!assistantText) return source;
+
+    const sourceCompact = normalizeVoiceDialogCompact(source);
+    const assistantCompact = normalizeVoiceDialogCompact(assistantText);
+    if (!sourceCompact || !assistantCompact || assistantCompact.length < 20) return source;
+
+    if (sourceCompact === assistantCompact || assistantCompact.includes(sourceCompact)) {
+        return '';
+    }
+
+    const sourceNorm = normalizeVoiceDialogForCompare(source);
+    const assistantNorm = normalizeVoiceDialogForCompare(assistantText);
+    const idx = sourceNorm.indexOf(assistantNorm);
+    if (idx === -1) return source;
+
+    const before = normalizeVoiceDialogText(source.slice(0, idx));
+    return before;
+}
+
 function clearGeminiFirstReplyHintTimer() {
     if (!geminiVoiceFirstReplyHintTimer) return;
     clearTimeout(geminiVoiceFirstReplyHintTimer);
@@ -3894,12 +3955,16 @@ function pushGeminiVoiceDialogLine(role, text) {
         }
 
         const merged = normalizeVoiceDialogText(mergeVoiceStreamingText(previousText, normalizedText));
-        if (merged && merged !== previousText) {
+        if (merged && merged !== previousText && hasCompactBoundaryOverlap(previousText, normalizedText)) {
             lastLine.text = merged;
             return;
         }
 
-        lastLine.text = normalizeVoiceDialogText(`${previousText} ${normalizedText}`);
+        // Different phrases from the same role should remain separate bubbles.
+        geminiVoiceDialogLines.push({
+            role: safeRole,
+            text: normalizedText
+        });
         return;
     }
 
@@ -4035,10 +4100,10 @@ async function handleGeminiLiveMessage(rawMessage) {
     }
 
     if (eventType === 'conversation.item.input_audio_transcription.completed') {
-        const userText = String(message?.transcript || '').trim();
+        const userText = sanitizeUserCompletedTranscript(String(message?.transcript || ''));
         geminiVoiceUserPreview = '';
         if (userText) {
-            geminiVoiceUserDraft = normalizeVoiceDialogText(userText);
+            geminiVoiceUserDraft = userText;
             flushGeminiVoiceDraftLine('user');
         }
         return;
