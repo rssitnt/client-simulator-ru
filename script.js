@@ -4697,6 +4697,14 @@ function hasBufferedVoiceDialog() {
     });
 }
 
+function getBufferedVoiceDialogReplicaCount() {
+    if (!Array.isArray(geminiVoiceDialogLines)) return 0;
+    return geminiVoiceDialogLines.reduce((count, line) => {
+        const normalized = normalizeVoiceDialogText(line?.text || '');
+        return normalized ? count + 1 : count;
+    }, 0);
+}
+
 function buildVoiceDialogTextFromBufferedLines() {
     if (!hasBufferedVoiceDialog()) return '';
     let dialogText = '';
@@ -4717,6 +4725,21 @@ function updateVoiceModeRateButtonState() {
         !isProcessing &&
         !isDialogRated;
     setVoiceModeRateButtonVisible(canShowRate);
+    if (!isVoiceScreenActive) return;
+    if (isProcessing) {
+        setVoiceModeStatus('Оцениваю диалог…', 'waiting');
+        return;
+    }
+    if (canShowRate) {
+        setVoiceModeStatus('Звонок завершён. Нажмите «Оценить диалог».', 'ready');
+        return;
+    }
+    if (elevenLabsActiveSocketCount > 0) {
+        const replicas = getBufferedVoiceDialogReplicaCount();
+        setVoiceModeStatus(`Идёт диалог… Реплик записано: ${replicas}.`, 'listening');
+        return;
+    }
+    setVoiceModeStatus('Ожидание начала диалога…', 'idle');
 }
 
 function resetElevenLabsVoiceSessionState() {
@@ -4724,6 +4747,7 @@ function resetElevenLabsVoiceSessionState() {
     elevenLabsActiveSocketCount = 0;
     resetGeminiVoiceDialogBuffer();
     setVoiceModeRateButtonVisible(false);
+    setVoiceModeStatus('Открываю голосовой режим…', 'idle');
 }
 
 function parseElevenLabsSocketProtocols(protocols) {
@@ -4753,6 +4777,7 @@ function processElevenLabsRealtimeMessage(message) {
     if (eventType === 'conversation_initiation_metadata') {
         elevenLabsConversationFinished = false;
         resetGeminiVoiceDialogBuffer();
+        setVoiceModeStatus('Соединение установлено. Идёт диалог…', 'listening');
         updateVoiceModeRateButtonState();
         return;
     }
@@ -4764,6 +4789,7 @@ function processElevenLabsRealtimeMessage(message) {
             elevenLabsConversationFinished = false;
             pushGeminiVoiceDialogLine('user', userText);
         }
+        setVoiceModeStatus(`Реплика менеджера сохранена (${getBufferedVoiceDialogReplicaCount()}).`, 'listening');
         updateVoiceModeRateButtonState();
         return;
     }
@@ -4782,6 +4808,7 @@ function processElevenLabsRealtimeMessage(message) {
             elevenLabsConversationFinished = false;
             pushGeminiVoiceDialogLine('assistant', assistantText);
         }
+        setVoiceModeStatus(`Реплика клиента сохранена (${getBufferedVoiceDialogReplicaCount()}).`, 'listening');
         updateVoiceModeRateButtonState();
     }
 }
@@ -4799,6 +4826,7 @@ function registerElevenLabsConversationSocket(socket) {
         elevenLabsSocketOpenState.set(socket, true);
         elevenLabsConversationFinished = false;
         setVoiceModeRateButtonVisible(false);
+        setVoiceModeStatus('Звонок начат. Говорите с ИИ-клиентом…', 'listening');
     });
 
     socket.addEventListener('message', (event) => {
@@ -4818,7 +4846,12 @@ function registerElevenLabsConversationSocket(socket) {
         }
         elevenLabsSocketOpenState.set(socket, false);
         if (elevenLabsActiveSocketCount === 0) {
-            elevenLabsConversationFinished = true;
+            elevenLabsConversationFinished = hasBufferedVoiceDialog();
+            if (elevenLabsConversationFinished) {
+                setVoiceModeStatus('Звонок завершён. Можно оценить диалог.', 'ready');
+            } else {
+                setVoiceModeStatus('Звонок завершён, но реплики не найдены.', 'error');
+            }
             updateVoiceModeRateButtonState();
         }
     });
@@ -4861,10 +4894,12 @@ async function handleVoiceModeRateClick() {
 
     const dialogText = buildVoiceDialogTextFromBufferedLines();
     if (!dialogText) {
+        setVoiceModeStatus('Нет текста диалога для оценки. Повторите звонок.', 'error');
         showCopyNotification('Диалог не найден. Завершите звонок и попробуйте снова.');
         return;
     }
 
+    setVoiceModeStatus('Оцениваю диалог…', 'waiting');
     appendGeminiVoiceDialogToChat();
     resetGeminiVoiceDialogBuffer();
     elevenLabsConversationFinished = false;

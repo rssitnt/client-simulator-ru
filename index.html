@@ -8,7 +8,7 @@
     <meta name="color-scheme" content="dark">
     <title>Kirillov Client Simulator</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
-    <link rel="stylesheet" href="style.css?v=20260211-26">
+    <link rel="stylesheet" href="style.css?v=20260211-27">
     <!-- Mammoth.js for .docx support -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
     <!-- docx.js for exporting to .docx -->
@@ -114,8 +114,11 @@
 
     <div id="voiceModeScreen" class="voice-mode-screen" hidden></div>
     <div id="voiceModeActions" class="voice-mode-actions" hidden>
-        <button id="voiceModeExitBtn" type="button" class="voice-mode-exit-btn">Выход</button>
-        <button id="voiceModeRateBtn" type="button" class="voice-mode-rate-btn" hidden>Оценить диалог</button>
+        <div class="voice-mode-actions-row">
+            <button id="voiceModeExitBtn" type="button" class="voice-mode-exit-btn">Выход</button>
+            <button id="voiceModeRateBtn" type="button" class="voice-mode-rate-btn" hidden>Оценить диалог</button>
+        </div>
+        <div id="voiceModeStatus" class="voice-mode-status" data-state="idle">Открываю голосовой режим…</div>
     </div>
     <elevenlabs-convai id="elevenlabsConvaiWidget" data-voice-hidden="true" aria-hidden="true" agent-id="agent_4101kh5kyvrhfba8fcq7ky33wk8e"></elevenlabs-convai>
 
@@ -517,7 +520,7 @@
     <!-- Turndown for HTML to Markdown conversion (WYSIWYG editing) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js"></script>
     <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
-    <script type="module" src="script.js?v=20260211-57"></script>
+    <script type="module" src="script.js?v=20260211-58"></script>
     <!-- Last deployment trigger: 2026-02-10 18:34 -->
 </body>
 </html>
