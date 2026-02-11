@@ -4693,6 +4693,8 @@ function setElevenLabsWidgetHidden(hidden) {
     if (!elevenlabsConvaiWidget) return;
     const hiddenFlag = hidden ? 'true' : 'false';
     elevenlabsConvaiWidget.setAttribute('data-voice-hidden', hiddenFlag);
+    elevenlabsConvaiWidget.style.setProperty('position', 'fixed', 'important');
+    elevenlabsConvaiWidget.style.setProperty('z-index', hidden ? '999999' : '1000001', 'important');
     if (hidden) {
         elevenlabsConvaiWidget.setAttribute('aria-hidden', 'true');
     } else {
@@ -4701,6 +4703,7 @@ function setElevenLabsWidgetHidden(hidden) {
 }
 
 function setVoiceModeScreenActive(active) {
+    document.body?.classList.toggle('voice-mode-active', !!active);
     if (voiceModeScreen) {
         if (active) {
             voiceModeScreen.hidden = false;

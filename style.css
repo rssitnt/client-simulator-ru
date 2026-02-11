@@ -3783,14 +3783,14 @@ elevenlabs-convai[data-voice-hidden="false"] {
     visibility: visible !important;
     opacity: 1 !important;
     pointer-events: auto !important;
-    position: relative !important;
-    z-index: 12010 !important;
+    position: fixed !important;
+    z-index: 1000001 !important;
 }
 
 .voice-mode-screen {
     position: fixed;
     inset: 0;
-    z-index: 12000;
+    z-index: 1000000;
     background: var(--color-bg-primary);
 }
 
@@ -3798,7 +3798,7 @@ elevenlabs-convai[data-voice-hidden="false"] {
     position: fixed;
     top: 14px;
     right: 14px;
-    z-index: 2147483647;
+    z-index: 1000002;
     border: 1px solid var(--color-border-light);
     background: rgba(18, 18, 18, 0.9);
     color: var(--color-text-primary);
@@ -3817,6 +3817,15 @@ elevenlabs-convai[data-voice-hidden="false"] {
 
 body.light-theme .voice-mode-exit-btn {
     background: rgba(255, 255, 255, 0.95);
+}
+
+body.voice-mode-active {
+    overflow: hidden;
+}
+
+body.voice-mode-active > :not(#voiceModeScreen):not(#voiceModeExitBtn):not(#elevenlabsConvaiWidget) {
+    visibility: hidden !important;
+    pointer-events: none !important;
 }
 
 /* AI Improve Modal */
