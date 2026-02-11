@@ -3776,13 +3776,11 @@ body.light-theme .btn-ai-improve:focus {
 elevenlabs-convai[data-voice-hidden="true"] {
     visibility: hidden !important;
     opacity: 0 !important;
-    pointer-events: none !important;
 }
 
 elevenlabs-convai[data-voice-hidden="false"] {
     visibility: visible !important;
     opacity: 1 !important;
-    pointer-events: auto !important;
 }
 
 /* AI Improve Modal */
