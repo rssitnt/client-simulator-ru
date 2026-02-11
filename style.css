@@ -3814,7 +3814,7 @@ body.light-theme .btn-ai-improve:focus {
     bottom: 96px;
     width: min(94vw, 520px);
     z-index: 2147483647;
-    display: none;
+    visibility: hidden;
     opacity: 0;
     transform: translateY(8px);
     pointer-events: none;
@@ -3822,7 +3822,7 @@ body.light-theme .btn-ai-improve:focus {
 }
 
 .voice-widget-popover.active {
-    display: block;
+    visibility: visible;
     opacity: 1;
     transform: translateY(0);
     pointer-events: auto;
