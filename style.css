@@ -2402,7 +2402,7 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
 }
 
 .auth-mail-help {
-    margin: 6px 0 16px;
+    margin: 12px 0 0;
     border: 1px solid #2a2a2a;
     border-radius: 12px;
     background: #151515;

@@ -316,6 +316,7 @@ const modalLoginInput = document.getElementById('modalLoginInput');
 const modalNameSubmit = document.getElementById('modalNameSubmit');
 const nameModalStep1 = document.getElementById('nameModalStep1');
 const modalPasswordInput = document.getElementById('modalPasswordInput');
+const authMailHelp = document.getElementById('authMailHelp');
 const togglePasswordVisibilityBtn = document.getElementById('togglePasswordVisibility');
 const authErrorText = document.getElementById('passwordError');
 const promptVariationsContainer = document.getElementById('promptVariations');
@@ -1190,6 +1191,14 @@ function setAuthError(message = '') {
     authErrorText.style.display = 'block';
 }
 
+function setAuthMailHelpVisible(isVisible) {
+    if (!authMailHelp) return;
+    authMailHelp.hidden = !isVisible;
+    if (isVisible) {
+        authMailHelp.setAttribute('open', '');
+    }
+}
+
 function markUserActivity() {
     lastUserActivityAt = Date.now();
 }
@@ -1541,6 +1550,7 @@ async function handleCreatePartnerInvite() {
 
 async function handleAuthSubmit() {
     if (!modalNameSubmit) return;
+    setAuthMailHelpVisible(false);
     const fio = normalizeFio(modalNameInput?.value || '');
     const login = normalizeLogin(modalLoginInput?.value || '');
     const password = String(modalPasswordInput?.value || '');
@@ -1568,7 +1578,7 @@ async function handleAuthSubmit() {
         let existingUser = await getUserRecordByLogin(login);
         const accessPolicy = await resolveAccessPolicy(login, existingUser);
         if (!accessPolicy) {
-            throw new Error('Доступ разрешен только для корпоративной почты компании или партнеров по инвайту.');
+            throw new Error('Используйте корпоративную почту, если вы сотрудник компании. Если вы партнёр, попросите администратора ссылку-приглашение');
         }
 
         const passwordHash = await hashPassword(login, password);
@@ -1642,6 +1652,7 @@ async function handleAuthSubmit() {
                 emailVerificationSentAt: nowIso
             }) || savedUser;
             setAuthError('Мы отправили ссылку подтверждения на email. Откройте письмо и повторите вход.');
+            setAuthMailHelpVisible(true);
             return;
         }
 
@@ -3376,6 +3387,7 @@ function showNameModal() {
         modalPasswordInput.value = '';
     }
     setPasswordVisibility(false);
+    setAuthMailHelpVisible(false);
     setAuthError('');
     setTimeout(() => modalNameInput?.focus(), 100);
 }
