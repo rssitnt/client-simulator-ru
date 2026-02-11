@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getDatabase, ref, onValue, set, get, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
-import { getAuth, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { getAuth, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
 
 // Initialize Firebase
@@ -986,9 +986,9 @@ async function consumeEmailVerificationLinkIfPresent() {
     } finally {
         clearEmailLinkContext();
         cleanupEmailLinkUrl();
-        if (auth) {
-            signOut(auth).catch(() => {});
-        }
+        // Keep Firebase auth session after email-link sign-in.
+        // This allows secured Realtime Database rules (auth != null)
+        // without breaking cross-device data access.
     }
 }
 
