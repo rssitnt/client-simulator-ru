@@ -333,7 +333,6 @@ const promptHistoryModalClose = document.getElementById('promptHistoryModalClose
 const promptHistoryTitle = document.getElementById('promptHistoryTitle');
 const promptHistoryList = document.getElementById('promptHistoryList');
 const voiceModeModal = document.getElementById('voiceModeModal');
-const elevenlabsConvaiWidget = document.getElementById('elevenlabsConvaiWidget');
 const voiceModeStartBtn = document.getElementById('voiceModeStartBtn');
 const voiceModeStopBtn = document.getElementById('voiceModeStopBtn');
 const voiceModeStatus = document.getElementById('voiceModeStatus');
@@ -5118,28 +5117,14 @@ bindEvent(themeToggle, 'change', () => {
     const isLight = themeToggle.checked;
     document.body.classList.toggle('light-theme', isLight);
     localStorage.setItem('theme', isLight ? 'light' : 'dark');
-    syncVoiceWidgetPalette();
 });
 
 // Accent color picker
-function syncVoiceWidgetPalette() {
-    if (!elevenlabsConvaiWidget) return;
-    const rootStyles = getComputedStyle(document.documentElement);
-    const accent = String(rootStyles.getPropertyValue('--color-accent') || '').trim();
-    const hover = String(rootStyles.getPropertyValue('--color-accent-hover') || '').trim();
-    const primary = accent || '#7F96FF';
-    const secondary = hover || adjustBrightness(primary, -15);
-
-    elevenlabsConvaiWidget.setAttribute('avatar-orb-color-1', primary);
-    elevenlabsConvaiWidget.setAttribute('avatar-orb-color-2', secondary);
-}
-
 function setAccentColor(color) {
     // Вычисляем hover цвет (темнее на 15%)
     const hoverColor = adjustBrightness(color, -15);
     document.documentElement.style.setProperty('--color-accent', color);
     document.documentElement.style.setProperty('--color-accent-hover', hoverColor);
-    syncVoiceWidgetPalette();
 }
 
 function adjustBrightness(hex, percent) {
@@ -5210,11 +5195,6 @@ if (moreColorsBtn && moreColorsPopup) {
 const savedAccentColor = localStorage.getItem('accentColor') || '#7F96FF';
 setAccentColor(savedAccentColor);
 updateColorPresetActive(savedAccentColor);
-if (typeof customElements !== 'undefined' && typeof customElements.whenDefined === 'function') {
-    customElements.whenDefined('elevenlabs-convai').then(() => {
-        syncVoiceWidgetPalette();
-    }).catch(() => {});
-}
 
 // Load saved theme
 const savedTheme = localStorage.getItem('theme');
