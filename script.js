@@ -333,7 +333,6 @@ const promptHistoryModalClose = document.getElementById('promptHistoryModalClose
 const promptHistoryTitle = document.getElementById('promptHistoryTitle');
 const promptHistoryList = document.getElementById('promptHistoryList');
 const voiceModeModal = document.getElementById('voiceModeModal');
-const voiceModeModalClose = document.getElementById('voiceModeModalClose');
 const voiceModeStartBtn = document.getElementById('voiceModeStartBtn');
 const voiceModeStopBtn = document.getElementById('voiceModeStopBtn');
 const voiceModeStatus = document.getElementById('voiceModeStatus');
@@ -496,6 +495,7 @@ let openAiHasUnansweredUserTurn = false;
 let openAiLastUserTurnCompact = '';
 let openAiLastUserTurnAt = 0;
 let openAiUserTranscriptByItemId = new Map();
+let voiceWidgetHideTimer = null;
 let reratePromptElement = null;
 let attestationQueue = [];
 let isAttestationQueueFlushInProgress = false;
@@ -2643,6 +2643,7 @@ function updateSendBtnState() {
         return;
     }
 
+    hideVoiceModeModal();
     setPrimaryActionMode('send');
     sendBtn.disabled = !hasText || isProcessing || isDialogRated;
 }
@@ -4679,12 +4680,39 @@ async function startGeminiVoiceMode() {
 function showVoiceModeModal() {
     hideTooltip(true);
     if (!voiceModeModal) return;
-    voiceModeModal.classList.add('active');
+    if (voiceWidgetHideTimer) {
+        clearTimeout(voiceWidgetHideTimer);
+        voiceWidgetHideTimer = null;
+    }
+    voiceModeModal.hidden = false;
+    requestAnimationFrame(() => {
+        voiceModeModal.classList.add('active');
+    });
 }
 
 function hideVoiceModeModal() {
     if (!voiceModeModal) return;
+    if (voiceModeModal.hidden && !voiceModeModal.classList.contains('active')) return;
     voiceModeModal.classList.remove('active');
+    if (voiceWidgetHideTimer) {
+        clearTimeout(voiceWidgetHideTimer);
+    }
+    voiceWidgetHideTimer = setTimeout(() => {
+        if (!voiceModeModal.classList.contains('active')) {
+            voiceModeModal.hidden = true;
+        }
+        voiceWidgetHideTimer = null;
+    }, 220);
+}
+
+function toggleVoiceModeWidget() {
+    if (!voiceModeModal) return;
+    const isOpen = !voiceModeModal.hidden && voiceModeModal.classList.contains('active');
+    if (isOpen) {
+        hideVoiceModeModal();
+    } else {
+        showVoiceModeModal();
+    }
 }
 
 function showPromptHistoryModal() {
@@ -5012,7 +5040,6 @@ bindEvent(promptVisibilityBtn, 'click', toggleActivePromptVisibility);
 bindEvent(aiImproveModalClose, 'click', hideAiImproveModal);
 bindEvent(aiImproveCancel, 'click', hideAiImproveModal);
 bindEvent(aiImproveSubmit, 'click', improvePromptWithAI);
-bindEvent(voiceModeModalClose, 'click', hideVoiceModeModal);
 bindEvent(promptHistoryModalClose, 'click', hidePromptHistoryModal);
 
 bindEvent(aiImproveBack, 'click', () => {
@@ -5302,13 +5329,6 @@ aiImproveModal.addEventListener('click', (e) => {
         hideAiImproveModal();
     }
 });
-if (voiceModeModal) {
-    voiceModeModal.addEventListener('click', (e) => {
-        if (e.target === voiceModeModal) {
-            hideVoiceModeModal();
-        }
-    });
-}
 if (promptHistoryModal) {
     promptHistoryModal.addEventListener('click', (e) => {
         if (e.target === promptHistoryModal) {
@@ -5316,6 +5336,20 @@ if (promptHistoryModal) {
         }
     });
 }
+
+document.addEventListener('mousedown', (e) => {
+    if (!voiceModeModal || voiceModeModal.hidden || !voiceModeModal.classList.contains('active')) return;
+    const target = e.target;
+    if (!(target instanceof Node)) return;
+    if (voiceModeModal.contains(target) || sendBtn?.contains(target)) return;
+    hideVoiceModeModal();
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (!voiceModeModal || voiceModeModal.hidden || !voiceModeModal.classList.contains('active')) return;
+    hideVoiceModeModal();
+});
 
 // ============ CHAT FUNCTIONS ============
 
@@ -6706,7 +6740,7 @@ function setupDragAndDropForPreview(previewElement, textarea) {
 
 function handlePrimaryActionClick() {
     if (sendBtn.dataset.mode === 'voice') {
-        showVoiceModeModal();
+        toggleVoiceModeWidget();
         return;
     }
     sendMessage();
