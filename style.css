@@ -3876,7 +3876,7 @@ body.light-theme .voice-mode-rate-btn {
 
 .voice-mode-status[data-state="listening"] {
     color: var(--color-text-primary);
-    border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-border-light));
+    border-color: rgba(255, 255, 255, 0.42);
 }
 
 .voice-mode-status[data-state="error"] {
@@ -3886,6 +3886,10 @@ body.light-theme .voice-mode-rate-btn {
 
 body.light-theme .voice-mode-status {
     background: rgba(255, 255, 255, 0.96);
+}
+
+body.light-theme .voice-mode-status[data-state="listening"] {
+    border-color: rgba(0, 0, 0, 0.35);
 }
 
 body.voice-mode-active {

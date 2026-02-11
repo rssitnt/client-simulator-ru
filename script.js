@@ -4697,14 +4697,6 @@ function hasBufferedVoiceDialog() {
     });
 }
 
-function getBufferedVoiceDialogReplicaCount() {
-    if (!Array.isArray(geminiVoiceDialogLines)) return 0;
-    return geminiVoiceDialogLines.reduce((count, line) => {
-        const normalized = normalizeVoiceDialogText(line?.text || '');
-        return normalized ? count + 1 : count;
-    }, 0);
-}
-
 function buildVoiceDialogTextFromBufferedLines() {
     if (!hasBufferedVoiceDialog()) return '';
     let dialogText = '';
@@ -4735,8 +4727,7 @@ function updateVoiceModeRateButtonState() {
         return;
     }
     if (elevenLabsActiveSocketCount > 0) {
-        const replicas = getBufferedVoiceDialogReplicaCount();
-        setVoiceModeStatus(`Идёт диалог… Реплик записано: ${replicas}.`, 'listening');
+        setVoiceModeStatus('Идёт диалог…', 'listening');
         return;
     }
     setVoiceModeStatus('Нажмите кнопку звонка для старта', 'idle');
@@ -4789,7 +4780,7 @@ function processElevenLabsRealtimeMessage(message) {
             elevenLabsConversationFinished = false;
             pushGeminiVoiceDialogLine('user', userText);
         }
-        setVoiceModeStatus(`Реплика менеджера сохранена (${getBufferedVoiceDialogReplicaCount()}).`, 'listening');
+        setVoiceModeStatus('Идёт диалог…', 'listening');
         updateVoiceModeRateButtonState();
         return;
     }
@@ -4808,7 +4799,7 @@ function processElevenLabsRealtimeMessage(message) {
             elevenLabsConversationFinished = false;
             pushGeminiVoiceDialogLine('assistant', assistantText);
         }
-        setVoiceModeStatus(`Реплика клиента сохранена (${getBufferedVoiceDialogReplicaCount()}).`, 'listening');
+        setVoiceModeStatus('Идёт диалог…', 'listening');
         updateVoiceModeRateButtonState();
     }
 }
