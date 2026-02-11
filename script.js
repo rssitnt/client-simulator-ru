@@ -4701,13 +4701,18 @@ function setElevenLabsWidgetHidden(hidden) {
 }
 
 function setVoiceModeScreenActive(active) {
-    if (!voiceModeScreen) return;
-    if (active) {
-        voiceModeScreen.hidden = false;
-        voiceModeScreen.setAttribute('aria-hidden', 'false');
-    } else {
-        voiceModeScreen.hidden = true;
-        voiceModeScreen.setAttribute('aria-hidden', 'true');
+    if (voiceModeScreen) {
+        if (active) {
+            voiceModeScreen.hidden = false;
+            voiceModeScreen.setAttribute('aria-hidden', 'false');
+        } else {
+            voiceModeScreen.hidden = true;
+            voiceModeScreen.setAttribute('aria-hidden', 'true');
+        }
+    }
+    if (voiceModeExitBtn) {
+        voiceModeExitBtn.hidden = !active;
+        voiceModeExitBtn.setAttribute('aria-hidden', active ? 'false' : 'true');
     }
 }
 
