@@ -3783,6 +3783,38 @@ elevenlabs-convai[data-voice-hidden="false"] {
     opacity: 1 !important;
 }
 
+.voice-mode-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483000;
+    background: var(--color-bg-primary);
+}
+
+.voice-mode-exit-btn {
+    position: fixed;
+    top: 14px;
+    right: 14px;
+    z-index: 2147483647;
+    border: 1px solid var(--color-border-light);
+    background: rgba(18, 18, 18, 0.9);
+    color: var(--color-text-primary);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.voice-mode-exit-btn:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+}
+
+body.light-theme .voice-mode-exit-btn {
+    background: rgba(255, 255, 255, 0.95);
+}
+
 /* AI Improve Modal */
 .ai-improve-modal {
     max-width: 500px;

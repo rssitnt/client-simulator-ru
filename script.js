@@ -332,6 +332,8 @@ const promptHistoryModal = document.getElementById('promptHistoryModal');
 const promptHistoryModalClose = document.getElementById('promptHistoryModalClose');
 const promptHistoryTitle = document.getElementById('promptHistoryTitle');
 const promptHistoryList = document.getElementById('promptHistoryList');
+const voiceModeScreen = document.getElementById('voiceModeScreen');
+const voiceModeExitBtn = document.getElementById('voiceModeExitBtn');
 const elevenlabsConvaiWidget = document.getElementById('elevenlabsConvaiWidget');
 const voiceModeStartBtn = document.getElementById('voiceModeStartBtn');
 const voiceModeStopBtn = document.getElementById('voiceModeStopBtn');
@@ -4698,12 +4700,25 @@ function setElevenLabsWidgetHidden(hidden) {
     }
 }
 
+function setVoiceModeScreenActive(active) {
+    if (!voiceModeScreen) return;
+    if (active) {
+        voiceModeScreen.hidden = false;
+        voiceModeScreen.setAttribute('aria-hidden', 'false');
+    } else {
+        voiceModeScreen.hidden = true;
+        voiceModeScreen.setAttribute('aria-hidden', 'true');
+    }
+}
+
 function showVoiceModeModal() {
     hideTooltip(true);
+    setVoiceModeScreenActive(true);
     setElevenLabsWidgetHidden(false);
     dispatchElevenLabsExpandEvent('expand');
     if (typeof customElements !== 'undefined' && typeof customElements.whenDefined === 'function') {
         customElements.whenDefined('elevenlabs-convai').then(() => {
+            setVoiceModeScreenActive(true);
             setElevenLabsWidgetHidden(false);
             dispatchElevenLabsExpandEvent('expand');
         }).catch(() => {});
@@ -4712,6 +4727,7 @@ function showVoiceModeModal() {
 
 function hideVoiceModeModal() {
     dispatchElevenLabsExpandEvent('collapse');
+    setVoiceModeScreenActive(false);
     setTimeout(() => {
         setElevenLabsWidgetHidden(true);
     }, 120);
@@ -6741,6 +6757,13 @@ function handlePrimaryActionClick() {
 }
 
 setElevenLabsWidgetHidden(true);
+setVoiceModeScreenActive(false);
+bindEvent(voiceModeExitBtn, 'click', hideVoiceModeModal);
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (!voiceModeScreen || voiceModeScreen.hidden) return;
+    hideVoiceModeModal();
+});
 
 bindEvent(sendBtn, 'click', handlePrimaryActionClick);
 bindEvent(userInput, 'keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
