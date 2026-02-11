@@ -6725,17 +6725,16 @@ function setupDragAndDropForPreview(previewElement, textarea) {
 // ============ EVENT LISTENERS ============
 
 function handlePrimaryActionClick() {
-    const canUseVoiceModeInline =
-        !userInput.disabled &&
-        !userInput.value.trim() &&
-        !isTextDialogStarted() &&
-        !isProcessing &&
-        !isDialogRated;
+    if (userInput.disabled || isProcessing || isDialogRated) {
+        return;
+    }
 
-    if (sendBtn.dataset.mode === 'voice' || canUseVoiceModeInline) {
+    const hasText = !!userInput.value.trim();
+    if (!hasText) {
         toggleVoiceModeWidget();
         return;
     }
+
     sendMessage();
 }
 
