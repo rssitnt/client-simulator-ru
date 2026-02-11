@@ -4739,7 +4739,7 @@ function updateVoiceModeRateButtonState() {
         setVoiceModeStatus(`Идёт диалог… Реплик записано: ${replicas}.`, 'listening');
         return;
     }
-    setVoiceModeStatus('Ожидание начала диалога…', 'idle');
+    setVoiceModeStatus('Нажмите кнопку звонка для старта', 'idle');
 }
 
 function resetElevenLabsVoiceSessionState() {
