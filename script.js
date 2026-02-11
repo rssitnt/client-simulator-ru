@@ -828,6 +828,12 @@ async function getPartnerInviteByLogin(login) {
             if (snapshot.exists()) {
                 return normalizePartnerInvite(snapshot.val(), normalizedLogin);
             }
+            const localStore = loadLocalPartnerInvitesStore();
+            if (Object.prototype.hasOwnProperty.call(localStore, key)) {
+                delete localStore[key];
+                saveLocalPartnerInvitesStore(localStore);
+            }
+            return null;
         } catch (error) {
             console.error('Failed to load partner invite from Firebase:', error);
         }
@@ -904,6 +910,27 @@ async function patchPartnerInvite(login, patch = {}) {
     return normalizePartnerInvite(merged, normalizedLogin);
 }
 
+async function deletePartnerInvite(login) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!isValidLogin(normalizedLogin)) return false;
+    const key = loginToStorageKey(normalizedLogin);
+
+    if (db) {
+        try {
+            await set(ref(db, `${PARTNER_INVITES_DB_PATH}/${key}`), null);
+        } catch (error) {
+            console.error('Failed to delete partner invite in Firebase:', error);
+        }
+    }
+
+    const localStore = loadLocalPartnerInvitesStore();
+    if (Object.prototype.hasOwnProperty.call(localStore, key)) {
+        delete localStore[key];
+        saveLocalPartnerInvitesStore(localStore);
+    }
+    return true;
+}
+
 async function listPartnerInvites() {
     if (db) {
         try {
@@ -918,6 +945,8 @@ async function listPartnerInvites() {
                     return invites;
                 }
             }
+            saveLocalPartnerInvitesStore({});
+            return [];
         } catch (error) {
             console.error('Failed to load partner invites from Firebase:', error);
         }
@@ -1072,6 +1101,12 @@ async function getUserRecordByLogin(login) {
                 const record = normalizeUserRecord(snapshot.val(), normalizedLogin);
                 if (record) return record;
             }
+            const localStore = loadLocalUsersStore();
+            if (Object.prototype.hasOwnProperty.call(localStore, key)) {
+                delete localStore[key];
+                saveLocalUsersStore(localStore);
+            }
+            return null;
         } catch (error) {
             console.error('Failed to load user from Firebase:', error);
         }
@@ -1172,6 +1207,27 @@ async function patchUserRecord(login, patch = {}) {
     return normalizeUserRecord(merged, normalizedLogin);
 }
 
+async function deleteUserRecord(login) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!normalizedLogin) return false;
+    const key = loginToStorageKey(normalizedLogin);
+
+    if (db) {
+        try {
+            await set(ref(db, `${AUTH_USERS_DB_PATH}/${key}`), null);
+        } catch (error) {
+            console.error('Failed to delete user in Firebase:', error);
+        }
+    }
+
+    const localStore = loadLocalUsersStore();
+    if (Object.prototype.hasOwnProperty.call(localStore, key)) {
+        delete localStore[key];
+        saveLocalUsersStore(localStore);
+    }
+    return true;
+}
+
 async function listAllUserRecords() {
     if (db) {
         try {
@@ -1185,6 +1241,8 @@ async function listAllUserRecords() {
                     return records.sort((a, b) => a.login.localeCompare(b.login));
                 }
             }
+            saveLocalUsersStore({});
+            return [];
         } catch (error) {
             console.error('Failed to load users list from Firebase:', error);
         }
@@ -1424,13 +1482,18 @@ async function toggleAccessForLogin(login, nextActive, user, invite) {
     const isCorporate = isCorporateEmail(login);
 
     if (!nextActive) {
-        if (!user) {
-            throw new Error('Для этого email нет активного аккаунта в системе.');
+        if (!user && !invite) {
+            throw new Error('Для этого email нет аккаунта в системе.');
         }
-        await patchUserRecord(login, {
-            sessionRevokedAt: nowIso,
-            lastSeenAt: nowIso
-        });
+        if (user) {
+            await deleteUserRecord(login);
+        }
+        if (invite) {
+            await deletePartnerInvite(login);
+        }
+        if (currentUser && currentUser.login === normalizeLogin(login)) {
+            resetCurrentSessionToAuth('Аккаунт удален из системы. Войдите снова.');
+        }
         return;
     }
 
@@ -1564,17 +1627,17 @@ async function renderAdminUsersTable() {
         const actionCell = document.createElement('td');
         const actionBtn = document.createElement('button');
         actionBtn.className = `btn-change ${accessState.active ? 'btn-danger-subtle' : ''}`.trim();
-        actionBtn.textContent = accessState.active ? 'Сбросить из системы' : 'Открыть доступ';
+        actionBtn.textContent = accessState.active ? 'Удалить из системы' : 'Открыть доступ';
         actionBtn.addEventListener('click', async () => {
             const nextActive = !accessState.active;
             if (!nextActive) {
-                const confirmed = confirm(`Сбросить активную сессию для ${login}?`);
+                const confirmed = confirm(`Удалить аккаунт ${login} из системы?`);
                 if (!confirmed) return;
             }
             actionBtn.disabled = true;
             try {
                 await toggleAccessForLogin(login, nextActive, user, invite);
-                showCopyNotification(nextActive ? `Доступ открыт: ${login}` : `Сессия сброшена: ${login}`);
+                showCopyNotification(nextActive ? `Доступ открыт: ${login}` : `Аккаунт удален: ${login}`);
                 await renderAdminUsersTable();
             } catch (error) {
                 console.error('Failed to toggle access:', error);
