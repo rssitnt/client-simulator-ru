@@ -4679,6 +4679,10 @@ async function startGeminiVoiceMode() {
 function showVoiceModeModal() {
     hideTooltip(true);
     if (!voiceModeModal) return;
+    if (voiceModeModal.hidden) {
+        voiceModeModal.hidden = false;
+    }
+    voiceModeModal.removeAttribute('hidden');
     voiceModeModal.classList.add('active');
 }
 
