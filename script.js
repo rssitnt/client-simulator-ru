@@ -4679,19 +4679,12 @@ async function startGeminiVoiceMode() {
 function showVoiceModeModal() {
     hideTooltip(true);
     if (!voiceModeModal) return;
-    updateVoiceModeControls();
-    if (!isGeminiVoiceActive && !isGeminiVoiceConnecting) {
-        setVoiceModeStatus('', 'idle');
-    }
     voiceModeModal.classList.add('active');
 }
 
 function hideVoiceModeModal() {
     if (!voiceModeModal) return;
     voiceModeModal.classList.remove('active');
-    if (isGeminiVoiceActive || isGeminiVoiceConnecting) {
-        stopGeminiVoiceMode({ silent: false }).catch(() => {});
-    }
 }
 
 function showPromptHistoryModal() {
@@ -5021,16 +5014,6 @@ bindEvent(aiImproveCancel, 'click', hideAiImproveModal);
 bindEvent(aiImproveSubmit, 'click', improvePromptWithAI);
 bindEvent(voiceModeModalClose, 'click', hideVoiceModeModal);
 bindEvent(promptHistoryModalClose, 'click', hidePromptHistoryModal);
-bindEvent(voiceModeStartBtn, 'click', () => {
-    startGeminiVoiceMode().catch((error) => {
-        console.error('Voice mode start error:', error);
-    });
-});
-bindEvent(voiceModeStopBtn, 'click', () => {
-    stopGeminiVoiceMode().catch((error) => {
-        console.error('Voice mode stop error:', error);
-    });
-});
 
 bindEvent(aiImproveBack, 'click', () => {
     if (aiImproveStep1) aiImproveStep1.style.display = 'block';
@@ -7151,8 +7134,6 @@ userInput.focus();
 autoResizeTextarea(userInput);
 prepareCustomTooltips();
 initCustomTooltipLayer();
-updateVoiceModeControls();
-setVoiceModeStatus('', 'idle');
 
 if (attestationQueue.length > 0) {
     scheduleAttestationQueueRetry(600);

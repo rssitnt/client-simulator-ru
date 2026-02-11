@@ -3809,65 +3809,24 @@ body.light-theme .btn-ai-improve:focus {
 }
 
 .voice-mode-modal {
-    max-width: 420px;
-    width: min(90vw, 420px);
+    max-width: 620px;
+    width: min(94vw, 620px);
     position: relative;
     border: none;
+    text-align: left;
 }
 
 .voice-mode-modal h3 {
     font-size: 20px;
+    margin-bottom: 14px;
 }
 
-.voice-mode-modal p {
-    margin-bottom: 24px;
-}
-
-.voice-mode-actions {
-    display: flex;
-    justify-content: center;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
-.voice-mode-actions .btn-modal-submit {
-    width: auto;
-    min-width: 140px;
-}
-
-.voice-mode-actions .btn-modal-cancel {
-    width: auto;
-    min-width: 140px;
-}
-
-.voice-mode-status {
-    margin: 0 0 14px;
-    padding: 10px 12px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.04);
-    color: #bdbdbd;
-    font-size: 13px;
-    line-height: 1.45;
-}
-
-.voice-mode-status:empty {
-    display: none;
-}
-
-.voice-mode-status[data-state="ready"] {
-    color: #b7e5c8;
-}
-
-.voice-mode-status[data-state="listening"] {
-    color: #9ecbff;
-}
-
-.voice-mode-status[data-state="waiting"] {
-    color: #f7c87a;
-}
-
-.voice-mode-status[data-state="error"] {
-    color: #ff8f8f;
+.voice-mode-modal elevenlabs-convai {
+    display: block;
+    width: 100%;
+    min-height: 420px;
+    border-radius: 14px;
+    overflow: hidden;
 }
 
 .modal-close {
@@ -3947,29 +3906,8 @@ body.light-theme .ai-improve-actions .btn-ai-apply-current:hover {
     background: #dcdcdc;
 }
 
-body.light-theme .voice-mode-modal p {
-    color: #555;
-}
-
-body.light-theme .voice-mode-status {
-    background: rgba(0, 0, 0, 0.05);
-    color: #616161;
-}
-
-body.light-theme .voice-mode-status[data-state="ready"] {
-    color: #237a4f;
-}
-
-body.light-theme .voice-mode-status[data-state="listening"] {
-    color: #2563eb;
-}
-
-body.light-theme .voice-mode-status[data-state="waiting"] {
-    color: #b7791f;
-}
-
-body.light-theme .voice-mode-status[data-state="error"] {
-    color: #c62828;
+body.light-theme .voice-mode-modal elevenlabs-convai {
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
 
 body.light-theme .prompt-history-modal {
