@@ -3797,10 +3797,10 @@ elevenlabs-convai[data-voice-hidden="false"] {
 .voice-mode-exit-btn {
     position: fixed;
     top: max(14px, env(safe-area-inset-top, 0px) + 8px);
-    right: max(14px, env(safe-area-inset-right, 0px) + 8px);
-    left: auto !important;
-    inset-inline-start: auto;
-    inset-inline-end: max(14px, env(safe-area-inset-right, 0px) + 8px);
+    left: max(14px, env(safe-area-inset-left, 0px) + 8px);
+    right: auto !important;
+    inset-inline-start: max(14px, env(safe-area-inset-left, 0px) + 8px);
+    inset-inline-end: auto;
     z-index: 1000002;
     border: 1px solid var(--color-border-light);
     background: rgba(18, 18, 18, 0.9);
