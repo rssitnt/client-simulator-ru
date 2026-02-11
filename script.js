@@ -91,6 +91,7 @@ const MAX_FAILED_PASSWORD_ATTEMPTS = 15;
 const ACTIVE_IDLE_TIMEOUT_MS = 60000;
 const ACTIVE_TICK_MS = 5000;
 const ACTIVE_FLUSH_MS = 15000;
+const SESSION_REVOCATION_CHECK_MS = 10000;
 
 const RATER_PROMPT_VERSION = '2025-01-30';
 const DEFAULT_RATER_PROMPT = `РОЛЬ
@@ -513,6 +514,8 @@ let pendingActiveMs = 0;
 let lastActiveTickAt = Date.now();
 let lastUserActivityAt = Date.now();
 let hasActivityListeners = false;
+let lastSessionRevocationCheckAt = 0;
+let sessionRevocationCheckInFlight = false;
 let fioSaveTimeout = null;
 let sharedAppConfig = {
     geminiTokenEndpoint: ''
@@ -610,6 +613,19 @@ function getAuthSession() {
 
 function clearAuthSession() {
     localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
+}
+
+function parseIsoMs(value) {
+    const ms = new Date(value || '').getTime();
+    return Number.isFinite(ms) ? ms : null;
+}
+
+function isSessionRevokedForSignedAt(sessionSignedAt, sessionRevokedAt) {
+    const signedAtMs = parseIsoMs(sessionSignedAt);
+    const revokedAtMs = parseIsoMs(sessionRevokedAt);
+    if (!revokedAtMs) return false;
+    if (!signedAtMs) return true;
+    return signedAtMs <= revokedAtMs;
 }
 
 function loadLocalUsersStore() {
@@ -964,6 +980,7 @@ async function consumeEmailVerificationLinkIfPresent() {
                 failedLoginAttempts: 0,
                 isBlocked: false,
                 blockedAt: null,
+                sessionRevokedAt: null,
                 lastSeenAt: nowIso
             });
         }
@@ -1026,6 +1043,7 @@ function normalizeUserRecord(raw, loginFallback = '') {
         failedLoginAttempts,
         isBlocked,
         blockedAt: isBlocked ? (raw.blockedAt || new Date().toISOString()) : null,
+        sessionRevokedAt: raw.sessionRevokedAt || null,
         createdAt: raw.createdAt || new Date().toISOString(),
         lastLoginAt: raw.lastLoginAt || null,
         lastSeenAt: raw.lastSeenAt || null,
@@ -1078,6 +1096,7 @@ async function saveUserRecord(record) {
         failedLoginAttempts: normalized.failedLoginAttempts,
         isBlocked: normalized.isBlocked,
         blockedAt: normalized.blockedAt,
+        sessionRevokedAt: normalized.sessionRevokedAt,
         createdAt: normalized.createdAt,
         lastLoginAt: normalized.lastLoginAt,
         lastSeenAt: normalized.lastSeenAt,
@@ -1130,6 +1149,9 @@ async function patchUserRecord(login, patch = {}) {
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'blockedAt')) {
         sanitizedPatch.blockedAt = sanitizedPatch.blockedAt || null;
     }
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'sessionRevokedAt')) {
+        sanitizedPatch.sessionRevokedAt = sanitizedPatch.sessionRevokedAt || null;
+    }
 
     if (db) {
         try {
@@ -1180,6 +1202,7 @@ function applyAuthenticatedUser(user) {
     if (!normalized) return;
 
     currentUser = normalized;
+    lastSessionRevocationCheckAt = 0;
     selectedRole = normalized.role;
     localStorage.setItem(USER_ROLE_KEY, normalized.role);
     localStorage.setItem(USER_NAME_KEY, normalized.fio);
@@ -1198,6 +1221,25 @@ function applyAuthenticatedUser(user) {
 
     updateUserNameDisplay();
     applyRoleRestrictions();
+}
+
+function resetCurrentSessionToAuth(message = '') {
+    if (activeTickTimerId) {
+        clearInterval(activeTickTimerId);
+        activeTickTimerId = null;
+    }
+    pendingActiveMs = 0;
+    sessionRevocationCheckInFlight = false;
+    lastSessionRevocationCheckAt = 0;
+    currentUser = null;
+    selectedRole = 'user';
+    localStorage.setItem(USER_ROLE_KEY, 'user');
+    clearAuthSession();
+    applyRoleRestrictions();
+    showNameModal();
+    if (message) {
+        setAuthError(message);
+    }
 }
 
 function setAuthError(message = '') {
@@ -1271,6 +1313,40 @@ async function flushActiveTime(force = false) {
     });
 }
 
+async function enforceSessionRevocation(force = false) {
+    if (!currentUser) return false;
+    const session = getAuthSession();
+    if (!session?.login) return false;
+    if (normalizeLogin(session.login) !== currentUser.login) return false;
+    if (isSessionRevokedForSignedAt(session.signedAt, currentUser.sessionRevokedAt)) {
+        resetCurrentSessionToAuth('Сессия закрыта администратором. Войдите снова.');
+        return true;
+    }
+    if (sessionRevocationCheckInFlight) return false;
+
+    const now = Date.now();
+    if (!force && (now - lastSessionRevocationCheckAt) < SESSION_REVOCATION_CHECK_MS) {
+        return false;
+    }
+    lastSessionRevocationCheckAt = now;
+    sessionRevocationCheckInFlight = true;
+    try {
+        const freshUser = await getUserRecordByLogin(currentUser.login);
+        if (!freshUser) {
+            resetCurrentSessionToAuth('Сессия завершена. Войдите снова.');
+            return true;
+        }
+        if (isSessionRevokedForSignedAt(session.signedAt, freshUser.sessionRevokedAt)) {
+            resetCurrentSessionToAuth('Сессия закрыта администратором. Войдите снова.');
+            return true;
+        }
+        currentUser.sessionRevokedAt = freshUser.sessionRevokedAt || null;
+    } finally {
+        sessionRevocationCheckInFlight = false;
+    }
+    return false;
+}
+
 function startActiveTimeTracking() {
     initUserActivityTrackingListeners();
     lastUserActivityAt = Date.now();
@@ -1283,6 +1359,8 @@ function startActiveTimeTracking() {
     }
 
     activeTickTimerId = setInterval(() => {
+        void enforceSessionRevocation(false);
+        if (!currentUser) return;
         const now = Date.now();
         const delta = now - lastActiveTickAt;
         lastActiveTickAt = now;
@@ -1345,22 +1423,34 @@ async function toggleAccessForLogin(login, nextActive, user, invite) {
     const isAdminUser = user?.role === 'admin';
     const isCorporate = isCorporateEmail(login);
 
+    if (!nextActive) {
+        if (!user) {
+            throw new Error('Для этого email нет активного аккаунта в системе.');
+        }
+        await patchUserRecord(login, {
+            sessionRevokedAt: nowIso,
+            lastSeenAt: nowIso
+        });
+        return;
+    }
+
     if (nextActive && !isCorporate && !isAdminUser && !invite) {
         throw new Error('Для этого email сначала выдайте доступ по ссылке.');
     }
 
     if (user) {
         await patchUserRecord(login, {
-            isBlocked: !nextActive,
-            blockedAt: nextActive ? null : nowIso,
-            failedLoginAttempts: nextActive ? 0 : user.failedLoginAttempts,
+            isBlocked: false,
+            blockedAt: null,
+            failedLoginAttempts: 0,
+            sessionRevokedAt: null,
             lastSeenAt: nowIso
         });
     }
 
     if (invite) {
         await patchPartnerInvite(login, {
-            status: nextActive ? 'active' : 'revoked'
+            status: 'active'
         });
     }
 
@@ -1474,17 +1564,17 @@ async function renderAdminUsersTable() {
         const actionCell = document.createElement('td');
         const actionBtn = document.createElement('button');
         actionBtn.className = `btn-change ${accessState.active ? 'btn-danger-subtle' : ''}`.trim();
-        actionBtn.textContent = accessState.active ? 'Закрыть доступ' : 'Открыть доступ';
+        actionBtn.textContent = accessState.active ? 'Сбросить из системы' : 'Открыть доступ';
         actionBtn.addEventListener('click', async () => {
             const nextActive = !accessState.active;
             if (!nextActive) {
-                const confirmed = confirm(`Закрыть доступ для ${login}?`);
+                const confirmed = confirm(`Сбросить активную сессию для ${login}?`);
                 if (!confirmed) return;
             }
             actionBtn.disabled = true;
             try {
                 await toggleAccessForLogin(login, nextActive, user, invite);
-                showCopyNotification(nextActive ? `Доступ открыт: ${login}` : `Доступ закрыт: ${login}`);
+                showCopyNotification(nextActive ? `Доступ открыт: ${login}` : `Сессия сброшена: ${login}`);
                 await renderAdminUsersTable();
             } catch (error) {
                 console.error('Failed to toggle access:', error);
@@ -1642,6 +1732,7 @@ async function handleAuthSubmit() {
                 failedLoginAttempts: 0,
                 isBlocked: false,
                 blockedAt: null,
+                sessionRevokedAt: null,
                 lastLoginAt: nowIso,
                 lastSeenAt: nowIso
             };
@@ -1659,6 +1750,7 @@ async function handleAuthSubmit() {
                 failedLoginAttempts: 0,
                 isBlocked: false,
                 blockedAt: null,
+                sessionRevokedAt: null,
                 activeMs: 0,
                 createdAt: nowIso,
                 lastLoginAt: nowIso,
@@ -1696,6 +1788,10 @@ async function restoreAuthSession() {
     if (!session?.login) return false;
     const user = await getUserRecordByLogin(session.login);
     if (!user) {
+        clearAuthSession();
+        return false;
+    }
+    if (isSessionRevokedForSignedAt(session.signedAt, user.sessionRevokedAt)) {
         clearAuthSession();
         return false;
     }
