@@ -332,7 +332,7 @@ const promptHistoryModal = document.getElementById('promptHistoryModal');
 const promptHistoryModalClose = document.getElementById('promptHistoryModalClose');
 const promptHistoryTitle = document.getElementById('promptHistoryTitle');
 const promptHistoryList = document.getElementById('promptHistoryList');
-const elevenlabsConvaiWidget = document.querySelector('elevenlabs-convai');
+const elevenlabsConvaiWidget = document.getElementById('elevenlabsConvaiWidget');
 const voiceModeStartBtn = document.getElementById('voiceModeStartBtn');
 const voiceModeStopBtn = document.getElementById('voiceModeStopBtn');
 const voiceModeStatus = document.getElementById('voiceModeStatus');
@@ -4687,11 +4687,24 @@ function dispatchElevenLabsExpandEvent(action = 'expand') {
     );
 }
 
+function setElevenLabsWidgetHidden(hidden) {
+    if (!elevenlabsConvaiWidget) return;
+    const hiddenFlag = hidden ? 'true' : 'false';
+    elevenlabsConvaiWidget.setAttribute('data-voice-hidden', hiddenFlag);
+    if (hidden) {
+        elevenlabsConvaiWidget.setAttribute('aria-hidden', 'true');
+    } else {
+        elevenlabsConvaiWidget.removeAttribute('aria-hidden');
+    }
+}
+
 function showVoiceModeModal() {
     hideTooltip(true);
+    setElevenLabsWidgetHidden(false);
     dispatchElevenLabsExpandEvent('expand');
     if (typeof customElements !== 'undefined' && typeof customElements.whenDefined === 'function') {
         customElements.whenDefined('elevenlabs-convai').then(() => {
+            setElevenLabsWidgetHidden(false);
             dispatchElevenLabsExpandEvent('expand');
         }).catch(() => {});
     }
@@ -4699,6 +4712,9 @@ function showVoiceModeModal() {
 
 function hideVoiceModeModal() {
     dispatchElevenLabsExpandEvent('collapse');
+    setTimeout(() => {
+        setElevenLabsWidgetHidden(true);
+    }, 120);
 }
 
 function showPromptHistoryModal() {
@@ -6723,6 +6739,8 @@ function handlePrimaryActionClick() {
 
     sendMessage();
 }
+
+setElevenLabsWidgetHidden(true);
 
 bindEvent(sendBtn, 'click', handlePrimaryActionClick);
 bindEvent(userInput, 'keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
