@@ -1033,6 +1033,15 @@ function normalizeUserRecord(raw, loginFallback = '') {
     };
 }
 
+function isPendingFirstPasswordSetup(user) {
+    if (!user) return false;
+    if (!user.emailVerifiedAt) return false;
+    if (user.passwordNeedsSetup) return true;
+    if (!user.emailVerificationSentAt) return false;
+    if (!user.createdAt || !user.lastLoginAt) return false;
+    return user.createdAt === user.lastLoginAt;
+}
+
 async function getUserRecordByLogin(login) {
     const normalizedLogin = normalizeLogin(login);
     if (!normalizedLogin) return null;
@@ -1601,7 +1610,7 @@ async function handleAuthSubmit() {
                 throw new Error('Сайт заблокирован для этого аккаунта после 15 неверных попыток ввода пароля. Обратитесь к администратору.');
             }
             const existingIsVerified = !!existingUser.emailVerifiedAt;
-            const passwordNeedsSetup = existingIsVerified && !!existingUser.passwordNeedsSetup;
+            const passwordNeedsSetup = existingIsVerified && isPendingFirstPasswordSetup(existingUser);
             if (existingIsVerified && existingUser.passwordHash !== passwordHash && !passwordNeedsSetup) {
                 const failedAttempts = Math.max(0, Number(existingUser.failedLoginAttempts) || 0) + 1;
                 const shouldBlock = failedAttempts >= MAX_FAILED_PASSWORD_ATTEMPTS;
