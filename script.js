@@ -956,8 +956,14 @@ async function consumeEmailVerificationLinkIfPresent() {
 
         const existingUser = await getUserRecordByLogin(login);
         if (existingUser) {
+            const wasVerifiedBefore = !!existingUser.emailVerifiedAt;
             await patchUserRecord(login, {
                 emailVerifiedAt: nowIso,
+                // After first email verification, user can set a final password on next login.
+                passwordNeedsSetup: !wasVerifiedBefore,
+                failedLoginAttempts: 0,
+                isBlocked: false,
+                blockedAt: null,
                 lastSeenAt: nowIso
             });
         }
@@ -970,7 +976,7 @@ async function consumeEmailVerificationLinkIfPresent() {
         }
 
         showCopyNotification('Email подтвержден. Теперь войдите с паролем.');
-        setAuthError('Email подтвержден. Введите пароль для входа.');
+        setAuthError('Email подтвержден. Введите пароль для входа (можно задать новый).');
         if (modalLoginInput) {
             modalLoginInput.value = login;
         }
@@ -1014,6 +1020,7 @@ function normalizeUserRecord(raw, loginFallback = '') {
         fio: normalizeFio(raw.fio || ''),
         role: normalizeRole(raw.role),
         passwordHash: String(raw.passwordHash || ''),
+        passwordNeedsSetup: !!raw.passwordNeedsSetup,
         emailVerifiedAt: raw.emailVerifiedAt || null,
         emailVerificationSentAt: raw.emailVerificationSentAt || null,
         failedLoginAttempts,
@@ -1056,6 +1063,7 @@ async function saveUserRecord(record) {
         fio: normalized.fio,
         role: normalized.role,
         passwordHash: normalized.passwordHash,
+        passwordNeedsSetup: normalized.passwordNeedsSetup,
         emailVerifiedAt: normalized.emailVerifiedAt,
         emailVerificationSentAt: normalized.emailVerificationSentAt,
         failedLoginAttempts: normalized.failedLoginAttempts,
@@ -1100,6 +1108,9 @@ async function patchUserRecord(login, patch = {}) {
     }
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'emailVerificationSentAt')) {
         sanitizedPatch.emailVerificationSentAt = sanitizedPatch.emailVerificationSentAt || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'passwordNeedsSetup')) {
+        sanitizedPatch.passwordNeedsSetup = !!sanitizedPatch.passwordNeedsSetup;
     }
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'failedLoginAttempts')) {
         sanitizedPatch.failedLoginAttempts = Math.max(0, Number(sanitizedPatch.failedLoginAttempts) || 0);
@@ -1590,7 +1601,8 @@ async function handleAuthSubmit() {
                 throw new Error('Сайт заблокирован для этого аккаунта после 15 неверных попыток ввода пароля. Обратитесь к администратору.');
             }
             const existingIsVerified = !!existingUser.emailVerifiedAt;
-            if (existingIsVerified && existingUser.passwordHash !== passwordHash) {
+            const passwordNeedsSetup = existingIsVerified && !!existingUser.passwordNeedsSetup;
+            if (existingIsVerified && existingUser.passwordHash !== passwordHash && !passwordNeedsSetup) {
                 const failedAttempts = Math.max(0, Number(existingUser.failedLoginAttempts) || 0) + 1;
                 const shouldBlock = failedAttempts >= MAX_FAILED_PASSWORD_ATTEMPTS;
                 await patchUserRecord(login, {
@@ -1615,7 +1627,8 @@ async function handleAuthSubmit() {
                 ...existingUser,
                 role: resolvedRole,
                 fio,
-                passwordHash: existingIsVerified ? existingUser.passwordHash : passwordHash,
+                passwordHash: (existingIsVerified && !passwordNeedsSetup) ? existingUser.passwordHash : passwordHash,
+                passwordNeedsSetup: false,
                 emailVerifiedAt: verifiedAt,
                 failedLoginAttempts: 0,
                 isBlocked: false,
@@ -1631,6 +1644,7 @@ async function handleAuthSubmit() {
                 fio,
                 role: resolvedRole,
                 passwordHash,
+                passwordNeedsSetup: false,
                 emailVerifiedAt: verifiedAt,
                 emailVerificationSentAt: null,
                 failedLoginAttempts: 0,
@@ -1677,6 +1691,10 @@ async function restoreAuthSession() {
         return false;
     }
     if (user.isBlocked) {
+        clearAuthSession();
+        return false;
+    }
+    if (user.passwordNeedsSetup) {
         clearAuthSession();
         return false;
     }
