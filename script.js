@@ -495,6 +495,10 @@ let openAiPendingUserTurn = '';
 let openAiHasUnansweredUserTurn = false;
 let openAiLastUserTurnCompact = '';
 let openAiLastUserTurnAt = 0;
+let voiceModeTranscriptRecognition = null;
+let voiceModeTranscriptRestartTimer = null;
+let isVoiceModeTranscriptActive = false;
+let hasOpenAiApiTranscriptInCurrentSession = false;
 let reratePromptElement = null;
 let attestationQueue = [];
 let isAttestationQueueFlushInProgress = false;
@@ -4068,6 +4072,7 @@ function resetGeminiVoiceDialogBuffer() {
     openAiHasUnansweredUserTurn = false;
     openAiLastUserTurnCompact = '';
     openAiLastUserTurnAt = 0;
+    hasOpenAiApiTranscriptInCurrentSession = false;
 }
 
 function appendGeminiVoiceDialogToChat() {
@@ -4191,14 +4196,12 @@ function requestOpenAiAssistantResponse(instructions = '') {
     return sent;
 }
 
-function flushOpenAiPendingUserTurn(options = {}) {
-    const { requestResponse = true } = options;
-    const userText = normalizeVoiceDialogText(openAiPendingUserTurn);
-    openAiPendingUserTurn = '';
+function appendVoiceUserTranscriptLine(text, options = {}) {
+    const { markUnanswered = true } = options;
+    const normalized = normalizeVoiceDialogText(text);
+    if (!normalized) return false;
 
-    if (!userText) return false;
-
-    const currentCompact = normalizeVoiceDialogCompact(userText);
+    const currentCompact = normalizeVoiceDialogCompact(normalized);
     const now = Date.now();
     if (
         currentCompact &&
@@ -4208,12 +4211,26 @@ function flushOpenAiPendingUserTurn(options = {}) {
     ) {
         return false;
     }
+
     openAiLastUserTurnCompact = currentCompact;
     openAiLastUserTurnAt = now;
 
-    geminiVoiceUserDraft = userText;
+    geminiVoiceUserDraft = normalized;
     flushGeminiVoiceDraftLine('user');
-    openAiHasUnansweredUserTurn = true;
+    if (markUnanswered) {
+        openAiHasUnansweredUserTurn = true;
+    }
+    return true;
+}
+
+function flushOpenAiPendingUserTurn(options = {}) {
+    const { requestResponse = true } = options;
+    const userText = normalizeVoiceDialogText(openAiPendingUserTurn);
+    openAiPendingUserTurn = '';
+
+    if (!userText) return false;
+    const appended = appendVoiceUserTranscriptLine(userText, { markUnanswered: true });
+    if (!appended) return false;
 
     if (!requestResponse) return true;
     return requestOpenAiAssistantResponse();
@@ -4226,6 +4243,72 @@ function queueOpenAiPendingUserTurn(text) {
         mergeVoiceStreamingText(openAiPendingUserTurn, normalized)
     );
     return openAiPendingUserTurn;
+}
+
+function clearVoiceModeTranscriptRestartTimer() {
+    if (!voiceModeTranscriptRestartTimer) return;
+    clearTimeout(voiceModeTranscriptRestartTimer);
+    voiceModeTranscriptRestartTimer = null;
+}
+
+function stopVoiceModeTranscriptRecognition() {
+    clearVoiceModeTranscriptRestartTimer();
+    isVoiceModeTranscriptActive = false;
+    if (!voiceModeTranscriptRecognition) return;
+    try {
+        voiceModeTranscriptRecognition.onresult = null;
+        voiceModeTranscriptRecognition.onerror = null;
+        voiceModeTranscriptRecognition.onend = null;
+        voiceModeTranscriptRecognition.stop();
+    } catch (error) {}
+    voiceModeTranscriptRecognition = null;
+}
+
+function startVoiceModeTranscriptRecognition() {
+    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognitionCtor) return;
+
+    stopVoiceModeTranscriptRecognition();
+    hasOpenAiApiTranscriptInCurrentSession = false;
+    isVoiceModeTranscriptActive = true;
+
+    const recognitionInstance = new SpeechRecognitionCtor();
+    voiceModeTranscriptRecognition = recognitionInstance;
+    recognitionInstance.lang = 'ru-RU';
+    recognitionInstance.continuous = true;
+    recognitionInstance.interimResults = false;
+    recognitionInstance.maxAlternatives = 1;
+
+    recognitionInstance.onresult = (event) => {
+        if (hasOpenAiApiTranscriptInCurrentSession) return;
+        for (let i = event.resultIndex; i < event.results.length; i += 1) {
+            const result = event.results[i];
+            if (!result?.isFinal) continue;
+            const text = normalizeVoiceDialogText(result[0]?.transcript || '');
+            if (!text) continue;
+            appendVoiceUserTranscriptLine(text, { markUnanswered: true });
+        }
+    };
+
+    recognitionInstance.onerror = () => {};
+
+    recognitionInstance.onend = () => {
+        if (!isVoiceModeTranscriptActive) return;
+        clearVoiceModeTranscriptRestartTimer();
+        voiceModeTranscriptRestartTimer = setTimeout(() => {
+            if (!isVoiceModeTranscriptActive) return;
+            try {
+                recognitionInstance.start();
+            } catch (error) {}
+        }, 240);
+    };
+
+    try {
+        recognitionInstance.start();
+    } catch (error) {
+        isVoiceModeTranscriptActive = false;
+        voiceModeTranscriptRecognition = null;
+    }
 }
 
 async function handleGeminiLiveMessage(rawMessage) {
@@ -4265,6 +4348,7 @@ async function handleGeminiLiveMessage(rawMessage) {
         const rawUserText = normalizeVoiceDialogText(String(message?.transcript || ''));
         const userText = rawUserText;
         if (userText) {
+            hasOpenAiApiTranscriptInCurrentSession = true;
             queueOpenAiPendingUserTurn(userText);
             geminiVoiceUserPreview = '';
             flushOpenAiPendingUserTurn({ requestResponse: false });
@@ -4280,6 +4364,7 @@ async function handleGeminiLiveMessage(rawMessage) {
         }
         // If completed text is empty but partial delta exists, keep it for the turn.
         if (geminiVoiceUserPreview.trim()) {
+            hasOpenAiApiTranscriptInCurrentSession = true;
             queueOpenAiPendingUserTurn(geminiVoiceUserPreview);
             geminiVoiceUserPreview = '';
             flushOpenAiPendingUserTurn({ requestResponse: false });
@@ -4523,6 +4608,7 @@ async function stopGeminiVoiceMode(options = {}) {
     isGeminiVoiceActive = false;
     updateVoiceModeControls();
 
+    stopVoiceModeTranscriptRecognition();
     teardownGeminiVoiceCapture();
     updateVoiceModeControls();
 
@@ -4559,6 +4645,7 @@ async function startGeminiVoiceMode() {
 
         isGeminiVoiceConnecting = false;
         isGeminiVoiceActive = true;
+        startVoiceModeTranscriptRecognition();
         updateVoiceModeControls();
         setVoiceModeStatus('Запрашиваю первое сообщение от ИИ-клиента…', 'waiting');
         scheduleGeminiFirstReplyHint();
