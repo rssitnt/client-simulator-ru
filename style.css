@@ -3794,13 +3794,22 @@ elevenlabs-convai[data-voice-hidden="false"] {
     background: var(--color-bg-primary);
 }
 
-.voice-mode-exit-btn {
+.voice-mode-actions {
     position: fixed;
     top: max(14px, env(safe-area-inset-top, 0px) + 8px);
     left: max(14px, env(safe-area-inset-left, 0px) + 8px);
-    right: auto !important;
-    inset-inline-start: max(14px, env(safe-area-inset-left, 0px) + 8px);
-    inset-inline-end: auto;
+    z-index: 1000002;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.voice-mode-actions[hidden] {
+    display: none !important;
+}
+
+.voice-mode-exit-btn,
+.voice-mode-rate-btn {
     z-index: 1000002;
     border: 1px solid var(--color-border-light);
     background: rgba(18, 18, 18, 0.9);
@@ -3818,7 +3827,18 @@ elevenlabs-convai[data-voice-hidden="false"] {
     color: var(--color-accent);
 }
 
-body.light-theme .voice-mode-exit-btn {
+.voice-mode-rate-btn {
+    background: color-mix(in srgb, var(--color-accent) 28%, #121212);
+    border-color: color-mix(in srgb, var(--color-accent) 52%, var(--color-border-light));
+}
+
+.voice-mode-rate-btn:hover {
+    border-color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 36%, #121212);
+}
+
+body.light-theme .voice-mode-exit-btn,
+body.light-theme .voice-mode-rate-btn {
     background: rgba(255, 255, 255, 0.95);
 }
 
@@ -3826,7 +3846,7 @@ body.voice-mode-active {
     overflow: hidden;
 }
 
-body.voice-mode-active > :not(#voiceModeScreen):not(#voiceModeExitBtn):not(#elevenlabsConvaiWidget) {
+body.voice-mode-active > :not(#voiceModeScreen):not(#voiceModeActions):not(#elevenlabsConvaiWidget) {
     visibility: hidden !important;
     pointer-events: none !important;
 }

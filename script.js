@@ -333,7 +333,9 @@ const promptHistoryModalClose = document.getElementById('promptHistoryModalClose
 const promptHistoryTitle = document.getElementById('promptHistoryTitle');
 const promptHistoryList = document.getElementById('promptHistoryList');
 const voiceModeScreen = document.getElementById('voiceModeScreen');
+const voiceModeActions = document.getElementById('voiceModeActions');
 const voiceModeExitBtn = document.getElementById('voiceModeExitBtn');
+const voiceModeRateBtn = document.getElementById('voiceModeRateBtn');
 const elevenlabsConvaiWidget = document.getElementById('elevenlabsConvaiWidget');
 const voiceModeStartBtn = document.getElementById('voiceModeStartBtn');
 const voiceModeStopBtn = document.getElementById('voiceModeStopBtn');
@@ -497,6 +499,10 @@ let openAiHasUnansweredUserTurn = false;
 let openAiLastUserTurnCompact = '';
 let openAiLastUserTurnAt = 0;
 let openAiUserTranscriptByItemId = new Map();
+let elevenLabsSocketBridgeInstalled = false;
+let elevenLabsActiveSocketCount = 0;
+let elevenLabsConversationFinished = false;
+const elevenLabsSocketOpenState = new WeakMap();
 let reratePromptElement = null;
 let attestationQueue = [];
 let isAttestationQueueFlushInProgress = false;
@@ -4677,6 +4683,200 @@ async function startGeminiVoiceMode() {
     }
 }
 
+function setVoiceModeRateButtonVisible(show) {
+    if (!voiceModeRateBtn) return;
+    const isVisible = !!show;
+    voiceModeRateBtn.hidden = !isVisible;
+    voiceModeRateBtn.setAttribute('aria-hidden', isVisible ? 'false' : 'true');
+}
+
+function hasBufferedVoiceDialog() {
+    return Array.isArray(geminiVoiceDialogLines) && geminiVoiceDialogLines.some((line) => {
+        const normalized = normalizeVoiceDialogText(line?.text || '');
+        return !!normalized;
+    });
+}
+
+function buildVoiceDialogTextFromBufferedLines() {
+    if (!hasBufferedVoiceDialog()) return '';
+    let dialogText = '';
+    geminiVoiceDialogLines.forEach((line) => {
+        const role = line?.role === 'user' ? 'Менеджер' : 'Клиент';
+        const text = normalizeVoiceDialogText(line?.text || '');
+        if (!text) return;
+        dialogText += `${role}: ${text}\n\n`;
+    });
+    return dialogText.trim();
+}
+
+function updateVoiceModeRateButtonState() {
+    const isVoiceScreenActive = !!voiceModeScreen && !voiceModeScreen.hidden;
+    const canShowRate = isVoiceScreenActive &&
+        elevenLabsConversationFinished &&
+        hasBufferedVoiceDialog() &&
+        !isProcessing &&
+        !isDialogRated;
+    setVoiceModeRateButtonVisible(canShowRate);
+}
+
+function resetElevenLabsVoiceSessionState() {
+    elevenLabsConversationFinished = false;
+    elevenLabsActiveSocketCount = 0;
+    resetGeminiVoiceDialogBuffer();
+    setVoiceModeRateButtonVisible(false);
+}
+
+function parseElevenLabsSocketProtocols(protocols) {
+    if (Array.isArray(protocols)) {
+        return protocols.map(value => String(value || '').toLowerCase()).filter(Boolean);
+    }
+    if (typeof protocols === 'string') {
+        return [protocols.toLowerCase()];
+    }
+    return [];
+}
+
+function shouldTrackElevenLabsSocket(url, protocols) {
+    const socketUrl = String(url || '').toLowerCase();
+    const protocolList = parseElevenLabsSocketProtocols(protocols);
+    if (protocolList.some(value => value.includes('convai'))) return true;
+    if (!socketUrl) return false;
+    if (socketUrl.includes('/v1/convai/conversation')) return true;
+    return socketUrl.includes('elevenlabs') && socketUrl.includes('convai');
+}
+
+function processElevenLabsRealtimeMessage(message) {
+    if (!message || typeof message !== 'object') return;
+    const eventType = String(message.type || '').trim();
+    if (!eventType) return;
+
+    if (eventType === 'conversation_initiation_metadata') {
+        elevenLabsConversationFinished = false;
+        resetGeminiVoiceDialogBuffer();
+        updateVoiceModeRateButtonState();
+        return;
+    }
+
+    if (eventType === 'user_transcript') {
+        const userTextRaw = String(message?.user_transcription_event?.user_transcript || '');
+        const userText = sanitizeUserCompletedTranscript(userTextRaw);
+        if (userText) {
+            elevenLabsConversationFinished = false;
+            pushGeminiVoiceDialogLine('user', userText);
+        }
+        updateVoiceModeRateButtonState();
+        return;
+    }
+
+    if (eventType === 'agent_response' || eventType === 'agent_response_correction') {
+        const assistantTextRaw = String(
+            message?.agent_response_event?.agent_response ||
+            message?.agent_response_correction_event?.agent_response ||
+            ''
+        );
+        let assistantText = sanitizeAssistantCompletedTranscript(assistantTextRaw);
+        if (!assistantText) {
+            assistantText = normalizeVoiceDialogText(assistantTextRaw);
+        }
+        if (assistantText) {
+            elevenLabsConversationFinished = false;
+            pushGeminiVoiceDialogLine('assistant', assistantText);
+        }
+        updateVoiceModeRateButtonState();
+    }
+}
+
+function registerElevenLabsConversationSocket(socket) {
+    if (!socket || typeof socket.addEventListener !== 'function') return;
+    if (elevenLabsSocketOpenState.has(socket)) return;
+    elevenLabsSocketOpenState.set(socket, false);
+
+    socket.addEventListener('open', () => {
+        const wasOpen = !!elevenLabsSocketOpenState.get(socket);
+        if (!wasOpen) {
+            elevenLabsActiveSocketCount += 1;
+        }
+        elevenLabsSocketOpenState.set(socket, true);
+        elevenLabsConversationFinished = false;
+        setVoiceModeRateButtonVisible(false);
+    });
+
+    socket.addEventListener('message', (event) => {
+        if (typeof event?.data !== 'string') return;
+        try {
+            const parsed = JSON.parse(event.data);
+            processElevenLabsRealtimeMessage(parsed);
+        } catch (error) {
+            // Ignore non-JSON chunks.
+        }
+    });
+
+    socket.addEventListener('close', () => {
+        const wasOpen = !!elevenLabsSocketOpenState.get(socket);
+        if (wasOpen) {
+            elevenLabsActiveSocketCount = Math.max(0, elevenLabsActiveSocketCount - 1);
+        }
+        elevenLabsSocketOpenState.set(socket, false);
+        if (elevenLabsActiveSocketCount === 0) {
+            elevenLabsConversationFinished = true;
+            updateVoiceModeRateButtonState();
+        }
+    });
+}
+
+function ensureElevenLabsSocketBridge() {
+    if (elevenLabsSocketBridgeInstalled) return;
+    if (typeof window === 'undefined' || typeof window.WebSocket !== 'function') return;
+
+    const NativeWebSocket = window.WebSocket;
+
+    const PatchedWebSocket = function patchedElevenLabsWebSocket(url, protocols) {
+        const socket = protocols === undefined
+            ? new NativeWebSocket(url)
+            : new NativeWebSocket(url, protocols);
+        if (shouldTrackElevenLabsSocket(url, protocols)) {
+            registerElevenLabsConversationSocket(socket);
+        }
+        return socket;
+    };
+
+    PatchedWebSocket.prototype = NativeWebSocket.prototype;
+    Object.defineProperty(PatchedWebSocket, 'name', { value: 'WebSocket' });
+    Object.getOwnPropertyNames(NativeWebSocket).forEach((key) => {
+        if (key in PatchedWebSocket) return;
+        try {
+            const descriptor = Object.getOwnPropertyDescriptor(NativeWebSocket, key);
+            if (descriptor) {
+                Object.defineProperty(PatchedWebSocket, key, descriptor);
+            }
+        } catch (error) {}
+    });
+
+    window.WebSocket = PatchedWebSocket;
+    elevenLabsSocketBridgeInstalled = true;
+}
+
+async function handleVoiceModeRateClick() {
+    if (isProcessing) return;
+
+    const dialogText = buildVoiceDialogTextFromBufferedLines();
+    if (!dialogText) {
+        showCopyNotification('Диалог не найден. Завершите звонок и попробуйте снова.');
+        return;
+    }
+
+    appendGeminiVoiceDialogToChat();
+    resetGeminiVoiceDialogBuffer();
+    elevenLabsConversationFinished = false;
+    setVoiceModeRateButtonVisible(false);
+    hideVoiceModeModal();
+
+    await rateChat({
+        force: true,
+        dialogTextOverride: dialogText
+    });
+}
+
 function dispatchElevenLabsExpandEvent(action = 'expand') {
     const payload = { detail: { action }, bubbles: true };
     if (elevenlabsConvaiWidget) {
@@ -4713,14 +4913,21 @@ function setVoiceModeScreenActive(active) {
             voiceModeScreen.setAttribute('aria-hidden', 'true');
         }
     }
-    if (voiceModeExitBtn) {
-        voiceModeExitBtn.hidden = !active;
-        voiceModeExitBtn.setAttribute('aria-hidden', active ? 'false' : 'true');
+    if (voiceModeActions) {
+        voiceModeActions.hidden = !active;
+        voiceModeActions.setAttribute('aria-hidden', active ? 'false' : 'true');
+    }
+    if (!active) {
+        setVoiceModeRateButtonVisible(false);
+    } else {
+        updateVoiceModeRateButtonState();
     }
 }
 
 function showVoiceModeModal() {
     hideTooltip(true);
+    ensureElevenLabsSocketBridge();
+    resetElevenLabsVoiceSessionState();
     setVoiceModeScreenActive(true);
     setElevenLabsWidgetHidden(false);
     dispatchElevenLabsExpandEvent('expand');
@@ -4736,6 +4943,7 @@ function showVoiceModeModal() {
 function hideVoiceModeModal() {
     dispatchElevenLabsExpandEvent('collapse');
     setVoiceModeScreenActive(false);
+    elevenLabsConversationFinished = false;
     setTimeout(() => {
         setElevenLabsWidgetHidden(true);
     }, 120);
@@ -5860,8 +6068,10 @@ async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RAT
 }
 
 async function rateChat(options = {}) {
-    const { force = false } = options;
-    if (conversationHistory.length === 0) {
+    const { force = false, dialogTextOverride = '' } = options;
+    const hasDialogOverride = typeof dialogTextOverride === 'string' && dialogTextOverride.trim() !== '';
+
+    if (!hasDialogOverride && conversationHistory.length === 0) {
         alert('Нет диалога для оценки');
         return;
     }
@@ -5887,7 +6097,10 @@ async function rateChat(options = {}) {
     const loadingMsg = addMessage('', 'loading');
     
     try {
-        const dialogText = buildDialogText();
+        const dialogText = hasDialogOverride ? dialogTextOverride.trim() : buildDialogText();
+        if (!dialogText) {
+            throw new Error('Нет диалога для оценки');
+        }
         const ratingMessage = await requestRatingWithRetry(dialogText, raterPrompt, RATING_SEND_ATTEMPTS);
         
         loadingMsg.remove();
@@ -6767,6 +6980,7 @@ function handlePrimaryActionClick() {
 setElevenLabsWidgetHidden(true);
 setVoiceModeScreenActive(false);
 bindEvent(voiceModeExitBtn, 'click', hideVoiceModeModal);
+bindEvent(voiceModeRateBtn, 'click', handleVoiceModeRateClick);
 document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (!voiceModeScreen || voiceModeScreen.hidden) return;
