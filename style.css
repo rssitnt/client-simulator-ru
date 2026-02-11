@@ -3773,6 +3773,14 @@ body.light-theme .btn-ai-improve:focus {
     box-shadow: none !important;
 }
 
+elevenlabs-convai#elevenlabsConvaiWidget {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    display: block !important;
+}
+
 elevenlabs-convai[data-voice-hidden="true"] {
     visibility: hidden !important;
     opacity: 0 !important;

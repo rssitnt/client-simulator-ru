@@ -4959,6 +4959,10 @@ function setElevenLabsWidgetHidden(hidden) {
     const hiddenFlag = hidden ? 'true' : 'false';
     elevenlabsConvaiWidget.setAttribute('data-voice-hidden', hiddenFlag);
     elevenlabsConvaiWidget.style.setProperty('position', 'fixed', 'important');
+    elevenlabsConvaiWidget.style.setProperty('inset', '0', 'important');
+    elevenlabsConvaiWidget.style.setProperty('width', '100vw', 'important');
+    elevenlabsConvaiWidget.style.setProperty('height', '100dvh', 'important');
+    elevenlabsConvaiWidget.style.setProperty('display', 'block', 'important');
     elevenlabsConvaiWidget.style.setProperty('z-index', hidden ? '999999' : '1000001', 'important');
     if (hidden) {
         elevenlabsConvaiWidget.setAttribute('aria-hidden', 'true');
