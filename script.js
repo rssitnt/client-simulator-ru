@@ -332,7 +332,7 @@ const promptHistoryModal = document.getElementById('promptHistoryModal');
 const promptHistoryModalClose = document.getElementById('promptHistoryModalClose');
 const promptHistoryTitle = document.getElementById('promptHistoryTitle');
 const promptHistoryList = document.getElementById('promptHistoryList');
-const voiceModeModal = document.getElementById('voiceModeModal');
+const elevenlabsConvaiWidget = document.querySelector('elevenlabs-convai');
 const voiceModeStartBtn = document.getElementById('voiceModeStartBtn');
 const voiceModeStopBtn = document.getElementById('voiceModeStopBtn');
 const voiceModeStatus = document.getElementById('voiceModeStatus');
@@ -2642,7 +2642,6 @@ function updateSendBtnState() {
         return;
     }
 
-    hideVoiceModeModal();
     setPrimaryActionMode('send');
     sendBtn.disabled = !hasText || isProcessing || isDialogRated;
 }
@@ -4676,29 +4675,30 @@ async function startGeminiVoiceMode() {
     }
 }
 
+function dispatchElevenLabsExpandEvent(action = 'expand') {
+    const payload = { detail: { action }, bubbles: true };
+    if (elevenlabsConvaiWidget) {
+        elevenlabsConvaiWidget.dispatchEvent(
+            new CustomEvent('elevenlabs-agent:expand', payload)
+        );
+    }
+    document.dispatchEvent(
+        new CustomEvent('elevenlabs-agent:expand', payload)
+    );
+}
+
 function showVoiceModeModal() {
     hideTooltip(true);
-    if (!voiceModeModal) return;
-    if (voiceModeModal.hidden) {
-        voiceModeModal.hidden = false;
+    dispatchElevenLabsExpandEvent('expand');
+    if (typeof customElements !== 'undefined' && typeof customElements.whenDefined === 'function') {
+        customElements.whenDefined('elevenlabs-convai').then(() => {
+            dispatchElevenLabsExpandEvent('expand');
+        }).catch(() => {});
     }
-    voiceModeModal.removeAttribute('hidden');
-    voiceModeModal.classList.add('active');
 }
 
 function hideVoiceModeModal() {
-    if (!voiceModeModal) return;
-    voiceModeModal.classList.remove('active');
-}
-
-function toggleVoiceModeWidget() {
-    if (!voiceModeModal) return;
-    const isOpen = voiceModeModal.classList.contains('active');
-    if (isOpen) {
-        hideVoiceModeModal();
-    } else {
-        showVoiceModeModal();
-    }
+    dispatchElevenLabsExpandEvent('collapse');
 }
 
 function showPromptHistoryModal() {
@@ -5322,20 +5322,6 @@ if (promptHistoryModal) {
         }
     });
 }
-
-document.addEventListener('mousedown', (e) => {
-    if (!voiceModeModal || !voiceModeModal.classList.contains('active')) return;
-    const target = e.target;
-    if (!(target instanceof Node)) return;
-    if (voiceModeModal.contains(target) || sendBtn?.contains(target)) return;
-    hideVoiceModeModal();
-});
-
-document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape') return;
-    if (!voiceModeModal || !voiceModeModal.classList.contains('active')) return;
-    hideVoiceModeModal();
-});
 
 // ============ CHAT FUNCTIONS ============
 
@@ -6731,7 +6717,7 @@ function handlePrimaryActionClick() {
 
     const hasText = !!userInput.value.trim();
     if (!hasText) {
-        toggleVoiceModeWidget();
+        showVoiceModeModal();
         return;
     }
 
