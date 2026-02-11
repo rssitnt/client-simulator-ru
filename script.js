@@ -492,6 +492,9 @@ let openAiVoiceRemoteAudio = null;
 let openAiResponsePending = false;
 let openAiResponseQueued = false;
 let openAiPendingUserTurn = '';
+let openAiHasUnansweredUserTurn = false;
+let openAiLastUserTurnCompact = '';
+let openAiLastUserTurnAt = 0;
 let reratePromptElement = null;
 let attestationQueue = [];
 let isAttestationQueueFlushInProgress = false;
@@ -4062,6 +4065,9 @@ function resetGeminiVoiceDialogBuffer() {
     openAiPendingUserTurn = '';
     openAiResponsePending = false;
     openAiResponseQueued = false;
+    openAiHasUnansweredUserTurn = false;
+    openAiLastUserTurnCompact = '';
+    openAiLastUserTurnAt = 0;
 }
 
 function appendGeminiVoiceDialogToChat() {
@@ -4177,6 +4183,7 @@ function requestOpenAiAssistantResponse(instructions = '') {
     if (sent) {
         openAiResponsePending = true;
         openAiResponseQueued = false;
+        openAiHasUnansweredUserTurn = false;
         geminiVoiceAssistantPreview = '';
         geminiVoiceAssistantDraft = '';
         setVoiceModeStatus('ИИ-клиент готовит ответ…', 'waiting');
@@ -4191,8 +4198,22 @@ function flushOpenAiPendingUserTurn(options = {}) {
 
     if (!userText) return false;
 
+    const currentCompact = normalizeVoiceDialogCompact(userText);
+    const now = Date.now();
+    if (
+        currentCompact &&
+        openAiLastUserTurnCompact &&
+        currentCompact === openAiLastUserTurnCompact &&
+        now - openAiLastUserTurnAt < 12000
+    ) {
+        return false;
+    }
+    openAiLastUserTurnCompact = currentCompact;
+    openAiLastUserTurnAt = now;
+
     geminiVoiceUserDraft = userText;
     flushGeminiVoiceDraftLine('user');
+    openAiHasUnansweredUserTurn = true;
 
     if (!requestResponse) return true;
     return requestOpenAiAssistantResponse();
@@ -4224,6 +4245,7 @@ async function handleGeminiLiveMessage(rawMessage) {
         flushOpenAiPendingUserTurn({ requestResponse: false });
         openAiResponsePending = true;
         openAiResponseQueued = false;
+        openAiHasUnansweredUserTurn = false;
         geminiVoiceAssistantPreview = '';
         geminiVoiceAssistantDraft = '';
         setVoiceModeStatus('ИИ-клиент готовит ответ…', 'waiting');
@@ -4246,6 +4268,14 @@ async function handleGeminiLiveMessage(rawMessage) {
             queueOpenAiPendingUserTurn(userText);
             geminiVoiceUserPreview = '';
             flushOpenAiPendingUserTurn({ requestResponse: false });
+            if (openAiResponsePending) {
+                openAiResponseQueued = true;
+            } else if (openAiHasUnansweredUserTurn) {
+                const requested = requestOpenAiAssistantResponse();
+                if (!requested) {
+                    setVoiceModeStatus('Не удалось запросить ответ ИИ-клиента.', 'error');
+                }
+            }
             return;
         }
         // If completed text is empty but partial delta exists, keep it for the turn.
@@ -4253,6 +4283,14 @@ async function handleGeminiLiveMessage(rawMessage) {
             queueOpenAiPendingUserTurn(geminiVoiceUserPreview);
             geminiVoiceUserPreview = '';
             flushOpenAiPendingUserTurn({ requestResponse: false });
+            if (openAiResponsePending) {
+                openAiResponseQueued = true;
+            } else if (openAiHasUnansweredUserTurn) {
+                const requested = requestOpenAiAssistantResponse();
+                if (!requested) {
+                    setVoiceModeStatus('Не удалось запросить ответ ИИ-клиента.', 'error');
+                }
+            }
         }
         return;
     }
@@ -4262,6 +4300,9 @@ async function handleGeminiLiveMessage(rawMessage) {
             queueOpenAiPendingUserTurn(geminiVoiceUserPreview);
             geminiVoiceUserPreview = '';
             flushOpenAiPendingUserTurn({ requestResponse: false });
+        }
+        if (!openAiHasUnansweredUserTurn) {
+            return;
         }
         if (openAiResponsePending) {
             openAiResponseQueued = true;
@@ -4596,7 +4637,7 @@ function hideVoiceModeModal() {
     if (!voiceModeModal) return;
     voiceModeModal.classList.remove('active');
     if (isGeminiVoiceActive || isGeminiVoiceConnecting) {
-        stopGeminiVoiceMode({ silent: true }).catch(() => {});
+        stopGeminiVoiceMode({ silent: false }).catch(() => {});
     }
 }
 
