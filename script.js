@@ -35,7 +35,7 @@ const GEMINI_FIRST_REPLY_HINT_DELAY_MS = 1800;
 const OPENAI_DEFAULT_VOICE = 'alloy';
 const OPENAI_VOICE_NAMES = new Set(['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse']);
 const OPENAI_OUTPUT_SPEECH_SPEED = 2.0;
-const OPENAI_INPUT_TRANSCRIBE_MODEL = 'gpt-4o-transcribe';
+const OPENAI_INPUT_TRANSCRIBE_MODEL = 'gpt-4o-mini-transcribe';
 const OPENAI_FAST_PACE_INSTRUCTIONS = 'Говори максимально быстро и энергично, но разборчиво. Отвечай кратко: 1-2 предложения без повторов.';
 const ATTESTATION_QUEUE_STORAGE_KEY = 'attestationQueue:v1';
 const ATTESTATION_SEND_ATTEMPTS = 3;
@@ -495,10 +495,7 @@ let openAiPendingUserTurn = '';
 let openAiHasUnansweredUserTurn = false;
 let openAiLastUserTurnCompact = '';
 let openAiLastUserTurnAt = 0;
-let voiceModeTranscriptRecognition = null;
-let voiceModeTranscriptRestartTimer = null;
-let isVoiceModeTranscriptActive = false;
-let hasOpenAiApiTranscriptInCurrentSession = false;
+let openAiUserTranscriptByItemId = new Map();
 let reratePromptElement = null;
 let attestationQueue = [];
 let isAttestationQueueFlushInProgress = false;
@@ -4072,7 +4069,7 @@ function resetGeminiVoiceDialogBuffer() {
     openAiHasUnansweredUserTurn = false;
     openAiLastUserTurnCompact = '';
     openAiLastUserTurnAt = 0;
-    hasOpenAiApiTranscriptInCurrentSession = false;
+    openAiUserTranscriptByItemId = new Map();
 }
 
 function appendGeminiVoiceDialogToChat() {
@@ -4245,70 +4242,53 @@ function queueOpenAiPendingUserTurn(text) {
     return openAiPendingUserTurn;
 }
 
-function clearVoiceModeTranscriptRestartTimer() {
-    if (!voiceModeTranscriptRestartTimer) return;
-    clearTimeout(voiceModeTranscriptRestartTimer);
-    voiceModeTranscriptRestartTimer = null;
-}
+function extractOpenAiConversationItemTranscript(item) {
+    if (!item || typeof item !== 'object') return '';
+    const directTranscript = normalizeVoiceDialogText(item.transcript || item.text || '');
+    if (directTranscript) return directTranscript;
 
-function stopVoiceModeTranscriptRecognition() {
-    clearVoiceModeTranscriptRestartTimer();
-    isVoiceModeTranscriptActive = false;
-    if (!voiceModeTranscriptRecognition) return;
-    try {
-        voiceModeTranscriptRecognition.onresult = null;
-        voiceModeTranscriptRecognition.onerror = null;
-        voiceModeTranscriptRecognition.onend = null;
-        voiceModeTranscriptRecognition.stop();
-    } catch (error) {}
-    voiceModeTranscriptRecognition = null;
-}
-
-function startVoiceModeTranscriptRecognition() {
-    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognitionCtor) return;
-
-    stopVoiceModeTranscriptRecognition();
-    hasOpenAiApiTranscriptInCurrentSession = false;
-    isVoiceModeTranscriptActive = true;
-
-    const recognitionInstance = new SpeechRecognitionCtor();
-    voiceModeTranscriptRecognition = recognitionInstance;
-    recognitionInstance.lang = 'ru-RU';
-    recognitionInstance.continuous = true;
-    recognitionInstance.interimResults = false;
-    recognitionInstance.maxAlternatives = 1;
-
-    recognitionInstance.onresult = (event) => {
-        if (hasOpenAiApiTranscriptInCurrentSession) return;
-        for (let i = event.resultIndex; i < event.results.length; i += 1) {
-            const result = event.results[i];
-            if (!result?.isFinal) continue;
-            const text = normalizeVoiceDialogText(result[0]?.transcript || '');
-            if (!text) continue;
-            appendVoiceUserTranscriptLine(text, { markUnanswered: true });
+    const chunks = [];
+    const content = Array.isArray(item.content) ? item.content : [];
+    for (const part of content) {
+        if (typeof part === 'string') {
+            const value = normalizeVoiceDialogText(part);
+            if (value) chunks.push(value);
+            continue;
         }
-    };
-
-    recognitionInstance.onerror = () => {};
-
-    recognitionInstance.onend = () => {
-        if (!isVoiceModeTranscriptActive) return;
-        clearVoiceModeTranscriptRestartTimer();
-        voiceModeTranscriptRestartTimer = setTimeout(() => {
-            if (!isVoiceModeTranscriptActive) return;
-            try {
-                recognitionInstance.start();
-            } catch (error) {}
-        }, 240);
-    };
-
-    try {
-        recognitionInstance.start();
-    } catch (error) {
-        isVoiceModeTranscriptActive = false;
-        voiceModeTranscriptRecognition = null;
+        if (!part || typeof part !== 'object') continue;
+        const value = normalizeVoiceDialogText(part.transcript || part.text || part.input_text || '');
+        if (value) chunks.push(value);
     }
+    return normalizeVoiceDialogText(chunks.join(' '));
+}
+
+function consumeOpenAiUserTranscript(rawText, itemId = '') {
+    const text = normalizeVoiceDialogText(rawText);
+    if (!text) return false;
+
+    const safeItemId = String(itemId || '').trim();
+    if (safeItemId) {
+        const known = normalizeVoiceDialogText(openAiUserTranscriptByItemId.get(safeItemId) || '');
+        if (known && normalizeVoiceDialogCompact(known) === normalizeVoiceDialogCompact(text)) {
+            return false;
+        }
+        openAiUserTranscriptByItemId.set(safeItemId, text);
+    }
+
+    queueOpenAiPendingUserTurn(text);
+    geminiVoiceUserPreview = '';
+    const appended = flushOpenAiPendingUserTurn({ requestResponse: false });
+    if (!appended) return false;
+
+    if (openAiResponsePending) {
+        openAiResponseQueued = true;
+    } else if (openAiHasUnansweredUserTurn) {
+        const requested = requestOpenAiAssistantResponse();
+        if (!requested) {
+            setVoiceModeStatus('Не удалось запросить ответ ИИ-клиента.', 'error');
+        }
+    }
+    return true;
 }
 
 async function handleGeminiLiveMessage(rawMessage) {
@@ -4335,6 +4315,16 @@ async function handleGeminiLiveMessage(rawMessage) {
         return;
     }
 
+    if (eventType === 'conversation.item.created' || eventType === 'conversation.item.updated') {
+        const item = message?.item;
+        const itemRole = String(item?.role || '').toLowerCase();
+        if (itemRole === 'user') {
+            const itemTranscript = extractOpenAiConversationItemTranscript(item);
+            consumeOpenAiUserTranscript(itemTranscript, item?.id || message?.item_id || '');
+        }
+        return;
+    }
+
     if (eventType === 'conversation.item.input_audio_transcription.delta') {
         geminiVoiceUserPreview = mergeVoiceStreamingText(geminiVoiceUserPreview, message?.delta || '');
         const previewText = normalizeVoiceDialogText(geminiVoiceUserPreview);
@@ -4345,47 +4335,25 @@ async function handleGeminiLiveMessage(rawMessage) {
     }
 
     if (eventType === 'conversation.item.input_audio_transcription.completed') {
-        const rawUserText = normalizeVoiceDialogText(String(message?.transcript || ''));
-        const userText = rawUserText;
-        if (userText) {
-            hasOpenAiApiTranscriptInCurrentSession = true;
-            queueOpenAiPendingUserTurn(userText);
-            geminiVoiceUserPreview = '';
-            flushOpenAiPendingUserTurn({ requestResponse: false });
-            if (openAiResponsePending) {
-                openAiResponseQueued = true;
-            } else if (openAiHasUnansweredUserTurn) {
-                const requested = requestOpenAiAssistantResponse();
-                if (!requested) {
-                    setVoiceModeStatus('Не удалось запросить ответ ИИ-клиента.', 'error');
-                }
+        const userText = normalizeVoiceDialogText(String(message?.transcript || ''));
+        if (!consumeOpenAiUserTranscript(userText, message?.item_id || '')) {
+            if (geminiVoiceUserPreview.trim()) {
+                consumeOpenAiUserTranscript(geminiVoiceUserPreview, message?.item_id || '');
             }
-            return;
+            geminiVoiceUserPreview = '';
         }
-        // If completed text is empty but partial delta exists, keep it for the turn.
+        return;
+    }
+
+    if (eventType === 'conversation.item.input_audio_transcription.failed') {
         if (geminiVoiceUserPreview.trim()) {
-            hasOpenAiApiTranscriptInCurrentSession = true;
-            queueOpenAiPendingUserTurn(geminiVoiceUserPreview);
+            consumeOpenAiUserTranscript(geminiVoiceUserPreview, message?.item_id || '');
             geminiVoiceUserPreview = '';
-            flushOpenAiPendingUserTurn({ requestResponse: false });
-            if (openAiResponsePending) {
-                openAiResponseQueued = true;
-            } else if (openAiHasUnansweredUserTurn) {
-                const requested = requestOpenAiAssistantResponse();
-                if (!requested) {
-                    setVoiceModeStatus('Не удалось запросить ответ ИИ-клиента.', 'error');
-                }
-            }
         }
         return;
     }
 
     if (eventType === 'input_audio_buffer.committed') {
-        if (geminiVoiceUserPreview.trim()) {
-            queueOpenAiPendingUserTurn(geminiVoiceUserPreview);
-            geminiVoiceUserPreview = '';
-            flushOpenAiPendingUserTurn({ requestResponse: false });
-        }
         if (!openAiHasUnansweredUserTurn) {
             return;
         }
@@ -4608,7 +4576,6 @@ async function stopGeminiVoiceMode(options = {}) {
     isGeminiVoiceActive = false;
     updateVoiceModeControls();
 
-    stopVoiceModeTranscriptRecognition();
     teardownGeminiVoiceCapture();
     updateVoiceModeControls();
 
@@ -4645,7 +4612,6 @@ async function startGeminiVoiceMode() {
 
         isGeminiVoiceConnecting = false;
         isGeminiVoiceActive = true;
-        startVoiceModeTranscriptRecognition();
         updateVoiceModeControls();
         setVoiceModeStatus('Запрашиваю первое сообщение от ИИ-клиента…', 'waiting');
         scheduleGeminiFirstReplyHint();
