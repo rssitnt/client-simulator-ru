@@ -495,7 +495,6 @@ let openAiHasUnansweredUserTurn = false;
 let openAiLastUserTurnCompact = '';
 let openAiLastUserTurnAt = 0;
 let openAiUserTranscriptByItemId = new Map();
-let voiceWidgetHideTimer = null;
 let reratePromptElement = null;
 let attestationQueue = [];
 let isAttestationQueueFlushInProgress = false;
@@ -4680,34 +4679,17 @@ async function startGeminiVoiceMode() {
 function showVoiceModeModal() {
     hideTooltip(true);
     if (!voiceModeModal) return;
-    if (voiceWidgetHideTimer) {
-        clearTimeout(voiceWidgetHideTimer);
-        voiceWidgetHideTimer = null;
-    }
-    voiceModeModal.hidden = false;
-    requestAnimationFrame(() => {
-        voiceModeModal.classList.add('active');
-    });
+    voiceModeModal.classList.add('active');
 }
 
 function hideVoiceModeModal() {
     if (!voiceModeModal) return;
-    if (voiceModeModal.hidden && !voiceModeModal.classList.contains('active')) return;
     voiceModeModal.classList.remove('active');
-    if (voiceWidgetHideTimer) {
-        clearTimeout(voiceWidgetHideTimer);
-    }
-    voiceWidgetHideTimer = setTimeout(() => {
-        if (!voiceModeModal.classList.contains('active')) {
-            voiceModeModal.hidden = true;
-        }
-        voiceWidgetHideTimer = null;
-    }, 220);
 }
 
 function toggleVoiceModeWidget() {
     if (!voiceModeModal) return;
-    const isOpen = !voiceModeModal.hidden && voiceModeModal.classList.contains('active');
+    const isOpen = voiceModeModal.classList.contains('active');
     if (isOpen) {
         hideVoiceModeModal();
     } else {
@@ -5338,7 +5320,7 @@ if (promptHistoryModal) {
 }
 
 document.addEventListener('mousedown', (e) => {
-    if (!voiceModeModal || voiceModeModal.hidden || !voiceModeModal.classList.contains('active')) return;
+    if (!voiceModeModal || !voiceModeModal.classList.contains('active')) return;
     const target = e.target;
     if (!(target instanceof Node)) return;
     if (voiceModeModal.contains(target) || sendBtn?.contains(target)) return;
@@ -5347,7 +5329,7 @@ document.addEventListener('mousedown', (e) => {
 
 document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    if (!voiceModeModal || voiceModeModal.hidden || !voiceModeModal.classList.contains('active')) return;
+    if (!voiceModeModal || !voiceModeModal.classList.contains('active')) return;
     hideVoiceModeModal();
 });
 
@@ -6739,7 +6721,14 @@ function setupDragAndDropForPreview(previewElement, textarea) {
 // ============ EVENT LISTENERS ============
 
 function handlePrimaryActionClick() {
-    if (sendBtn.dataset.mode === 'voice') {
+    const canUseVoiceModeInline =
+        !userInput.disabled &&
+        !userInput.value.trim() &&
+        !isTextDialogStarted() &&
+        !isProcessing &&
+        !isDialogRated;
+
+    if (sendBtn.dataset.mode === 'voice' || canUseVoiceModeInline) {
         toggleVoiceModeWidget();
         return;
     }
