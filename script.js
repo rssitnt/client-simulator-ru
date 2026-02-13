@@ -933,13 +933,13 @@ function isAccessRevokedForLogin(accessRevocation, login) {
 
 function saveEmailLinkContext(context) {
     try {
-        localStorage.setItem(EMAIL_LINK_CONTEXT_STORAGE_KEY, JSON.stringify(context || {}));
+        setCachedStorageValue(EMAIL_LINK_CONTEXT_STORAGE_KEY, JSON.stringify(context || {}));
     } catch (error) {}
 }
 
 function getEmailLinkContext() {
     try {
-        const raw = localStorage.getItem(EMAIL_LINK_CONTEXT_STORAGE_KEY);
+        const raw = getCachedStorageValue(EMAIL_LINK_CONTEXT_STORAGE_KEY);
         if (!raw) return null;
         const parsed = JSON.parse(raw);
         return parsed && typeof parsed === 'object' ? parsed : null;
@@ -949,20 +949,20 @@ function getEmailLinkContext() {
 }
 
 function clearEmailLinkContext() {
-    localStorage.removeItem(EMAIL_LINK_CONTEXT_STORAGE_KEY);
+    removeCachedStorageValue(EMAIL_LINK_CONTEXT_STORAGE_KEY);
 }
 
 function savePendingEmailSignInLink(linkValue) {
     try {
         const normalized = String(linkValue || '').trim();
         if (!normalized) return;
-        localStorage.setItem(PENDING_EMAIL_SIGNIN_LINK_STORAGE_KEY, normalized);
+        setCachedStorageValue(PENDING_EMAIL_SIGNIN_LINK_STORAGE_KEY, normalized);
     } catch (error) {}
 }
 
 function getPendingEmailSignInLink() {
     try {
-        const raw = String(localStorage.getItem(PENDING_EMAIL_SIGNIN_LINK_STORAGE_KEY) || '').trim();
+        const raw = String(getCachedStorageValue(PENDING_EMAIL_SIGNIN_LINK_STORAGE_KEY) || '').trim();
         return raw || '';
     } catch (error) {
         return '';
@@ -970,7 +970,7 @@ function getPendingEmailSignInLink() {
 }
 
 function clearPendingEmailSignInLink() {
-    localStorage.removeItem(PENDING_EMAIL_SIGNIN_LINK_STORAGE_KEY);
+    removeCachedStorageValue(PENDING_EMAIL_SIGNIN_LINK_STORAGE_KEY);
 }
 
 function saveEmailLinkHint(hint) {
@@ -979,7 +979,7 @@ function saveEmailLinkHint(hint) {
         const action = String(hint?.action || '').trim().toLowerCase();
         if (!isValidLogin(login)) return;
         if (action !== 'invite' && action !== 'verify') return;
-        localStorage.setItem(EMAIL_LINK_HINT_STORAGE_KEY, JSON.stringify({
+        setCachedStorageValue(EMAIL_LINK_HINT_STORAGE_KEY, JSON.stringify({
             login,
             action,
             savedAt: new Date().toISOString()
@@ -993,7 +993,7 @@ function saveEmailLinkVerifiedHint(hint) {
         const action = String(hint?.action || '').trim().toLowerCase();
         if (!isValidLogin(login)) return;
         if (action !== 'invite' && action !== 'verify') return;
-        localStorage.setItem(EMAIL_LINK_VERIFIED_HINT_STORAGE_KEY, JSON.stringify({
+        setCachedStorageValue(EMAIL_LINK_VERIFIED_HINT_STORAGE_KEY, JSON.stringify({
             login,
             action,
             verifiedAt: new Date().toISOString(),
@@ -1004,7 +1004,7 @@ function saveEmailLinkVerifiedHint(hint) {
 
 function getEmailLinkVerifiedHint() {
     try {
-        const raw = localStorage.getItem(EMAIL_LINK_VERIFIED_HINT_STORAGE_KEY);
+        const raw = getCachedStorageValue(EMAIL_LINK_VERIFIED_HINT_STORAGE_KEY);
         if (!raw) return null;
         const parsed = JSON.parse(raw);
         if (!parsed || typeof parsed !== 'object') return null;
@@ -1023,7 +1023,7 @@ function getEmailLinkVerifiedHint() {
 }
 
 function clearEmailLinkVerifiedHint() {
-    localStorage.removeItem(EMAIL_LINK_VERIFIED_HINT_STORAGE_KEY);
+    removeCachedStorageValue(EMAIL_LINK_VERIFIED_HINT_STORAGE_KEY);
 }
 
 function saveEmailLinkAuthReady(login, action = 'verify') {
@@ -1033,7 +1033,7 @@ function saveEmailLinkAuthReady(login, action = 'verify') {
         if (!isValidLogin(normalizedLogin)) return;
         if (normalizedAction !== 'invite' && normalizedAction !== 'verify') return;
 
-        localStorage.setItem(EMAIL_LINK_AUTH_READY_STORAGE_KEY, JSON.stringify({
+        setCachedStorageValue(EMAIL_LINK_AUTH_READY_STORAGE_KEY, JSON.stringify({
             login: normalizedLogin,
             action: normalizedAction,
             readyAt: new Date().toISOString()
@@ -1043,7 +1043,7 @@ function saveEmailLinkAuthReady(login, action = 'verify') {
 
 function getEmailLinkAuthReady(login) {
     try {
-        const raw = localStorage.getItem(EMAIL_LINK_AUTH_READY_STORAGE_KEY);
+        const raw = getCachedStorageValue(EMAIL_LINK_AUTH_READY_STORAGE_KEY);
         if (!raw) return null;
         const parsed = JSON.parse(raw);
         if (!parsed || typeof parsed !== 'object') return null;
@@ -1073,12 +1073,12 @@ function getEmailLinkAuthReady(login) {
 }
 
 function clearEmailLinkAuthReady() {
-    localStorage.removeItem(EMAIL_LINK_AUTH_READY_STORAGE_KEY);
+    removeCachedStorageValue(EMAIL_LINK_AUTH_READY_STORAGE_KEY);
 }
 
 function getEmailLinkHint() {
     try {
-        const raw = localStorage.getItem(EMAIL_LINK_HINT_STORAGE_KEY);
+        const raw = getCachedStorageValue(EMAIL_LINK_HINT_STORAGE_KEY);
         if (!raw) return null;
         const parsed = JSON.parse(raw);
         if (!parsed || typeof parsed !== 'object') return null;
@@ -1101,7 +1101,7 @@ function getEmailLinkHint() {
 }
 
 function clearEmailLinkHint() {
-    localStorage.removeItem(EMAIL_LINK_HINT_STORAGE_KEY);
+    removeCachedStorageValue(EMAIL_LINK_HINT_STORAGE_KEY);
 }
 
 function tryDecodeUrlValue(value) {
@@ -3624,7 +3624,7 @@ function initPromptsData(firebaseData = {}) {
             : role === 'manager_call'
                 ? 'managerCallPrompt'
                 : role + 'Prompt';
-        const legacyContent = firebaseData[role + '_prompt'] || localStorage.getItem(legacyKey) || '';
+        const legacyContent = firebaseData[role + '_prompt'] || getCachedStorageValue(legacyKey) || '';
         const rawPublicVariations = Array.isArray(firebaseData[role + '_variations'])
             ? firebaseData[role + '_variations']
             : [];
