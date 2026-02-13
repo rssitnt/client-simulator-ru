@@ -2225,8 +2225,8 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
     .mobile-tab {
         font-size: 13px;
         padding: 0 10px;
-        min-height: 56px;
-        height: 56px;
+        min-height: 28px;
+        height: 28px;
         border-radius: 10px;
         display: flex;
         align-items: center;
@@ -2274,8 +2274,8 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
     .mobile-tab {
         font-size: 12px;
         padding: 0 8px;
-        min-height: 56px;
-        height: 56px;
+        min-height: 28px;
+        height: 28px;
         border-radius: 10px;
         max-width: 108px;
     }
