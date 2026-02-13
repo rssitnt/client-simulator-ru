@@ -2244,7 +2244,7 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
     
     .btn-send, .btn-voice-inline {
         flex-shrink: 0;
-        margin-bottom: 2px;
+        margin-bottom: 0;
     }
 }
 
