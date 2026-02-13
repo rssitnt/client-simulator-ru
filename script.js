@@ -764,7 +764,7 @@ function removeCachedStorageValue(key) {
 }
 
 function setAuthSession(login) {
-    localStorage.setItem(AUTH_SESSION_STORAGE_KEY, JSON.stringify({
+    setCachedStorageValue(AUTH_SESSION_STORAGE_KEY, JSON.stringify({
         login: normalizeLogin(login),
         signedAt: new Date().toISOString()
     }));
@@ -772,7 +772,7 @@ function setAuthSession(login) {
 
 function getAuthSession() {
     try {
-        const raw = localStorage.getItem(AUTH_SESSION_STORAGE_KEY);
+        const raw = getCachedStorageValue(AUTH_SESSION_STORAGE_KEY);
         if (!raw) return null;
         const parsed = JSON.parse(raw);
         return parsed && typeof parsed.login === 'string' ? parsed : null;
@@ -782,7 +782,7 @@ function getAuthSession() {
 }
 
 function clearAuthSession() {
-    localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
+    removeCachedStorageValue(AUTH_SESSION_STORAGE_KEY);
 }
 
 function parseIsoMs(value) {
