@@ -50,13 +50,19 @@ const MARKDOWN_CACHE_TEXT_LIMIT = 40000;
 const AUTH_USERS_DB_PATH = 'users';
 const PARTNER_INVITES_DB_PATH = 'partner_invites';
 const APP_CONFIG_DB_PATH = 'app_config';
+const ACCESS_REVOKE_DB_PATH = 'access_revocations';
 const AUTH_LOCAL_STORAGE_KEY = 'authUsers:v1';
 const PARTNER_INVITES_STORAGE_KEY = 'partnerInvites:v1';
+const ACCESS_REVOKES_STORAGE_KEY = 'accessRevocations:v1';
 const AUTH_SESSION_STORAGE_KEY = 'authSession:v1';
 const EMAIL_LINK_CONTEXT_STORAGE_KEY = 'emailLinkContext:v1';
 const PENDING_EMAIL_SIGNIN_LINK_STORAGE_KEY = 'pendingEmailSignInLink:v1';
 const EMAIL_LINK_HINT_STORAGE_KEY = 'emailLinkHint:v1';
+const EMAIL_LINK_VERIFIED_HINT_STORAGE_KEY = 'emailLinkVerifiedHint:v1';
+const EMAIL_LINK_AUTH_READY_STORAGE_KEY = 'emailLinkAuthReady:v1';
 const EMAIL_LINK_HINT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const EMAIL_LINK_VERIFIED_HINT_MAX_AGE_MS = 30 * 60 * 1000;
+const EMAIL_LINK_AUTH_READY_MAX_AGE_MS = 30 * 60 * 1000;
 const CORPORATE_EMAIL_DOMAINS = new Set([
     '7271155.ru',
     '7274069.ru',
@@ -327,6 +333,7 @@ const modalNameSubmit = document.getElementById('modalNameSubmit');
 const nameModalStep1 = document.getElementById('nameModalStep1');
 const modalPasswordInput = document.getElementById('modalPasswordInput');
 const authMailHelp = document.getElementById('authMailHelp');
+const authMailHelpImage = document.getElementById('authMailHelpImage');
 const togglePasswordVisibilityBtn = document.getElementById('togglePasswordVisibility');
 const authErrorText = document.getElementById('passwordError');
 const promptVariationsContainer = document.getElementById('promptVariations');
@@ -554,6 +561,15 @@ function normalizeFio(value) {
     return String(value || '').trim().replace(/\s+/g, ' ');
 }
 
+function sanitizeAuthName(value) {
+    const normalized = normalizeFio(value);
+    if (!normalized) return '';
+    if (/@/.test(normalized)) {
+        return normalized.split(/\s+/).filter(Boolean).filter((part) => !/@/.test(part)).join(' ');
+    }
+    return normalized;
+}
+
 function normalizeLogin(value) {
     return String(value || '')
         .trim()
@@ -670,12 +686,140 @@ function loadLocalPartnerInvitesStore() {
     }
 }
 
+function loadLocalAccessRevokesStore() {
+    try {
+        const raw = localStorage.getItem(ACCESS_REVOKES_STORAGE_KEY);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (error) {
+        return {};
+    }
+}
+
+function saveLocalAccessRevokesStore(store) {
+    try {
+        localStorage.setItem(ACCESS_REVOKES_STORAGE_KEY, JSON.stringify(store || {}));
+    } catch (error) {
+        console.error('Failed to persist local access revokes store:', error);
+    }
+}
+
+function normalizeAccessRevocation(raw, loginFallback = '') {
+    if (!raw || typeof raw !== 'object') return null;
+    const login = normalizeLogin(raw.login || loginFallback);
+    if (!isValidLogin(login)) return null;
+    return {
+        login,
+        status: raw.status === 'active' ? 'active' : 'revoked',
+        revokedAt: raw.revokedAt || null,
+        updatedAt: raw.updatedAt || null,
+        updatedBy: normalizeLogin(raw.updatedBy || ''),
+        reason: String(raw.reason || '').trim() || 'admin'
+    };
+}
+
 function saveLocalPartnerInvitesStore(store) {
     try {
         localStorage.setItem(PARTNER_INVITES_STORAGE_KEY, JSON.stringify(store || {}));
     } catch (error) {
         console.error('Failed to persist local partner invites store:', error);
     }
+}
+
+async function getAccessRevocation(login) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!isValidLogin(normalizedLogin)) return null;
+    const key = loginToStorageKey(normalizedLogin);
+
+    if (db) {
+        try {
+            const snapshot = await get(ref(db, `${ACCESS_REVOKE_DB_PATH}/${key}`));
+            if (snapshot.exists()) {
+                return normalizeAccessRevocation(snapshot.val(), normalizedLogin);
+            }
+        } catch (error) {
+            console.error('Failed to load access revocation from Firebase:', error);
+        }
+    }
+
+    const localStore = loadLocalAccessRevokesStore();
+    return normalizeAccessRevocation(localStore[key], normalizedLogin);
+}
+
+async function setAccessRevocation(login, isRevoked, meta = {}) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!isValidLogin(normalizedLogin)) return null;
+    const key = loginToStorageKey(normalizedLogin);
+    const nowIso = new Date().toISOString();
+    const payload = {
+        login: normalizedLogin,
+        status: isRevoked ? 'revoked' : 'active',
+        updatedBy: normalizeLogin(meta.updatedBy || ''),
+        reason: isRevoked ? String(meta.reason || 'admin') : 'active',
+        revokedAt: isRevoked ? (meta.revokedAt || nowIso) : null,
+        updatedAt: nowIso
+    };
+
+    if (db) {
+        try {
+            if (isRevoked) {
+                await set(ref(db, `${ACCESS_REVOKE_DB_PATH}/${key}`), payload);
+            } else {
+                await set(ref(db, `${ACCESS_REVOKE_DB_PATH}/${key}`), null);
+            }
+        } catch (error) {
+            console.error('Failed to save access revocation in Firebase:', error);
+        }
+    }
+
+    const localStore = loadLocalAccessRevokesStore();
+    if (isRevoked) {
+        localStore[key] = payload;
+    } else if (Object.prototype.hasOwnProperty.call(localStore, key)) {
+        delete localStore[key];
+    }
+    saveLocalAccessRevokesStore(localStore);
+    return payload;
+}
+
+async function listAccessRevocations() {
+    if (db) {
+        try {
+            const snapshot = await get(ref(db, ACCESS_REVOKE_DB_PATH));
+            if (snapshot.exists()) {
+                const raw = snapshot.val();
+                return Object.values(raw || {})
+                    .map((item) => normalizeAccessRevocation(item))
+                    .filter((item) => item && item.status === 'revoked')
+                    .sort((a, b) => {
+                        const aTime = parseIsoMs(a.updatedAt);
+                        const bTime = parseIsoMs(b.updatedAt);
+                        if (aTime && bTime) return bTime - aTime;
+                        return 0;
+                    });
+            }
+        } catch (error) {
+            console.error('Failed to load access revocations from Firebase:', error);
+        }
+    }
+
+    const localStore = loadLocalAccessRevokesStore();
+    return Object.values(localStore || {})
+        .map((item) => normalizeAccessRevocation(item))
+        .filter((item) => item && item.status === 'revoked')
+        .sort((a, b) => {
+            const aTime = parseIsoMs(a.updatedAt);
+            const bTime = parseIsoMs(b.updatedAt);
+            if (aTime && bTime) return bTime - aTime;
+            return 0;
+        });
+}
+
+function isAccessRevokedForLogin(accessRevocation, login) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!normalizedLogin || !accessRevocation) return false;
+    return accessRevocation.login === normalizedLogin && accessRevocation.status === 'revoked';
 }
 
 function saveEmailLinkContext(context) {
@@ -732,6 +876,95 @@ function saveEmailLinkHint(hint) {
             savedAt: new Date().toISOString()
         }));
     } catch (error) {}
+}
+
+function saveEmailLinkVerifiedHint(hint) {
+    try {
+        const login = normalizeLogin(hint?.login || hint?.email || '');
+        const action = String(hint?.action || '').trim().toLowerCase();
+        if (!isValidLogin(login)) return;
+        if (action !== 'invite' && action !== 'verify') return;
+        localStorage.setItem(EMAIL_LINK_VERIFIED_HINT_STORAGE_KEY, JSON.stringify({
+            login,
+            action,
+            verifiedAt: new Date().toISOString(),
+            source: 'email-link'
+        }));
+    } catch (error) {}
+}
+
+function getEmailLinkVerifiedHint() {
+    try {
+        const raw = localStorage.getItem(EMAIL_LINK_VERIFIED_HINT_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return null;
+        const login = normalizeLogin(parsed.login || '');
+        const action = String(parsed.action || '').trim().toLowerCase();
+        const verifiedAt = String(parsed.verifiedAt || parsed.savedAt || '').trim();
+        if (!isValidLogin(login) || !verifiedAt) return null;
+        if (action !== 'invite' && action !== 'verify') return null;
+        const savedAtMs = parseIsoMs(verifiedAt);
+        if (!savedAtMs) return null;
+        if ((Date.now() - savedAtMs) > EMAIL_LINK_VERIFIED_HINT_MAX_AGE_MS) return null;
+        return { login, action, verifiedAt };
+    } catch (error) {
+        return null;
+    }
+}
+
+function clearEmailLinkVerifiedHint() {
+    localStorage.removeItem(EMAIL_LINK_VERIFIED_HINT_STORAGE_KEY);
+}
+
+function saveEmailLinkAuthReady(login, action = 'verify') {
+    try {
+        const normalizedLogin = normalizeLogin(login);
+        const normalizedAction = String(action || '').trim().toLowerCase();
+        if (!isValidLogin(normalizedLogin)) return;
+        if (normalizedAction !== 'invite' && normalizedAction !== 'verify') return;
+
+        localStorage.setItem(EMAIL_LINK_AUTH_READY_STORAGE_KEY, JSON.stringify({
+            login: normalizedLogin,
+            action: normalizedAction,
+            readyAt: new Date().toISOString()
+        }));
+    } catch (error) {}
+}
+
+function getEmailLinkAuthReady(login) {
+    try {
+        const raw = localStorage.getItem(EMAIL_LINK_AUTH_READY_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return null;
+
+        const loginToMatch = normalizeLogin(login || '');
+        const parsedLogin = normalizeLogin(parsed.login || '');
+        const action = String(parsed.action || '').trim().toLowerCase();
+        const readyAt = String(parsed.readyAt || '').trim();
+
+        if (!isValidLogin(parsedLogin) || action !== 'invite' && action !== 'verify') return null;
+        const readyAtMs = parseIsoMs(readyAt);
+        if (!readyAtMs) return null;
+        if ((Date.now() - readyAtMs) > EMAIL_LINK_AUTH_READY_MAX_AGE_MS) {
+            clearEmailLinkAuthReady();
+            return null;
+        }
+        if (loginToMatch && loginToMatch !== parsedLogin) return null;
+
+        return {
+            login: parsedLogin,
+            action,
+            readyAt
+        };
+    } catch (error) {
+        return null;
+    }
+}
+
+function clearEmailLinkAuthReady() {
+    localStorage.removeItem(EMAIL_LINK_AUTH_READY_STORAGE_KEY);
 }
 
 function getEmailLinkHint() {
@@ -1111,6 +1344,14 @@ async function listPartnerInvites() {
 async function resolveAccessPolicy(login, userRecord = null) {
     const normalizedLogin = normalizeLogin(login);
     if (!isValidLogin(normalizedLogin)) return null;
+    if (userRecord?.isBlocked) {
+        return null;
+    }
+
+    const accessRevocation = await getAccessRevocation(normalizedLogin);
+    if (isAccessRevokedForLogin(accessRevocation, normalizedLogin)) {
+        return null;
+    }
 
     if (userRecord?.role === 'admin') {
         return { type: 'admin', role: 'admin', invite: null };
@@ -1133,6 +1374,8 @@ async function resolveAccessPolicy(login, userRecord = null) {
 }
 
 async function finalizeEmailLinkVerification(login, signInLink) {
+    const detectedAction = getEmailActionFromCurrentLink(signInLink || window.location.href);
+    const linkAction = detectedAction === 'invite' || detectedAction === 'verify' ? detectedAction : 'verify';
     await signInWithEmailLink(auth, login, signInLink);
     const nowIso = new Date().toISOString();
 
@@ -1158,6 +1401,11 @@ async function finalizeEmailLinkVerification(login, signInLink) {
         });
     }
 
+    saveEmailLinkAuthReady(login, linkAction);
+    saveEmailLinkVerifiedHint({
+        login,
+        action: linkAction
+    });
     clearPendingEmailSignInLink();
     clearEmailLinkHint();
     showCopyNotification('Email подтвержден. Теперь войдите с паролем.');
@@ -1636,22 +1884,39 @@ function formatInviteExpiry(iso) {
     return date.toLocaleDateString('ru-RU');
 }
 
-function getAccessSourceLabel(login, user, invite) {
+function getAccessSourceLabel(login, user, invite, accessRevocation = null) {
+    if (isAccessRevokedForLogin(accessRevocation, login)) {
+        const reason = String(accessRevocation?.reason || '').trim();
+        if (reason && reason !== 'manual') {
+            return `Снят доступ (${reason})`;
+        }
+        return 'Снят доступ администратором';
+    }
+
     if (invite) {
         return invite.expiresAt ? `По ссылке до ${formatInviteExpiry(invite.expiresAt)}` : 'По ссылке';
     }
-    return 'по корп.почте';
+
+    if (isCorporateEmail(login)) return 'По корпоративному email';
+    if (user?.role === 'admin') return 'Админ';
+    return 'Без источника';
 }
 
-function getAccessState(login, user, invite) {
+function getAccessState(login, user, invite, accessRevocation = null) {
     const blockedByUser = !!user?.isBlocked;
     const inviteExists = !!invite;
     const inviteActive = inviteExists ? isPartnerInviteActive(invite) : false;
     const isAdminUser = user?.role === 'admin';
     const isCorporate = isCorporateEmail(login);
+    const isRevoked = isAccessRevokedForLogin(accessRevocation, login);
 
-    const active = !blockedByUser && (isAdminUser || isCorporate || inviteActive);
+    const active = !isRevoked && !blockedByUser && (isAdminUser || isCorporate || inviteActive);
     let label = active ? 'Активен' : 'Закрыт';
+    if (isRevoked) {
+        label = 'Доступ закрыт';
+    } else if (blockedByUser) {
+        label = 'Заблокирован';
+    }
     if (!active && !blockedByUser && !inviteExists && !isCorporate && !isAdminUser) {
         label = 'Нет доступа';
     }
@@ -1663,37 +1928,61 @@ function getAccessState(login, user, invite) {
         inviteExists,
         inviteActive,
         isAdminUser,
-        isCorporate
+        isCorporate,
+        isRevoked
     };
 }
 
-async function toggleAccessForLogin(login, nextActive, user, invite) {
+async function toggleAccessForLogin(login, nextActive, user, invite, accessRevocation = null) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!normalizedLogin) throw new Error('Некорректный email.');
     const nowIso = new Date().toISOString();
     const isAdminUser = user?.role === 'admin';
-    const isCorporate = isCorporateEmail(login);
+    const isCorporate = isCorporateEmail(normalizedLogin);
+    const currentlyRevoked = isAccessRevokedForLogin(accessRevocation, normalizedLogin);
+    const shouldDeleteUser = Boolean(user) && !isAdminUser;
 
     if (!nextActive) {
-        if (!user && !invite) {
-            throw new Error('Для этого email нет аккаунта в системе.');
+        if (!user && !invite && !currentlyRevoked) {
+            throw new Error('Для этого email нет данных для закрытия доступа.');
         }
-        if (user) {
-            await deleteUserRecord(login);
-        }
+
+        await setAccessRevocation(normalizedLogin, true, {
+            reason: 'manual',
+            updatedBy: normalizeLogin(currentUser?.login || '')
+        });
+
         if (invite) {
-            await deletePartnerInvite(login);
+            await deletePartnerInvite(normalizedLogin);
         }
-        if (currentUser && currentUser.login === normalizeLogin(login)) {
-            resetCurrentSessionToAuth('Аккаунт удален из системы. Войдите снова.');
+
+        if (shouldDeleteUser) {
+            await deleteUserRecord(normalizedLogin);
+        } else if (user) {
+            await patchUserRecord(normalizedLogin, {
+                isBlocked: true,
+                blockedAt: nowIso,
+                failedLoginAttempts: 0,
+                sessionRevokedAt: nowIso,
+                lastSeenAt: nowIso
+            });
+        }
+
+        if (currentUser && currentUser.login === normalizedLogin) {
+            resetCurrentSessionToAuth('Доступ закрыт администратором. Войдите снова.');
         }
         return;
     }
 
-    if (nextActive && !isCorporate && !isAdminUser && !invite) {
+    const canOpenByRole = isAdminUser || isCorporate || !!invite;
+    if (nextActive && !canOpenByRole && !currentlyRevoked) {
         throw new Error('Для этого email сначала выдайте доступ по ссылке.');
     }
 
+    await setAccessRevocation(normalizedLogin, false);
+
     if (user) {
-        await patchUserRecord(login, {
+        await patchUserRecord(normalizedLogin, {
             isBlocked: false,
             blockedAt: null,
             failedLoginAttempts: 0,
@@ -1703,18 +1992,18 @@ async function toggleAccessForLogin(login, nextActive, user, invite) {
     }
 
     if (invite) {
-        await patchPartnerInvite(login, {
+        await patchPartnerInvite(normalizedLogin, {
             status: 'active'
         });
     }
 
-    if (currentUser && currentUser.login === login) {
-        const refreshedUser = await getUserRecordByLogin(login);
+    if (currentUser && currentUser.login === normalizedLogin) {
+        const refreshedUser = await getUserRecordByLogin(normalizedLogin);
         if (refreshedUser) {
             currentUser = normalizeUserRecord({
                 ...currentUser,
                 ...refreshedUser
-            }, login) || currentUser;
+            }, normalizedLogin) || currentUser;
             selectedRole = currentUser.role;
             localStorage.setItem(USER_ROLE_KEY, currentUser.role);
             if (currentRoleDisplay) {
@@ -1740,16 +2029,25 @@ async function renderAdminUsersTable() {
     }
     adminUsersTableBody.innerHTML = '<tr><td colspan="6" class="admin-empty">Загрузка...</td></tr>';
 
-    const [users, invites] = await Promise.all([
+    const [users, invites, revocations] = await Promise.all([
         listAllUserRecords(),
-        listPartnerInvites()
+        listPartnerInvites(),
+        listAccessRevocations()
     ]);
     const usersByLogin = new Map(users.map((user) => [user.login, user]));
     const invitesByLogin = new Map(invites.map((invite) => [invite.login, invite]));
+    const revocationsByLogin = new Map(revocations.map((item) => [item.login, item]));
     const allLogins = Array.from(new Set([
         ...usersByLogin.keys(),
-        ...invitesByLogin.keys()
-    ])).sort((a, b) => a.localeCompare(b));
+        ...invitesByLogin.keys(),
+        ...revocationsByLogin.keys()
+    ])).filter((login) => {
+        const user = usersByLogin.get(login) || null;
+        const invite = invitesByLogin.get(login) || null;
+        const accessRevocation = revocationsByLogin.get(login) || null;
+        if (user || invite) return true;
+        return !isAccessRevokedForLogin(accessRevocation, login);
+    }).sort((a, b) => a.localeCompare(b));
 
     if (!allLogins.length) {
         adminUsersTableBody.innerHTML = '<tr><td colspan="6" class="admin-empty">Пользователи не найдены</td></tr>';
@@ -1760,7 +2058,8 @@ async function renderAdminUsersTable() {
     allLogins.forEach((login) => {
         const user = usersByLogin.get(login) || null;
         const invite = invitesByLogin.get(login) || null;
-        const accessState = getAccessState(login, user, invite);
+        const accessRevocation = revocationsByLogin.get(login) || null;
+        const accessState = getAccessState(login, user, invite, accessRevocation);
         const row = document.createElement('tr');
         row.dataset.login = login;
 
@@ -1805,7 +2104,7 @@ async function renderAdminUsersTable() {
 
         const sourceCell = document.createElement('td');
         sourceCell.className = 'admin-access-source';
-        sourceCell.textContent = getAccessSourceLabel(login, user, invite);
+        sourceCell.textContent = getAccessSourceLabel(login, user, invite, accessRevocation);
 
         const timeCell = document.createElement('td');
         timeCell.className = 'admin-time';
@@ -1818,17 +2117,17 @@ async function renderAdminUsersTable() {
         const actionCell = document.createElement('td');
         const actionBtn = document.createElement('button');
         actionBtn.className = `btn-change ${accessState.active ? 'btn-danger-subtle' : ''}`.trim();
-        actionBtn.textContent = accessState.active ? 'Удалить из системы' : 'Открыть доступ';
+        actionBtn.textContent = accessState.active ? 'Закрыть доступ' : 'Открыть доступ';
         actionBtn.addEventListener('click', async () => {
             const nextActive = !accessState.active;
             if (!nextActive) {
-                const confirmed = confirm(`Удалить аккаунт ${login} из системы?`);
+                const confirmed = confirm(`Закрыть доступ для ${login}?`);
                 if (!confirmed) return;
             }
             actionBtn.disabled = true;
             try {
-                await toggleAccessForLogin(login, nextActive, user, invite);
-                showCopyNotification(nextActive ? `Доступ открыт: ${login}` : `Аккаунт удален: ${login}`);
+                await toggleAccessForLogin(login, nextActive, user, invite, accessRevocation);
+                showCopyNotification(nextActive ? `Доступ открыт: ${login}` : `Доступ закрыт: ${login}`);
                 await renderAdminUsersTable();
             } catch (error) {
                 console.error('Failed to toggle access:', error);
@@ -1939,7 +2238,8 @@ async function handleAuthSubmit() {
     modalNameSubmit.disabled = true;
 
     try {
-        await consumePendingEmailSignInLinkForLogin(login);
+        const didVerifyEmailLinkNow = await consumePendingEmailSignInLinkForLogin(login);
+        const authReady = getEmailLinkAuthReady(login);
         let existingUser = await getUserRecordByLogin(login);
         const accessPolicy = await resolveAccessPolicy(login, existingUser);
         if (!accessPolicy) {
@@ -1948,10 +2248,10 @@ async function handleAuthSubmit() {
 
         const passwordHash = await hashPassword(login, password);
         const nowIso = new Date().toISOString();
-        const emailLinkHint = getEmailLinkHint();
-        const hasMatchingInviteOrVerifyHint = !!emailLinkHint &&
-            emailLinkHint.login === login &&
-            (emailLinkHint.action === 'invite' || emailLinkHint.action === 'verify');
+        const emailLinkVerifiedHint = getEmailLinkVerifiedHint();
+        const hasEmailLinkVerification = didVerifyEmailLinkNow || !!authReady || (!!emailLinkVerifiedHint &&
+            emailLinkVerifiedHint.login === login &&
+            (emailLinkVerifiedHint.action === 'invite' || emailLinkVerifiedHint.action === 'verify'));
         let shouldMarkInviteAsVerifiedFromHint = false;
         let targetUser = null;
 
@@ -1961,7 +2261,8 @@ async function handleAuthSubmit() {
             }
             const existingIsVerified = !!existingUser.emailVerifiedAt;
             const passwordNeedsSetup = existingIsVerified && isPendingFirstPasswordSetup(existingUser);
-            if (existingIsVerified && existingUser.passwordHash !== passwordHash && !passwordNeedsSetup) {
+            const canSetPasswordAfterLink = existingIsVerified && hasEmailLinkVerification;
+            if (existingIsVerified && existingUser.passwordHash !== passwordHash && !passwordNeedsSetup && !canSetPasswordAfterLink) {
                 const failedAttempts = Math.max(0, Number(existingUser.failedLoginAttempts) || 0) + 1;
                 const shouldBlock = failedAttempts >= MAX_FAILED_PASSWORD_ATTEMPTS;
                 await patchUserRecord(login, {
@@ -1982,7 +2283,7 @@ async function handleAuthSubmit() {
                 ? 'admin'
                 : normalizeRole(accessPolicy.role || existingUser.role);
             let verifiedAt = existingUser.emailVerifiedAt || accessPolicy?.invite?.emailVerifiedAt || null;
-            if (!verifiedAt && accessPolicy?.type === 'partner' && hasMatchingInviteOrVerifyHint) {
+            if (!verifiedAt && hasEmailLinkVerification) {
                 verifiedAt = nowIso;
                 shouldMarkInviteAsVerifiedFromHint = true;
             }
@@ -1990,7 +2291,7 @@ async function handleAuthSubmit() {
                 ...existingUser,
                 role: resolvedRole,
                 fio,
-                passwordHash: (existingIsVerified && !passwordNeedsSetup) ? existingUser.passwordHash : passwordHash,
+                passwordHash: (existingIsVerified && !passwordNeedsSetup && !canSetPasswordAfterLink) ? existingUser.passwordHash : passwordHash,
                 passwordNeedsSetup: false,
                 emailVerifiedAt: verifiedAt,
                 failedLoginAttempts: 0,
@@ -2003,7 +2304,7 @@ async function handleAuthSubmit() {
         } else {
             const resolvedRole = normalizeRole(accessPolicy.role || 'user');
             let verifiedAt = accessPolicy?.invite?.emailVerifiedAt || null;
-            if (!verifiedAt && accessPolicy?.type === 'partner' && hasMatchingInviteOrVerifyHint) {
+            if (!verifiedAt && hasEmailLinkVerification) {
                 verifiedAt = nowIso;
                 shouldMarkInviteAsVerifiedFromHint = true;
             }
@@ -2031,7 +2332,6 @@ async function handleAuthSubmit() {
             await patchPartnerInvite(login, {
                 emailVerifiedAt: nowIso
             });
-            clearEmailLinkHint();
         }
 
         const isVerified = !!savedUser.emailVerifiedAt;
@@ -2047,7 +2347,9 @@ async function handleAuthSubmit() {
 
         setAuthSession(savedUser.login);
         applyAuthenticatedUser(savedUser);
+        clearEmailLinkAuthReady();
         clearEmailLinkHint();
+        clearEmailLinkVerifiedHint();
         hideNameModal();
         startActiveTimeTracking();
     } catch (error) {
@@ -3361,14 +3663,27 @@ function renderPromptHistory() {
         item.className = 'change-item';
         const title = `${getRoleLabel(entry.role)} · ${entry.variationName || 'Без названия'}`;
         const time = formatHistoryTime(entry.ts);
-        item.innerHTML = `
-            <div class="change-meta">
-                <div class="change-title" title="${title}">${title}</div>
-                <div class="change-time">${time}</div>
-            </div>
-            <button class="btn-restore" data-id="${entry.id}">Восстановить</button>
-        `;
-        item.querySelector('.btn-restore').addEventListener('click', (e) => {
+
+        const changeMeta = document.createElement('div');
+        changeMeta.className = 'change-meta';
+
+        const changeTitle = document.createElement('div');
+        changeTitle.className = 'change-title';
+        changeTitle.textContent = title;
+        changeTitle.title = title;
+
+        const changeTime = document.createElement('div');
+        changeTime.className = 'change-time';
+        changeTime.textContent = time;
+
+        const restoreButton = document.createElement('button');
+        restoreButton.className = 'btn-restore';
+        restoreButton.dataset.id = entry.id;
+        restoreButton.textContent = 'Восстановить';
+
+        changeMeta.append(changeTitle, changeTime);
+        item.append(changeMeta, restoreButton);
+        restoreButton.addEventListener('click', (e) => {
             e.stopPropagation();
             restorePromptVersion(entry.id, role, activeVariation.id);
         });
@@ -3769,6 +4084,14 @@ function setPasswordVisibility(isVisible) {
     togglePasswordVisibilityBtn.removeAttribute('title');
 }
 
+function sanitizeModalNameInput() {
+    if (!modalNameInput) return;
+    const sanitized = sanitizeAuthName(modalNameInput.value);
+    if (modalNameInput.value !== sanitized) {
+        modalNameInput.value = sanitized;
+    }
+}
+
 function showNameModal() {
     if (!nameModal) return;
     nameModal.classList.add('active');
@@ -3776,7 +4099,8 @@ function showNameModal() {
         nameModalStep1.style.display = 'block';
     }
     if (modalNameInput && !modalNameInput.value) {
-        modalNameInput.value = localStorage.getItem(USER_NAME_KEY) || '';
+        modalNameInput.value = sanitizeAuthName(localStorage.getItem(USER_NAME_KEY) || '');
+        sanitizeModalNameInput();
     }
     if (modalLoginInput && !modalLoginInput.value) {
         modalLoginInput.value = localStorage.getItem(USER_LOGIN_KEY) || '';
@@ -3810,12 +4134,22 @@ if (modalNameSubmit) {
     });
 });
 
+if (modalNameInput) {
+    modalNameInput.addEventListener('input', sanitizeModalNameInput);
+    modalNameInput.addEventListener('focus', sanitizeModalNameInput);
+}
+
 if (togglePasswordVisibilityBtn) {
     togglePasswordVisibilityBtn.addEventListener('click', () => {
         const nextVisible = modalPasswordInput?.type === 'password';
         setPasswordVisibility(nextVisible);
         modalPasswordInput?.focus();
     });
+}
+if (authMailHelpImage) {
+    authMailHelpImage.addEventListener('error', () => {
+        authMailHelpImage.style.display = 'none';
+    }, { once: true });
 }
 
 // ============ AI IMPROVE MODAL ============
@@ -6207,6 +6541,126 @@ function clearChat() {
     }
 }
 
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;')
+        .replace(/\//g, '&#x2F;');
+}
+
+function buildSafeExportPdfWindow({ title, css, body }) {
+    const safeTitle = escapeHtml(title || 'Экспорт');
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        alert('Браузер блокировал всплывающее окно. Разрешите всплывающие окна и повторите экспорт.');
+        return;
+    }
+
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>${safeTitle}</title>
+            ${css || ''}
+        </head>
+        <body>
+            ${body || ''}
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+    printWindow.onload = () => {
+        printWindow.print();
+    };
+}
+
+function sanitizeRenderedHtml(html) {
+    const sourceHtml = String(html || '');
+    if (!sourceHtml) return '';
+
+    const template = document.createElement('template');
+    template.innerHTML = sourceHtml;
+
+    const allowedTags = new Set([
+        'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
+        'UL', 'OL', 'LI',
+        'B', 'STRONG', 'I', 'EM', 'DEL',
+        'PRE', 'CODE',
+        'BLOCKQUOTE', 'A', 'SPAN',
+        'DIV', 'HR', 'BR'
+    ]);
+
+    const allowedAttributesByTag = {
+        A: new Set(['href', 'title', 'target', 'rel']),
+        DIV: new Set(['class']),
+        SPAN: new Set(['class']),
+        PRE: new Set(['class']),
+        CODE: new Set(['class']),
+        LI: new Set(['class']),
+        P: new Set(['class'])
+    };
+
+    template.content.querySelectorAll('*').forEach((element) => {
+        const tagName = element.tagName.toUpperCase();
+        if (!allowedTags.has(tagName)) {
+            while (element.firstChild) {
+                element.parentNode?.insertBefore(element.firstChild, element);
+            }
+            element.remove();
+            return;
+        }
+
+        const allowedAttrs = allowedAttributesByTag[tagName] || new Set(['class']);
+        Array.from(element.attributes).forEach((attribute) => {
+            const attrName = attribute.name.toLowerCase();
+            const attrValue = String(attribute.value || '');
+
+            if (!allowedAttrs.has(attrName)) {
+                element.removeAttribute(attribute.name);
+                return;
+            }
+
+            if (attrName.startsWith('on')) {
+                element.removeAttribute(attribute.name);
+                return;
+            }
+
+            if ((attrName === 'href' || attrName === 'src') && /^\s*javascript:/i.test(attrValue)) {
+                element.removeAttribute(attribute.name);
+                return;
+            }
+
+            if (attrName === 'target' && element.tagName.toUpperCase() === 'A') {
+                if (attrValue === '_blank') {
+                    element.setAttribute('rel', 'noopener noreferrer');
+                } else {
+                    element.removeAttribute('target');
+                }
+            }
+
+            if (attrName === 'href' && element.tagName.toUpperCase() === 'A') {
+                const safeHref = attrValue.trim();
+                if (!safeHref) {
+                    element.removeAttribute('href');
+                }
+            }
+
+            if (!/^(?:href|class|target|rel|title)$/.test(attrName)) {
+                element.removeAttribute(attribute.name);
+            }
+        });
+
+        if (element.tagName.toUpperCase() === 'A' && !element.getAttribute('rel') && element.getAttribute('target') === '_blank') {
+            element.setAttribute('rel', 'noopener noreferrer');
+        }
+    });
+
+    return template.innerHTML;
+}
+
 async function sendMessage() {
     const userMessage = userInput.value.trim();
     if (!userMessage || isProcessing || isDialogRated) return;
@@ -6220,7 +6674,7 @@ async function sendMessage() {
     const startDiv = document.getElementById('startConversation');
     if (startDiv) startDiv.style.display = 'none';
     
-    addMessage(userMessage, 'user', true);
+    addMessage(userMessage, 'user', false);
     conversationHistory.push({ role: 'user', content: userMessage });
     updatePromptLock();
     updateSendBtnState();
@@ -7017,62 +7471,29 @@ function exportToRtf(messages, filename) {
 }
 
 function exportToPdf(messages, filename) {
-    const content = messages.map(msg => {
+    const content = messages.map((msg) => {
         const roleColor = msg.role === 'ОЦЕНКА ДИАЛОГА' ? '#ff9900' : '#2e74b5';
-        return `<div style="margin-bottom: 16px;"><strong style="color: ${roleColor};">${msg.role}:</strong><br>${msg.content.replace(/\n/g, '<br>')}</div>`;
+        const safeRole = escapeHtml(msg?.role || 'Системное сообщение');
+        const safeContent = escapeHtml(msg?.content || '').replace(/\n/g, '<br>');
+        return `<div style="margin-bottom: 16px;"><strong style="color: ${roleColor};">${safeRole}:</strong><br>${safeContent}</div>`;
     }).join('');
-    
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>${filename}</title>
-            <style>
-                body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; line-height: 1.6; }
-                h1 { text-align: center; margin-bottom: 30px; }
-            </style>
-        </head>
-        <body>
+    buildSafeExportPdfWindow({
+        title: filename,
+        css: '<style>body { font-family: \'Segoe UI\', Arial, sans-serif; padding: 40px; line-height: 1.6; } h1 { text-align: center; margin-bottom: 30px; }</style>',
+        body: `
             <h1>История диалога</h1>
             ${content}
-        </body>
-        </html>
-    `);
-    printWindow.document.close();
-    printWindow.onload = () => {
-        printWindow.print();
-    };
+        `
+    });
 }
 
 function exportPromptToPdf(text, filename) {
     const content = renderMarkdown(text);
-    
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>${filename}</title>
-            <style>
-                body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; line-height: 1.6; }
-                h1, h2, h3 { margin-top: 24px; margin-bottom: 12px; }
-                ul, ol { margin: 12px 0; padding-left: 24px; }
-                li { margin-bottom: 6px; }
-                code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; }
-                pre { background: #f5f5f5; padding: 16px; border-radius: 6px; overflow-x: auto; }
-                blockquote { border-left: 3px solid #667eea; padding-left: 16px; margin: 16px 0; color: #555; }
-            </style>
-        </head>
-        <body>
-            ${content}
-        </body>
-        </html>
-    `);
-    printWindow.document.close();
-    printWindow.onload = () => {
-        printWindow.print();
-    };
+    buildSafeExportPdfWindow({
+        title: filename,
+        css: '<style>body { font-family: \'Segoe UI\', Arial, sans-serif; padding: 40px; line-height: 1.6; } h1, h2, h3 { margin-top: 24px; margin-bottom: 12px; } ul, ol { margin: 12px 0; padding-left: 24px; } li { margin-bottom: 6px; } code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; } pre { background: #f5f5f5; padding: 16px; border-radius: 6px; overflow-x: auto; } blockquote { border-left: 3px solid #667eea; padding-left: 16px; margin: 16px 0; color: #555; }</style>',
+        body: content
+    });
 }
 
 function exportCurrentPrompt(format = 'txt') {
@@ -7312,10 +7733,11 @@ function renderMarkdown(text) {
         .replace(/\n/g, '<br>') + '</p>';
     }
 
+    const safeHtml = sanitizeRenderedHtml(html);
     if (canCache) {
-        setCachedMarkdown(cleanText, html);
+        setCachedMarkdown(cleanText, safeHtml);
     }
-    return html;
+    return safeHtml;
 }
 
 function updatePreview() {
@@ -7399,7 +7821,7 @@ function setupWYSIWYG(previewElement, textarea, callback) {
             if (html) {
                 // Handle HTML paste to preserve formatting
                 const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = html;
+                tempDiv.innerHTML = sanitizeRenderedHtml(html);
                 const fragment = document.createDocumentFragment();
                 while (tempDiv.firstChild) fragment.appendChild(tempDiv.firstChild);
                 range.insertNode(fragment);

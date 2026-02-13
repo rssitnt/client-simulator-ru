@@ -2142,7 +2142,7 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
 
     .mobile-tab {
         flex: 0 1 calc(50% - 12px);
-        max-width: 168px;
+        max-width: 128px;
     }
     
     .panels-container {
@@ -2218,8 +2218,9 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
     
     .mobile-tab {
         font-size: 13px;
-        padding: 10px 12px;
+        padding: 10px 8px;
         min-height: 42px;
+        max-width: 112px;
     }
     
     .chat-input-container {
@@ -2235,6 +2236,11 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
     
     .input-wrapper {
         min-width: 0;
+    }
+
+    .input-actions {
+        bottom: calc(100% + 6px);
+        right: 8px;
     }
     
     #userInput {
@@ -2256,8 +2262,9 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
     
     .mobile-tab {
         font-size: 12px;
-        padding: 10px 8px;
+        padding: 9px 6px;
         min-height: 42px;
+        max-width: 108px;
     }
 }
 
@@ -2689,8 +2696,8 @@ body.light-theme .btn-settings-floating:hover {
     .btn-clear-floating {
         top: 8px;
         left: 8px;
-        width: 42px;
-        height: 42px;
+        width: 56px;
+        height: 56px;
         padding: 0;
         border-radius: 10px;
         display: flex;
@@ -2700,8 +2707,8 @@ body.light-theme .btn-settings-floating:hover {
     .btn-settings-floating {
         top: 8px;
         right: 8px;
-        width: 42px;
-        height: 42px;
+        width: 56px;
+        height: 56px;
         padding: 0;
         border-radius: 10px;
         display: flex;
@@ -2710,8 +2717,8 @@ body.light-theme .btn-settings-floating:hover {
     }
     .btn-clear-floating svg,
     .btn-settings-floating svg {
-        width: 22px;
-        height: 22px;
+        width: 26px;
+        height: 26px;
     }
 }
 
