@@ -217,6 +217,9 @@ Sales / ЗИП: если клиент чётко знает конкретную
 Действия для CRM (следующие шаги: отправить КП, уточнить данные, записать на диагностику и т.д.).
 Метаданные (распознанный статус клиента, является ли торгующей организацией, применялась ли фильтрация торгующих организаций).`;
 
+const localStorageScalarCache = new Map();
+let isLocalStorageAccessible = true;
+
 function generateSessionId() {
     return 'session_' + Date.now() + '_' + Math.random().toString(36).slice(2, 11);
 }
@@ -638,7 +641,6 @@ const localJsonStorageCache = new Map();
 const localJsonStorageDirtyKeys = new Set();
 const localJsonStorageRemovedKeys = new Set();
 let localJsonStorageFlushTimer = null;
-let isLocalStorageAccessible = true;
 
 function getSafeLocalStorageValue(key) {
     if (!isLocalStorageAccessible) return null;
@@ -768,8 +770,6 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
         }
     });
 }
-
-const localStorageScalarCache = new Map();
 
 function getCachedStorageValue(key, fallback = '') {
     if (localStorageScalarCache.has(key)) {
