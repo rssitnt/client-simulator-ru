@@ -2401,10 +2401,7 @@ async function restoreAuthSession() {
 
 // Check if current user is admin
 function isAdmin() {
-    const resolvedRole = normalizeRole(
-        currentUser?.role || localStorage.getItem(USER_ROLE_KEY) || selectedRole || 'user'
-    );
-    return resolvedRole === 'admin';
+    return normalizeRole(currentUser?.role || 'user') === 'admin';
 }
 
 // Apply role-based restrictions
