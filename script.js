@@ -97,6 +97,9 @@ const CORPORATE_EMAIL_DOMAINS = new Set([
 const USER_ROLE_KEY = 'userRole';
 const USER_NAME_KEY = 'managerName';
 const USER_LOGIN_KEY = 'managerLogin';
+const THEME_STORAGE_KEY = 'theme';
+const ACCENT_COLOR_STORAGE_KEY = 'accentColor';
+const RATER_PROMPT_VERSION_STORAGE_KEY = 'raterPromptVersion';
 const MAX_FAILED_PASSWORD_ATTEMPTS = 15;
 const ACTIVE_IDLE_TIMEOUT_MS = 60000;
 const ACTIVE_TICK_MS = 5000;
@@ -219,14 +222,17 @@ function generateSessionId() {
 }
 
 // Generate unique session ID
-let baseSessionId = localStorage.getItem(SESSION_ID_STORAGE_KEY) || generateSessionId();
+let baseSessionId = getCachedStorageValue(SESSION_ID_STORAGE_KEY);
+if (!baseSessionId) {
+    baseSessionId = generateSessionId();
+}
 let clientSessionId = '';
 let managerSessionId = '';
 let raterSessionId = '';
 
 function refreshSessionIds(sessionId = baseSessionId) {
     baseSessionId = String(sessionId || generateSessionId());
-    localStorage.setItem(SESSION_ID_STORAGE_KEY, baseSessionId);
+    setCachedStorageValue(SESSION_ID_STORAGE_KEY, baseSessionId);
     clientSessionId = `${baseSessionId}_client`;
     managerSessionId = `${baseSessionId}_manager`;
     raterSessionId = `${baseSessionId}_rater`;
@@ -730,6 +736,31 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
             flushLocalJsonStorageCacheNow();
         }
     });
+}
+
+const localStorageScalarCache = new Map();
+
+function getCachedStorageValue(key, fallback = '') {
+    if (localStorageScalarCache.has(key)) {
+        return localStorageScalarCache.get(key);
+    }
+
+    const raw = localStorage.getItem(key);
+    const value = raw === null ? fallback : raw;
+    localStorageScalarCache.set(key, value);
+    return value;
+}
+
+function setCachedStorageValue(key, value) {
+    const normalized = value == null ? '' : String(value);
+    localStorageScalarCache.set(key, normalized);
+    localStorage.setItem(key, normalized);
+    return normalized;
+}
+
+function removeCachedStorageValue(key) {
+    localStorageScalarCache.delete(key);
+    localStorage.removeItem(key);
 }
 
 function setAuthSession(login) {
@@ -1779,9 +1810,9 @@ function applyAuthenticatedUser(user) {
     currentUser = normalized;
     lastSessionRevocationCheckAt = 0;
     selectedRole = normalized.role;
-    localStorage.setItem(USER_ROLE_KEY, normalized.role);
-    localStorage.setItem(USER_NAME_KEY, normalized.fio);
-    localStorage.setItem(USER_LOGIN_KEY, normalized.login);
+    setCachedStorageValue(USER_ROLE_KEY, normalized.role);
+    setCachedStorageValue(USER_NAME_KEY, normalized.fio);
+    setCachedStorageValue(USER_LOGIN_KEY, normalized.login);
     managerNameInput.value = normalized.fio;
 
     if (currentRoleDisplay) {
@@ -1808,7 +1839,7 @@ function resetCurrentSessionToAuth(message = '') {
     lastSessionRevocationCheckAt = 0;
     currentUser = null;
     selectedRole = 'user';
-    localStorage.setItem(USER_ROLE_KEY, 'user');
+    setCachedStorageValue(USER_ROLE_KEY, 'user');
     clearAuthSession();
     applyRoleRestrictions();
     showNameModal();
@@ -2083,7 +2114,7 @@ async function toggleAccessForLogin(login, nextActive, user, invite, accessRevoc
                 ...refreshedUser
             }, normalizedLogin) || currentUser;
             selectedRole = currentUser.role;
-            localStorage.setItem(USER_ROLE_KEY, currentUser.role);
+            setCachedStorageValue(USER_ROLE_KEY, currentUser.role);
             if (currentRoleDisplay) {
                 currentRoleDisplay.textContent = getRoleLabelUi(currentUser.role);
             }
@@ -2165,7 +2196,7 @@ async function renderAdminUsersTable() {
                 if (currentUser && user.login === currentUser.login) {
                     currentUser.role = nextRole;
                     selectedRole = nextRole;
-                    localStorage.setItem(USER_ROLE_KEY, nextRole);
+                    setCachedStorageValue(USER_ROLE_KEY, nextRole);
                     if (currentRoleDisplay) {
                         currentRoleDisplay.textContent = getRoleLabelUi(nextRole);
                     }
@@ -3160,11 +3191,11 @@ function generateId() {
 }
 
 function getPromptOwnerKey() {
-    const storedName = (localStorage.getItem('managerName') || managerNameInput?.value || 'guest')
+    const storedName = (getCachedStorageValue(USER_NAME_KEY, '') || managerNameInput?.value || 'guest')
         .trim()
         .toLowerCase()
         .replace(/\s+/g, '_');
-    const role = localStorage.getItem('userRole') || selectedRole || 'user';
+    const role = getCachedStorageValue(USER_ROLE_KEY, selectedRole) || selectedRole || 'user';
     return `${role}:${storedName || 'guest'}`;
 }
 
@@ -3667,7 +3698,7 @@ function initPromptsData(firebaseData = {}) {
     });
 
     if (isAdmin()) {
-        const appliedVersion = localStorage.getItem('raterPromptVersion');
+        const appliedVersion = getCachedStorageValue(RATER_PROMPT_VERSION_STORAGE_KEY);
         if (appliedVersion !== RATER_PROMPT_VERSION) {
             const activePublicRaterId = getPublicActiveId('rater');
             const activePublicVar = promptsData.rater.variations.find(
@@ -3676,7 +3707,7 @@ function initPromptsData(firebaseData = {}) {
             if (activePublicVar) {
                 activePublicVar.content = DEFAULT_RATER_PROMPT;
                 didRestorePublicPrompt = true;
-                localStorage.setItem('raterPromptVersion', RATER_PROMPT_VERSION);
+                setCachedStorageValue(RATER_PROMPT_VERSION_STORAGE_KEY, RATER_PROMPT_VERSION);
             }
         }
     }
@@ -4164,7 +4195,7 @@ async function loadPrompts() {
     const restored = await restoreAuthSession();
     if (!restored) {
         selectedRole = 'user';
-        localStorage.setItem(USER_ROLE_KEY, 'user');
+        setCachedStorageValue(USER_ROLE_KEY, 'user');
         showNameModal();
     } else {
         hideNameModal();
@@ -4276,11 +4307,11 @@ function showNameModal() {
         nameModalStep1.style.display = 'block';
     }
     if (modalNameInput && !modalNameInput.value) {
-        modalNameInput.value = sanitizeAuthName(localStorage.getItem(USER_NAME_KEY) || '');
+        modalNameInput.value = sanitizeAuthName(getCachedStorageValue(USER_NAME_KEY));
         sanitizeModalNameInput();
     }
     if (modalLoginInput && !modalLoginInput.value) {
-        modalLoginInput.value = localStorage.getItem(USER_LOGIN_KEY) || '';
+        modalLoginInput.value = getCachedStorageValue(USER_LOGIN_KEY);
     }
     if (modalPasswordInput) {
         modalPasswordInput.value = '';
@@ -4509,7 +4540,7 @@ function updateVoiceModeControls() {
 function getConfiguredGeminiApiKey() {
     return String(
         (typeof window !== 'undefined' && (window.GEMINI_LIVE_API_KEY || window.GEMINI_API_KEY)) ||
-        localStorage.getItem(GEMINI_LIVE_API_KEY_STORAGE_KEY) ||
+        getCachedStorageValue(GEMINI_LIVE_API_KEY_STORAGE_KEY) ||
         ''
     ).trim();
 }
@@ -4539,7 +4570,7 @@ function getDefaultGeminiTokenEndpoint() {
 }
 
 function getConfiguredGeminiTokenEndpoint() {
-    const localOverride = normalizeGeminiTokenEndpoint(localStorage.getItem(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY) || '');
+    const localOverride = normalizeGeminiTokenEndpoint(getCachedStorageValue(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY));
     if (localOverride) return localOverride;
 
     const sharedEndpoint = getSharedGeminiTokenEndpoint();
@@ -4551,7 +4582,7 @@ function getConfiguredGeminiTokenEndpoint() {
 function getConfiguredGeminiVoiceName() {
     const value = String(
         (typeof window !== 'undefined' && window.GEMINI_LIVE_VOICE_NAME) ||
-        localStorage.getItem(GEMINI_LIVE_VOICE_NAME_STORAGE_KEY) ||
+        getCachedStorageValue(GEMINI_LIVE_VOICE_NAME_STORAGE_KEY) ||
         ''
     ).trim().toLowerCase();
     if (!value) return OPENAI_DEFAULT_VOICE;
@@ -4560,7 +4591,7 @@ function getConfiguredGeminiVoiceName() {
 
 function populateVoiceConfigFields() {
     if (geminiApiKeyInput) {
-        geminiApiKeyInput.value = localStorage.getItem(GEMINI_LIVE_API_KEY_STORAGE_KEY) || '';
+        geminiApiKeyInput.value = getCachedStorageValue(GEMINI_LIVE_API_KEY_STORAGE_KEY);
     }
     if (geminiTokenEndpointInput) {
         geminiTokenEndpointInput.value = getConfiguredGeminiTokenEndpoint();
@@ -4585,21 +4616,21 @@ async function saveVoiceModeConfigFromInputs() {
     const voiceName = voiceNameRaw ? (OPENAI_VOICE_NAMES.has(voiceNameRaw) ? voiceNameRaw : OPENAI_DEFAULT_VOICE) : '';
 
     if (apiKey) {
-        localStorage.setItem(GEMINI_LIVE_API_KEY_STORAGE_KEY, apiKey);
+        setCachedStorageValue(GEMINI_LIVE_API_KEY_STORAGE_KEY, apiKey);
     } else {
-        localStorage.removeItem(GEMINI_LIVE_API_KEY_STORAGE_KEY);
+        removeCachedStorageValue(GEMINI_LIVE_API_KEY_STORAGE_KEY);
     }
 
     if (tokenEndpoint) {
-        localStorage.setItem(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY, tokenEndpoint);
+        setCachedStorageValue(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY, tokenEndpoint);
     } else {
-        localStorage.removeItem(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY);
+        removeCachedStorageValue(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY);
     }
 
     if (voiceName) {
-        localStorage.setItem(GEMINI_LIVE_VOICE_NAME_STORAGE_KEY, voiceName);
+        setCachedStorageValue(GEMINI_LIVE_VOICE_NAME_STORAGE_KEY, voiceName);
     } else {
-        localStorage.removeItem(GEMINI_LIVE_VOICE_NAME_STORAGE_KEY);
+        removeCachedStorageValue(GEMINI_LIVE_VOICE_NAME_STORAGE_KEY);
     }
 
     let sharedSaved = false;
@@ -4617,9 +4648,9 @@ async function saveVoiceModeConfigFromInputs() {
 }
 
 async function clearVoiceModeConfig() {
-    localStorage.removeItem(GEMINI_LIVE_API_KEY_STORAGE_KEY);
-    localStorage.removeItem(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY);
-    localStorage.removeItem(GEMINI_LIVE_VOICE_NAME_STORAGE_KEY);
+    removeCachedStorageValue(GEMINI_LIVE_API_KEY_STORAGE_KEY);
+    removeCachedStorageValue(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY);
+    removeCachedStorageValue(GEMINI_LIVE_VOICE_NAME_STORAGE_KEY);
 
     if (db && selectedRole === 'admin') {
         try {
@@ -4661,7 +4692,7 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}) {
             credentials: 'omit',
             body: JSON.stringify({
                 source: 'client-simulator-web',
-                login: currentUser?.login || localStorage.getItem(USER_LOGIN_KEY) || '',
+                login: currentUser?.login || getCachedStorageValue(USER_LOGIN_KEY) || '',
                 model: sessionConfig?.model || GEMINI_LIVE_MODEL,
                 voice: sessionConfig?.voice || getConfiguredGeminiVoiceName(),
                 instructions: String(sessionConfig?.instructions || '').trim()
@@ -6053,9 +6084,9 @@ function hidePromptHistoryModal() {
 
 function showSettingsModal() {
     hideTooltip(true);
-    const savedName = currentUser?.fio || localStorage.getItem(USER_NAME_KEY) || '';
-    const userRole = normalizeRole(currentUser?.role || localStorage.getItem(USER_ROLE_KEY) || 'user');
-    const loginValue = currentUser?.login || localStorage.getItem(USER_LOGIN_KEY) || '-';
+    const savedName = currentUser?.fio || getCachedStorageValue(USER_NAME_KEY) || '';
+    const userRole = normalizeRole(currentUser?.role || getCachedStorageValue(USER_ROLE_KEY, 'user') || 'user');
+    const loginValue = currentUser?.login || getCachedStorageValue(USER_LOGIN_KEY) || '-';
 
     settingsNameInput.value = savedName;
     if (accountLoginValue) {
@@ -6063,7 +6094,7 @@ function showSettingsModal() {
     }
     autoResizeNameInput();
     selectedRole = userRole;
-    localStorage.setItem(USER_ROLE_KEY, userRole);
+    setCachedStorageValue(USER_ROLE_KEY, userRole);
     currentRoleDisplay.textContent = getRoleLabelUi(userRole);
     
     // Hide password section
@@ -6099,8 +6130,8 @@ function hideSettingsModal() {
     }
 
 function updateUserNameDisplay() {
-    const name = currentUser?.fio || localStorage.getItem(USER_NAME_KEY) || 'Гость';
-    const role = normalizeRole(currentUser?.role || localStorage.getItem(USER_ROLE_KEY) || 'user');
+    const name = currentUser?.fio || getCachedStorageValue(USER_NAME_KEY) || 'Гость';
+    const role = normalizeRole(currentUser?.role || getCachedStorageValue(USER_ROLE_KEY, 'user') || 'user');
     const roleIcon = getRoleIcon(role);
     currentUserName.textContent = `${roleIcon} ${name}`;
 }
@@ -6396,7 +6427,7 @@ bindEvent(settingsNameInput, 'input', () => {
     const newName = normalizeFio(settingsNameInput.value);
     if (!newName || !currentUser) return;
     managerNameInput.value = newName;
-    localStorage.setItem(USER_NAME_KEY, newName);
+    setCachedStorageValue(USER_NAME_KEY, newName);
     currentUser.fio = newName;
     updateUserNameDisplay();
 
@@ -6438,7 +6469,7 @@ bindEvent(clearVoiceConfigBtn, 'click', () => {
 bindEvent(themeToggle, 'change', () => {
     const isLight = themeToggle.checked;
     document.body.classList.toggle('light-theme', isLight);
-    localStorage.setItem('theme', isLight ? 'light' : 'dark');
+    setCachedStorageValue(THEME_STORAGE_KEY, isLight ? 'light' : 'dark');
 });
 
 // Accent color picker
@@ -6478,7 +6509,7 @@ colorPresets.forEach(preset => {
     preset.addEventListener('click', () => {
         const color = preset.dataset.color;
         setAccentColor(color);
-        localStorage.setItem('accentColor', color);
+        setCachedStorageValue(ACCENT_COLOR_STORAGE_KEY, color);
         updateColorPresetActive(color);
     });
 });
@@ -6506,7 +6537,7 @@ if (moreColorsBtn && moreColorsPopup) {
         option.addEventListener('click', () => {
             const color = option.dataset.color;
             setAccentColor(color);
-            localStorage.setItem('accentColor', color);
+            setCachedStorageValue(ACCENT_COLOR_STORAGE_KEY, color);
             updateColorPresetActive(color);
             moreColorsPopup.classList.remove('active');
         });
@@ -6514,12 +6545,12 @@ if (moreColorsBtn && moreColorsPopup) {
 }
 
 // Load saved accent color
-const savedAccentColor = localStorage.getItem('accentColor') || '#7F96FF';
+const savedAccentColor = getCachedStorageValue(ACCENT_COLOR_STORAGE_KEY, '#7F96FF');
 setAccentColor(savedAccentColor);
 updateColorPresetActive(savedAccentColor);
 
 // Load saved theme
-const savedTheme = localStorage.getItem('theme');
+const savedTheme = getCachedStorageValue(THEME_STORAGE_KEY);
 if (savedTheme === 'light') {
     themeToggle.checked = true;
     document.body.classList.add('light-theme');
@@ -6527,7 +6558,7 @@ if (savedTheme === 'light') {
 
 // Change role button
 changeRoleBtn.addEventListener('click', () => {
-    const currentRole = currentUser?.role || localStorage.getItem(USER_ROLE_KEY) || 'user';
+    const currentRole = currentUser?.role || getCachedStorageValue(USER_ROLE_KEY, 'user') || 'user';
     
     if (currentRole === 'admin') {
         // Admin -> User (no password needed)
@@ -6555,7 +6586,7 @@ async function switchRole(newRole) {
         role
     }, currentUser.login);
     selectedRole = role;
-    localStorage.setItem(USER_ROLE_KEY, role);
+    setCachedStorageValue(USER_ROLE_KEY, role);
     currentRoleDisplay.textContent = getRoleLabelUi(role);
     applyRoleRestrictions();
     showCopyNotification(`Роль изменена на ${getRoleLabelUi(role)}`);
@@ -7396,7 +7427,7 @@ async function sendAttestationResult(dialogText, ratingText) {
         id: requestId,
         requestId,
         createdAt: new Date().toISOString(),
-        managerName: localStorage.getItem('managerName') || '',
+        managerName: getCachedStorageValue(USER_NAME_KEY),
         dialog,
         rating,
         clientPrompt: getActiveContent('client'),
@@ -7468,7 +7499,7 @@ async function buildAttestationDocxPayload(dialogText, ratingText, options = {})
     const fileBase64 = await blobToBase64(blob);
     const timestampSource = options.timestamp || new Date().toISOString();
     const timestamp = timestampSource.replace(/[:.]/g, '-');
-    const rawName = options.managerName || localStorage.getItem('managerName') || '';
+    const rawName = options.managerName || getCachedStorageValue(USER_NAME_KEY) || '';
     const safeName = sanitizeFileNamePart(rawName) || 'user';
     return {
         fileName: `attestation_${safeName}_${timestamp}.docx`,
