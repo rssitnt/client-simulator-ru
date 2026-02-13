@@ -562,6 +562,7 @@ let elevenLabsConversationFinished = false;
 let elevenLabsWidgetLoadPromise = null;
 let activeVoiceModeProvider = 'elevenlabs';
 let voiceModeOpenRequestId = 0;
+let voiceModeWidgetHideTimerId = 0;
 const elevenLabsSocketOpenState = new WeakMap();
 let reratePromptElement = null;
 let attestationQueue = [];
@@ -4946,6 +4947,12 @@ function setVoiceModeStatus(text, state = 'idle') {
     voiceModeStatus.dataset.state = state;
 }
 
+function clearVoiceModeWidgetHideTimer() {
+    if (!voiceModeWidgetHideTimerId) return;
+    clearTimeout(voiceModeWidgetHideTimerId);
+    voiceModeWidgetHideTimerId = 0;
+}
+
 function isElevenLabsWidgetDefined() {
     if (typeof customElements === 'undefined') return false;
     if (typeof customElements.get !== 'function') return false;
@@ -5048,6 +5055,37 @@ async function ensureElevenLabsWidgetReady() {
     const isReady = await elevenLabsWidgetLoadPromise;
     elevenLabsWidgetLoadPromise = null;
     return isReady;
+}
+
+async function canReachElevenLabsNetwork(timeoutMs = 3200) {
+    if (typeof fetch !== 'function') return true;
+    const targets = [
+        'https://api.elevenlabs.io',
+        'https://elevenlabs.io'
+    ];
+
+    for (const target of targets) {
+        let timeoutId = null;
+        let controller = null;
+        try {
+            if (typeof AbortController !== 'undefined') {
+                controller = new AbortController();
+                timeoutId = setTimeout(() => controller.abort(), Math.max(1000, timeoutMs));
+            }
+            await fetch(target, {
+                method: 'GET',
+                mode: 'no-cors',
+                cache: 'no-store',
+                signal: controller ? controller.signal : undefined
+            });
+            if (timeoutId) clearTimeout(timeoutId);
+            return true;
+        } catch (error) {
+            if (timeoutId) clearTimeout(timeoutId);
+        }
+    }
+
+    return false;
 }
 
 function updateVoiceModeControls() {
@@ -6546,6 +6584,7 @@ async function showVoiceModeModal() {
     hideTooltip(true);
     const openRequestId = ++voiceModeOpenRequestId;
     activeVoiceModeProvider = 'elevenlabs';
+    clearVoiceModeWidgetHideTimer();
     try {
         resetElevenLabsVoiceSessionState();
         setVoiceModeStatus('Открываю голосовой режим…', 'idle');
@@ -6555,7 +6594,10 @@ async function showVoiceModeModal() {
         const widgetReady = await ensureElevenLabsWidgetReady();
         if (openRequestId !== voiceModeOpenRequestId || !voiceModeScreen || voiceModeScreen.hidden) return;
 
-        if (widgetReady) {
+        const networkReady = widgetReady ? await canReachElevenLabsNetwork() : false;
+        if (openRequestId !== voiceModeOpenRequestId || !voiceModeScreen || voiceModeScreen.hidden) return;
+
+        if (widgetReady && networkReady) {
             ensureElevenLabsSocketBridge();
             setVoiceModeStatus('Нажмите кнопку звонка для старта', 'idle');
             setElevenLabsWidgetHidden(false);
@@ -6564,8 +6606,12 @@ async function showVoiceModeModal() {
         }
 
         activeVoiceModeProvider = 'openai';
-        setVoiceModeStatus('ElevenLabs недоступен в этой сети. Подключаю встроенный голосовой режим…', 'waiting');
-        showCopyNotification('ElevenLabs недоступен без VPN. Запускаю встроенный голосовой режим.');
+        if (widgetReady && !networkReady) {
+            setVoiceModeStatus('Сеть блокирует ElevenLabs. Подключаю встроенный голосовой режим…', 'waiting');
+            showCopyNotification('ElevenLabs недоступен в текущей сети. Запускаю встроенный режим.');
+        } else {
+            setVoiceModeStatus('ElevenLabs не загрузился. Подключаю встроенный голосовой режим…', 'waiting');
+        }
         await startGeminiVoiceMode();
         if (openRequestId !== voiceModeOpenRequestId || !voiceModeScreen || voiceModeScreen.hidden) {
             await stopGeminiVoiceMode({ silent: true, expectedClose: true });
@@ -6583,6 +6629,7 @@ async function showVoiceModeModal() {
 
 function hideVoiceModeModal() {
     voiceModeOpenRequestId += 1;
+    clearVoiceModeWidgetHideTimer();
     const shouldStopRealtimeVoice = activeVoiceModeProvider === 'openai' ||
         isGeminiVoiceConnecting ||
         isGeminiVoiceActive ||
@@ -6595,7 +6642,8 @@ function hideVoiceModeModal() {
     setVoiceModeScreenActive(false);
     elevenLabsConversationFinished = false;
     activeVoiceModeProvider = 'elevenlabs';
-    setTimeout(() => {
+    voiceModeWidgetHideTimerId = setTimeout(() => {
+        voiceModeWidgetHideTimerId = 0;
         setElevenLabsWidgetHidden(true);
     }, 120);
 }
