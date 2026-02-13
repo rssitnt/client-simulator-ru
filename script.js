@@ -60,10 +60,26 @@ const PENDING_EMAIL_SIGNIN_LINK_STORAGE_KEY = 'pendingEmailSignInLink:v1';
 const EMAIL_LINK_HINT_STORAGE_KEY = 'emailLinkHint:v1';
 const EMAIL_LINK_VERIFIED_HINT_STORAGE_KEY = 'emailLinkVerifiedHint:v1';
 const EMAIL_LINK_AUTH_READY_STORAGE_KEY = 'emailLinkAuthReady:v1';
+const EMAIL_LINK_PROCESSED_STORAGE_KEY = 'emailLinkProcessed:v1';
+const EMAIL_LINK_PROCESSED_TTL_MS = 24 * 60 * 60 * 1000;
 const SESSION_ID_STORAGE_KEY = 'sessionId';
 const EMAIL_LINK_HINT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const EMAIL_LINK_VERIFIED_HINT_MAX_AGE_MS = 30 * 60 * 1000;
 const EMAIL_LINK_AUTH_READY_MAX_AGE_MS = 30 * 60 * 1000;
+const ACCESS_CONTROL_DECISION_REASON = {
+    ADMIN: 'admin',
+    CORPORATE: 'corporate',
+    INVITE: 'invite',
+    REVOKED: 'revoked',
+    BLOCKED: 'blocked',
+    NOT_FOUND: 'not_found'
+};
+
+const ACCESS_CONTROL_DECISION_ACTION = {
+    REFRESH: 'refresh',
+    CLOSE_SESSION: 'close_session',
+    SHOW_HELP: 'show_help'
+};
 const CORPORATE_EMAIL_DOMAINS = new Set([
     '7271155.ru',
     '7274069.ru',
@@ -118,6 +134,14 @@ const FILESAVER_LIBRARY_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/FileSaver.
 const EXTERNAL_SCRIPT_LOAD_PROMISES = new Map();
 
 const RATER_PROMPT_VERSION = '2025-01-30';
+const PASSWORD_HASH_ALGORITHM = 'PBKDF2';
+const PASSWORD_HASH_ITERATIONS = 120000;
+const PASSWORD_HASH_KEY_BYTES = 32;
+const PASSWORD_HASH_SALT_BYTES = 16;
+const PASSWORD_HASH_FORMAT_PREFIX = 'pbkdf2:v1';
+const PASSWORD_HASH_FALLBACK_PREFIX = 'sha256:v1';
+const FAILED_LOGIN_BACKOFF_BASE_MS = 1200;
+const FAILED_LOGIN_BACKOFF_MAX_MS = 60 * 1000;
 const DEFAULT_RATER_PROMPT = `РОЛЬ
 Ты — строгий аудитор звонков компании. Твоя задача: автоматически классифицировать звонок (Сервисный центр или Сбыт навесного оборудования и запчастей) и оценить его по соответствующему регламенту. Работай только по правилам ниже, без домыслов, с прозрачными доказательствами из транскрипта.
 
@@ -816,6 +840,21 @@ function clearAuthSession() {
     removeCachedStorageValue(AUTH_SESSION_STORAGE_KEY);
 }
 
+function clearAuthCacheIdentity() {
+    removeCachedStorageValue(USER_ROLE_KEY);
+    removeCachedStorageValue(USER_NAME_KEY);
+    removeCachedStorageValue(USER_LOGIN_KEY);
+}
+
+function clearAuthCacheIdentityForLogin(login = '') {
+    const normalizedLogin = normalizeLogin(login);
+    if (!normalizedLogin) return false;
+    const cachedLogin = normalizeLogin(getCachedStorageValue(USER_LOGIN_KEY));
+    if (cachedLogin !== normalizedLogin) return false;
+    clearAuthCacheIdentity();
+    return true;
+}
+
 function parseIsoMs(value) {
     const ms = new Date(value || '').getTime();
     return Number.isFinite(ms) ? ms : null;
@@ -960,6 +999,74 @@ function isAccessRevokedForLogin(accessRevocation, login) {
     const normalizedLogin = normalizeLogin(login);
     if (!normalizedLogin || !accessRevocation) return false;
     return accessRevocation.login === normalizedLogin && accessRevocation.status === 'revoked';
+}
+
+function buildAccessPolicyDeny(reason, options = {}) {
+    return {
+        decision: 'deny',
+        reason,
+        nextAction: options.nextAction || ACCESS_CONTROL_DECISION_ACTION.SHOW_HELP,
+        ...options
+    };
+}
+
+function buildAccessPolicyAllow(reason, options = {}) {
+    return {
+        decision: 'allow',
+        reason,
+        nextAction: ACCESS_CONTROL_DECISION_ACTION.REFRESH,
+        ...options
+    };
+}
+
+function resolveAccessPolicyDecisionMessage(decision) {
+    if (!decision || decision.decision !== 'deny') return '';
+    switch (decision.reason) {
+        case ACCESS_CONTROL_DECISION_REASON.REVOKED:
+            return 'Доступ закрыт администратором. Обратитесь для восстановления.';
+        case ACCESS_CONTROL_DECISION_REASON.BLOCKED:
+            return decision.blockedReason || 'Доступ временно закрыт по безопасности.';
+        case ACCESS_CONTROL_DECISION_REASON.NOT_FOUND:
+            return 'Используйте корпоративную почту, если вы сотрудник компании. Если вы партнёр, получите ссылку по приглашению.';
+        default:
+            return 'Вход в систему запрещён.';
+    }
+}
+
+function applySessionPolicy(accessDecision, options = {}) {
+    const {
+        userLogin = '',
+        onDeny = null
+    } = options;
+
+    if (!accessDecision || accessDecision.decision === 'allow') {
+        return false;
+    }
+
+    const message = String(resolveAccessPolicyDecisionMessage(accessDecision) || '').trim();
+
+    if (accessDecision.nextAction === ACCESS_CONTROL_DECISION_ACTION.CLOSE_SESSION) {
+        clearAuthSession();
+        const normalizedUserLogin = normalizeLogin(userLogin);
+        const shouldClearIdentity = normalizedUserLogin
+            ? clearAuthCacheIdentityForLogin(normalizedUserLogin) || !!(currentUser && normalizeLogin(currentUser.login) === normalizedUserLogin)
+            : false;
+        if (shouldClearIdentity) {
+            resetCurrentSessionToAuth(message);
+        } else if (message) {
+            setAuthError(message);
+        } else if (typeof onDeny === 'function') {
+            onDeny();
+        }
+        return true;
+    }
+
+    if (message) {
+        setAuthError(message);
+    } else if (typeof onDeny === 'function') {
+        onDeny();
+    }
+    return false;
 }
 
 function saveEmailLinkContext(context) {
@@ -1133,6 +1240,66 @@ function getEmailLinkHint() {
 
 function clearEmailLinkHint() {
     removeCachedStorageValue(EMAIL_LINK_HINT_STORAGE_KEY);
+}
+
+function loadEmailLinkProcessedState() {
+    return getCachedLocalStorageJson(EMAIL_LINK_PROCESSED_STORAGE_KEY);
+}
+
+function saveEmailLinkProcessedState(state = {}) {
+    setCachedLocalStorageJson(EMAIL_LINK_PROCESSED_STORAGE_KEY, state || {});
+}
+
+function pruneEmailLinkProcessedState(state = {}) {
+    const now = Date.now();
+    const next = {};
+    Object.entries(state || {}).forEach(([key, item]) => {
+        if (!item || typeof item !== 'object') return;
+        const processedAt = parseIsoMs(item.processedAt || '');
+        if (!processedAt) return;
+        if ((now - processedAt) > EMAIL_LINK_PROCESSED_TTL_MS) return;
+        next[key] = item;
+    });
+    return next;
+}
+
+function normalizeEmailLinkProcessingAction(action = '') {
+    const normalized = String(action || '').trim().toLowerCase();
+    return normalized === 'invite' ? 'invite' : 'verify';
+}
+
+function buildEmailLinkProcessingKey(login, signInLink, action = 'verify') {
+    const normalizedLogin = normalizeLogin(login);
+    const normalizedAction = normalizeEmailLinkProcessingAction(action);
+    const normalizedLink = String(signInLink || '').trim();
+    const linkMarker = btoa(unescape(encodeURIComponent(normalizedLink))).replace(/=+$/g, '');
+    return `${normalizedLogin}|${normalizedAction}|${linkMarker}`;
+}
+
+function isEmailLinkProcessed(login, signInLink, action = 'verify') {
+    const normalizedLogin = normalizeLogin(login);
+    const normalizedLink = String(signInLink || '').trim();
+    if (!normalizedLogin || !normalizedLink) return false;
+    const state = pruneEmailLinkProcessedState(loadEmailLinkProcessedState());
+    const key = buildEmailLinkProcessingKey(normalizedLogin, normalizedLink, action);
+    saveEmailLinkProcessedState(state);
+    return !!state[key];
+}
+
+function markEmailLinkProcessed(login, signInLink, action = 'verify') {
+    const normalizedLogin = normalizeLogin(login);
+    const normalizedLink = String(signInLink || '').trim();
+    const normalizedAction = normalizeEmailLinkProcessingAction(action);
+    if (!normalizedLogin || !normalizedLink) return;
+
+    const state = pruneEmailLinkProcessedState(loadEmailLinkProcessedState());
+    const key = buildEmailLinkProcessingKey(normalizedLogin, normalizedLink, normalizedAction);
+    state[key] = {
+        login: normalizedLogin,
+        action: normalizedAction,
+        processedAt: new Date().toISOString()
+    };
+    saveEmailLinkProcessedState(state);
 }
 
 function tryDecodeUrlValue(value) {
@@ -1483,43 +1650,75 @@ async function listPartnerInvites() {
 
 async function resolveAccessPolicy(login, userRecord = null) {
     const normalizedLogin = normalizeLogin(login);
-    if (!isValidLogin(normalizedLogin)) return null;
+    if (!isValidLogin(normalizedLogin)) {
+        return buildAccessPolicyDeny(ACCESS_CONTROL_DECISION_REASON.NOT_FOUND, {
+            nextAction: ACCESS_CONTROL_DECISION_ACTION.SHOW_HELP
+        });
+    }
+
     if (userRecord?.isBlocked) {
-        return null;
+        return buildAccessPolicyDeny(ACCESS_CONTROL_DECISION_REASON.BLOCKED, {
+            nextAction: ACCESS_CONTROL_DECISION_ACTION.CLOSE_SESSION,
+            blockedReason: 'Пользователь заблокирован после превышения лимита попыток.'
+        });
     }
 
     const accessRevocation = await getAccessRevocation(normalizedLogin);
     if (isAccessRevokedForLogin(accessRevocation, normalizedLogin)) {
-        return null;
+        return buildAccessPolicyDeny(ACCESS_CONTROL_DECISION_REASON.REVOKED, {
+            nextAction: ACCESS_CONTROL_DECISION_ACTION.CLOSE_SESSION,
+            accessRevocation
+        });
     }
 
     if (userRecord?.role === 'admin') {
-        return { type: 'admin', role: 'admin', invite: null };
+        return buildAccessPolicyAllow(ACCESS_CONTROL_DECISION_REASON.ADMIN, {
+            user: userRecord,
+            invite: null,
+            accessRevocation: null,
+            role: 'admin'
+        });
     }
 
     if (isCorporateEmail(normalizedLogin)) {
-        return { type: 'corporate', role: 'user', invite: null };
+        return buildAccessPolicyAllow(ACCESS_CONTROL_DECISION_REASON.CORPORATE, {
+            user: userRecord || null,
+            invite: null,
+            accessRevocation
+        });
     }
 
     const invite = await getPartnerInviteByLogin(normalizedLogin);
     if (isPartnerInviteActive(invite)) {
-        return {
-            type: 'partner',
-            role: 'user',
-            invite
-        };
+        return buildAccessPolicyAllow(ACCESS_CONTROL_DECISION_REASON.INVITE, {
+            user: userRecord || null,
+            invite,
+            accessRevocation
+        });
     }
 
-    return null;
+    return buildAccessPolicyDeny(ACCESS_CONTROL_DECISION_REASON.NOT_FOUND, {
+        nextAction: ACCESS_CONTROL_DECISION_ACTION.SHOW_HELP,
+        accessRevocation,
+        user: userRecord || null,
+        invite: null
+    });
 }
 
 async function finalizeEmailLinkVerification(login, signInLink) {
     const detectedAction = getEmailActionFromCurrentLink(signInLink || window.location.href);
     const linkAction = detectedAction === 'invite' || detectedAction === 'verify' ? detectedAction : 'verify';
-    await signInWithEmailLink(auth, login, signInLink);
+    const normalizedLogin = normalizeLogin(login);
+
+    if (isEmailLinkProcessed(normalizedLogin, signInLink, linkAction)) {
+        setAuthError('Ссылка уже подтверждена. Продолжайте вход.');
+        return false;
+    }
+
+    await signInWithEmailLink(auth, normalizedLogin, signInLink);
     const nowIso = new Date().toISOString();
 
-    const existingUser = await getUserRecordByLogin(login);
+    const existingUser = await getUserRecordByLogin(normalizedLogin);
     if (existingUser) {
         const wasVerifiedBefore = !!existingUser.emailVerifiedAt;
         await patchUserRecord(login, {
@@ -1529,6 +1728,8 @@ async function finalizeEmailLinkVerification(login, signInLink) {
             failedLoginAttempts: 0,
             isBlocked: false,
             blockedAt: null,
+            blockedReason: null,
+            failedLoginBackoffUntil: null,
             sessionRevokedAt: null,
             lastSeenAt: nowIso
         });
@@ -1541,6 +1742,7 @@ async function finalizeEmailLinkVerification(login, signInLink) {
         });
     }
 
+    markEmailLinkProcessed(normalizedLogin, signInLink, linkAction);
     saveEmailLinkAuthReady(login, linkAction);
     saveEmailLinkVerifiedHint({
         login,
@@ -1553,6 +1755,7 @@ async function finalizeEmailLinkVerification(login, signInLink) {
     if (modalLoginInput) {
         modalLoginInput.value = login;
     }
+    return true;
 }
 
 async function consumePendingEmailSignInLinkForLogin(login) {
@@ -1563,8 +1766,11 @@ async function consumePendingEmailSignInLinkForLogin(login) {
     if (!pendingLink) return false;
 
     try {
-        await finalizeEmailLinkVerification(normalizedLogin, pendingLink);
-        return true;
+        const finalized = await finalizeEmailLinkVerification(normalizedLogin, pendingLink);
+        if (!finalized) {
+            clearPendingEmailSignInLink();
+        }
+        return !!finalized;
     } catch (error) {
         const code = String(error?.code || '').trim();
         if (code === 'auth/invalid-action-code' || code === 'auth/expired-action-code') {
@@ -1595,16 +1801,29 @@ async function consumeEmailVerificationLinkIfPresent() {
         cleanupEmailLinkUrl();
         return;
     }
+    const linkAction = getEmailActionFromCurrentLink(signInLink || window.location.href) === 'invite' ? 'invite' : 'verify';
+    if (isEmailLinkProcessed(login, signInLink, linkAction)) {
+        clearPendingEmailSignInLink();
+        clearEmailLinkAuthReady();
+        clearEmailLinkHint();
+        cleanupEmailLinkUrl();
+        return;
+    }
 
     try {
-        await finalizeEmailLinkVerification(login, signInLink);
+        const finalized = await finalizeEmailLinkVerification(login, signInLink);
         clearEmailLinkHint();
+        if (!finalized) {
+            return;
+        }
     } catch (error) {
         console.error('Email link verification error:', error);
         const code = String(error?.code || '').trim();
         if (code === 'auth/missing-email' || code === 'auth/invalid-email') {
             savePendingEmailSignInLink(signInLink);
             setAuthError('Введите email из приглашения и нажмите «Войти», чтобы завершить подтверждение.');
+        } else if (code === 'auth/invalid-action-code' || code === 'auth/expired-action-code') {
+            setAuthError('Ссылка уже использована или просрочена. Запросите новую.');
         } else {
             setAuthError(getReadableFirebaseAuthError(error, 'consume_link'));
         }
@@ -1617,21 +1836,159 @@ async function consumeEmailVerificationLinkIfPresent() {
     }
 }
 
+function createTextEncoder() {
+    if (typeof TextEncoder === 'undefined') return null;
+    try {
+        return new TextEncoder();
+    } catch (error) {
+        return null;
+    }
+}
+
+function bytesToBase64(bytesLike) {
+    const bytes = new Uint8Array(bytesLike);
+    let binary = '';
+    bytes.forEach((b) => {
+        binary += String.fromCharCode(b);
+    });
+    return btoa(binary);
+}
+
+function base64ToBytes(base64) {
+    try {
+        const binary = atob(base64 || '');
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+    } catch (error) {
+        return null;
+    }
+}
+
+function parsePasswordHashWithState(rawHash = '') {
+    const normalized = String(rawHash || '').trim();
+    if (!normalized) return { format: 'legacy', raw: normalized };
+
+    if (normalized.startsWith(`${PASSWORD_HASH_FORMAT_PREFIX}|`)) {
+        const parts = normalized.split('|');
+        if (parts.length === 4) {
+            const iterations = Number(parts[1]);
+            const salt = base64ToBytes(parts[2]);
+            const derived = base64ToBytes(parts[3]);
+            if (Number.isFinite(iterations) && iterations > 0 && salt && derived) {
+                return {
+                    format: 'pbkdf2',
+                    prefix: PASSWORD_HASH_FORMAT_PREFIX,
+                    iterations,
+                    salt,
+                    derived
+                };
+            }
+        }
+        return { format: 'legacy', raw: normalized };
+    }
+
+    if (normalized.startsWith(`${PASSWORD_HASH_FALLBACK_PREFIX}|`)) {
+        return {
+            format: 'sha256',
+            prefix: PASSWORD_HASH_FALLBACK_PREFIX,
+            raw: normalized.slice(`${PASSWORD_HASH_FALLBACK_PREFIX}|`.length)
+        };
+    }
+
+    return { format: 'legacy', raw: normalized };
+}
+
+function isPasswordHashNeedsMigration(rawHash = '') {
+    const parsed = parsePasswordHashWithState(rawHash);
+    return parsed.format !== 'pbkdf2';
+}
+
+async function hashPasswordWithSubtleFallback(input) {
+    const encoder = createTextEncoder();
+    if (encoder && window.crypto?.subtle) {
+        const data = encoder.encode(String(input || ''));
+        const digest = await window.crypto.subtle.digest('SHA-256', data);
+        return Array.from(new Uint8Array(digest))
+            .map((b) => b.toString(16).padStart(2, '0'))
+            .join('');
+    }
+    return hashPasswordLegacy(input);
+}
+
+function hashPasswordLegacy(input) {
+    return btoa(unescape(encodeURIComponent(String(input || ''))));
+}
+
+function normalizePasswordSecret(login, password) {
+    return `${normalizeLogin(login)}::${String(password || '')}`;
+}
+
 async function hashPassword(login, password) {
     const normalizedLogin = normalizeLogin(login);
-    const value = `${normalizedLogin}::${String(password || '')}`;
+    const secret = normalizePasswordSecret(normalizedLogin, password);
     try {
-        if (window.crypto?.subtle && typeof TextEncoder !== 'undefined') {
-            const data = new TextEncoder().encode(value);
-            const digest = await window.crypto.subtle.digest('SHA-256', data);
-            return Array.from(new Uint8Array(digest))
-                .map((b) => b.toString(16).padStart(2, '0'))
-                .join('');
+        const encoder = createTextEncoder();
+        if (!encoder || !window.crypto?.subtle) {
+            throw new Error('fallback');
         }
+        const salt = window.crypto.getRandomValues(new Uint8Array(PASSWORD_HASH_SALT_BYTES));
+        const keyMaterial = await window.crypto.subtle.importKey(
+            'raw',
+            encoder.encode(secret),
+            'PBKDF2',
+            false,
+            ['deriveBits']
+        );
+        const derivedBits = await window.crypto.subtle.deriveBits({
+            name: PASSWORD_HASH_ALGORITHM,
+            salt,
+            iterations: PASSWORD_HASH_ITERATIONS,
+            hash: 'SHA-256'
+        }, keyMaterial, PASSWORD_HASH_KEY_BYTES * 8);
+        return `${PASSWORD_HASH_FORMAT_PREFIX}|${PASSWORD_HASH_ITERATIONS}|${bytesToBase64(salt)}|${bytesToBase64(new Uint8Array(derivedBits))}`;
     } catch (error) {
-        console.warn('crypto.subtle hash failed, fallback used', error);
+        console.warn('hashPassword fallback to legacy due:', error?.message || error);
+        const legacy = await hashPasswordWithSubtleFallback(secret);
+        return `${PASSWORD_HASH_FALLBACK_PREFIX}|${legacy}`;
     }
-    return btoa(unescape(encodeURIComponent(value)));
+}
+
+async function verifyPasswordHash(login, password, rawHash) {
+    const secret = normalizePasswordSecret(login, password);
+    const parsed = parsePasswordHashWithState(rawHash);
+
+    if (parsed.format === 'pbkdf2') {
+        try {
+            if (!window.crypto?.subtle || !parsed.salt || !parsed.derived) {
+                return false;
+            }
+            const encoder = createTextEncoder();
+            if (!encoder) return false;
+            const keyMaterial = await window.crypto.subtle.importKey(
+                'raw',
+                encoder.encode(secret),
+                'PBKDF2',
+                false,
+                ['deriveBits']
+            );
+            const derivedBits = await window.crypto.subtle.deriveBits({
+                name: PASSWORD_HASH_ALGORITHM,
+                salt: parsed.salt,
+                iterations: parsed.iterations,
+                hash: 'SHA-256'
+            }, keyMaterial, PASSWORD_HASH_KEY_BYTES * 8);
+            return bytesToBase64(new Uint8Array(derivedBits)) === bytesToBase64(new Uint8Array(parsed.derived));
+        } catch (error) {
+            return false;
+        }
+    }
+
+    const legacyHash = await hashPasswordWithSubtleFallback(secret);
+    const legacyCompat = parsed.format === 'sha256' ? (parsed.raw || '') : (String(rawHash || '').trim());
+    return legacyHash === legacyCompat || hashPasswordLegacy(secret) === legacyCompat;
 }
 
 function normalizeUserRecord(raw, loginFallback = '') {
@@ -1640,6 +1997,9 @@ function normalizeUserRecord(raw, loginFallback = '') {
     if (!isValidLogin(login)) return null;
     const failedLoginAttempts = Math.max(0, Number(raw.failedLoginAttempts) || 0);
     const isBlocked = !!raw.isBlocked;
+    const failedLoginBackoffUntil = raw.failedLoginBackoffUntil || null;
+    const blockedReason = String(raw.blockedReason || '').trim();
+    const passwordHashScheme = String(raw.passwordHashScheme || '').trim();
     return {
         login,
         fio: normalizeFio(raw.fio || ''),
@@ -1650,8 +2010,11 @@ function normalizeUserRecord(raw, loginFallback = '') {
         emailVerificationSentAt: raw.emailVerificationSentAt || null,
         failedLoginAttempts,
         isBlocked,
+        blockedReason: blockedReason || null,
+        failedLoginBackoffUntil: failedLoginBackoffUntil,
         blockedAt: isBlocked ? (raw.blockedAt || new Date().toISOString()) : null,
         sessionRevokedAt: raw.sessionRevokedAt || null,
+        passwordHashScheme: passwordHashScheme || null,
         createdAt: raw.createdAt || new Date().toISOString(),
         lastLoginAt: raw.lastLoginAt || null,
         lastSeenAt: raw.lastSeenAt || null,
@@ -1709,8 +2072,11 @@ async function saveUserRecord(record) {
         emailVerificationSentAt: normalized.emailVerificationSentAt,
         failedLoginAttempts: normalized.failedLoginAttempts,
         isBlocked: normalized.isBlocked,
+        blockedReason: normalized.blockedReason,
+        failedLoginBackoffUntil: normalized.failedLoginBackoffUntil,
         blockedAt: normalized.blockedAt,
         sessionRevokedAt: normalized.sessionRevokedAt,
+        passwordHashScheme: normalized.passwordHashScheme,
         createdAt: normalized.createdAt,
         lastLoginAt: normalized.lastLoginAt,
         lastSeenAt: normalized.lastSeenAt,
@@ -1754,11 +2120,23 @@ async function patchUserRecord(login, patch = {}) {
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'passwordNeedsSetup')) {
         sanitizedPatch.passwordNeedsSetup = !!sanitizedPatch.passwordNeedsSetup;
     }
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'passwordHashScheme')) {
+        sanitizedPatch.passwordHashScheme = String(sanitizedPatch.passwordHashScheme || '').trim() || null;
+    }
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'failedLoginAttempts')) {
         sanitizedPatch.failedLoginAttempts = Math.max(0, Number(sanitizedPatch.failedLoginAttempts) || 0);
     }
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'isBlocked')) {
         sanitizedPatch.isBlocked = !!sanitizedPatch.isBlocked;
+    }
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'blockedReason')) {
+        const reason = String(sanitizedPatch.blockedReason || '').trim();
+        sanitizedPatch.blockedReason = reason || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'failedLoginBackoffUntil')) {
+        const backoffUntil = String(sanitizedPatch.failedLoginBackoffUntil || '').trim();
+        const parsed = parseIsoMs(backoffUntil);
+        sanitizedPatch.failedLoginBackoffUntil = parsed ? new Date(parsed).toISOString() : null;
     }
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'blockedAt')) {
         sanitizedPatch.blockedAt = sanitizedPatch.blockedAt || null;
@@ -1872,6 +2250,7 @@ function resetCurrentSessionToAuth(message = '') {
     selectedRole = 'user';
     setCachedStorageValue(USER_ROLE_KEY, 'user');
     clearAuthSession();
+    clearAuthCacheIdentity();
     applyRoleRestrictions();
     showNameModal();
     if (message) {
@@ -2073,6 +2452,37 @@ function getAccessState(login, user, invite, accessRevocation = null) {
     };
 }
 
+function getFailedLoginBackoffState(user) {
+    if (!user) {
+        return null;
+    }
+    const blockedUntil = parseIsoMs(user.failedLoginBackoffUntil);
+    if (!blockedUntil) return null;
+    return blockedUntil > Date.now() ? blockedUntil : null;
+}
+
+function computeFailedLoginBackoffMs(failedAttempts) {
+    const normalizedAttempts = Math.max(0, Number(failedAttempts) || 0);
+    if (normalizedAttempts <= 1) return 0;
+    const factor = normalizedAttempts - 1;
+    const delay = FAILED_LOGIN_BACKOFF_BASE_MS * Math.pow(2, factor);
+    return Math.min(FAILED_LOGIN_BACKOFF_MAX_MS, Math.max(FAILED_LOGIN_BACKOFF_BASE_MS, delay));
+}
+
+function clearAuthCachesForRevocation(login = '') {
+    const normalizedLogin = normalizeLogin(login);
+    if (!normalizedLogin) return;
+
+    const activeSession = getAuthSession();
+    if (normalizeLogin(activeSession?.login || '') === normalizedLogin) {
+        clearAuthSession();
+    }
+    clearAuthCacheIdentityForLogin(normalizedLogin);
+    if (currentUser && normalizeLogin(currentUser.login) === normalizedLogin) {
+        clearAuthCacheIdentity();
+    }
+}
+
 async function toggleAccessForLogin(login, nextActive, user, invite, accessRevocation = null) {
     const normalizedLogin = normalizeLogin(login);
     if (!normalizedLogin) throw new Error('Некорректный email.');
@@ -2102,12 +2512,15 @@ async function toggleAccessForLogin(login, nextActive, user, invite, accessRevoc
             await patchUserRecord(normalizedLogin, {
                 isBlocked: true,
                 blockedAt: nowIso,
+                blockedReason: 'revoked_by_admin',
                 failedLoginAttempts: 0,
+                failedLoginBackoffUntil: null,
                 sessionRevokedAt: nowIso,
                 lastSeenAt: nowIso
             });
         }
 
+        clearAuthCachesForRevocation(normalizedLogin);
         if (currentUser && currentUser.login === normalizedLogin) {
             resetCurrentSessionToAuth('Доступ закрыт администратором. Войдите снова.');
         }
@@ -2124,8 +2537,10 @@ async function toggleAccessForLogin(login, nextActive, user, invite, accessRevoc
     if (user) {
         await patchUserRecord(normalizedLogin, {
             isBlocked: false,
+            blockedReason: null,
             blockedAt: null,
             failedLoginAttempts: 0,
+            failedLoginBackoffUntil: null,
             sessionRevokedAt: null,
             lastSeenAt: nowIso
         });
@@ -2398,12 +2813,34 @@ async function handleAuthSubmit() {
         const authReady = getEmailLinkAuthReady(login);
         let existingUser = await getUserRecordByLogin(login);
         const accessPolicy = await resolveAccessPolicy(login, existingUser);
-        if (!accessPolicy) {
-            throw new Error('Используйте корпоративную почту, если вы сотрудник компании. Если вы партнёр, попросите администратора ссылку-приглашение');
+        if (!accessPolicy || accessPolicy.decision !== 'allow') {
+            const deniedMessage = resolveAccessPolicyDecisionMessage(accessPolicy);
+            applySessionPolicy(accessPolicy || { decision: 'deny', reason: ACCESS_CONTROL_DECISION_REASON.NOT_FOUND }, {
+                userLogin: login,
+                onDeny: () => setAuthError(deniedMessage || 'Доступ запрещён.')
+            });
+            throw new Error(deniedMessage || 'Доступ запрещён.');
         }
 
-        const passwordHash = await hashPassword(login, password);
+        const backoffUntil = getFailedLoginBackoffState(existingUser || null);
+        if (backoffUntil) {
+            const waitSeconds = Math.max(1, Math.ceil((backoffUntil - Date.now()) / 1000));
+            throw new Error(`Слишком много попыток. Подождите ${waitSeconds} сек перед новой попыткой.`);
+        }
+        if (existingUser?.failedLoginBackoffUntil) {
+            await patchUserRecord(login, {
+                failedLoginBackoffUntil: null
+            });
+        }
+
         const nowIso = new Date().toISOString();
+        const passwordValid = async () => {
+            if (!existingUser || !existingUser.passwordHash) {
+                return !existingUser;
+            }
+            return verifyPasswordHash(login, password, existingUser.passwordHash);
+        };
+
         const emailLinkVerifiedHint = getEmailLinkVerifiedHint();
         const hasEmailLinkVerification = didVerifyEmailLinkNow || !!authReady || (!!emailLinkVerifiedHint &&
             emailLinkVerifiedHint.login === login &&
@@ -2412,19 +2849,22 @@ async function handleAuthSubmit() {
         let targetUser = null;
 
         if (existingUser) {
-            if (existingUser.isBlocked) {
-                throw new Error('Сайт заблокирован для этого аккаунта после 15 неверных попыток ввода пароля. Обратитесь к администратору.');
-            }
             const existingIsVerified = !!existingUser.emailVerifiedAt;
             const passwordNeedsSetup = existingIsVerified && isPendingFirstPasswordSetup(existingUser);
             const canSetPasswordAfterLink = existingIsVerified && hasEmailLinkVerification;
-            if (existingIsVerified && existingUser.passwordHash !== passwordHash && !passwordNeedsSetup && !canSetPasswordAfterLink) {
+            const shouldVerifyPassword = !passwordNeedsSetup && !canSetPasswordAfterLink;
+            const isPasswordValid = shouldVerifyPassword ? await passwordValid() : true;
+            if (shouldVerifyPassword && !isPasswordValid) {
                 const failedAttempts = Math.max(0, Number(existingUser.failedLoginAttempts) || 0) + 1;
                 const shouldBlock = failedAttempts >= MAX_FAILED_PASSWORD_ATTEMPTS;
+                const backoffMs = shouldBlock ? null : computeFailedLoginBackoffMs(failedAttempts);
+                const backoffUntilAt = backoffMs ? new Date(nowIso).getTime() + backoffMs : null;
                 await patchUserRecord(login, {
                     failedLoginAttempts: failedAttempts,
                     isBlocked: shouldBlock,
                     blockedAt: shouldBlock ? nowIso : null,
+                    blockedReason: shouldBlock ? 'failed_attempts' : null,
+                    failedLoginBackoffUntil: backoffUntilAt ? new Date(backoffUntilAt).toISOString() : null,
                     lastSeenAt: nowIso
                 });
 
@@ -2433,8 +2873,17 @@ async function handleAuthSubmit() {
                 }
 
                 const attemptsLeft = Math.max(0, MAX_FAILED_PASSWORD_ATTEMPTS - failedAttempts);
-                throw new Error(`Неверный логин или пароль. Осталось попыток до блокировки: ${attemptsLeft}.`);
+                const nextWait = backoffMs ? Math.max(1, Math.ceil(backoffMs / 1000)) : 0;
+                const waitHint = nextWait ? ` Подождите ${nextWait} сек.` : '';
+                throw new Error(`Неверный логин или пароль. Осталось попыток до блокировки: ${attemptsLeft}.${waitHint}`);
             }
+
+            let nextPasswordHash = existingUser.passwordHash;
+            const needsPasswordMigration = isPasswordHashNeedsMigration(existingUser.passwordHash);
+            if (needsPasswordMigration || passwordNeedsSetup || canSetPasswordAfterLink) {
+                nextPasswordHash = await hashPassword(login, password);
+            }
+
             const resolvedRole = existingUser.role === 'admin'
                 ? 'admin'
                 : normalizeRole(accessPolicy.role || existingUser.role);
@@ -2447,17 +2896,21 @@ async function handleAuthSubmit() {
                 ...existingUser,
                 role: resolvedRole,
                 fio,
-                passwordHash: (existingIsVerified && !passwordNeedsSetup && !canSetPasswordAfterLink) ? existingUser.passwordHash : passwordHash,
+                passwordHash: nextPasswordHash,
                 passwordNeedsSetup: false,
                 emailVerifiedAt: verifiedAt,
                 failedLoginAttempts: 0,
                 isBlocked: false,
                 blockedAt: null,
+                blockedReason: null,
+                failedLoginBackoffUntil: null,
+                passwordHashScheme: needsPasswordMigration ? PASSWORD_HASH_FORMAT_PREFIX : existingUser.passwordHashScheme || PASSWORD_HASH_FORMAT_PREFIX,
                 sessionRevokedAt: null,
                 lastLoginAt: nowIso,
                 lastSeenAt: nowIso
             };
         } else {
+            const passwordHash = await hashPassword(login, password);
             const resolvedRole = normalizeRole(accessPolicy.role || 'user');
             let verifiedAt = accessPolicy?.invite?.emailVerifiedAt || null;
             if (!verifiedAt && hasEmailLinkVerification) {
@@ -2474,7 +2927,10 @@ async function handleAuthSubmit() {
                 emailVerificationSentAt: null,
                 failedLoginAttempts: 0,
                 isBlocked: false,
+                blockedReason: null,
+                failedLoginBackoffUntil: null,
                 blockedAt: null,
+                passwordHashScheme: PASSWORD_HASH_FORMAT_PREFIX,
                 sessionRevokedAt: null,
                 activeMs: 0,
                 createdAt: nowIso,
@@ -2528,26 +2984,26 @@ async function restoreAuthSession() {
         clearAuthSession();
         return false;
     }
-    if (user.isBlocked) {
-        clearAuthSession();
+    const accessDecision = await resolveAccessPolicy(user.login, user);
+    if (!accessDecision || accessDecision.decision !== 'allow') {
+        applySessionPolicy(accessDecision, {
+            userLogin: user.login
+        });
         return false;
     }
     if (user.passwordNeedsSetup) {
         clearAuthSession();
+        clearAuthCacheIdentity();
         return false;
     }
-    const accessPolicy = await resolveAccessPolicy(user.login, user);
-    if (!accessPolicy) {
-        clearAuthSession();
-        return false;
-    }
-    const verifiedAt = user.emailVerifiedAt || accessPolicy?.invite?.emailVerifiedAt || null;
+    const verifiedAt = user.emailVerifiedAt || accessDecision?.invite?.emailVerifiedAt || null;
     if (!verifiedAt) {
         clearAuthSession();
+        clearAuthCacheIdentity();
         return false;
     }
     if (user.role !== 'admin') {
-        user.role = normalizeRole(accessPolicy.role || user.role);
+        user.role = normalizeRole(accessDecision.role || user.role);
     }
     user.emailVerifiedAt = verifiedAt;
     applyAuthenticatedUser(user);
@@ -6652,8 +7108,7 @@ async function verifyRoleChangePassword(password) {
     const storedHash = String(currentUser.passwordHash || '').trim();
     if (!storedHash) return false;
     try {
-        const candidateHash = await hashPassword(currentUser.login, password);
-        return candidateHash === storedHash;
+        return await verifyPasswordHash(currentUser.login, password, storedHash);
     } catch (error) {
         return false;
     }
