@@ -3505,6 +3505,12 @@ body.light-theme .more-colors-popup {
 }
 
 @media (max-width: 768px) {
+    #settingsModal {
+        align-items: center;
+        justify-content: center;
+        padding: max(10px, env(safe-area-inset-top, 0px) + 6px) 10px max(10px, env(safe-area-inset-bottom, 0px) + 6px);
+    }
+
     .settings-panel {
         width: calc(100vw - 20px);
         min-width: 0;
@@ -3513,7 +3519,8 @@ body.light-theme .more-colors-popup {
     }
 
     #settingsModal .settings-panel {
-        max-height: calc(100dvh - 20px);
+        margin: 0;
+        max-height: min(92dvh, calc(100dvh - 20px));
     }
 
     .settings-row {
