@@ -2763,6 +2763,23 @@ async function handleCreatePartnerInvite() {
     try {
         await sendMagicLinkToEmail(login, 'invite');
 
+        await setAccessRevocation(login, false, {
+            updatedBy: currentUser?.login || ''
+        });
+
+        const existingUser = await getUserRecordByLogin(login);
+        if (existingUser && existingUser.role !== 'admin') {
+            await patchUserRecord(login, {
+                isBlocked: false,
+                blockedReason: null,
+                blockedAt: null,
+                failedLoginAttempts: 0,
+                failedLoginBackoffUntil: null,
+                sessionRevokedAt: null,
+                lastSeenAt: new Date().toISOString()
+            });
+        }
+
         await savePartnerInvite({
             login,
             role,
@@ -2773,7 +2790,6 @@ async function handleCreatePartnerInvite() {
             createdBy: currentUser?.login || ''
         });
 
-        const existingUser = await getUserRecordByLogin(login);
         if (existingUser && existingUser.role !== 'admin') {
             await patchUserRecord(login, { role });
         }
