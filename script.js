@@ -638,6 +638,42 @@ const localJsonStorageCache = new Map();
 const localJsonStorageDirtyKeys = new Set();
 const localJsonStorageRemovedKeys = new Set();
 let localJsonStorageFlushTimer = null;
+let isLocalStorageAccessible = true;
+
+function getSafeLocalStorageValue(key) {
+    if (!isLocalStorageAccessible) return null;
+    try {
+        return localStorage.getItem(key);
+    } catch (error) {
+        isLocalStorageAccessible = false;
+        console.warn('LocalStorage read unavailable:', error);
+        return null;
+    }
+}
+
+function setSafeLocalStorageValue(key, value) {
+    if (!isLocalStorageAccessible) return false;
+    try {
+        localStorage.setItem(key, value);
+        return true;
+    } catch (error) {
+        isLocalStorageAccessible = false;
+        console.warn('LocalStorage write unavailable:', error);
+        return false;
+    }
+}
+
+function removeSafeLocalStorageValue(key) {
+    if (!isLocalStorageAccessible) return false;
+    try {
+        localStorage.removeItem(key);
+        return true;
+    } catch (error) {
+        isLocalStorageAccessible = false;
+        console.warn('LocalStorage remove unavailable:', error);
+        return false;
+    }
+}
 
 function normalizeLocalStorageJson(raw) {
     if (!raw) return {};
@@ -651,7 +687,7 @@ function getCachedLocalStorageJson(key) {
     }
 
     try {
-        const parsed = normalizeLocalStorageJson(localStorage.getItem(key));
+        const parsed = normalizeLocalStorageJson(getSafeLocalStorageValue(key));
         localJsonStorageCache.set(key, parsed);
         return parsed;
     } catch (error) {
@@ -695,22 +731,18 @@ function flushLocalJsonStorageCache() {
     keys.forEach((key) => {
         if (localJsonStorageRemovedKeys.has(key)) {
             localJsonStorageRemovedKeys.delete(key);
-            try {
-                localStorage.removeItem(key);
-            } catch (error) {
-                console.error('Failed to remove local storage key:', key, error);
-            }
+            removeSafeLocalStorageValue(key);
             return;
         }
 
         const data = localJsonStorageCache.get(key);
         if (!data) {
-            localStorage.removeItem(key);
+            removeSafeLocalStorageValue(key);
             return;
         }
 
         try {
-            localStorage.setItem(key, JSON.stringify(data));
+            setSafeLocalStorageValue(key, JSON.stringify(data));
         } catch (error) {
             console.error('Failed to persist local storage key:', key, error);
         }
@@ -744,7 +776,7 @@ function getCachedStorageValue(key, fallback = '') {
         return localStorageScalarCache.get(key);
     }
 
-    const raw = localStorage.getItem(key);
+    const raw = getSafeLocalStorageValue(key);
     const value = raw === null ? fallback : raw;
     localStorageScalarCache.set(key, value);
     return value;
@@ -753,13 +785,13 @@ function getCachedStorageValue(key, fallback = '') {
 function setCachedStorageValue(key, value) {
     const normalized = value == null ? '' : String(value);
     localStorageScalarCache.set(key, normalized);
-    localStorage.setItem(key, normalized);
+    setSafeLocalStorageValue(key, normalized);
     return normalized;
 }
 
 function removeCachedStorageValue(key) {
     localStorageScalarCache.delete(key);
-    localStorage.removeItem(key);
+    removeSafeLocalStorageValue(key);
 }
 
 function setAuthSession(login) {
