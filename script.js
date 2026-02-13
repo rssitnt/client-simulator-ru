@@ -107,6 +107,11 @@ const ELEVENLABS_WIDGET_SOURCES = [
     'https://unpkg.com/@elevenlabs/convai-widget-embed',
     'https://cdn.jsdelivr.net/npm/@elevenlabs/convai-widget-embed'
 ];
+const EXTERNAL_SCRIPT_LOAD_TIMEOUT_MS = 8000;
+const DOCX_LIBRARY_SRC = 'https://unpkg.com/docx@7.1.0/build/index.js';
+const MAMMOTH_LIBRARY_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
+const FILESAVER_LIBRARY_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js';
+const EXTERNAL_SCRIPT_LOAD_PROMISES = new Map();
 
 const RATER_PROMPT_VERSION = '2025-01-30';
 const DEFAULT_RATER_PROMPT = `РОЛЬ
@@ -2633,6 +2638,115 @@ function debounce(func, wait) {
             clearTimeout(timeout);
         timeout = setTimeout(() => func(...args), wait);
         };
+}
+
+function normalizeScriptSrc(src) {
+    return String(src || '').trim();
+}
+
+function ensureGlobalScriptReady({
+    key,
+    src,
+    timeoutMs = EXTERNAL_SCRIPT_LOAD_TIMEOUT_MS,
+    isReady = () => false
+}) {
+    const normalizedKey = String(key || normalizeScriptSrc(src));
+    const normalizedSrc = normalizeScriptSrc(src);
+    if (!normalizedKey) {
+        return Promise.reject(new Error('Missing external script key'));
+    }
+    if (typeof isReady === 'function' && isReady()) {
+        return Promise.resolve(true);
+    }
+    if (!normalizedSrc) {
+        return Promise.reject(new Error('Missing external script source'));
+    }
+    if (typeof document === 'undefined' || typeof window === 'undefined') {
+        return Promise.reject(new Error('No DOM available'));
+    }
+
+    const cached = EXTERNAL_SCRIPT_LOAD_PROMISES.get(normalizedKey);
+    if (cached) return cached;
+
+    const loadPromise = (async () => {
+        if (isReady()) return true;
+
+        let script = Array.from(document.querySelectorAll('script')).find((node) => {
+            return normalizeScriptSrc(node?.src || '') === normalizedSrc;
+        }) || null;
+        if (!script) {
+            script = document.createElement('script');
+            script.src = normalizedSrc;
+            script.async = true;
+            script.type = 'text/javascript';
+            script.crossOrigin = 'anonymous';
+            script.referrerPolicy = 'no-referrer';
+            document.head?.appendChild(script);
+        }
+
+        if (isReady()) return true;
+
+        return new Promise((resolve) => {
+            let settled = false;
+            const finish = (result) => {
+                if (settled) return;
+                settled = true;
+                script.removeEventListener('load', onLoad);
+                script.removeEventListener('error', onError);
+                clearTimeout(timeoutId);
+                resolve(!!result && isReady());
+            };
+            const onLoad = () => finish(true);
+            const onError = () => finish(false);
+            const timeoutId = setTimeout(() => finish(false), Math.max(300, timeoutMs));
+            script.addEventListener('load', onLoad);
+            script.addEventListener('error', onError);
+        });
+    })().finally(() => {
+        EXTERNAL_SCRIPT_LOAD_PROMISES.delete(normalizedKey);
+    });
+
+    EXTERNAL_SCRIPT_LOAD_PROMISES.set(normalizedKey, loadPromise);
+    return loadPromise;
+}
+
+function ensureDocxLibrary() {
+    return ensureGlobalScriptReady({
+        key: 'docx',
+        src: DOCX_LIBRARY_SRC,
+        isReady: () => typeof window.docx !== 'undefined'
+    }).then((ready) => {
+        if (!ready) {
+            throw new Error('Не удалось загрузить библиотеку docx');
+        }
+        return true;
+    });
+}
+
+function ensureMammothLibrary() {
+    return ensureGlobalScriptReady({
+        key: 'mammoth',
+        src: MAMMOTH_LIBRARY_SRC,
+        isReady: () => typeof window.mammoth !== 'undefined'
+    }).then((ready) => {
+        if (!ready) {
+            throw new Error('Не удалось загрузить библиотеку mammoth');
+        }
+        return true;
+    });
+}
+
+function ensureFileSaverLibrary() {
+    return ensureGlobalScriptReady({
+        key: 'fileSaver',
+        src: FILESAVER_LIBRARY_SRC,
+        isReady: () => typeof window.saveAs === 'function'
+    }).then((ready) => {
+        if (!ready) {
+            throw new Error('Не удалось загрузить библиотеку FileSaver');
+        }
+        return true;
+    });
 }
 
 function setCustomTooltip(element, text) {
@@ -7269,9 +7383,7 @@ function sanitizeFileNamePart(value) {
 }
 
 async function buildAttestationDocxPayload(dialogText, ratingText, options = {}) {
-    if (typeof docx === 'undefined') {
-        throw new Error('docx library not loaded');
-    }
+    await ensureDocxLibrary();
     const { Document, Packer, Paragraph, TextRun, HeadingLevel } = docx;
     const title = new Paragraph({
         text: 'Отчет аттестации',
@@ -7382,6 +7494,20 @@ updateSendBtnState();
 
 // ============ EXPORT FUNCTIONS ============
 
+function downloadWithFileSaver(blob, fileName) {
+    return ensureFileSaverLibrary()
+        .then(() => {
+            saveAs(blob, fileName);
+        })
+        .catch((error) => {
+            alert(error?.message || 'Не удалось инициализировать FileSaver');
+        });
+}
+
+function ensureDocxAndSaveAs() {
+    return Promise.all([ensureDocxLibrary(), ensureFileSaverLibrary()]);
+}
+
 function exportChat(format = 'txt') {
     if (conversationHistory.length === 0) {
         alert('Нет сообщений для экспорта');
@@ -7433,23 +7559,48 @@ function showCopyNotification(text) {
 function exportToTxt(messages, filename) {
     const chatText = messages.map(msg => `${msg.role}: ${msg.content}`).join('\n\n');
     const blob = new Blob([chatText], { type: 'text/plain;charset=utf-8' });
-    saveAs(blob, filename + '.txt');
+    void downloadWithFileSaver(blob, filename + '.txt');
 }
 
 function exportToDocx(messages, filename) {
-    if (typeof docx === 'undefined') { alert('docx library not loaded'); return; }
-    const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = docx;
-    
-    const children = [new Paragraph({ text: "История диалога", heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER, spacing: { after: 400 } })];
-    
-    messages.forEach(msg => {
-        const isRating = msg.role === 'ОЦЕНКА ДИАЛОГА';
-        children.push(new Paragraph({ children: [new TextRun({ text: msg.role + ":", bold: true, size: 24, color: isRating ? "FF9900" : "2E74B5" })], spacing: { before: 200, after: 100 } }));
-        children.push(new Paragraph({ children: [new TextRun({ text: msg.content, size: 24 })], spacing: { after: 200 } }));
-    });
+    ensureDocxAndSaveAs()
+        .then(() => {
+            const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = docx;
+            const children = [new Paragraph({
+                text: "История диалога",
+                heading: HeadingLevel.HEADING_1,
+                alignment: AlignmentType.CENTER,
+                spacing: { after: 400 }
+            })];
 
-    const doc = new Document({ sections: [{ properties: {}, children: children }] });
-    Packer.toBlob(doc).then(blob => saveAs(blob, filename + ".docx"));
+            messages.forEach(msg => {
+                const isRating = msg.role === 'ОЦЕНКА ДИАЛОГА';
+                children.push(new Paragraph({
+                    children: [new TextRun({
+                        text: `${msg.role}:`,
+                        bold: true,
+                        size: 24,
+                        color: isRating ? "FF9900" : "2E74B5"
+                    })],
+                    spacing: { before: 200, after: 100 }
+                }));
+                children.push(new Paragraph({
+                    children: [new TextRun({ text: msg.content, size: 24 })],
+                    spacing: { after: 200 }
+                }));
+            });
+
+            const doc = new Document({ sections: [{ properties: {}, children }] });
+            return Packer.toBlob(doc);
+        })
+        .then((blob) => {
+            if (blob) {
+                void downloadWithFileSaver(blob, filename + ".docx");
+            }
+        })
+        .catch((error) => {
+            alert(error.message || 'Ошибка экспорта в DOCX');
+        });
 }
 
 function exportToRtf(messages, filename) {
@@ -7464,7 +7615,7 @@ function exportToRtf(messages, filename) {
     });
     rtf += "}";
     const blob = new Blob([rtf], { type: "application/rtf" });
-    saveAs(blob, filename + ".rtf");
+    void downloadWithFileSaver(blob, filename + ".rtf");
 }
 
 function exportToPdf(messages, filename) {
@@ -7511,8 +7662,12 @@ function exportCurrentPrompt(format = 'txt') {
     const timestamp = new Date().toLocaleString().replace(/[:.]/g, '-');
     const fullFileName = `${fileName} ${timestamp}`;
     
-    if (format === 'clipboard') copyPromptToClipboard(promptText, fileName);
-    else if (format === 'txt') { const blob = new Blob([promptText], { type: 'text/plain;charset=utf-8' }); saveAs(blob, fullFileName + '.txt'); }
+    if (format === 'clipboard') {
+        copyPromptToClipboard(promptText, fileName);
+    } else if (format === 'txt') {
+        const blob = new Blob([promptText], { type: 'text/plain;charset=utf-8' });
+        void downloadWithFileSaver(blob, fullFileName + '.txt');
+    }
     else if (format === 'docx') exportPromptToDocx(promptText, fullFileName);
     else if (format === 'rtf') exportPromptToRtf(promptText, fullFileName);
     else if (format === 'pdf') exportPromptToPdf(promptText, fullFileName);
@@ -7578,72 +7733,70 @@ function parseStyledText(text, TextRun) {
 }
 
 function exportPromptToDocx(text, filename) {
-    if (typeof docx === 'undefined') { alert('docx library not loaded'); return; }
-    const { Document, Packer, Paragraph, TextRun, HeadingLevel } = docx;
-    
-    const children = [];
-    const lines = text.split('\n');
-    
-    lines.forEach(line => {
-        const trimmed = line.trim();
-        
-        // Handle empty lines with minimal spacing
-        if (trimmed === '') {
-            children.push(new Paragraph({ text: '', spacing: { after: 100 } }));
-            return;
-        }
-        
-        // Base paragraph options
-        let paraOpts = {
-            spacing: { after: 120 },
-            children: []
-        };
+    ensureDocxAndSaveAs()
+        .then(() => {
+            const { Document, Packer, Paragraph, TextRun, HeadingLevel } = docx;
+            const children = [];
+            const lines = text.split('\n');
 
-        // Markdown headings
-        if (line.startsWith('# ')) {
-            paraOpts.children = [new TextRun({ text: line.slice(2), bold: true, size: 32 })];
-            paraOpts.spacing = { before: 280, after: 140 };
-        } else if (line.startsWith('## ')) {
-            paraOpts.children = [new TextRun({ text: line.slice(3), bold: true, size: 28 })];
-            paraOpts.spacing = { before: 240, after: 120 };
-        } else if (line.startsWith('### ')) {
-            paraOpts.children = [new TextRun({ text: line.slice(4), bold: true, size: 26 })];
-            paraOpts.spacing = { before: 200, after: 100 };
-        }
-        // **ЗАГОЛОВОК** на отдельной строке (может содержать скобки и другие символы)
-        else if (trimmed.startsWith('**') && trimmed.endsWith('**') && trimmed.length > 4) {
-            const headerText = trimmed.slice(2, -2);
-            if (!headerText.includes('**')) {
-                paraOpts.children = [new TextRun({ text: headerText, bold: true, size: 28 })];
-                paraOpts.spacing = { before: 240, after: 120 };
-        } else {
-                paraOpts.children = parseStyledText(line, TextRun);
-            }
-        }
-        // Маркированный список
-        else if (line.startsWith('- ') || line.startsWith('* ')) {
-            const listContent = line.slice(2);
-            paraOpts.indent = { left: 360 };
-            paraOpts.children = [new TextRun({ text: '• ', size: 24 }), ...parseStyledText(listContent, TextRun)];
-        }
-        // Нумерованный список
-        else if (/^\d+\.\s/.test(line)) {
-            const match = line.match(/^(\d+\.)\s(.*)$/);
-            if (match) {
-                paraOpts.indent = { left: 360 };
-                paraOpts.children = [new TextRun({ text: match[1] + ' ', size: 24 }), ...parseStyledText(match[2], TextRun)];
-            }
-        }
-        // Обычный текст с markdown
-        else {
-            paraOpts.children = parseStyledText(line, TextRun);
-        }
-        
-        children.push(new Paragraph(paraOpts));
-    });
+            lines.forEach(line => {
+                const trimmed = line.trim();
 
-    const doc = new Document({ sections: [{ properties: {}, children: children }] });
-    Packer.toBlob(doc).then(blob => saveAs(blob, filename + ".docx"));
+                if (trimmed === '') {
+                    children.push(new Paragraph({ text: '', spacing: { after: 100 } }));
+                    return;
+                }
+
+                let paraOpts = {
+                    spacing: { after: 120 },
+                    children: []
+                };
+
+                if (line.startsWith('# ')) {
+                    paraOpts.children = [new TextRun({ text: line.slice(2), bold: true, size: 32 })];
+                    paraOpts.spacing = { before: 280, after: 140 };
+                } else if (line.startsWith('## ')) {
+                    paraOpts.children = [new TextRun({ text: line.slice(3), bold: true, size: 28 })];
+                    paraOpts.spacing = { before: 240, after: 120 };
+                } else if (line.startsWith('### ')) {
+                    paraOpts.children = [new TextRun({ text: line.slice(4), bold: true, size: 26 })];
+                    paraOpts.spacing = { before: 200, after: 100 };
+                } else if (trimmed.startsWith('**') && trimmed.endsWith('**') && trimmed.length > 4) {
+                    const headerText = trimmed.slice(2, -2);
+                    if (!headerText.includes('**')) {
+                        paraOpts.children = [new TextRun({ text: headerText, bold: true, size: 28 })];
+                        paraOpts.spacing = { before: 240, after: 120 };
+                    } else {
+                        paraOpts.children = parseStyledText(line, TextRun);
+                    }
+                } else if (line.startsWith('- ') || line.startsWith('* ')) {
+                    const listContent = line.slice(2);
+                    paraOpts.indent = { left: 360 };
+                    paraOpts.children = [new TextRun({ text: '• ', size: 24 }), ...parseStyledText(listContent, TextRun)];
+                } else if (/^\d+\.\s/.test(line)) {
+                    const match = line.match(/^(\d+\.)\s(.*)$/);
+                    if (match) {
+                        paraOpts.indent = { left: 360 };
+                        paraOpts.children = [new TextRun({ text: `${match[1]} `, size: 24 }), ...parseStyledText(match[2], TextRun)];
+                    }
+                } else {
+                    paraOpts.children = parseStyledText(line, TextRun);
+                }
+
+                children.push(new Paragraph(paraOpts));
+            });
+
+            const doc = new Document({ sections: [{ properties: {}, children }] });
+            return Packer.toBlob(doc);
+        })
+        .then((blob) => {
+            if (blob) {
+                void downloadWithFileSaver(blob, filename + ".docx");
+            }
+        })
+        .catch((error) => {
+            alert(error.message || 'Ошибка экспорта в DOCX');
+        });
 }
 
 function exportPromptToRtf(text, filename) {
@@ -7669,7 +7822,7 @@ function exportPromptToRtf(text, filename) {
     
     rtf += "}";
     const blob = new Blob([rtf], { type: "application/rtf" });
-    saveAs(blob, filename + ".rtf");
+    void downloadWithFileSaver(blob, filename + ".rtf");
 }
 
 async function copyPromptToClipboard(text, label) {
@@ -7860,6 +8013,7 @@ function handleFileDrop(file, textarea, previewElement) {
                 const reader = new FileReader();
                 reader.onload = async (event) => {
                     try {
+                await ensureMammothLibrary();
                 const result = await mammoth.convertToMarkdown({ arrayBuffer: event.target.result });
                 const content = result.value;
                 textarea.value = content;
@@ -7871,7 +8025,7 @@ function handleFileDrop(file, textarea, previewElement) {
                 // Also sync to data
                 const role = getActiveRole();
                 syncContentToData(role, content);
-            } catch (err) { alert('Ошибка чтения .docx'); }
+                } catch (err) { alert('Ошибка чтения .docx'); }
                 };
                 reader.readAsArrayBuffer(file);
     } else if (fileName.endsWith('.rtf')) {
