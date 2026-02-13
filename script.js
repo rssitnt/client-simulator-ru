@@ -60,6 +60,7 @@ const PENDING_EMAIL_SIGNIN_LINK_STORAGE_KEY = 'pendingEmailSignInLink:v1';
 const EMAIL_LINK_HINT_STORAGE_KEY = 'emailLinkHint:v1';
 const EMAIL_LINK_VERIFIED_HINT_STORAGE_KEY = 'emailLinkVerifiedHint:v1';
 const EMAIL_LINK_AUTH_READY_STORAGE_KEY = 'emailLinkAuthReady:v1';
+const SESSION_ID_STORAGE_KEY = 'sessionId';
 const EMAIL_LINK_HINT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const EMAIL_LINK_VERIFIED_HINT_MAX_AGE_MS = 30 * 60 * 1000;
 const EMAIL_LINK_AUTH_READY_MAX_AGE_MS = 30 * 60 * 1000;
@@ -218,14 +219,14 @@ function generateSessionId() {
 }
 
 // Generate unique session ID
-let baseSessionId = localStorage.getItem('sessionId') || generateSessionId();
+let baseSessionId = localStorage.getItem(SESSION_ID_STORAGE_KEY) || generateSessionId();
 let clientSessionId = '';
 let managerSessionId = '';
 let raterSessionId = '';
 
 function refreshSessionIds(sessionId = baseSessionId) {
     baseSessionId = String(sessionId || generateSessionId());
-    localStorage.setItem('sessionId', baseSessionId);
+    localStorage.setItem(SESSION_ID_STORAGE_KEY, baseSessionId);
     clientSessionId = `${baseSessionId}_client`;
     managerSessionId = `${baseSessionId}_manager`;
     raterSessionId = `${baseSessionId}_rater`;
@@ -467,6 +468,7 @@ let pendingRatingImproveContext = null;
 let aiImproveMode = 'default';
 const LOCAL_PROMPTS_STORAGE_VERSION = 'v2';
 const HISTORY_LIMIT = 50;
+const LOCAL_PROMPTS_HISTORY_STORAGE_KEY = 'promptHistory';
 let promptHistory = [];
 let lastHistoryContent = {
     client: {},
@@ -626,6 +628,110 @@ function loginToStorageKey(login) {
         .join('_');
 }
 
+const LOCAL_JSON_STORAGE_FLUSH_MS = 160;
+const localJsonStorageCache = new Map();
+const localJsonStorageDirtyKeys = new Set();
+const localJsonStorageRemovedKeys = new Set();
+let localJsonStorageFlushTimer = null;
+
+function normalizeLocalStorageJson(raw) {
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+}
+
+function getCachedLocalStorageJson(key) {
+    if (localJsonStorageCache.has(key)) {
+        return localJsonStorageCache.get(key);
+    }
+
+    try {
+        const parsed = normalizeLocalStorageJson(localStorage.getItem(key));
+        localJsonStorageCache.set(key, parsed);
+        return parsed;
+    } catch (error) {
+        console.error('Failed to parse local storage JSON:', key, error);
+        const fallback = {};
+        localJsonStorageCache.set(key, fallback);
+        return fallback;
+    }
+}
+
+function setCachedLocalStorageJson(key, value) {
+    if (value === null || typeof value !== 'object') {
+        clearCachedLocalStorageJson(key);
+        return;
+    }
+    localJsonStorageCache.set(key, value);
+    localJsonStorageRemovedKeys.delete(key);
+    localJsonStorageDirtyKeys.add(key);
+    scheduleLocalJsonStorageFlush();
+}
+
+function clearCachedLocalStorageJson(key, fallback = {}) {
+    const normalizedFallback = (fallback && typeof fallback === 'object') ? fallback : {};
+    localJsonStorageCache.set(key, normalizedFallback);
+    localJsonStorageRemovedKeys.add(key);
+    localJsonStorageDirtyKeys.add(key);
+    scheduleLocalJsonStorageFlush();
+}
+
+function flushLocalJsonStorageCache() {
+    if (localJsonStorageFlushTimer) {
+        clearTimeout(localJsonStorageFlushTimer);
+        localJsonStorageFlushTimer = null;
+    }
+
+    if (!localJsonStorageDirtyKeys.size) return;
+
+    const keys = Array.from(localJsonStorageDirtyKeys);
+    localJsonStorageDirtyKeys.clear();
+
+    keys.forEach((key) => {
+        if (localJsonStorageRemovedKeys.has(key)) {
+            localJsonStorageRemovedKeys.delete(key);
+            try {
+                localStorage.removeItem(key);
+            } catch (error) {
+                console.error('Failed to remove local storage key:', key, error);
+            }
+            return;
+        }
+
+        const data = localJsonStorageCache.get(key);
+        if (!data) {
+            localStorage.removeItem(key);
+            return;
+        }
+
+        try {
+            localStorage.setItem(key, JSON.stringify(data));
+        } catch (error) {
+            console.error('Failed to persist local storage key:', key, error);
+        }
+    });
+}
+
+function scheduleLocalJsonStorageFlush(delayMs = LOCAL_JSON_STORAGE_FLUSH_MS) {
+    if (localJsonStorageFlushTimer) return;
+    localJsonStorageFlushTimer = setTimeout(flushLocalJsonStorageCache, delayMs);
+}
+
+function flushLocalJsonStorageCacheNow() {
+    if (!localJsonStorageFlushTimer && !localJsonStorageDirtyKeys.size) return;
+    flushLocalJsonStorageCache();
+}
+
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    window.addEventListener('beforeunload', flushLocalJsonStorageCacheNow);
+    window.addEventListener('pagehide', flushLocalJsonStorageCacheNow);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            flushLocalJsonStorageCacheNow();
+        }
+    });
+}
+
 function setAuthSession(login) {
     localStorage.setItem(AUTH_SESSION_STORAGE_KEY, JSON.stringify({
         login: normalizeLogin(login),
@@ -662,52 +768,23 @@ function isSessionRevokedForSignedAt(sessionSignedAt, sessionRevokedAt) {
 }
 
 function loadLocalUsersStore() {
-    try {
-        const raw = localStorage.getItem(AUTH_LOCAL_STORAGE_KEY);
-        if (!raw) return {};
-        const parsed = JSON.parse(raw);
-        return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (error) {
-        return {};
-    }
+    return getCachedLocalStorageJson(AUTH_LOCAL_STORAGE_KEY);
 }
 
 function saveLocalUsersStore(store) {
-    try {
-        localStorage.setItem(AUTH_LOCAL_STORAGE_KEY, JSON.stringify(store || {}));
-    } catch (error) {
-        console.error('Failed to persist local auth store:', error);
-    }
+    setCachedLocalStorageJson(AUTH_LOCAL_STORAGE_KEY, store || {});
 }
 
 function loadLocalPartnerInvitesStore() {
-    try {
-        const raw = localStorage.getItem(PARTNER_INVITES_STORAGE_KEY);
-        if (!raw) return {};
-        const parsed = JSON.parse(raw);
-        return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (error) {
-        return {};
-    }
+    return getCachedLocalStorageJson(PARTNER_INVITES_STORAGE_KEY);
 }
 
 function loadLocalAccessRevokesStore() {
-    try {
-        const raw = localStorage.getItem(ACCESS_REVOKES_STORAGE_KEY);
-        if (!raw) return {};
-        const parsed = JSON.parse(raw);
-        return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (error) {
-        return {};
-    }
+    return getCachedLocalStorageJson(ACCESS_REVOKES_STORAGE_KEY);
 }
 
 function saveLocalAccessRevokesStore(store) {
-    try {
-        localStorage.setItem(ACCESS_REVOKES_STORAGE_KEY, JSON.stringify(store || {}));
-    } catch (error) {
-        console.error('Failed to persist local access revokes store:', error);
-    }
+    setCachedLocalStorageJson(ACCESS_REVOKES_STORAGE_KEY, store || {});
 }
 
 function normalizeAccessRevocation(raw, loginFallback = '') {
@@ -725,11 +802,7 @@ function normalizeAccessRevocation(raw, loginFallback = '') {
 }
 
 function saveLocalPartnerInvitesStore(store) {
-    try {
-        localStorage.setItem(PARTNER_INVITES_STORAGE_KEY, JSON.stringify(store || {}));
-    } catch (error) {
-        console.error('Failed to persist local partner invites store:', error);
-    }
+    setCachedLocalStorageJson(PARTNER_INVITES_STORAGE_KEY, store || {});
 }
 
 async function getAccessRevocation(login) {
@@ -3100,14 +3173,7 @@ function getLocalPromptsStorageKey() {
 }
 
 function loadLocalPromptsStore() {
-    try {
-        const raw = localStorage.getItem(getLocalPromptsStorageKey());
-        if (!raw) return {};
-        const parsed = JSON.parse(raw);
-        return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (e) {
-        return {};
-    }
+    return getCachedLocalStorageJson(getLocalPromptsStorageKey());
 }
 
 function getLocalPromptsRoleData(role) {
@@ -3152,9 +3218,9 @@ function saveLocalPromptsData() {
     });
 
     if (hasLocalData) {
-        localStorage.setItem(getLocalPromptsStorageKey(), JSON.stringify(payload));
+        setCachedLocalStorageJson(getLocalPromptsStorageKey(), payload);
     } else {
-        localStorage.removeItem(getLocalPromptsStorageKey());
+        clearCachedLocalStorageJson(getLocalPromptsStorageKey());
     }
 }
 
@@ -3818,7 +3884,11 @@ function savePromptHistory() {
     });
     promptHistory = trimmedHistory;
 
-    localStorage.setItem('promptHistory', JSON.stringify(promptHistory));
+    if (!promptHistory.length) {
+        clearCachedLocalStorageJson(LOCAL_PROMPTS_HISTORY_STORAGE_KEY, []);
+    } else {
+        setCachedLocalStorageJson(LOCAL_PROMPTS_HISTORY_STORAGE_KEY, promptHistory);
+    }
     if (db) {
         set(ref(db, 'prompt_history'), promptHistory)
             .then(() => debugLog('Prompt history synced'))
@@ -4170,13 +4240,9 @@ async function loadPrompts() {
     } else {
         setSharedGeminiTokenEndpoint('');
         initPromptsData({});
-        const localHistory = localStorage.getItem('promptHistory');
-        if (localHistory) {
-            try {
-                promptHistory = JSON.parse(localHistory) || [];
-            } catch (e) {
-                promptHistory = [];
-            }
+        promptHistory = getCachedLocalStorageJson(LOCAL_PROMPTS_HISTORY_STORAGE_KEY);
+        if (!Array.isArray(promptHistory)) {
+            promptHistory = [];
         }
         renderPromptHistory();
     }
@@ -6972,30 +7038,21 @@ function normalizeAttestationQueueItem(raw) {
 }
 
 function saveAttestationQueue() {
-    try {
-        if (!attestationQueue.length) {
-            localStorage.removeItem(ATTESTATION_QUEUE_STORAGE_KEY);
-            return;
-        }
-        localStorage.setItem(ATTESTATION_QUEUE_STORAGE_KEY, JSON.stringify(attestationQueue));
-    } catch (error) {
-        console.error('Failed to persist attestation queue:', error);
+    if (!attestationQueue.length) {
+        clearCachedLocalStorageJson(ATTESTATION_QUEUE_STORAGE_KEY, []);
+        return;
     }
+    setCachedLocalStorageJson(ATTESTATION_QUEUE_STORAGE_KEY, attestationQueue);
 }
 
 function loadAttestationQueue() {
     try {
-        const raw = localStorage.getItem(ATTESTATION_QUEUE_STORAGE_KEY);
-        if (!raw) {
-            attestationQueue = [];
-            return;
-        }
-        const parsed = JSON.parse(raw);
-        const normalized = Array.isArray(parsed)
-            ? parsed.map(normalizeAttestationQueueItem).filter(Boolean)
+        const raw = getCachedLocalStorageJson(ATTESTATION_QUEUE_STORAGE_KEY);
+        const normalized = Array.isArray(raw)
+            ? raw.map(normalizeAttestationQueueItem).filter(Boolean)
             : [];
         attestationQueue = normalized;
-        if (normalized.length !== (Array.isArray(parsed) ? parsed.length : 0)) {
+        if (normalized.length !== (Array.isArray(raw) ? raw.length : 0)) {
             saveAttestationQueue();
         }
     } catch (error) {
