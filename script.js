@@ -601,12 +601,19 @@ function normalizeFio(value) {
 }
 
 function sanitizeAuthName(value) {
-    const normalized = normalizeFio(value);
-    if (!normalized) return '';
-    if (/@/.test(normalized)) {
-        return normalized.split(/\s+/).filter(Boolean).filter((part) => !/@/.test(part)).join(' ');
+    const raw = String(value || '');
+    if (!raw) return '';
+
+    const normalizedSpaces = raw.replace(/\s+/g, ' ');
+    if (!/@/.test(normalizedSpaces)) {
+        return normalizedSpaces;
     }
-    return normalized;
+
+    return normalizedSpaces
+        .split(' ')
+        .filter(Boolean)
+        .filter((part) => !/@/.test(part))
+        .join(' ');
 }
 
 function normalizeLogin(value) {
