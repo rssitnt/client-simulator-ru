@@ -494,7 +494,6 @@ let isUserEditing = false;
 let lastFirebaseData = null;
 let selectedRole = 'user';
 let currentUser = null;
-const ADMIN_PASSWORD = '1357246';
 let lockedPromptRole = null;
 let lockedPromptVariationId = null;
 let recognition = null;
@@ -2143,9 +2142,25 @@ async function renderAdminUsersTable() {
         listPartnerInvites(),
         listAccessRevocations()
     ]);
-    const usersByLogin = new Map(users.map((user) => [user.login, user]));
-    const invitesByLogin = new Map(invites.map((invite) => [invite.login, invite]));
-    const revocationsByLogin = new Map(revocations.map((item) => [item.login, item]));
+    const usersByLogin = new Map();
+    const invitesByLogin = new Map();
+    const revocationsByLogin = new Map();
+
+    users.forEach((user) => {
+        const login = normalizeLogin(user?.login || '');
+        if (isValidLogin(login)) usersByLogin.set(login, user);
+    });
+
+    invites.forEach((invite) => {
+        const login = normalizeLogin(invite?.login || '');
+        if (isValidLogin(login)) invitesByLogin.set(login, invite);
+    });
+
+    revocations.forEach((item) => {
+        const login = normalizeLogin(item?.login || '');
+        if (isValidLogin(login)) revocationsByLogin.set(login, item);
+    });
+
     const allLogins = Array.from(new Set([
         ...usersByLogin.keys(),
         ...invitesByLogin.keys(),
@@ -6600,22 +6615,58 @@ roleChangeCancelBtn.addEventListener('click', () => {
 });
 
 // Confirm role change (for User -> Admin)
-roleChangeConfirmBtn.addEventListener('click', () => {
+async function verifyRoleChangePassword(password) {
+    if (!currentUser?.login) return false;
+    const storedHash = String(currentUser.passwordHash || '').trim();
+    if (!storedHash) return false;
+    try {
+        const candidateHash = await hashPassword(currentUser.login, password);
+        return candidateHash === storedHash;
+    } catch (error) {
+        return false;
+    }
+}
+
+roleChangeConfirmBtn.addEventListener('click', async () => {
     const password = roleChangePasswordInput.value.trim();
-    
-    if (password === ADMIN_PASSWORD) {
-        switchRole('admin');
-        roleChangePassword.style.display = 'none';
-        roleChangePasswordInput.value = '';
-        roleChangeError.style.display = 'none';
-    } else {
+    if (!password) {
         roleChangeError.style.display = 'block';
-        roleChangePasswordInput.value = '';
         roleChangePasswordInput.style.borderColor = '#ff5555';
         setTimeout(() => {
             roleChangePasswordInput.style.borderColor = '';
             roleChangeError.style.display = 'none';
         }, 2000);
+        return;
+    }
+
+    roleChangeConfirmBtn.disabled = true;
+    roleChangeConfirmBtn.textContent = 'Проверка...';
+
+    try {
+        const isPasswordValid = await verifyRoleChangePassword(password);
+        if (isPasswordValid) {
+            await switchRole('admin');
+            roleChangePassword.style.display = 'none';
+            roleChangePasswordInput.value = '';
+            roleChangeError.style.display = 'none';
+        } else {
+            roleChangeError.style.display = 'block';
+            roleChangePasswordInput.value = '';
+            roleChangePasswordInput.style.borderColor = '#ff5555';
+            setTimeout(() => {
+                roleChangePasswordInput.style.borderColor = '';
+                roleChangeError.style.display = 'none';
+            }, 2000);
+        }
+    } catch (error) {
+        roleChangeError.style.display = 'block';
+        roleChangeError.textContent = 'Ошибка проверки пароля. Попробуйте позже.';
+        setTimeout(() => {
+            roleChangeError.style.display = 'none';
+        }, 2000);
+    } finally {
+        roleChangeConfirmBtn.disabled = false;
+        roleChangeConfirmBtn.textContent = 'Подтвердить';
     }
 });
 
