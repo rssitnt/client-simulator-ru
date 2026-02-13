@@ -2135,6 +2135,14 @@ body.light-theme .prompt-preview::-webkit-scrollbar-thumb:hover {
 @media (max-width: 1024px) {
     .mobile-tabs {
         display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .mobile-tab {
+        flex: 0 1 calc(50% - 12px);
+        max-width: 168px;
     }
     
     .panels-container {
@@ -2681,12 +2689,29 @@ body.light-theme .btn-settings-floating:hover {
     .btn-clear-floating {
         top: 8px;
         left: 8px;
-        padding: 10px;
+        width: 42px;
+        height: 42px;
+        padding: 0;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
     .btn-settings-floating {
         top: 8px;
         right: 8px;
-        padding: 10px;
+        width: 42px;
+        height: 42px;
+        padding: 0;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .btn-clear-floating svg,
+    .btn-settings-floating svg {
+        width: 22px;
+        height: 22px;
     }
 }
 
