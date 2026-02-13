@@ -54,6 +54,7 @@ const AUTH_LOCAL_STORAGE_KEY = 'authUsers:v1';
 const PARTNER_INVITES_STORAGE_KEY = 'partnerInvites:v1';
 const AUTH_SESSION_STORAGE_KEY = 'authSession:v1';
 const EMAIL_LINK_CONTEXT_STORAGE_KEY = 'emailLinkContext:v1';
+const PENDING_EMAIL_SIGNIN_LINK_STORAGE_KEY = 'pendingEmailSignInLink:v1';
 const CORPORATE_EMAIL_DOMAINS = new Set([
     '7271155.ru',
     '7274069.ru',
@@ -696,38 +697,114 @@ function clearEmailLinkContext() {
     localStorage.removeItem(EMAIL_LINK_CONTEXT_STORAGE_KEY);
 }
 
+function savePendingEmailSignInLink(linkValue) {
+    try {
+        const normalized = String(linkValue || '').trim();
+        if (!normalized) return;
+        localStorage.setItem(PENDING_EMAIL_SIGNIN_LINK_STORAGE_KEY, normalized);
+    } catch (error) {}
+}
+
+function getPendingEmailSignInLink() {
+    try {
+        const raw = String(localStorage.getItem(PENDING_EMAIL_SIGNIN_LINK_STORAGE_KEY) || '').trim();
+        return raw || '';
+    } catch (error) {
+        return '';
+    }
+}
+
+function clearPendingEmailSignInLink() {
+    localStorage.removeItem(PENDING_EMAIL_SIGNIN_LINK_STORAGE_KEY);
+}
+
+function tryDecodeUrlValue(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    try {
+        return decodeURIComponent(raw);
+    } catch (error) {
+        return raw;
+    }
+}
+
+function collectEmailLinkUrlCandidates(rawUrl = window.location.href) {
+    const queue = [String(rawUrl || '').trim()];
+    const visited = new Set();
+    const candidates = [];
+
+    while (queue.length > 0 && candidates.length < 16) {
+        const current = String(queue.shift() || '').trim();
+        if (!current || visited.has(current)) continue;
+        visited.add(current);
+        candidates.push(current);
+
+        try {
+            const parsed = new URL(current);
+            const nestedParamNames = ['link', 'deep_link_id', 'continueUrl', 'continue_url', 'redirectUrl', 'redirect_url', 'url'];
+            nestedParamNames.forEach((paramName) => {
+                const value = String(parsed.searchParams.get(paramName) || '').trim();
+                if (!value) return;
+                if (!visited.has(value)) queue.push(value);
+                const decodedValue = tryDecodeUrlValue(value);
+                if (decodedValue && !visited.has(decodedValue)) queue.push(decodedValue);
+            });
+
+            parsed.searchParams.forEach((value) => {
+                const normalized = String(value || '').trim();
+                if (!normalized) return;
+                if (/^https?:\/\//i.test(normalized) || /^https?:%2f%2f/i.test(normalized)) {
+                    if (!visited.has(normalized)) queue.push(normalized);
+                    const decoded = tryDecodeUrlValue(normalized);
+                    if (decoded && !visited.has(decoded)) queue.push(decoded);
+                }
+            });
+        } catch (error) {}
+    }
+
+    return candidates;
+}
+
+function resolveEmailSignInLink(rawUrl = window.location.href) {
+    if (!auth) return null;
+    const candidates = collectEmailLinkUrlCandidates(rawUrl);
+    for (const candidate of candidates) {
+        try {
+            if (isSignInWithEmailLink(auth, candidate)) {
+                return candidate;
+            }
+        } catch (error) {}
+    }
+    return null;
+}
+
 function getAppBaseUrl() {
     return `${window.location.origin}${window.location.pathname}`;
 }
 
 function getEmailFromCurrentLink(rawUrl = window.location.href) {
-    const readFromUrl = (urlValue) => {
+    const urlCandidates = collectEmailLinkUrlCandidates(rawUrl);
+    const emailParamNames = ['email', 'invited_email', 'login'];
+
+    for (const urlValue of urlCandidates) {
         try {
             const parsedUrl = new URL(urlValue);
-            const candidates = [
-                parsedUrl.searchParams.get('email'),
-                parsedUrl.searchParams.get('invited_email'),
-                parsedUrl.searchParams.get('login')
-            ];
+            const candidates = emailParamNames.map((paramName) => parsedUrl.searchParams.get(paramName));
             const email = candidates.map(normalizeLogin).find(isValidLogin);
             if (email) return email;
-            const continueUrl = parsedUrl.searchParams.get('continueUrl');
-            if (!continueUrl) return null;
-            const decodedContinue = decodeURIComponent(continueUrl);
-            const continueParsed = new URL(decodedContinue);
-            const nestedCandidates = [
-                continueParsed.searchParams.get('email'),
-                continueParsed.searchParams.get('invited_email'),
-                continueParsed.searchParams.get('login')
-            ];
-            return nestedCandidates.map(normalizeLogin).find(isValidLogin) || null;
+            let fallbackEmail = '';
+            parsedUrl.searchParams.forEach((value) => {
+                if (fallbackEmail) return;
+                const maybeEmail = normalizeLogin(value);
+                if (isValidLogin(maybeEmail)) {
+                    fallbackEmail = maybeEmail;
+                }
+            });
+            if (fallbackEmail) return fallbackEmail;
         } catch (error) {
-            return null;
+            continue;
         }
-    };
-
-    const fromUrl = readFromUrl(rawUrl);
-    if (fromUrl) return fromUrl;
+    }
     const fromContext = normalizeLogin(getEmailLinkContext()?.email || '');
     if (isValidLogin(fromContext)) return fromContext;
     return null;
@@ -750,6 +827,9 @@ function getReadableFirebaseAuthError(error, context = 'generic') {
     }
     if (code === 'auth/invalid-email') {
         return 'Укажите корректный email.';
+    }
+    if (code === 'auth/user-mismatch') {
+        return 'Этот email не совпадает с адресом в ссылке подтверждения. Введите email из письма.';
     }
     if (code === 'auth/network-request-failed') {
         return 'Ошибка сети при обращении к Firebase. Проверьте интернет и повторите попытку.';
@@ -992,52 +1072,84 @@ async function resolveAccessPolicy(login, userRecord = null) {
     return null;
 }
 
+async function finalizeEmailLinkVerification(login, signInLink) {
+    await signInWithEmailLink(auth, login, signInLink);
+    const nowIso = new Date().toISOString();
+
+    const existingUser = await getUserRecordByLogin(login);
+    if (existingUser) {
+        const wasVerifiedBefore = !!existingUser.emailVerifiedAt;
+        await patchUserRecord(login, {
+            emailVerifiedAt: nowIso,
+            // After first email verification, user can set a final password on next login.
+            passwordNeedsSetup: !wasVerifiedBefore,
+            failedLoginAttempts: 0,
+            isBlocked: false,
+            blockedAt: null,
+            sessionRevokedAt: null,
+            lastSeenAt: nowIso
+        });
+    }
+
+    const invite = await getPartnerInviteByLogin(login);
+    if (invite) {
+        await patchPartnerInvite(login, {
+            emailVerifiedAt: nowIso
+        });
+    }
+
+    clearPendingEmailSignInLink();
+    showCopyNotification('Email подтвержден. Теперь войдите с паролем.');
+    setAuthError('Email подтвержден. Введите пароль для входа (можно задать новый).');
+    if (modalLoginInput) {
+        modalLoginInput.value = login;
+    }
+}
+
+async function consumePendingEmailSignInLinkForLogin(login) {
+    if (!auth) return false;
+    const normalizedLogin = normalizeLogin(login);
+    if (!isValidLogin(normalizedLogin)) return false;
+    const pendingLink = getPendingEmailSignInLink();
+    if (!pendingLink) return false;
+
+    try {
+        await finalizeEmailLinkVerification(normalizedLogin, pendingLink);
+        return true;
+    } catch (error) {
+        const code = String(error?.code || '').trim();
+        if (code === 'auth/invalid-action-code' || code === 'auth/expired-action-code') {
+            clearPendingEmailSignInLink();
+            return false;
+        }
+        throw error;
+    }
+}
+
 async function consumeEmailVerificationLinkIfPresent() {
     if (!auth) return;
-    if (!isSignInWithEmailLink(auth, window.location.href)) return;
+    const signInLink = resolveEmailSignInLink(window.location.href);
+    if (!signInLink) return;
 
-    const login = getEmailFromCurrentLink(window.location.href);
+    const login = getEmailFromCurrentLink(signInLink) || getEmailFromCurrentLink(window.location.href);
     if (!isValidLogin(login)) {
-        setAuthError('Не удалось определить email из ссылки подтверждения.');
+        savePendingEmailSignInLink(signInLink);
+        setAuthError('Открыта ссылка подтверждения. Введите email и нажмите «Войти».');
         cleanupEmailLinkUrl();
-        clearEmailLinkContext();
         return;
     }
 
     try {
-        await signInWithEmailLink(auth, login, window.location.href);
-        const nowIso = new Date().toISOString();
-
-        const existingUser = await getUserRecordByLogin(login);
-        if (existingUser) {
-            const wasVerifiedBefore = !!existingUser.emailVerifiedAt;
-            await patchUserRecord(login, {
-                emailVerifiedAt: nowIso,
-                // After first email verification, user can set a final password on next login.
-                passwordNeedsSetup: !wasVerifiedBefore,
-                failedLoginAttempts: 0,
-                isBlocked: false,
-                blockedAt: null,
-                sessionRevokedAt: null,
-                lastSeenAt: nowIso
-            });
-        }
-
-        const invite = await getPartnerInviteByLogin(login);
-        if (invite) {
-            await patchPartnerInvite(login, {
-                emailVerifiedAt: nowIso
-            });
-        }
-
-        showCopyNotification('Email подтвержден. Теперь войдите с паролем.');
-        setAuthError('Email подтвержден. Введите пароль для входа (можно задать новый).');
-        if (modalLoginInput) {
-            modalLoginInput.value = login;
-        }
+        await finalizeEmailLinkVerification(login, signInLink);
     } catch (error) {
         console.error('Email link verification error:', error);
-        setAuthError(getReadableFirebaseAuthError(error, 'consume_link'));
+        const code = String(error?.code || '').trim();
+        if (code === 'auth/missing-email' || code === 'auth/invalid-email') {
+            savePendingEmailSignInLink(signInLink);
+            setAuthError('Введите email из приглашения и нажмите «Войти», чтобы завершить подтверждение.');
+        } else {
+            setAuthError(getReadableFirebaseAuthError(error, 'consume_link'));
+        }
     } finally {
         clearEmailLinkContext();
         cleanupEmailLinkUrl();
@@ -1757,6 +1869,7 @@ async function handleAuthSubmit() {
     modalNameSubmit.disabled = true;
 
     try {
+        await consumePendingEmailSignInLinkForLogin(login);
         let existingUser = await getUserRecordByLogin(login);
         const accessPolicy = await resolveAccessPolicy(login, existingUser);
         if (!accessPolicy) {
