@@ -55,6 +55,8 @@ const PARTNER_INVITES_STORAGE_KEY = 'partnerInvites:v1';
 const AUTH_SESSION_STORAGE_KEY = 'authSession:v1';
 const EMAIL_LINK_CONTEXT_STORAGE_KEY = 'emailLinkContext:v1';
 const PENDING_EMAIL_SIGNIN_LINK_STORAGE_KEY = 'pendingEmailSignInLink:v1';
+const EMAIL_LINK_HINT_STORAGE_KEY = 'emailLinkHint:v1';
+const EMAIL_LINK_HINT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const CORPORATE_EMAIL_DOMAINS = new Set([
     '7271155.ru',
     '7274069.ru',
@@ -718,6 +720,48 @@ function clearPendingEmailSignInLink() {
     localStorage.removeItem(PENDING_EMAIL_SIGNIN_LINK_STORAGE_KEY);
 }
 
+function saveEmailLinkHint(hint) {
+    try {
+        const login = normalizeLogin(hint?.login || hint?.email || '');
+        const action = String(hint?.action || '').trim().toLowerCase();
+        if (!isValidLogin(login)) return;
+        if (action !== 'invite' && action !== 'verify') return;
+        localStorage.setItem(EMAIL_LINK_HINT_STORAGE_KEY, JSON.stringify({
+            login,
+            action,
+            savedAt: new Date().toISOString()
+        }));
+    } catch (error) {}
+}
+
+function getEmailLinkHint() {
+    try {
+        const raw = localStorage.getItem(EMAIL_LINK_HINT_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return null;
+        const login = normalizeLogin(parsed.login || '');
+        const action = String(parsed.action || '').trim().toLowerCase();
+        const savedAt = String(parsed.savedAt || '').trim();
+        if (!isValidLogin(login)) return null;
+        if (action !== 'invite' && action !== 'verify') return null;
+        const savedAtMs = parseIsoMs(savedAt);
+        if (!savedAtMs) return null;
+        if ((Date.now() - savedAtMs) > EMAIL_LINK_HINT_MAX_AGE_MS) return null;
+        return {
+            login,
+            action,
+            savedAt
+        };
+    } catch (error) {
+        return null;
+    }
+}
+
+function clearEmailLinkHint() {
+    localStorage.removeItem(EMAIL_LINK_HINT_STORAGE_KEY);
+}
+
 function tryDecodeUrlValue(value) {
     const raw = String(value || '').trim();
     if (!raw) return '';
@@ -776,6 +820,22 @@ function resolveEmailSignInLink(rawUrl = window.location.href) {
         } catch (error) {}
     }
     return null;
+}
+
+function getEmailActionFromCurrentLink(rawUrl = window.location.href) {
+    const urlCandidates = collectEmailLinkUrlCandidates(rawUrl);
+    for (const urlValue of urlCandidates) {
+        try {
+            const parsedUrl = new URL(urlValue);
+            const action = String(parsedUrl.searchParams.get('email_action') || '').trim().toLowerCase();
+            if (action === 'invite' || action === 'verify') {
+                return action;
+            }
+        } catch (error) {
+            continue;
+        }
+    }
+    return '';
 }
 
 function getAppBaseUrl() {
@@ -1099,6 +1159,7 @@ async function finalizeEmailLinkVerification(login, signInLink) {
     }
 
     clearPendingEmailSignInLink();
+    clearEmailLinkHint();
     showCopyNotification('Email подтвержден. Теперь войдите с паролем.');
     setAuthError('Email подтвержден. Введите пароль для входа (можно задать новый).');
     if (modalLoginInput) {
@@ -1128,6 +1189,14 @@ async function consumePendingEmailSignInLinkForLogin(login) {
 
 async function consumeEmailVerificationLinkIfPresent() {
     if (!auth) return;
+    const detectedAction = getEmailActionFromCurrentLink(window.location.href);
+    const detectedLogin = getEmailFromCurrentLink(window.location.href);
+    if (detectedAction && isValidLogin(detectedLogin)) {
+        saveEmailLinkHint({
+            login: detectedLogin,
+            action: detectedAction
+        });
+    }
     const signInLink = resolveEmailSignInLink(window.location.href);
     if (!signInLink) return;
 
@@ -1141,6 +1210,7 @@ async function consumeEmailVerificationLinkIfPresent() {
 
     try {
         await finalizeEmailLinkVerification(login, signInLink);
+        clearEmailLinkHint();
     } catch (error) {
         console.error('Email link verification error:', error);
         const code = String(error?.code || '').trim();
@@ -1878,6 +1948,11 @@ async function handleAuthSubmit() {
 
         const passwordHash = await hashPassword(login, password);
         const nowIso = new Date().toISOString();
+        const emailLinkHint = getEmailLinkHint();
+        const hasMatchingInviteOrVerifyHint = !!emailLinkHint &&
+            emailLinkHint.login === login &&
+            (emailLinkHint.action === 'invite' || emailLinkHint.action === 'verify');
+        let shouldMarkInviteAsVerifiedFromHint = false;
         let targetUser = null;
 
         if (existingUser) {
@@ -1906,7 +1981,11 @@ async function handleAuthSubmit() {
             const resolvedRole = existingUser.role === 'admin'
                 ? 'admin'
                 : normalizeRole(accessPolicy.role || existingUser.role);
-            const verifiedAt = existingUser.emailVerifiedAt || accessPolicy?.invite?.emailVerifiedAt || null;
+            let verifiedAt = existingUser.emailVerifiedAt || accessPolicy?.invite?.emailVerifiedAt || null;
+            if (!verifiedAt && accessPolicy?.type === 'partner' && hasMatchingInviteOrVerifyHint) {
+                verifiedAt = nowIso;
+                shouldMarkInviteAsVerifiedFromHint = true;
+            }
             targetUser = {
                 ...existingUser,
                 role: resolvedRole,
@@ -1923,7 +2002,11 @@ async function handleAuthSubmit() {
             };
         } else {
             const resolvedRole = normalizeRole(accessPolicy.role || 'user');
-            const verifiedAt = accessPolicy?.invite?.emailVerifiedAt || null;
+            let verifiedAt = accessPolicy?.invite?.emailVerifiedAt || null;
+            if (!verifiedAt && accessPolicy?.type === 'partner' && hasMatchingInviteOrVerifyHint) {
+                verifiedAt = nowIso;
+                shouldMarkInviteAsVerifiedFromHint = true;
+            }
             targetUser = {
                 login,
                 fio,
@@ -1944,6 +2027,12 @@ async function handleAuthSubmit() {
         }
 
         let savedUser = await saveUserRecord(targetUser);
+        if (shouldMarkInviteAsVerifiedFromHint && accessPolicy?.invite) {
+            await patchPartnerInvite(login, {
+                emailVerifiedAt: nowIso
+            });
+            clearEmailLinkHint();
+        }
 
         const isVerified = !!savedUser.emailVerifiedAt;
         if (!isVerified) {
@@ -1958,6 +2047,7 @@ async function handleAuthSubmit() {
 
         setAuthSession(savedUser.login);
         applyAuthenticatedUser(savedUser);
+        clearEmailLinkHint();
         hideNameModal();
         startActiveTimeTracking();
     } catch (error) {
