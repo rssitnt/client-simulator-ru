@@ -92,6 +92,12 @@ const ACTIVE_IDLE_TIMEOUT_MS = 60000;
 const ACTIVE_TICK_MS = 5000;
 const ACTIVE_FLUSH_MS = 15000;
 const SESSION_REVOCATION_CHECK_MS = 10000;
+const ELEVENLABS_WIDGET_ELEMENT_NAME = 'elevenlabs-convai';
+const ELEVENLABS_WIDGET_LOAD_TIMEOUT_MS = 4500;
+const ELEVENLABS_WIDGET_SOURCES = [
+    'https://unpkg.com/@elevenlabs/convai-widget-embed',
+    'https://cdn.jsdelivr.net/npm/@elevenlabs/convai-widget-embed'
+];
 
 const RATER_PROMPT_VERSION = '2025-01-30';
 const DEFAULT_RATER_PROMPT = `РОЛЬ
@@ -504,6 +510,9 @@ let openAiUserTranscriptByItemId = new Map();
 let elevenLabsSocketBridgeInstalled = false;
 let elevenLabsActiveSocketCount = 0;
 let elevenLabsConversationFinished = false;
+let elevenLabsWidgetLoadPromise = null;
+let activeVoiceModeProvider = 'elevenlabs';
+let voiceModeOpenRequestId = 0;
 const elevenLabsSocketOpenState = new WeakMap();
 let reratePromptElement = null;
 let attestationQueue = [];
@@ -3660,6 +3669,110 @@ function setVoiceModeStatus(text, state = 'idle') {
     voiceModeStatus.dataset.state = state;
 }
 
+function isElevenLabsWidgetDefined() {
+    if (typeof customElements === 'undefined') return false;
+    if (typeof customElements.get !== 'function') return false;
+    return !!customElements.get(ELEVENLABS_WIDGET_ELEMENT_NAME);
+}
+
+function getElevenLabsWidgetScriptCandidates() {
+    const candidates = [...ELEVENLABS_WIDGET_SOURCES];
+    if (typeof document === 'undefined') return candidates;
+    document.querySelectorAll('script[src*="@elevenlabs/convai-widget-embed"]').forEach((node) => {
+        const src = String(node?.src || '').trim();
+        if (!src) return;
+        if (candidates.includes(src)) return;
+        candidates.unshift(src);
+    });
+    return candidates;
+}
+
+function waitForElevenLabsWidgetDefinition(timeoutMs = ELEVENLABS_WIDGET_LOAD_TIMEOUT_MS) {
+    if (isElevenLabsWidgetDefined()) return Promise.resolve(true);
+    if (typeof customElements === 'undefined' || typeof customElements.whenDefined !== 'function') {
+        return Promise.resolve(false);
+    }
+
+    return new Promise((resolve) => {
+        let settled = false;
+        const finish = (result) => {
+            if (settled) return;
+            settled = true;
+            resolve(!!result);
+        };
+        const timeoutId = setTimeout(() => finish(isElevenLabsWidgetDefined()), Math.max(300, timeoutMs));
+        customElements.whenDefined(ELEVENLABS_WIDGET_ELEMENT_NAME)
+            .then(() => {
+                clearTimeout(timeoutId);
+                finish(true);
+            })
+            .catch(() => {
+                clearTimeout(timeoutId);
+                finish(false);
+            });
+    });
+}
+
+function loadElevenLabsWidgetScriptSource(src, timeoutMs = ELEVENLABS_WIDGET_LOAD_TIMEOUT_MS) {
+    if (typeof document === 'undefined') return Promise.resolve(false);
+    const normalizedSrc = String(src || '').trim();
+    if (!normalizedSrc) return Promise.resolve(false);
+
+    return new Promise((resolve) => {
+        let script = Array.from(document.querySelectorAll('script')).find((node) => {
+            return String(node?.src || '').trim() === normalizedSrc;
+        }) || null;
+
+        if (!script) {
+            script = document.createElement('script');
+            script.src = normalizedSrc;
+            script.async = true;
+            script.type = 'text/javascript';
+            document.head?.appendChild(script);
+        }
+
+        if (isElevenLabsWidgetDefined()) {
+            resolve(true);
+            return;
+        }
+
+        let settled = false;
+        const finish = (result) => {
+            if (settled) return;
+            settled = true;
+            script.removeEventListener('load', onLoad);
+            script.removeEventListener('error', onError);
+            clearTimeout(timeoutId);
+            resolve(!!result);
+        };
+        const onLoad = () => finish(true);
+        const onError = () => finish(false);
+        const timeoutId = setTimeout(() => finish(false), Math.max(500, timeoutMs));
+
+        script.addEventListener('load', onLoad);
+        script.addEventListener('error', onError);
+    });
+}
+
+async function ensureElevenLabsWidgetReady() {
+    if (isElevenLabsWidgetDefined()) return true;
+    if (elevenLabsWidgetLoadPromise) return elevenLabsWidgetLoadPromise;
+
+    elevenLabsWidgetLoadPromise = (async () => {
+        const candidates = getElevenLabsWidgetScriptCandidates();
+        for (const src of candidates) {
+            await loadElevenLabsWidgetScriptSource(src);
+            const isDefined = await waitForElevenLabsWidgetDefinition();
+            if (isDefined) return true;
+        }
+        return isElevenLabsWidgetDefined();
+    })();
+
+    const isReady = await elevenLabsWidgetLoadPromise;
+    elevenLabsWidgetLoadPromise = null;
+    return isReady;
+}
+
 function updateVoiceModeControls() {
     if (voiceModeStartBtn) {
         if (isGeminiVoiceConnecting) {
@@ -5152,26 +5265,59 @@ function setVoiceModeScreenActive(active) {
     }
 }
 
-function showVoiceModeModal() {
+async function showVoiceModeModal() {
     hideTooltip(true);
-    ensureElevenLabsSocketBridge();
-    resetElevenLabsVoiceSessionState();
-    setVoiceModeScreenActive(true);
-    setElevenLabsWidgetHidden(false);
-    dispatchElevenLabsExpandEvent('expand');
-    if (typeof customElements !== 'undefined' && typeof customElements.whenDefined === 'function') {
-        customElements.whenDefined('elevenlabs-convai').then(() => {
-            setVoiceModeScreenActive(true);
+    const openRequestId = ++voiceModeOpenRequestId;
+    activeVoiceModeProvider = 'elevenlabs';
+    try {
+        resetElevenLabsVoiceSessionState();
+        setVoiceModeStatus('Открываю голосовой режим…', 'idle');
+        setVoiceModeScreenActive(true);
+        setElevenLabsWidgetHidden(true);
+
+        const widgetReady = await ensureElevenLabsWidgetReady();
+        if (openRequestId !== voiceModeOpenRequestId || !voiceModeScreen || voiceModeScreen.hidden) return;
+
+        if (widgetReady) {
+            ensureElevenLabsSocketBridge();
+            setVoiceModeStatus('Нажмите кнопку звонка для старта', 'idle');
             setElevenLabsWidgetHidden(false);
             dispatchElevenLabsExpandEvent('expand');
-        }).catch(() => {});
+            return;
+        }
+
+        activeVoiceModeProvider = 'openai';
+        setVoiceModeStatus('ElevenLabs недоступен в этой сети. Подключаю встроенный голосовой режим…', 'waiting');
+        showCopyNotification('ElevenLabs недоступен без VPN. Запускаю встроенный голосовой режим.');
+        await startGeminiVoiceMode();
+        if (openRequestId !== voiceModeOpenRequestId || !voiceModeScreen || voiceModeScreen.hidden) {
+            await stopGeminiVoiceMode({ silent: true, expectedClose: true });
+            return;
+        }
+        if (!isGeminiVoiceActive && !isGeminiVoiceConnecting) {
+            setVoiceModeStatus('Не удалось запустить голосовой режим. Попробуйте VPN или проверьте сеть.', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to open voice mode:', error);
+        if (openRequestId !== voiceModeOpenRequestId) return;
+        setVoiceModeStatus('Не удалось открыть голосовой режим. Попробуйте позже.', 'error');
     }
 }
 
 function hideVoiceModeModal() {
+    voiceModeOpenRequestId += 1;
+    const shouldStopRealtimeVoice = activeVoiceModeProvider === 'openai' ||
+        isGeminiVoiceConnecting ||
+        isGeminiVoiceActive ||
+        !!geminiLiveSession ||
+        !!openAiVoicePeerConnection;
+    if (shouldStopRealtimeVoice) {
+        stopGeminiVoiceMode({ silent: true, expectedClose: true }).catch(() => {});
+    }
     dispatchElevenLabsExpandEvent('collapse');
     setVoiceModeScreenActive(false);
     elevenLabsConversationFinished = false;
+    activeVoiceModeProvider = 'elevenlabs';
     setTimeout(() => {
         setElevenLabsWidgetHidden(true);
     }, 120);
