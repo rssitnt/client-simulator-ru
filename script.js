@@ -2109,11 +2109,17 @@ async function patchUserRecord(login, patch = {}) {
     if (!normalizedLogin) return null;
     const key = loginToStorageKey(normalizedLogin);
     const sanitizedPatch = { ...patch };
+    const requestedRoleChange = Object.prototype.hasOwnProperty.call(sanitizedPatch, 'role')
+        ? normalizeRole(sanitizedPatch.role)
+        : null;
+    if (requestedRoleChange === 'admin' && !isAdmin()) {
+        throw new Error('Недостаточно прав для назначения роли админа.');
+    }
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'fio')) {
         sanitizedPatch.fio = normalizeFio(sanitizedPatch.fio);
     }
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'role')) {
-        sanitizedPatch.role = normalizeRole(sanitizedPatch.role);
+        sanitizedPatch.role = requestedRoleChange;
     }
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'activeMs')) {
         sanitizedPatch.activeMs = Math.max(0, Number(sanitizedPatch.activeMs) || 0);
@@ -6622,6 +6628,14 @@ function showSettingsModal() {
     selectedRole = userRole;
     setCachedStorageValue(USER_ROLE_KEY, userRole);
     currentRoleDisplay.textContent = getRoleLabelUi(userRole);
+    if (changeRoleBtn) {
+        if (userRole === 'admin') {
+            changeRoleBtn.style.display = '';
+            changeRoleBtn.textContent = 'Переключить в режим пользователя';
+        } else {
+            changeRoleBtn.style.display = 'none';
+        }
+    }
     
     // Hide password section
     roleChangePassword.style.display = 'none';
@@ -7092,6 +7106,11 @@ changeRoleBtn.addEventListener('click', () => {
             switchRole('user');
         }
     } else {
+        if (!isAdmin()) {
+            showCopyNotification('Повышение прав недоступно. Обратитесь к администратору.');
+            return;
+        }
+
         // User -> Admin (require password)
         roleChangePassword.style.display = 'block';
         roleChangePasswordInput.focus();
@@ -7100,6 +7119,9 @@ changeRoleBtn.addEventListener('click', () => {
 
 // Helper function to switch role
 async function switchRole(newRole) {
+    if (!isAdmin() && newRole === 'admin') {
+        throw new Error('Недостаточно прав для назначения роли админа.');
+    }
     if (!currentUser) return;
     const role = normalizeRole(newRole);
     const patched = await patchUserRecord(currentUser.login, {
