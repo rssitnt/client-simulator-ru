@@ -6715,7 +6715,19 @@ function autoResizeNameInput() {
 
 function hideSettingsModal() {
     settingsModal.classList.remove('active');
+}
+
+function isSettingsModalOpen() {
+    return !!settingsModal?.classList?.contains('active');
+}
+
+function toggleSettingsModal() {
+    if (isSettingsModalOpen()) {
+        hideSettingsModal();
+        return;
     }
+    showSettingsModal();
+}
 
 function updateUserNameDisplay() {
     const name = currentUser?.fio || getCachedStorageValue(USER_NAME_KEY) || 'Гость';
@@ -7000,7 +7012,11 @@ bindEvent(aiImproveInput, 'keydown', (e) => {
 
 // ============ SETTINGS MODAL EVENT LISTENERS ============
 
-bindEvent(settingsBtn, 'click', showSettingsModal);
+bindEvent(settingsBtn, 'click', (e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    toggleSettingsModal();
+});
 
 // Close settings modal on overlay click
 bindEvent(settingsModal, 'click', (e) => {
