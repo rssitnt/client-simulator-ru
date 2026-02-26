@@ -2105,7 +2105,7 @@ async function saveUserRecord(record) {
     return payload;
 }
 
-async function patchUserRecord(login, patch = {}) {
+async function patchUserRecord(login, patch = {}, options = {}) {
     const normalizedLogin = normalizeLogin(login);
     if (!normalizedLogin) return null;
     const key = loginToStorageKey(normalizedLogin);
@@ -2113,7 +2113,9 @@ async function patchUserRecord(login, patch = {}) {
     const requestedRoleChange = Object.prototype.hasOwnProperty.call(sanitizedPatch, 'role')
         ? normalizeRole(sanitizedPatch.role)
         : null;
-    if (requestedRoleChange === 'admin' && !isAdmin()) {
+    const allowRoleEscalation = !!options.allowRoleEscalation;
+    const isSelfTarget = normalizeLogin(currentUser?.login || '') === normalizedLogin;
+    if (requestedRoleChange === 'admin' && !isAdmin() && !(allowRoleEscalation && isSelfTarget)) {
         throw new Error('Недостаточно прав для назначения роли админа.');
     }
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'fio')) {
@@ -3046,11 +3048,25 @@ function isAdmin() {
     return normalizeRole(currentUser?.role || 'user') === 'admin';
 }
 
+function ensureRoleChangeButtonVisible(roleOverride = null) {
+    if (!changeRoleBtn) return;
+    const resolvedRole = normalizeRole(
+        roleOverride || currentUser?.role || getCachedStorageValue(USER_ROLE_KEY, 'user') || 'user'
+    );
+    changeRoleBtn.style.display = 'inline-flex';
+    changeRoleBtn.style.visibility = 'visible';
+    changeRoleBtn.disabled = false;
+    changeRoleBtn.textContent = resolvedRole === 'admin'
+        ? 'Переключить в режим пользователя'
+        : 'Сменить';
+}
+
 // Apply role-based restrictions
 function applyRoleRestrictions() {
     const isAdminUser = isAdmin();
 
     document.body.classList.toggle('user-mode', !isAdminUser);
+    ensureRoleChangeButtonVisible();
     
     if (!isAdminUser) {
         debugLog('User mode: Prompts are read-only');
@@ -6676,14 +6692,7 @@ function showSettingsModal() {
     selectedRole = userRole;
     setCachedStorageValue(USER_ROLE_KEY, userRole);
     currentRoleDisplay.textContent = getRoleLabelUi(userRole);
-    if (changeRoleBtn) {
-        if (userRole === 'admin') {
-            changeRoleBtn.style.display = '';
-            changeRoleBtn.textContent = 'Переключить в режим пользователя';
-        } else {
-            changeRoleBtn.style.display = 'none';
-        }
-    }
+    ensureRoleChangeButtonVisible(userRole);
     
     // Hide password section
     roleChangePassword.style.display = 'none';
@@ -7170,11 +7179,6 @@ changeRoleBtn.addEventListener('click', () => {
             switchRole('user');
         }
     } else {
-        if (!isAdmin()) {
-            showCopyNotification('Повышение прав недоступно. Обратитесь к администратору.');
-            return;
-        }
-
         // User -> Admin (require password)
         roleChangePassword.style.display = 'block';
         roleChangePasswordInput.focus();
@@ -7182,8 +7186,9 @@ changeRoleBtn.addEventListener('click', () => {
 });
 
 // Helper function to switch role
-async function switchRole(newRole) {
-    if (!isAdmin() && newRole === 'admin') {
+async function switchRole(newRole, options = {}) {
+    const allowRoleEscalation = !!options.allowRoleEscalation;
+    if (!allowRoleEscalation && !isAdmin() && newRole === 'admin') {
         throw new Error('Недостаточно прав для назначения роли админа.');
     }
     if (!currentUser) return;
@@ -7191,6 +7196,8 @@ async function switchRole(newRole) {
     const patched = await patchUserRecord(currentUser.login, {
         role,
         lastSeenAt: new Date().toISOString()
+    }, {
+        allowRoleEscalation
     });
     currentUser = normalizeUserRecord({
         ...currentUser,
@@ -7241,7 +7248,7 @@ roleChangeConfirmBtn.addEventListener('click', async () => {
     try {
         const isPasswordValid = await verifyRoleChangePassword(password);
         if (isPasswordValid) {
-            await switchRole('admin');
+            await switchRole('admin', { allowRoleEscalation: true });
             roleChangePassword.style.display = 'none';
             roleChangePasswordInput.value = '';
             roleChangeError.style.display = 'none';
