@@ -522,6 +522,9 @@ let isUserEditing = false;
 let lastFirebaseData = null;
 let selectedRole = 'user';
 let currentUser = null;
+let isAppBootstrapped = false;
+let isWindowLoaded = document.readyState === 'complete';
+let isChatReady = false;
 let lockedPromptRole = null;
 let lockedPromptVariationId = null;
 let recognition = null;
@@ -4088,6 +4091,28 @@ function toggleInputState(enabled) {
     }
 }
 
+function setChatLoadingState(isLoading) {
+    if (isLoading) {
+        toggleInputState(false);
+        userInput.placeholder = 'Загрузка...';
+        return;
+    }
+    toggleInputState(true);
+    if (!isDialogRated) {
+        userInput.placeholder = '';
+    }
+}
+
+function updateChatReadyState() {
+    const ready = isAppBootstrapped && isWindowLoaded;
+    if (ready === isChatReady) return;
+    isChatReady = ready;
+    setChatLoadingState(!ready);
+    if (ready && document.activeElement === document.body) {
+        userInput.focus();
+    }
+}
+
 function isTextDialogStarted() {
     return conversationHistory.length > 0;
 }
@@ -7531,6 +7556,7 @@ function sanitizeRenderedHtml(html) {
 }
 
 async function sendMessage() {
+    if (!isChatReady) return;
     const userMessage = userInput.value.trim();
     if (!userMessage || isProcessing || isDialogRated) return;
 
@@ -7603,6 +7629,7 @@ async function sendMessage() {
 }
 
 async function startConversationHandler() {
+    if (!isChatReady) return;
     const systemPrompt = validatePromptBeforeWebhook('client', systemPromptInput.value);
     if (!systemPrompt) return;
 
@@ -9298,16 +9325,25 @@ document.querySelectorAll('.toolbar-btn').forEach(btn => {
 
 // ============ INITIALIZATION ============
 
+setChatLoadingState(true);
 loadAttestationQueue();
-loadPrompts().catch((error) => {
-    console.error('Initialization auth/prompts error:', error);
-    showNameModal();
-});
+loadPrompts()
+    .catch((error) => {
+        console.error('Initialization auth/prompts error:', error);
+        showNameModal();
+    })
+    .finally(() => {
+        isAppBootstrapped = true;
+        updateChatReadyState();
+    });
 initSpeechRecognition();
-userInput.focus();
 autoResizeTextarea(userInput);
 prepareCustomTooltips();
 initCustomTooltipLayer();
+window.addEventListener('load', () => {
+    isWindowLoaded = true;
+    updateChatReadyState();
+});
 
 if (attestationQueue.length > 0) {
     scheduleAttestationQueueRetry(600);
