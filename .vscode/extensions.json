@@ -1,0 +1,21 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "bradlc.vscode-tailwindcss",
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "formulahendry.auto-close-tag",
+    "formulahendry.auto-rename-tag",
+    "redhat.vscode-yaml",
+    "yzhang.markdown-all-in-one",
+    "mikestead.dotenv-ref",
+    "slevesque.vscode-autohotkey",
+    "eamodio.gitlens",
+    "usernamehw.errorlens",
+    "christian-kohler.path-intellisense",
+    "supabase.supabase-vscode",
+    "anthropic.claude-code"
+  ],
+  "unwantedRecommendations": []
+}
