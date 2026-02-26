@@ -7210,6 +7210,9 @@ async function switchRole(newRole, options = {}) {
     currentRoleDisplay.textContent = getRoleLabelUi(role);
     applyRoleRestrictions();
     showCopyNotification(`Роль изменена на ${getRoleLabelUi(role)}`);
+    setTimeout(() => {
+        location.reload();
+    }, 200);
 }
 
 // Cancel role change
