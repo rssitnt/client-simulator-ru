@@ -4091,13 +4091,24 @@ function toggleInputState(enabled) {
     }
 }
 
+function setStartButtonsEnabled(enabled) {
+    const startBtnEl = document.getElementById('startBtn');
+    const startAttestationBtnEl = document.getElementById('startAttestationBtn');
+    [startBtnEl, startAttestationBtnEl].forEach((btn) => {
+        if (!btn) return;
+        btn.disabled = !enabled;
+    });
+}
+
 function setChatLoadingState(isLoading) {
     if (isLoading) {
         toggleInputState(false);
+        setStartButtonsEnabled(false);
         userInput.placeholder = 'Загрузка...';
         return;
     }
     toggleInputState(true);
+    setStartButtonsEnabled(true);
     if (!isDialogRated) {
         userInput.placeholder = '';
     }
@@ -7431,8 +7442,12 @@ function clearChat() {
     const startAttestationBtnEl = document.getElementById('startAttestationBtn');
     if (startAttestationBtnEl) {
         startAttestationBtnEl.style.display = isAttestationMode ? 'none' : '';
-        startAttestationBtnEl.addEventListener('click', () => setAttestationMode(true));
+        startAttestationBtnEl.addEventListener('click', () => {
+            if (!isChatReady) return;
+            setAttestationMode(true);
+        });
     }
+    setStartButtonsEnabled(isChatReady);
 }
 
 function escapeHtml(value) {
@@ -8930,6 +8945,7 @@ if (exitAttestationBtn) {
 }
 if (startAttestationBtn) {
     startAttestationBtn.addEventListener('click', () => {
+        if (!isChatReady) return;
         setAttestationMode(true);
     });
 }
