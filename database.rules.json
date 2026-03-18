@@ -1,6 +1,42 @@
 {
   "rules": {
-    ".read": "auth != null && auth.token.email_verified == true",
-    ".write": "auth != null && auth.token.email_verified == true"
+    ".read": false,
+    ".write": false,
+    "users_by_uid": {
+      "$uid": {
+        ".read": "auth != null && auth.token.email_verified == true && auth.uid === $uid",
+        ".write": "auth != null && auth.token.email_verified == true && auth.uid === $uid && newData.hasChildren(['uid','login','role','legacyKey','updatedAt']) && newData.child('uid').val() === auth.uid && newData.child('login').val() === auth.token.email && root.child('users').child(newData.child('legacyKey').val()).child('login').val() === auth.token.email && newData.child('role').val() === root.child('users').child(newData.child('legacyKey').val()).child('role').val()"
+      }
+    },
+    "users": {
+      "$key": {
+        ".read": "auth != null && auth.token.email_verified == true && (data.child('login').val() === auth.token.email || root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin')",
+        ".write": "auth != null && auth.token.email_verified == true && (root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin' || (((!data.exists() && newData.child('login').val() === auth.token.email && newData.child('role').val() === 'user') || (data.exists() && data.child('login').val() === auth.token.email && newData.child('login').val() === data.child('login').val() && newData.child('role').val() === data.child('role').val())) && (!newData.child('uid').exists() || newData.child('uid').val() === auth.uid)))"
+      }
+    },
+    "partner_invites": {
+      "$key": {
+        ".read": "auth != null && auth.token.email_verified == true && (data.child('login').val() === auth.token.email || root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin')",
+        ".write": "auth != null && auth.token.email_verified == true && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'"
+      }
+    },
+    "access_revocations": {
+      "$key": {
+        ".read": "auth != null && auth.token.email_verified == true && (data.child('login').val() === auth.token.email || root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin')",
+        ".write": "auth != null && auth.token.email_verified == true && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'"
+      }
+    },
+    "prompts": {
+      ".read": "auth != null && auth.token.email_verified == true",
+      ".write": "auth != null && auth.token.email_verified == true && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'"
+    },
+    "prompt_history": {
+      ".read": "auth != null && auth.token.email_verified == true",
+      ".write": "auth != null && auth.token.email_verified == true && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'"
+    },
+    "app_config": {
+      ".read": "auth != null && auth.token.email_verified == true",
+      ".write": "auth != null && auth.token.email_verified == true && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'"
+    }
   }
 }

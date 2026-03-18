@@ -24,15 +24,18 @@
 
 ## Авторизация запроса
 
-Сервер поддерживает 2 режима:
+По умолчанию сервер принимает только:
 
-1. `Authorization: Bearer <Firebase ID token>` (предпочтительный)
-2. Fallback по `login`/`email` в body, с проверкой доступа через RTDB (`users`, `partner_invites`) и `ALLOWED_EMAIL_DOMAINS`
+1. `Authorization: Bearer <Firebase ID token>`
+
+Небезопасный fallback по `login`/`email` в body отключен по умолчанию.
+Если вам нужен legacy-режим для миграции, включайте его только временно через `ALLOW_LEGACY_LOGIN_FALLBACK=true`.
 
 ## Переменные окружения (рекомендуемые)
 
 - `ALLOWED_ORIGINS` — например: `https://client-simulator.ru,https://www.client-simulator.ru`
 - `ALLOWED_EMAIL_DOMAINS` — например: `tradicia-k.ru,tradicia-k.kz`
+- `ALLOW_LEGACY_LOGIN_FALLBACK` — по умолчанию `false`, включать только временно для миграции
 - `GEMINI_LIVE_MODEL` — по умолчанию `gemini-2.5-flash-native-audio-preview-09-2025`
 - `OPENAI_REALTIME_MODEL` — по умолчанию `gpt-4o-realtime-preview-2025-06-03`
 - `OPENAI_DEFAULT_VOICE` — по умолчанию `alloy`

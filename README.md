@@ -34,6 +34,7 @@ npx http-server -p 3001
 1. Поднимите сервер выдачи ephemeral токенов из `server/gemini-token-server.mjs`.
 2. Держите `OPENAI_API_KEY` только на сервере (env/secret manager).
 3. Фронт по умолчанию дергает `POST /api/openai-realtime-session` и отправляет Firebase ID token в `Authorization`.
+4. Небезопасный fallback по `login`/`email` в body отключён по умолчанию и должен включаться только временно для миграции.
 
 Подробно: `server/README.md`.
 

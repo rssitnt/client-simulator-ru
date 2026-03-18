@@ -48,6 +48,7 @@ const RATING_SEND_RETRY_MAX_MS = 5000;
 const MARKDOWN_CACHE_MAX_SIZE = 250;
 const MARKDOWN_CACHE_TEXT_LIMIT = 40000;
 const AUTH_USERS_DB_PATH = 'users';
+const AUTH_USERS_BY_UID_DB_PATH = 'users_by_uid';
 const PARTNER_INVITES_DB_PATH = 'partner_invites';
 const APP_CONFIG_DB_PATH = 'app_config';
 const ACCESS_REVOKE_DB_PATH = 'access_revocations';
@@ -123,22 +124,40 @@ const ACTIVE_FLUSH_MS = 15000;
 const SESSION_REVOCATION_CHECK_MS = 10000;
 const ELEVENLABS_WIDGET_ELEMENT_NAME = 'elevenlabs-convai';
 const ELEVENLABS_WIDGET_LOAD_TIMEOUT_MS = 4500;
+const ELEVENLABS_WIDGET_VERSION = '0.10.3';
+const ELEVENLABS_WIDGET_PRIMARY_SRC = `https://unpkg.com/@elevenlabs/convai-widget-embed@${ELEVENLABS_WIDGET_VERSION}/dist/index.js`;
+const ELEVENLABS_WIDGET_FALLBACK_SRC = `https://cdn.jsdelivr.net/npm/@elevenlabs/convai-widget-embed@${ELEVENLABS_WIDGET_VERSION}/dist/index.js`;
 const ELEVENLABS_WIDGET_SOURCES = [
-    'https://unpkg.com/@elevenlabs/convai-widget-embed',
-    'https://cdn.jsdelivr.net/npm/@elevenlabs/convai-widget-embed'
+    ELEVENLABS_WIDGET_PRIMARY_SRC,
+    ELEVENLABS_WIDGET_FALLBACK_SRC
 ];
 const EXTERNAL_SCRIPT_LOAD_TIMEOUT_MS = 8000;
 const DOCX_LIBRARY_SRC = 'https://unpkg.com/docx@7.1.0/build/index.js';
 const MAMMOTH_LIBRARY_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
 const FILESAVER_LIBRARY_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js';
+const TRUSTED_EXTERNAL_SCRIPT_METADATA = new Map([
+    [ELEVENLABS_WIDGET_PRIMARY_SRC, { integrity: 'sha384-5tWP0n8XpR8xOqp5MbYmYLibF6/Ou7UFDhWn2ESUAz+qz6OlS9o8Fy1d+lMTQRuD' }],
+    [ELEVENLABS_WIDGET_FALLBACK_SRC, { integrity: 'sha384-5tWP0n8XpR8xOqp5MbYmYLibF6/Ou7UFDhWn2ESUAz+qz6OlS9o8Fy1d+lMTQRuD' }],
+    [DOCX_LIBRARY_SRC, { integrity: 'sha384-lGLqE+x3VglMuTcmrdpm32ZSDEh1a93PZ+jHuVZ8jG4DayHt4qNBJtmwL76C855e' }],
+    [MAMMOTH_LIBRARY_SRC, { integrity: 'sha384-nFoSjZIoH3CCp8W639jJyQkuPHinJ2NHe7on1xvlUA7SuGfJAfvMldrsoAVm6ECz' }],
+    [FILESAVER_LIBRARY_SRC, { integrity: 'sha384-PlRSzpewlarQuj5alIadXwjNUX+2eNMKwr0f07ShWYLy8B6TjEbm7ZlcN/ScSbwy' }]
+]);
 const EXTERNAL_SCRIPT_LOAD_PROMISES = new Map();
+const SANITIZED_HTML_TAGS = [
+    'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'ul', 'ol', 'li',
+    'b', 'strong', 'i', 'em', 'del',
+    'pre', 'code',
+    'blockquote', 'a', 'span',
+    'div', 'hr', 'br'
+];
+const SANITIZED_HTML_ATTRIBUTES = ['class', 'href', 'title', 'target', 'rel'];
 
 const RATER_PROMPT_VERSION = '2025-01-30';
 const PASSWORD_HASH_ALGORITHM = 'PBKDF2';
 const PASSWORD_HASH_ITERATIONS = 120000;
 const PASSWORD_HASH_KEY_BYTES = 32;
 const PASSWORD_HASH_SALT_BYTES = 16;
-const ADMIN_PASSWORD = '1357246';
 const PASSWORD_HASH_FORMAT_PREFIX = 'pbkdf2:v1';
 const PASSWORD_HASH_FALLBACK_PREFIX = 'sha256:v1';
 const FAILED_LOGIN_BACKOFF_BASE_MS = 1200;
@@ -572,6 +591,7 @@ let reratePromptElement = null;
 let attestationQueue = [];
 let isAttestationQueueFlushInProgress = false;
 let attestationQueueRetryTimer = null;
+let currentUserAccessMirrorSyncPromise = null;
 let activeTickTimerId = null;
 let pendingActiveMs = 0;
 let lastActiveTickAt = Date.now();
@@ -657,6 +677,26 @@ function getRoleIcon(role) {
     return '👤';
 }
 
+function hasAdminAccount(user = currentUser) {
+    return normalizeRole(user?.role || 'user') === 'admin';
+}
+
+function syncSelectedRole(nextRole = selectedRole) {
+    const normalizedNextRole = normalizeRole(nextRole);
+    const effectiveRole = hasAdminAccount()
+        ? (normalizedNextRole === 'admin' ? 'admin' : 'user')
+        : 'user';
+
+    selectedRole = effectiveRole;
+    setCachedStorageValue(USER_ROLE_KEY, effectiveRole);
+
+    if (currentRoleDisplay) {
+        currentRoleDisplay.textContent = getRoleLabelUi(effectiveRole);
+    }
+
+    return effectiveRole;
+}
+
 function isCorporateEmail(login) {
     const email = normalizeLogin(login);
     const atIndex = email.lastIndexOf('@');
@@ -670,6 +710,89 @@ function loginToStorageKey(login) {
     return Array.from(normalized)
         .map((char) => char.codePointAt(0).toString(16))
         .join('_');
+}
+
+function getCurrentAuthUid() {
+    return String(auth?.currentUser?.uid || '').trim();
+}
+
+function resolveAuthUidForLogin(login, fallback = '') {
+    const normalizedLogin = normalizeLogin(login);
+    const fallbackUid = String(fallback || '').trim();
+    const authUid = getCurrentAuthUid();
+    const authEmail = normalizeLogin(auth?.currentUser?.email || '');
+    if (authUid && normalizedLogin && authEmail === normalizedLogin) {
+        return authUid;
+    }
+    return fallbackUid || null;
+}
+
+function canSyncCurrentUserAccessMirror(user = currentUser) {
+    if (!db || !user) return false;
+    const normalizedLogin = normalizeLogin(user?.login || '');
+    const authUid = getCurrentAuthUid();
+    const authEmail = normalizeLogin(auth?.currentUser?.email || '');
+    return !!(authUid && normalizedLogin && authEmail === normalizedLogin);
+}
+
+async function syncCurrentUserAccessMirror(user = currentUser) {
+    const normalizedUser = normalizeUserRecord(user, user?.login);
+    if (!normalizedUser || !canSyncCurrentUserAccessMirror(normalizedUser)) return false;
+
+    const uid = resolveAuthUidForLogin(normalizedUser.login, normalizedUser.uid);
+    if (!uid) return false;
+
+    const payload = {
+        uid,
+        login: normalizedUser.login,
+        role: normalizeRole(normalizedUser.role),
+        legacyKey: loginToStorageKey(normalizedUser.login),
+        updatedAt: new Date().toISOString()
+    };
+
+    try {
+        await set(ref(db, `${AUTH_USERS_BY_UID_DB_PATH}/${uid}`), payload);
+        return true;
+    } catch (error) {
+        console.error('Failed to sync user access mirror:', error);
+        return false;
+    }
+}
+
+async function ensureCurrentUserAccessMirror(user = currentUser) {
+    if (!canSyncCurrentUserAccessMirror(user)) return false;
+    if (currentUserAccessMirrorSyncPromise) {
+        return currentUserAccessMirrorSyncPromise;
+    }
+
+    currentUserAccessMirrorSyncPromise = (async () => {
+        const normalizedUser = normalizeUserRecord(user, user?.login);
+        if (!normalizedUser) return false;
+
+        const resolvedUid = resolveAuthUidForLogin(normalizedUser.login, normalizedUser.uid);
+        if (!resolvedUid) return false;
+
+        let syncedUser = normalizedUser;
+        if (normalizedUser.uid !== resolvedUid) {
+            const patched = await patchUserRecord(normalizedUser.login, {
+                uid: resolvedUid
+            });
+            syncedUser = normalizeUserRecord({
+                ...normalizedUser,
+                ...(patched || {}),
+                uid: resolvedUid
+            }, normalizedUser.login) || normalizedUser;
+            if (currentUser && currentUser.login === syncedUser.login) {
+                currentUser = syncedUser;
+            }
+        }
+
+        return syncCurrentUserAccessMirror(syncedUser);
+    })().finally(() => {
+        currentUserAccessMirrorSyncPromise = null;
+    });
+
+    return currentUserAccessMirrorSyncPromise;
 }
 
 const LOCAL_JSON_STORAGE_FLUSH_MS = 160;
@@ -888,6 +1011,34 @@ function saveLocalUsersStore(store) {
     setCachedLocalStorageJson(AUTH_LOCAL_STORAGE_KEY, store || {});
 }
 
+function toLocalUserCachePayload(record) {
+    if (!record || typeof record !== 'object') return null;
+    const normalized = normalizeUserRecord(record, record?.login);
+    if (!normalized) return null;
+
+    return {
+        uid: normalized.uid,
+        login: normalized.login,
+        fio: normalized.fio,
+        role: normalized.role,
+        passwordHash: '',
+        passwordNeedsSetup: normalized.passwordNeedsSetup,
+        emailVerifiedAt: normalized.emailVerifiedAt,
+        emailVerificationSentAt: normalized.emailVerificationSentAt,
+        failedLoginAttempts: normalized.failedLoginAttempts,
+        isBlocked: normalized.isBlocked,
+        blockedReason: normalized.blockedReason,
+        failedLoginBackoffUntil: normalized.failedLoginBackoffUntil,
+        blockedAt: normalized.blockedAt,
+        sessionRevokedAt: normalized.sessionRevokedAt,
+        passwordHashScheme: null,
+        createdAt: normalized.createdAt,
+        lastLoginAt: normalized.lastLoginAt,
+        lastSeenAt: normalized.lastSeenAt,
+        activeMs: normalized.activeMs
+    };
+}
+
 function loadLocalPartnerInvitesStore() {
     return getCachedLocalStorageJson(PARTNER_INVITES_STORAGE_KEY);
 }
@@ -929,8 +1080,15 @@ async function getAccessRevocation(login) {
             if (snapshot.exists()) {
                 return normalizeAccessRevocation(snapshot.val(), normalizedLogin);
             }
+            const localStore = loadLocalAccessRevokesStore();
+            if (Object.prototype.hasOwnProperty.call(localStore, key)) {
+                delete localStore[key];
+                saveLocalAccessRevokesStore(localStore);
+            }
+            return null;
         } catch (error) {
             console.error('Failed to load access revocation from Firebase:', error);
+            return null;
         }
     }
 
@@ -990,8 +1148,11 @@ async function listAccessRevocations() {
                         return 0;
                     });
             }
+            saveLocalAccessRevokesStore({});
+            return [];
         } catch (error) {
             console.error('Failed to load access revocations from Firebase:', error);
+            return [];
         }
     }
 
@@ -1537,6 +1698,7 @@ async function getPartnerInviteByLogin(login) {
             return null;
         } catch (error) {
             console.error('Failed to load partner invite from Firebase:', error);
+            return null;
         }
     }
 
@@ -1650,6 +1812,7 @@ async function listPartnerInvites() {
             return [];
         } catch (error) {
             console.error('Failed to load partner invites from Firebase:', error);
+            return [];
         }
     }
 
@@ -1918,20 +2081,16 @@ function isPasswordHashNeedsMigration(rawHash = '') {
     return parsed.format !== 'pbkdf2';
 }
 
-async function hashPasswordWithSubtleFallback(input) {
+async function hashPasswordSha256Legacy(input) {
     const encoder = createTextEncoder();
-    if (encoder && window.crypto?.subtle) {
-        const data = encoder.encode(String(input || ''));
-        const digest = await window.crypto.subtle.digest('SHA-256', data);
-        return Array.from(new Uint8Array(digest))
-            .map((b) => b.toString(16).padStart(2, '0'))
-            .join('');
+    if (!encoder || !window.crypto?.subtle) {
+        throw new Error('secure-crypto-unavailable');
     }
-    return hashPasswordLegacy(input);
-}
-
-function hashPasswordLegacy(input) {
-    return btoa(unescape(encodeURIComponent(String(input || ''))));
+    const data = encoder.encode(String(input || ''));
+    const digest = await window.crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(digest))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
 }
 
 function normalizePasswordSecret(login, password) {
@@ -1941,31 +2100,25 @@ function normalizePasswordSecret(login, password) {
 async function hashPassword(login, password) {
     const normalizedLogin = normalizeLogin(login);
     const secret = normalizePasswordSecret(normalizedLogin, password);
-    try {
-        const encoder = createTextEncoder();
-        if (!encoder || !window.crypto?.subtle) {
-            throw new Error('fallback');
-        }
-        const salt = window.crypto.getRandomValues(new Uint8Array(PASSWORD_HASH_SALT_BYTES));
-        const keyMaterial = await window.crypto.subtle.importKey(
-            'raw',
-            encoder.encode(secret),
-            'PBKDF2',
-            false,
-            ['deriveBits']
-        );
-        const derivedBits = await window.crypto.subtle.deriveBits({
-            name: PASSWORD_HASH_ALGORITHM,
-            salt,
-            iterations: PASSWORD_HASH_ITERATIONS,
-            hash: 'SHA-256'
-        }, keyMaterial, PASSWORD_HASH_KEY_BYTES * 8);
-        return `${PASSWORD_HASH_FORMAT_PREFIX}|${PASSWORD_HASH_ITERATIONS}|${bytesToBase64(salt)}|${bytesToBase64(new Uint8Array(derivedBits))}`;
-    } catch (error) {
-        console.warn('hashPassword fallback to legacy due:', error?.message || error);
-        const legacy = await hashPasswordWithSubtleFallback(secret);
-        return `${PASSWORD_HASH_FALLBACK_PREFIX}|${legacy}`;
+    const encoder = createTextEncoder();
+    if (!encoder || !window.crypto?.subtle) {
+        throw new Error('Secure password hashing is unavailable in this browser');
     }
+    const salt = window.crypto.getRandomValues(new Uint8Array(PASSWORD_HASH_SALT_BYTES));
+    const keyMaterial = await window.crypto.subtle.importKey(
+        'raw',
+        encoder.encode(secret),
+        'PBKDF2',
+        false,
+        ['deriveBits']
+    );
+    const derivedBits = await window.crypto.subtle.deriveBits({
+        name: PASSWORD_HASH_ALGORITHM,
+        salt,
+        iterations: PASSWORD_HASH_ITERATIONS,
+        hash: 'SHA-256'
+    }, keyMaterial, PASSWORD_HASH_KEY_BYTES * 8);
+    return `${PASSWORD_HASH_FORMAT_PREFIX}|${PASSWORD_HASH_ITERATIONS}|${bytesToBase64(salt)}|${bytesToBase64(new Uint8Array(derivedBits))}`;
 }
 
 async function verifyPasswordHash(login, password, rawHash) {
@@ -1998,21 +2151,30 @@ async function verifyPasswordHash(login, password, rawHash) {
         }
     }
 
-    const legacyHash = await hashPasswordWithSubtleFallback(secret);
-    const legacyCompat = parsed.format === 'sha256' ? (parsed.raw || '') : (String(rawHash || '').trim());
-    return legacyHash === legacyCompat || hashPasswordLegacy(secret) === legacyCompat;
+    if (parsed.format === 'sha256') {
+        try {
+            const legacyHash = await hashPasswordSha256Legacy(secret);
+            return legacyHash === (parsed.raw || '');
+        } catch (error) {
+            return false;
+        }
+    }
+
+    return false;
 }
 
 function normalizeUserRecord(raw, loginFallback = '') {
     if (!raw || typeof raw !== 'object') return null;
     const login = normalizeLogin(raw.login || loginFallback);
     if (!isValidLogin(login)) return null;
+    const uid = String(raw.uid || '').trim();
     const failedLoginAttempts = Math.max(0, Number(raw.failedLoginAttempts) || 0);
     const isBlocked = !!raw.isBlocked;
     const failedLoginBackoffUntil = raw.failedLoginBackoffUntil || null;
     const blockedReason = String(raw.blockedReason || '').trim();
     const passwordHashScheme = String(raw.passwordHashScheme || '').trim();
     return {
+        uid: uid || null,
         login,
         fio: normalizeFio(raw.fio || ''),
         role: normalizeRole(raw.role),
@@ -2063,6 +2225,7 @@ async function getUserRecordByLogin(login) {
             return null;
         } catch (error) {
             console.error('Failed to load user from Firebase:', error);
+            return null;
         }
     }
 
@@ -2074,7 +2237,9 @@ async function saveUserRecord(record) {
     const normalized = normalizeUserRecord(record, record?.login);
     if (!normalized) throw new Error('Invalid user record');
     const key = loginToStorageKey(normalized.login);
+    const resolvedUid = resolveAuthUidForLogin(normalized.login, normalized.uid);
     const payload = {
+        uid: resolvedUid,
         login: normalized.login,
         fio: normalized.fio,
         role: normalized.role,
@@ -2104,7 +2269,7 @@ async function saveUserRecord(record) {
     }
 
     const localStore = loadLocalUsersStore();
-    localStore[key] = payload;
+    localStore[key] = toLocalUserCachePayload(payload);
     saveLocalUsersStore(localStore);
     return payload;
 }
@@ -2117,9 +2282,7 @@ async function patchUserRecord(login, patch = {}, options = {}) {
     const requestedRoleChange = Object.prototype.hasOwnProperty.call(sanitizedPatch, 'role')
         ? normalizeRole(sanitizedPatch.role)
         : null;
-    const allowRoleEscalation = !!options.allowRoleEscalation;
-    const isSelfTarget = normalizeLogin(currentUser?.login || '') === normalizedLogin;
-    if (requestedRoleChange === 'admin' && !isAdmin() && !(allowRoleEscalation && isSelfTarget)) {
+    if (requestedRoleChange === 'admin' && !isAdmin()) {
         throw new Error('Недостаточно прав для назначения роли админа.');
     }
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'fio')) {
@@ -2127,6 +2290,11 @@ async function patchUserRecord(login, patch = {}, options = {}) {
     }
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'role')) {
         sanitizedPatch.role = requestedRoleChange;
+    }
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'uid')) {
+        const requestedUid = String(sanitizedPatch.uid || '').trim();
+        const ownAuthUid = resolveAuthUidForLogin(normalizedLogin);
+        sanitizedPatch.uid = ownAuthUid && requestedUid === ownAuthUid ? ownAuthUid : null;
     }
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'activeMs')) {
         sanitizedPatch.activeMs = Math.max(0, Number(sanitizedPatch.activeMs) || 0);
@@ -2175,11 +2343,11 @@ async function patchUserRecord(login, patch = {}, options = {}) {
 
     const localStore = loadLocalUsersStore();
     const merged = {
-        ...(localStore[key] || { login: normalizedLogin, role: 'user', activeMs: 0 }),
+        ...(toLocalUserCachePayload(localStore[key]) || { login: normalizedLogin, role: 'user', activeMs: 0 }),
         ...sanitizedPatch,
         login: normalizedLogin
     };
-    localStore[key] = merged;
+    localStore[key] = toLocalUserCachePayload(merged);
     saveLocalUsersStore(localStore);
     return normalizeUserRecord(merged, normalizedLogin);
 }
@@ -2222,6 +2390,7 @@ async function listAllUserRecords() {
             return [];
         } catch (error) {
             console.error('Failed to load users list from Firebase:', error);
+            return [];
         }
     }
 
@@ -2237,16 +2406,13 @@ function applyAuthenticatedUser(user) {
     if (!normalized) return;
 
     currentUser = normalized;
+    currentUser.passwordHash = '';
+    currentUser.passwordHashScheme = null;
     lastSessionRevocationCheckAt = 0;
-    selectedRole = normalized.role;
-    setCachedStorageValue(USER_ROLE_KEY, normalized.role);
+    syncSelectedRole(normalized.role);
     setCachedStorageValue(USER_NAME_KEY, normalized.fio);
     setCachedStorageValue(USER_LOGIN_KEY, normalized.login);
     managerNameInput.value = normalized.fio;
-
-    if (currentRoleDisplay) {
-        currentRoleDisplay.textContent = getRoleLabelUi(normalized.role);
-    }
     if (settingsNameInput) {
         settingsNameInput.value = normalized.fio;
     }
@@ -2255,6 +2421,7 @@ function applyAuthenticatedUser(user) {
     }
 
     updateUserNameDisplay();
+    void ensureCurrentUserAccessMirror(normalized);
     applyRoleRestrictions();
 }
 
@@ -2267,8 +2434,7 @@ function resetCurrentSessionToAuth(message = '') {
     sessionRevocationCheckInFlight = false;
     lastSessionRevocationCheckAt = 0;
     currentUser = null;
-    selectedRole = 'user';
-    setCachedStorageValue(USER_ROLE_KEY, 'user');
+    syncSelectedRole('user');
     clearAuthSession();
     clearAuthCacheIdentity();
     applyRoleRestrictions();
@@ -2579,11 +2745,7 @@ async function toggleAccessForLogin(login, nextActive, user, invite, accessRevoc
                 ...currentUser,
                 ...refreshedUser
             }, normalizedLogin) || currentUser;
-            selectedRole = currentUser.role;
-            setCachedStorageValue(USER_ROLE_KEY, currentUser.role);
-            if (currentRoleDisplay) {
-                currentRoleDisplay.textContent = getRoleLabelUi(currentUser.role);
-            }
+            syncSelectedRole(selectedRole);
         }
     }
 }
@@ -2603,6 +2765,7 @@ async function renderAdminUsersTable() {
         adminPanelAccordion.style.display = '';
     }
     adminUsersTableBody.innerHTML = '<tr><td colspan="6" class="admin-empty">Загрузка...</td></tr>';
+    await ensureCurrentUserAccessMirror();
 
     const [users, invites, revocations] = await Promise.all([
         listAllUserRecords(),
@@ -2677,11 +2840,8 @@ async function renderAdminUsersTable() {
 
                 if (currentUser && user.login === currentUser.login) {
                     currentUser.role = nextRole;
-                    selectedRole = nextRole;
-                    setCachedStorageValue(USER_ROLE_KEY, nextRole);
-                    if (currentRoleDisplay) {
-                        currentRoleDisplay.textContent = getRoleLabelUi(nextRole);
-                    }
+                    syncSelectedRole(nextRole);
+                    void ensureCurrentUserAccessMirror(currentUser);
                     applyRoleRestrictions();
                 }
                 showCopyNotification(`Роль ${user.login} обновлена`);
@@ -3049,20 +3209,26 @@ async function restoreAuthSession() {
 
 // Check if current user is admin
 function isAdmin() {
-    return normalizeRole(currentUser?.role || 'user') === 'admin';
+    return hasAdminAccount() && normalizeRole(selectedRole || 'user') === 'admin';
 }
 
 function ensureRoleChangeButtonVisible(roleOverride = null) {
     if (!changeRoleBtn) return;
+    if (!hasAdminAccount()) {
+        changeRoleBtn.style.display = 'none';
+        changeRoleBtn.style.visibility = 'hidden';
+        changeRoleBtn.disabled = true;
+        return;
+    }
     const resolvedRole = normalizeRole(
-        roleOverride || currentUser?.role || getCachedStorageValue(USER_ROLE_KEY, 'user') || 'user'
+        roleOverride || selectedRole || getCachedStorageValue(USER_ROLE_KEY, 'admin') || currentUser?.role || 'admin'
     );
     changeRoleBtn.style.display = 'inline-flex';
     changeRoleBtn.style.visibility = 'visible';
     changeRoleBtn.disabled = false;
     changeRoleBtn.textContent = resolvedRole === 'admin'
         ? 'Переключить в режим пользователя'
-        : 'Сменить';
+        : 'Вернуться в режим админа';
 }
 
 // Apply role-based restrictions
@@ -3301,6 +3467,27 @@ function normalizeScriptSrc(src) {
     return String(src || '').trim();
 }
 
+function getTrustedExternalScriptMetadata(src) {
+    const normalizedSrc = normalizeScriptSrc(src);
+    return TRUSTED_EXTERNAL_SCRIPT_METADATA.get(normalizedSrc) || null;
+}
+
+function applyTrustedExternalScriptPolicy(script, src) {
+    const metadata = getTrustedExternalScriptMetadata(src);
+    if (!metadata) {
+        throw new Error(`Blocked untrusted external script source: ${normalizeScriptSrc(src)}`);
+    }
+    if (script.integrity && metadata.integrity && script.integrity !== metadata.integrity) {
+        throw new Error(`Integrity mismatch for external script: ${normalizeScriptSrc(src)}`);
+    }
+    if (metadata.integrity) {
+        script.integrity = metadata.integrity;
+    }
+    script.crossOrigin = 'anonymous';
+    script.referrerPolicy = 'no-referrer';
+    return metadata;
+}
+
 function ensureGlobalScriptReady({
     key,
     src,
@@ -3317,6 +3504,9 @@ function ensureGlobalScriptReady({
     }
     if (!normalizedSrc) {
         return Promise.reject(new Error('Missing external script source'));
+    }
+    if (!getTrustedExternalScriptMetadata(normalizedSrc)) {
+        return Promise.reject(new Error(`Blocked untrusted external script source: ${normalizedSrc}`));
     }
     if (typeof document === 'undefined' || typeof window === 'undefined') {
         return Promise.reject(new Error('No DOM available'));
@@ -3336,9 +3526,10 @@ function ensureGlobalScriptReady({
             script.src = normalizedSrc;
             script.async = true;
             script.type = 'text/javascript';
-            script.crossOrigin = 'anonymous';
-            script.referrerPolicy = 'no-referrer';
+            applyTrustedExternalScriptPolicy(script, normalizedSrc);
             document.head?.appendChild(script);
+        } else {
+            applyTrustedExternalScriptPolicy(script, normalizedSrc);
         }
 
         if (isReady()) return true;
@@ -4507,7 +4698,11 @@ function savePromptHistory() {
         setCachedLocalStorageJson(LOCAL_PROMPTS_HISTORY_STORAGE_KEY, promptHistory);
     }
     if (db) {
-        set(ref(db, 'prompt_history'), promptHistory)
+        const syncPromise = isAdmin()
+            ? ensureCurrentUserAccessMirror()
+            : Promise.resolve(true);
+        syncPromise
+            .then(() => set(ref(db, 'prompt_history'), promptHistory))
             .then(() => debugLog('Prompt history synced'))
             .catch(e => console.error('Failed to sync history:', e));
     }
@@ -4770,7 +4965,11 @@ function savePromptsToFirebaseNow() {
         return;
     }
 
-    set(ref(db, 'prompts'), payload)
+    const syncPromise = isAdmin()
+        ? ensureCurrentUserAccessMirror()
+        : Promise.resolve(true);
+    syncPromise
+        .then(() => set(ref(db, 'prompts'), payload))
         .then(() => debugLog('Prompts synced to Firebase'))
         .catch(e => console.error('Failed to sync:', e));
 }
@@ -5016,8 +5215,9 @@ function getElevenLabsWidgetScriptCandidates() {
     const candidates = [...ELEVENLABS_WIDGET_SOURCES];
     if (typeof document === 'undefined') return candidates;
     document.querySelectorAll('script[src*="@elevenlabs/convai-widget-embed"]').forEach((node) => {
-        const src = String(node?.src || '').trim();
+        const src = normalizeScriptSrc(node?.src || '');
         if (!src) return;
+        if (!getTrustedExternalScriptMetadata(src)) return;
         if (candidates.includes(src)) return;
         candidates.unshift(src);
     });
@@ -5052,12 +5252,15 @@ function waitForElevenLabsWidgetDefinition(timeoutMs = ELEVENLABS_WIDGET_LOAD_TI
 
 function loadElevenLabsWidgetScriptSource(src, timeoutMs = ELEVENLABS_WIDGET_LOAD_TIMEOUT_MS) {
     if (typeof document === 'undefined') return Promise.resolve(false);
-    const normalizedSrc = String(src || '').trim();
+    const normalizedSrc = normalizeScriptSrc(src);
     if (!normalizedSrc) return Promise.resolve(false);
+    if (!getTrustedExternalScriptMetadata(normalizedSrc)) {
+        return Promise.resolve(false);
+    }
 
     return new Promise((resolve) => {
         let script = Array.from(document.querySelectorAll('script')).find((node) => {
-            return String(node?.src || '').trim() === normalizedSrc;
+            return normalizeScriptSrc(node?.src || '') === normalizedSrc;
         }) || null;
 
         if (!script) {
@@ -5065,7 +5268,15 @@ function loadElevenLabsWidgetScriptSource(src, timeoutMs = ELEVENLABS_WIDGET_LOA
             script.src = normalizedSrc;
             script.async = true;
             script.type = 'text/javascript';
+            applyTrustedExternalScriptPolicy(script, normalizedSrc);
             document.head?.appendChild(script);
+        } else {
+            try {
+                applyTrustedExternalScriptPolicy(script, normalizedSrc);
+            } catch (error) {
+                resolve(false);
+                return;
+            }
         }
 
         if (isElevenLabsWidgetDefined()) {
@@ -5226,6 +5437,7 @@ function populateVoiceConfigFields() {
 
 async function saveSharedGeminiTokenEndpointConfig(value) {
     if (!(db && selectedRole === 'admin')) return false;
+    await ensureCurrentUserAccessMirror();
     const normalized = normalizeGeminiTokenEndpoint(value);
     await set(ref(db, `${APP_CONFIG_DB_PATH}/geminiTokenEndpoint`), normalized || null);
     setSharedGeminiTokenEndpoint(normalized);
@@ -5277,6 +5489,7 @@ async function clearVoiceModeConfig() {
 
     if (db && selectedRole === 'admin') {
         try {
+            await ensureCurrentUserAccessMirror();
             await set(ref(db, `${APP_CONFIG_DB_PATH}/geminiTokenEndpoint`), null);
             setSharedGeminiTokenEndpoint('');
         } catch (error) {
@@ -5304,10 +5517,11 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}) {
     const tokenEndpoint = getConfiguredGeminiTokenEndpoint();
     if (tokenEndpoint) {
         const idToken = await getFirebaseAuthIdToken();
-        const headers = { 'Content-Type': 'application/json' };
-        if (idToken) {
-            headers.Authorization = `Bearer ${idToken}`;
+        if (!idToken) {
+            throw new Error('Для голосового режима нужен подтвержденный вход через email.');
         }
+        const headers = { 'Content-Type': 'application/json' };
+        headers.Authorization = `Bearer ${idToken}`;
 
         const tokenResponse = await fetchWithTimeout(tokenEndpoint, {
             method: 'POST',
@@ -6718,7 +6932,7 @@ function hidePromptHistoryModal() {
 function showSettingsModal() {
     hideTooltip(true);
     const savedName = currentUser?.fio || getCachedStorageValue(USER_NAME_KEY) || '';
-    const userRole = normalizeRole(currentUser?.role || getCachedStorageValue(USER_ROLE_KEY, 'user') || 'user');
+    const userRole = syncSelectedRole(selectedRole || getCachedStorageValue(USER_ROLE_KEY, currentUser?.role || 'user'));
     const loginValue = currentUser?.login || getCachedStorageValue(USER_LOGIN_KEY) || '-';
 
     settingsNameInput.value = savedName;
@@ -6726,9 +6940,6 @@ function showSettingsModal() {
         accountLoginValue.textContent = loginValue || '-';
     }
     autoResizeNameInput();
-    selectedRole = userRole;
-    setCachedStorageValue(USER_ROLE_KEY, userRole);
-    currentRoleDisplay.textContent = getRoleLabelUi(userRole);
     ensureRoleChangeButtonVisible(userRole);
     
     // Hide password section
@@ -6777,7 +6988,9 @@ function toggleSettingsModal() {
 
 function updateUserNameDisplay() {
     const name = currentUser?.fio || getCachedStorageValue(USER_NAME_KEY) || 'Гость';
-    const role = normalizeRole(currentUser?.role || getCachedStorageValue(USER_ROLE_KEY, 'user') || 'user');
+    const role = hasAdminAccount()
+        ? normalizeRole(selectedRole || getCachedStorageValue(USER_ROLE_KEY, 'user') || 'user')
+        : 'user';
     const roleIcon = getRoleIcon(role);
     currentUserName.textContent = `${roleIcon} ${name}`;
 }
@@ -7208,47 +7421,27 @@ if (savedTheme === 'light') {
 
 // Change role button
 changeRoleBtn.addEventListener('click', () => {
-    const currentRole = currentUser?.role || getCachedStorageValue(USER_ROLE_KEY, 'user') || 'user';
-    
+    if (!hasAdminAccount()) return;
+    const currentRole = normalizeRole(selectedRole || getCachedStorageValue(USER_ROLE_KEY, 'admin') || currentUser?.role || 'admin');
+
     if (currentRole === 'admin') {
-        // Admin -> User (no password needed)
         if (confirm('Вы уверены, что хотите переключиться на роль Пользователя?')) {
             switchRole('user');
         }
     } else {
-        // User -> Admin (require password)
-        roleChangePassword.style.display = 'block';
-        roleChangePasswordInput.focus();
+        switchRole('admin');
     }
 });
 
-// Helper function to switch role
-async function switchRole(newRole, options = {}) {
-    const allowRoleEscalation = !!options.allowRoleEscalation;
-    if (!allowRoleEscalation && !isAdmin() && newRole === 'admin') {
-        throw new Error('Недостаточно прав для назначения роли админа.');
+function switchRole(newRole) {
+    if (!hasAdminAccount()) {
+        throw new Error('Режим администратора доступен только админ-аккаунтам.');
     }
-    if (!currentUser) return;
-    const role = normalizeRole(newRole);
-    const patched = await patchUserRecord(currentUser.login, {
-        role,
-        lastSeenAt: new Date().toISOString()
-    }, {
-        allowRoleEscalation
-    });
-    currentUser = normalizeUserRecord({
-        ...currentUser,
-        ...(patched || {}),
-        role
-    }, currentUser.login);
-    selectedRole = role;
-    setCachedStorageValue(USER_ROLE_KEY, role);
-    currentRoleDisplay.textContent = getRoleLabelUi(role);
+    const role = normalizeRole(newRole) === 'admin' ? 'admin' : 'user';
+    const effectiveRole = syncSelectedRole(role);
     applyRoleRestrictions();
-    showCopyNotification(`Роль изменена на ${getRoleLabelUi(role)}`);
-    setTimeout(() => {
-        location.reload();
-    }, 200);
+    updateUserNameDisplay();
+    showCopyNotification(`Включен ${getRoleLabelUi(effectiveRole).toLowerCase()} режим`);
 }
 
 // Cancel role change
@@ -7258,61 +7451,23 @@ roleChangeCancelBtn.addEventListener('click', () => {
     roleChangeError.style.display = 'none';
 });
 
-// Confirm role change (for User -> Admin)
-async function verifyRoleChangePassword(password) {
-    const normalized = String(password || '').trim();
-    if (!normalized) return false;
-    if (normalized === ADMIN_PASSWORD) return true;
-    if (!currentUser?.login) return false;
-    const storedHash = String(currentUser.passwordHash || '').trim();
-    if (!storedHash) return false;
-    try {
-        return await verifyPasswordHash(currentUser.login, normalized, storedHash);
-    } catch (error) {
-        return false;
-    }
-}
-
 roleChangeConfirmBtn.addEventListener('click', async () => {
-    const password = roleChangePasswordInput.value.trim();
-    if (!password) {
-        roleChangeError.style.display = 'block';
-        roleChangePasswordInput.style.borderColor = '#ff5555';
-        setTimeout(() => {
-            roleChangePasswordInput.style.borderColor = '';
-            roleChangeError.style.display = 'none';
-        }, 2000);
+    if (!hasAdminAccount()) {
+        roleChangePassword.style.display = 'none';
         return;
     }
 
-    roleChangeConfirmBtn.disabled = true;
-    roleChangeConfirmBtn.textContent = 'Проверка...';
-
     try {
-        const isPasswordValid = await verifyRoleChangePassword(password);
-        if (isPasswordValid) {
-            await switchRole('admin', { allowRoleEscalation: true });
-            roleChangePassword.style.display = 'none';
-            roleChangePasswordInput.value = '';
-            roleChangeError.style.display = 'none';
-        } else {
-            roleChangeError.style.display = 'block';
-            roleChangePasswordInput.value = '';
-            roleChangePasswordInput.style.borderColor = '#ff5555';
-            setTimeout(() => {
-                roleChangePasswordInput.style.borderColor = '';
-                roleChangeError.style.display = 'none';
-            }, 2000);
-        }
+        switchRole('admin');
+        roleChangePassword.style.display = 'none';
+        roleChangePasswordInput.value = '';
+        roleChangeError.style.display = 'none';
     } catch (error) {
         roleChangeError.style.display = 'block';
-        roleChangeError.textContent = 'Ошибка проверки пароля. Попробуйте позже.';
+        roleChangeError.textContent = 'Не удалось включить режим администратора.';
         setTimeout(() => {
             roleChangeError.style.display = 'none';
         }, 2000);
-    } finally {
-        roleChangeConfirmBtn.disabled = false;
-        roleChangeConfirmBtn.textContent = 'Подтвердить';
     }
 });
 
@@ -7486,7 +7641,23 @@ function buildSafeExportPdfWindow({ title, css, body }) {
     };
 }
 
-function sanitizeRenderedHtml(html) {
+function normalizeSanitizedAnchorTargets(root) {
+    root.querySelectorAll('a').forEach((anchor) => {
+        const href = String(anchor.getAttribute('href') || '').trim();
+        if (!href) {
+            anchor.removeAttribute('href');
+        }
+        const target = String(anchor.getAttribute('target') || '').trim().toLowerCase();
+        if (!target) return;
+        if (target === '_blank') {
+            anchor.setAttribute('rel', 'noopener noreferrer');
+            return;
+        }
+        anchor.removeAttribute('target');
+    });
+}
+
+function sanitizeRenderedHtmlLegacy(html) {
     const sourceHtml = String(html || '');
     if (!sourceHtml) return '';
 
@@ -7568,6 +7739,26 @@ function sanitizeRenderedHtml(html) {
     });
 
     return template.innerHTML;
+}
+
+function sanitizeRenderedHtml(html) {
+    const sourceHtml = String(html || '');
+    if (!sourceHtml) return '';
+
+    if (typeof DOMPurify !== 'undefined' && typeof DOMPurify.sanitize === 'function') {
+        const sanitized = DOMPurify.sanitize(sourceHtml, {
+            ALLOWED_TAGS: SANITIZED_HTML_TAGS,
+            ALLOWED_ATTR: SANITIZED_HTML_ATTRIBUTES,
+            ALLOW_DATA_ATTR: false,
+            KEEP_CONTENT: true
+        });
+        const template = document.createElement('template');
+        template.innerHTML = sanitized;
+        normalizeSanitizedAnchorTargets(template.content);
+        return template.innerHTML;
+    }
+
+    return sanitizeRenderedHtmlLegacy(sourceHtml);
 }
 
 async function sendMessage() {

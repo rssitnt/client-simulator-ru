@@ -14,6 +14,7 @@ const ALLOWED_EMAIL_DOMAINS = String(process.env.ALLOWED_EMAIL_DOMAINS || '')
     .split(',')
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean);
+const ALLOW_LEGACY_LOGIN_FALLBACK = String(process.env.ALLOW_LEGACY_LOGIN_FALLBACK || '').trim().toLowerCase() === 'true';
 
 const GEMINI_LIVE_MODEL = String(process.env.GEMINI_LIVE_MODEL || 'gemini-2.5-flash-native-audio-preview-09-2025').trim();
 const TOKEN_PATH = '/api/gemini-live-token';
@@ -45,7 +46,7 @@ const OPENAI_ALLOWED_VOICES = new Set(['alloy', 'ash', 'ballad', 'coral', 'echo'
 
 function getCorsOrigin(requestOrigin) {
     if (!requestOrigin) return '';
-    if (!ALLOWED_ORIGINS.length) return requestOrigin;
+    if (!ALLOWED_ORIGINS.length) return '';
     return ALLOWED_ORIGINS.includes(requestOrigin) ? requestOrigin : '';
 }
 
@@ -330,7 +331,7 @@ const server = createServer(async (req, res) => {
                 sendJson(res, 403, { error: 'Email domain is not allowed' }, requestOrigin);
                 return;
             }
-        } else {
+        } else if (ALLOW_LEGACY_LOGIN_FALLBACK) {
             const loginFromBody = normalizeLogin(requestBody?.login || requestBody?.email || '');
             const fallbackAuth = await verifyLoginFallbackAccess(loginFromBody);
             authIdentity = {
@@ -339,6 +340,9 @@ const server = createServer(async (req, res) => {
                 login: fallbackAuth.login,
                 source: fallbackAuth.source
             };
+        } else {
+            sendJson(res, 401, { error: 'Firebase ID token is required' }, requestOrigin);
+            return;
         }
 
         const clientIp = getClientIp(req);
