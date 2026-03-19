@@ -23,10 +23,14 @@
 - За этот pass сделано:
   - `54169a5` `Harden token server request parsing`
   - `d38dcec` `Reduce prompt sync write amplification`
+- После этого локально правили UI scrollbar:
+  - чатовый `#userInput` больше не пытается скрывать системный scrollbar, а использует тот же thin/rounded паттерн, что `prompt-editor/prompt-preview`
+  - тот же scrollbar-паттерн распространён на `ai-improve` textarea, чтобы зоны редактирования были консистентны
 - Что именно улучшено:
   - token server теперь режет oversized JSON body и отдаёт явные `400/413` вместо fail-open парсинга в `{}`
   - public prompt sync во фронтенде стал role-scoped вместо постоянной перезаписи всего `prompts`
   - prompt history больше не пишется на каждый autosave-пауза, а фиксируется checkpoint-ами
   - hidden prompt history modal больше не перерисовывается на каждый Firebase update
+  - scrollbar в основных текстовых зонах ввода стал единообразным и современным, без старого системного вида у чатового ввода
 - Следующий лучший шаг:
   - пройтись по оставшимся polling loop-ам в `script.js` (`active time`, `session revocation`, related listeners) и решить, где нужен event-driven подход, а где polling оправдан
