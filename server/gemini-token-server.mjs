@@ -23,6 +23,10 @@ const OPENAI_REALTIME_MODEL = String(process.env.OPENAI_REALTIME_MODEL || 'gpt-4
 const OPENAI_DEFAULT_VOICE = String(process.env.OPENAI_DEFAULT_VOICE || 'alloy').trim().toLowerCase();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX_REQUESTS = 15;
+const MAX_JSON_BODY_BYTES = (() => {
+    const configuredValue = Number.parseInt(String(process.env.MAX_JSON_BODY_BYTES || ''), 10);
+    return Number.isFinite(configuredValue) && configuredValue > 0 ? configuredValue : 64 * 1024;
+})();
 const rateLimitBuckets = new Map();
 
 if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
@@ -69,16 +73,41 @@ function sendJson(res, statusCode, payload, requestOrigin = '') {
     res.end(JSON.stringify(payload));
 }
 
+function createHttpError(statusCode, message) {
+    const error = new Error(message);
+    error.statusCode = statusCode;
+    return error;
+}
+
 async function readJsonBody(req) {
+    const declaredLength = Number.parseInt(String(req.headers['content-length'] || ''), 10);
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_JSON_BODY_BYTES) {
+        throw createHttpError(413, `Request body too large. Limit is ${MAX_JSON_BODY_BYTES} bytes.`);
+    }
+
     const chunks = [];
+    let totalBytes = 0;
     for await (const chunk of req) {
+        totalBytes += chunk.length;
+        if (totalBytes > MAX_JSON_BODY_BYTES) {
+            throw createHttpError(413, `Request body too large. Limit is ${MAX_JSON_BODY_BYTES} bytes.`);
+        }
         chunks.push(chunk);
     }
     if (!chunks.length) return {};
+    const rawBody = Buffer.concat(chunks).toString('utf8').trim();
+    if (!rawBody) return {};
     try {
-        return JSON.parse(Buffer.concat(chunks).toString('utf8'));
-    } catch {
-        return {};
+        const parsed = JSON.parse(rawBody);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            throw createHttpError(400, 'JSON body must be an object.');
+        }
+        return parsed;
+    } catch (error) {
+        if (error?.statusCode) {
+            throw error;
+        }
+        throw createHttpError(400, 'Invalid JSON body.');
     }
 }
 
@@ -392,7 +421,11 @@ const server = createServer(async (req, res) => {
         }, requestOrigin);
     } catch (error) {
         const message = String(error?.message || 'Failed to create voice session token');
-        const status = /MISSING|INVALID|EXPIRED|TOKEN/i.test(message) ? 401 : 500;
+        const status = Number.isInteger(error?.statusCode)
+            ? error.statusCode
+            : /MISSING|INVALID|EXPIRED|TOKEN/i.test(message)
+                ? 401
+                : 500;
         sendJson(res, status, { error: message }, requestOrigin);
     }
 });

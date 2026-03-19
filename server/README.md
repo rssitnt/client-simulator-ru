@@ -36,6 +36,7 @@
 - `ALLOWED_ORIGINS` — например: `https://client-simulator.ru,https://www.client-simulator.ru`
 - `ALLOWED_EMAIL_DOMAINS` — например: `tradicia-k.ru,tradicia-k.kz`
 - `ALLOW_LEGACY_LOGIN_FALLBACK` — по умолчанию `false`, включать только временно для миграции
+- `MAX_JSON_BODY_BYTES` — лимит JSON body, по умолчанию `65536`
 - `GEMINI_LIVE_MODEL` — по умолчанию `gemini-2.5-flash-native-audio-preview-09-2025`
 - `OPENAI_REALTIME_MODEL` — по умолчанию `gpt-4o-realtime-preview-2025-06-03`
 - `OPENAI_DEFAULT_VOICE` — по умолчанию `alloy`
@@ -57,3 +58,10 @@ source server/.env.local
 set +a
 npm run start:token-server
 ```
+
+## Поведение валидации body
+
+- Сервер принимает только JSON object body.
+- Невалидный JSON получает `400`.
+- Слишком большой body получает `413`.
+- Пустой body по-прежнему допустим и трактуется как `{}`.
