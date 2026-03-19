@@ -19,3 +19,14 @@
 ## Для следующего агента
 - Считать проект бизнес-критичным
 - Не полировать мелочи раньше, чем надёжность и уязвимости
+- Последний CI-pass выполнен `2026-03-19`
+- За этот pass сделано:
+  - `54169a5` `Harden token server request parsing`
+  - `d38dcec` `Reduce prompt sync write amplification`
+- Что именно улучшено:
+  - token server теперь режет oversized JSON body и отдаёт явные `400/413` вместо fail-open парсинга в `{}`
+  - public prompt sync во фронтенде стал role-scoped вместо постоянной перезаписи всего `prompts`
+  - prompt history больше не пишется на каждый autosave-пауза, а фиксируется checkpoint-ами
+  - hidden prompt history modal больше не перерисовывается на каждый Firebase update
+- Следующий лучший шаг:
+  - пройтись по оставшимся polling loop-ам в `script.js` (`active time`, `session revocation`, related listeners) и решить, где нужен event-driven подход, а где polling оправдан

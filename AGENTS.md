@@ -21,7 +21,7 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
-- As of `2026-03-10`, the latest completed pass focused on security hardening.
+- As of `2026-03-19`, the latest completed pass focused on token-server robustness and frontend prompt-sync performance.
 - Already fixed in this codebase:
   - client-side self-escalation to admin
   - overly broad Firebase RTDB access
@@ -30,10 +30,12 @@
   - fail-open trust of localStorage when Firebase reads fail
   - CDN supply-chain hardening with CSP, SRI, and loader checks
   - sanitizer replacement with DOMPurify
-- The next pending work from that pass is:
   - request-body size limit and invalid JSON handling in `server/gemini-token-server.mjs`
   - prompt/history write amplification in `script.js`
+  - hidden prompt-history modal re-rendering on every Firebase history update
+- The next pending work from that pass is:
   - frontend polling/write-loop performance cleanup in `script.js`
+  - review `active time` and session-revocation polling for event-driven simplification opportunities
 
 ## References
 - `README.md`
