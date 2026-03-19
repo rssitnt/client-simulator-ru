@@ -4137,7 +4137,7 @@ function publishActiveLocalPrompt(role) {
     );
     publicActiveIds[role] = activeVariation.id;
     saveLocalPromptsData();
-    savePromptsToFirebaseNow();
+    savePromptsToFirebaseNow({ roles: [role] });
     return true;
 }
 
@@ -4211,7 +4211,7 @@ function ensureAttestationVariation(role) {
         };
         promptsData[role].variations.push(variation);
         if (isAdmin()) {
-            savePromptsToFirebaseNow();
+            savePromptsToFirebaseNow({ roles: [role] });
         }
     }
     return variation;
@@ -4556,7 +4556,7 @@ function renderVariations() {
                     if (v.isLocal) {
                         saveLocalPromptsData();
                     } else {
-                        savePromptsToFirebase();
+                        queuePublicPromptSave(role);
                     }
                 }
             });
@@ -4708,6 +4708,13 @@ function savePromptHistory() {
     }
 }
 
+function checkpointPromptHistory(role, variationId = promptsData[role]?.activeId) {
+    if (!role || !variationId) return;
+    const variation = (promptsData[role]?.variations || []).find(v => v.id === variationId);
+    if (!variation || variation.isLocal) return;
+    recordPromptHistory(role, variation);
+}
+
 function recordPromptHistory(role, variation) {
     if (!isAdmin()) return;
     if (!variation) return;
@@ -4758,7 +4765,8 @@ function restorePromptVersion(entryId, role = getActiveRole(), variationId = get
     promptsData[role].activeId = targetVar.id;
     renderVariations();
     updateEditorContent(role);
-    savePromptsToFirebaseNow();
+    checkpointPromptHistory(role, targetVar.id);
+    savePromptsToFirebaseNow({ roles: [role] });
     if (promptHistoryModal?.classList.contains('active')) {
         renderPromptHistory();
     }
@@ -4786,7 +4794,7 @@ function addVariation(role) {
     if (initialScopeLocal) {
         saveLocalPromptsData();
     } else {
-        savePromptsToFirebase();
+        queuePublicPromptSave(role);
     }
 }
                     
@@ -4820,7 +4828,7 @@ function deleteVariation(role, id) {
         if (deletedVariation?.isLocal) {
             saveLocalPromptsData();
         } else {
-            savePromptsToFirebase();
+            queuePublicPromptSave(role);
         }
     }
 }
@@ -4876,18 +4884,26 @@ function syncContentToData(role, content) {
         // This prevents data loss from WYSIWYG/Turndown glitches
         if (content.trim() === '' && activeVar.content && activeVar.content.trim().length > 10) {
             console.warn(`Prevented accidental data loss for ${role}. New content was empty.`);
-            return;
+            return null;
+        }
+        if (activeVar.content === content) {
+            if (role === getActiveRole()) {
+                updatePromptLengthInfo(role);
+            }
+            return false;
         }
         activeVar.content = content;
         if (activeVar.isLocal) {
             saveLocalPromptsData();
         } else {
-            savePromptsToFirebase();
+            queuePublicPromptSave(role);
         }
         if (role === getActiveRole()) {
             updatePromptLengthInfo(role);
         }
+        return true;
     }
+    return null;
 }
 
 function getActiveContent(role) {
@@ -4912,11 +4928,36 @@ function validatePromptBeforeWebhook(role, promptValue) {
 
 // ============ FIREBASE SYNC ============
 
+const dirtyPublicPromptRoles = new Set();
+
+function getNormalizedPromptSyncRoles(roles = PROMPT_ROLES) {
+    const requestedRoles = Array.isArray(roles) && roles.length ? roles : PROMPT_ROLES;
+    return [...new Set(requestedRoles.filter(role => PROMPT_ROLES.includes(role)))];
+}
+
+function buildPromptsSyncPayload(roles = PROMPT_ROLES) {
+    const payload = {};
+    getNormalizedPromptSyncRoles(roles).forEach((role) => {
+        payload[role + '_prompt'] = getPublicActiveContent(role);
+        payload[role + '_variations'] = getPublicVariations(role);
+        payload[role + '_activeId'] = getPublicActiveId(role);
+    });
+    return payload;
+}
+
+function queuePublicPromptSave(role) {
+    if (!role) return;
+    dirtyPublicPromptRoles.add(role);
+    savePromptsToFirebase();
+}
+
 const savePromptsToFirebase = debounce(() => {
-    savePromptsToFirebaseNow();
+    const roles = [...dirtyPublicPromptRoles];
+    if (!roles.length) return;
+    savePromptsToFirebaseNow({ roles });
 }, 1000);
 
-function savePromptsToFirebaseNow() {
+function savePromptsToFirebaseNow(options = {}) {
     agentLog(
         'savePromptsToFirebaseNow called',
         () => ({
@@ -4929,32 +4970,13 @@ function savePromptsToFirebaseNow() {
         { location: 'script.js:savePromptsToFirebaseNow', hypothesisId: 'B' }
     );
     saveLocalPromptsData();
-
-    const activeRole = getActiveRole();
-    const activeVar = promptsData[activeRole]?.variations.find(v => v.id === promptsData[activeRole]?.activeId);
-    if (activeVar && !activeVar.isLocal) {
-        recordPromptHistory(activeRole, activeVar);
-    }
     if (!db) return;
 
-    const payload = {
-        client_prompt: getPublicActiveContent('client'),
-        manager_prompt: getPublicActiveContent('manager'),
-        manager_call_prompt: getPublicActiveContent('manager_call'),
-        rater_prompt: getPublicActiveContent('rater'),
-
-        client_variations: getPublicVariations('client'),
-        client_activeId: getPublicActiveId('client'),
-        manager_variations: getPublicVariations('manager'),
-        manager_activeId: getPublicActiveId('manager'),
-        manager_call_variations: getPublicVariations('manager_call'),
-        manager_call_activeId: getPublicActiveId('manager_call'),
-        rater_variations: getPublicVariations('rater'),
-        rater_activeId: getPublicActiveId('rater')
-    };
+    const roles = getNormalizedPromptSyncRoles(options.roles);
+    const payload = buildPromptsSyncPayload(roles);
 
     // Critical Fix: Validation to prevent saving empty/corrupted data to cloud
-    const hasEmptyEssential = PROMPT_ROLES.some(role => {
+    const hasEmptyEssential = roles.some(role => {
         const publicVariations = payload[role + '_variations'] || [];
         const activeContent = payload[role + '_prompt'] || '';
         return activeContent === '' && publicVariations.some(v => (v.content || '').trim() !== '');
@@ -4969,8 +4991,11 @@ function savePromptsToFirebaseNow() {
         ? ensureCurrentUserAccessMirror()
         : Promise.resolve(true);
     syncPromise
-        .then(() => set(ref(db, 'prompts'), payload))
-        .then(() => debugLog('Prompts synced to Firebase'))
+        .then(() => (options.fullReplace ? set(ref(db, 'prompts'), payload) : update(ref(db, 'prompts'), payload)))
+        .then(() => {
+            roles.forEach(role => dirtyPublicPromptRoles.delete(role));
+            debugLog('Prompts synced to Firebase');
+        })
         .catch(e => console.error('Failed to sync:', e));
 }
 
@@ -5017,7 +5042,7 @@ async function loadPrompts() {
                     initPromptsData(data);
                 } else {
                     initPromptsData({});
-                    savePromptsToFirebaseNow();
+                    savePromptsToFirebaseNow({ fullReplace: true });
         }
             }, (error) => {
                 console.error('Firebase read error:', error);
@@ -5047,7 +5072,9 @@ async function loadPrompts() {
                 } else {
                     promptHistory = [];
                 }
-                renderPromptHistory();
+                if (promptHistoryModal?.classList.contains('active')) {
+                    renderPromptHistory();
+                }
             });
         } catch (e) {
             console.error('Error setting up Firebase listener:', e);
@@ -7231,7 +7258,8 @@ function applyImprovedPrompt(targetMode = 'new') {
     if (targetVariation.isLocal) {
         saveLocalPromptsData();
     } else {
-        savePromptsToFirebase();
+        checkpointPromptHistory(pendingRole, targetVariation.id);
+        savePromptsToFirebaseNow({ roles: [pendingRole] });
     }
 
     hideAiImproveModal();
@@ -8901,8 +8929,7 @@ const syncWYSIWYGDebounced = debounce(function(previewElement, textarea, callbac
 }, 300);
         
 // Force immediate sync of current editor content
-function syncCurrentEditorNow() {
-    const role = getActiveRole();
+function syncCurrentEditorNow(role = getActiveRole()) {
     const preview = promptPreviewByRole[role];
     const textarea = promptInputsByRole[role];
     
@@ -8916,11 +8943,14 @@ function syncCurrentEditorNow() {
         }
 
         textarea.value = markdown;
-        syncContentToData(role, markdown);
+        const syncResult = syncContentToData(role, markdown);
+        if (syncResult !== null) {
+            checkpointPromptHistory(role);
+        }
     }
 }
 
-function setupWYSIWYG(previewElement, textarea, callback) {
+function setupWYSIWYG(role, previewElement, textarea, callback) {
     previewElement.setAttribute('contenteditable', 'true');
     
     previewElement.addEventListener('input', () => {
@@ -8935,6 +8965,7 @@ function setupWYSIWYG(previewElement, textarea, callback) {
     previewElement.addEventListener('blur', () => {
         // Delay resetting the flag to allow sync to complete
         setTimeout(() => {
+            syncCurrentEditorNow(role);
             isUserEditing = false;
         }, 500);
     });
@@ -8980,10 +9011,10 @@ function initWYSIWYGMode() {
         wrapper.classList.add('preview-mode');
     });
 
-    setupWYSIWYG(promptPreviewByRole.client, systemPromptInput, (c) => syncContentToData('client', c));
-    setupWYSIWYG(promptPreviewByRole.manager, managerPromptInput, (c) => syncContentToData('manager', c));
-    setupWYSIWYG(promptPreviewByRole.manager_call, managerCallPromptInput, (c) => syncContentToData('manager_call', c));
-    setupWYSIWYG(promptPreviewByRole.rater, raterPromptInput, (c) => syncContentToData('rater', c));
+    setupWYSIWYG('client', promptPreviewByRole.client, systemPromptInput, (c) => syncContentToData('client', c));
+    setupWYSIWYG('manager', promptPreviewByRole.manager, managerPromptInput, (c) => syncContentToData('manager', c));
+    setupWYSIWYG('manager_call', promptPreviewByRole.manager_call, managerCallPromptInput, (c) => syncContentToData('manager_call', c));
+    setupWYSIWYG('rater', promptPreviewByRole.rater, raterPromptInput, (c) => syncContentToData('rater', c));
 }
 
 // ============ DRAG & DROP ============
@@ -9315,6 +9346,11 @@ window.addEventListener('resize', debounce(checkTabsCompactMode, 100));
     
     input.addEventListener('blur', () => {
         setTimeout(() => {
+            const wrapper = input.closest('.prompt-wrapper');
+            const role = wrapper?.dataset.instruction;
+            if (role) {
+                checkpointPromptHistory(role);
+            }
             isUserEditing = false;
         }, 500);
     });
