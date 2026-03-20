@@ -1840,6 +1840,17 @@ body.user-mode .prompt-preview {
     text-overflow: ellipsis;
 }
 
+.prompt-sync-conflict-notice {
+    margin: 10px 12px 12px;
+    padding: 10px 12px;
+    border: 1px solid rgba(198, 148, 43, 0.45);
+    background: rgba(110, 79, 21, 0.22);
+    border-radius: 10px;
+    color: #e7d2a1;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
 .prompt-length-info.is-over {
     color: #ff6f6f;
 }
@@ -1850,6 +1861,12 @@ body.light-theme .toolbar-btn-eye.state-hidden {
 
 body.light-theme .prompt-length-info {
     color: #777;
+}
+
+body.light-theme .prompt-sync-conflict-notice {
+    border-color: rgba(188, 138, 34, 0.38);
+    background: rgba(255, 236, 194, 0.78);
+    color: #6c4d00;
 }
 
 body.light-theme .prompt-length-info.is-over {

@@ -74,6 +74,17 @@ function logStep(message) {
     process.stdout.write(`[integration-smoke] ${message}\n`);
 }
 
+function isRetryableRatingSmokeError(message) {
+    const normalized = String(message || '').toLowerCase();
+    return (
+        normalized.includes('таймаут') ||
+        normalized.includes('timeout') ||
+        normalized.includes('failed to fetch') ||
+        normalized.includes('networkerror') ||
+        normalized.includes('http 5')
+    );
+}
+
 function loginToStorageKey(value) {
     return Array.from(String(value || '').trim().toLowerCase())
         .map((char) => char.codePointAt(0).toString(16))
@@ -116,7 +127,13 @@ function buildSeedPayload() {
             managerPrompt: 'Подсказывай менеджеру коротко.',
             managerCallPrompt: 'Симулируй клиента в звонке.',
             raterPrompt: 'Оцени диалог кратко и структурированно.'
-        }
+        },
+        webhookDebugConfig: JSON.stringify({
+            ratingAttempts: 1,
+            ratingTimeoutMs: 45000,
+            ratingRetryBaseMs: 400,
+            ratingRetryMaxMs: 1200
+        })
     };
 }
 
@@ -199,6 +216,7 @@ async function seedLocalState(context) {
         localStorage.setItem('managerPrompt', payload.prompts.managerPrompt);
         localStorage.setItem('managerCallPrompt', payload.prompts.managerCallPrompt);
         localStorage.setItem('raterPrompt', payload.prompts.raterPrompt);
+        localStorage.setItem('webhookDebugConfig:v1', payload.webhookDebugConfig);
     }, seed);
 }
 
@@ -225,6 +243,15 @@ async function waitForNewConversationEvent(page, previousAssistantCount, previou
         { assistantCount: previousAssistantCount, noticeCount: previousNoticeCount },
         { timeout: 70000 }
     );
+}
+
+async function requestRatingThroughCurrentUi(page) {
+    const terminalRateButton = page.locator('.conversation-action-note .btn-conversation-rate');
+    if (await terminalRateButton.count()) {
+        await terminalRateButton.first().click();
+        return;
+    }
+    await page.click('#rateChat');
 }
 
 async function runIntegrationFlow(browser, baseUrl) {
@@ -259,16 +286,42 @@ async function runIntegrationFlow(browser, baseUrl) {
         expect(sendErrorCount === 0, 'Chat webhook returned an error after follow-up');
 
         logStep('request rating through live webhook');
-        await page.click('#rateChat');
-        await page.waitForFunction(() => {
-            return document.querySelectorAll('.message.rating, .message.error').length > 0;
-        }, undefined, { timeout: 70000 });
+        let previousRatingCount = await page.locator('.message.rating').count();
+        let previousErrorCount = await page.locator('.message.error').count();
+        let ratingSucceeded = false;
 
-        const ratingErrorCount = await page.locator('.message.error').count();
-        expect(ratingErrorCount === 0, 'Rating webhook returned an error');
+        for (let attempt = 1; attempt <= 2; attempt += 1) {
+            await requestRatingThroughCurrentUi(page);
+            await page.waitForFunction(
+                ({ ratingCount, errorCount }) => {
+                    return document.querySelectorAll('.message.rating').length > ratingCount ||
+                        document.querySelectorAll('.message.error').length > errorCount;
+                },
+                { ratingCount: previousRatingCount, errorCount: previousErrorCount },
+                { timeout: 85000 }
+            );
 
-        const ratingCount = await page.locator('.message.rating').count();
-        expect(ratingCount > 0, 'Rating message was not rendered');
+            const ratingCount = await page.locator('.message.rating').count();
+            if (ratingCount > previousRatingCount) {
+                ratingSucceeded = true;
+                break;
+            }
+
+            const ratingErrorCount = await page.locator('.message.error').count();
+            const latestErrorText = ratingErrorCount > 0
+                ? String(await page.locator('.message.error').last().textContent() || '').trim()
+                : '';
+            if (attempt < 2 && isRetryableRatingSmokeError(latestErrorText)) {
+                logStep(`retry rating after transient error: ${latestErrorText}`);
+                previousRatingCount = ratingCount;
+                previousErrorCount = ratingErrorCount;
+                continue;
+            }
+
+            expect(false, `Rating webhook returned an error${latestErrorText ? `: ${latestErrorText}` : ''}`);
+        }
+
+        expect(ratingSucceeded, 'Rating message was not rendered');
     } catch (error) {
         await ensureOutputDir();
         await page.screenshot({ path: path.join(outputDir, 'integration-smoke-failure.png'), fullPage: true });

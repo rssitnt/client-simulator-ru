@@ -66,6 +66,7 @@ const EMAIL_LINK_VERIFIED_HINT_STORAGE_KEY = 'emailLinkVerifiedHint:v1';
 const EMAIL_LINK_AUTH_READY_STORAGE_KEY = 'emailLinkAuthReady:v1';
 const EMAIL_LINK_PROCESSED_STORAGE_KEY = 'emailLinkProcessed:v1';
 const CLIENT_CONVERSATION_ACTION_PROMPT_STORAGE_KEY = 'clientConversationActionPrompt:v1';
+const WEBHOOK_DEBUG_CONFIG_STORAGE_KEY = 'webhookDebugConfig:v1';
 const EMAIL_LINK_PROCESSED_TTL_MS = 24 * 60 * 60 * 1000;
 const SESSION_ID_STORAGE_KEY = 'sessionId';
 const EMAIL_LINK_HINT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -503,6 +504,7 @@ const authMailHelpImage = document.getElementById('authMailHelpImage');
 const togglePasswordVisibilityBtn = document.getElementById('togglePasswordVisibility');
 const authErrorText = document.getElementById('passwordError');
 const promptVariationsContainer = document.getElementById('promptVariations');
+const promptSyncConflictNotice = document.getElementById('promptSyncConflictNotice');
 const promptLengthInfo = document.getElementById('promptLengthInfo');
 
 // AI Improve Modal Elements
@@ -775,6 +777,8 @@ let promptsData = {
     manager_call: { variations: [], activeId: null },
     rater: { variations: [], activeId: null }
 };
+const promptEditRemoteBaselineHashes = {};
+const promptSyncConflictMessages = {};
 
 function normalizeFio(value) {
     return String(value || '').trim().replace(/\s+/g, ' ');
@@ -839,6 +843,33 @@ function hasAdminAccount(user = currentUser) {
 function isLocalhostAdminPreviewHost() {
     const hostname = String(window?.location?.hostname || '').trim().toLowerCase();
     return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
+}
+
+function normalizeDebugPositiveInt(value, fallback, min = 1, max = Number.MAX_SAFE_INTEGER) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.min(max, Math.max(min, Math.round(parsed)));
+}
+
+function getLocalWebhookDebugConfig() {
+    if (!isLocalhostAdminPreviewHost()) return {};
+    try {
+        const parsed = getCachedLocalStorageJson(WEBHOOK_DEBUG_CONFIG_STORAGE_KEY);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (error) {
+        console.warn('Failed to read webhook debug config:', error);
+        return {};
+    }
+}
+
+function getRuntimeRatingRequestConfig() {
+    const debugConfig = getLocalWebhookDebugConfig();
+    return {
+        attempts: normalizeDebugPositiveInt(debugConfig.ratingAttempts, RATING_SEND_ATTEMPTS, 1, RATING_SEND_ATTEMPTS),
+        timeoutMs: normalizeDebugPositiveInt(debugConfig.ratingTimeoutMs, RATING_WEBHOOK_TIMEOUT_MS, 5000, 120000),
+        retryBaseMs: normalizeDebugPositiveInt(debugConfig.ratingRetryBaseMs, RATING_SEND_RETRY_BASE_MS, 0, RATING_SEND_RETRY_MAX_MS),
+        retryMaxMs: normalizeDebugPositiveInt(debugConfig.ratingRetryMaxMs, RATING_SEND_RETRY_MAX_MS, 0, 30000)
+    };
 }
 
 function canUseAdminPreviewControls(user = currentUser) {
@@ -5433,6 +5464,125 @@ function recordDirtyPromptOverrideRoles(baseStore, nextStore) {
     });
 }
 
+function getPublicPromptRoleSnapshotFromFirebaseData(source = {}, role = '') {
+    if (!PROMPT_ROLES.includes(role)) {
+        return { prompt: '', variations: [], activeId: null };
+    }
+    const safeSource = source && typeof source === 'object' ? source : {};
+    const variations = Array.isArray(safeSource[role + '_variations'])
+        ? safeSource[role + '_variations']
+            .filter((variation) => variation && typeof variation === 'object' && typeof variation.id === 'string')
+            .map((variation) => ({
+                id: String(variation.id || '').trim(),
+                name: String(variation.name || 'Основной').trim() || 'Основной',
+                content: String(variation.content || ''),
+                isLocal: false
+            }))
+        : [];
+    const activeId = typeof safeSource[role + '_activeId'] === 'string'
+        ? String(safeSource[role + '_activeId']).trim() || null
+        : null;
+    return {
+        prompt: String(safeSource[role + '_prompt'] || ''),
+        variations,
+        activeId
+    };
+}
+
+function getCurrentPublicPromptRoleSnapshot(role = '') {
+    if (!PROMPT_ROLES.includes(role)) {
+        return { prompt: '', variations: [], activeId: null };
+    }
+    const rolePayload = buildPromptsSyncPayload([role]);
+    return getPublicPromptRoleSnapshotFromFirebaseData(rolePayload, role);
+}
+
+function getPublicPromptRoleSnapshotHash(source, role = '') {
+    return JSON.stringify(getPublicPromptRoleSnapshotFromFirebaseData(source, role));
+}
+
+function rememberPromptEditBaseline(role = '') {
+    if (!PROMPT_ROLES.includes(role)) return;
+    if (dirtyPublicPromptRoles.has(role) && promptEditRemoteBaselineHashes[role]) return;
+    promptEditRemoteBaselineHashes[role] = getPublicPromptRoleSnapshotHash(lastPromptsFirebaseSnapshot || {}, role);
+}
+
+function clearPromptEditBaseline(role = '') {
+    if (!PROMPT_ROLES.includes(role)) return;
+    delete promptEditRemoteBaselineHashes[role];
+}
+
+function setPromptSyncConflictMessage(role = '', message = '') {
+    if (!PROMPT_ROLES.includes(role)) return;
+    const normalizedMessage = String(message || '').trim();
+    if (normalizedMessage) {
+        promptSyncConflictMessages[role] = normalizedMessage;
+    } else {
+        delete promptSyncConflictMessages[role];
+    }
+}
+
+function renderPromptSyncConflictNotice(role = getActiveRole()) {
+    if (!promptSyncConflictNotice) return;
+    const message = PROMPT_ROLES.includes(role) ? String(promptSyncConflictMessages[role] || '').trim() : '';
+    promptSyncConflictNotice.hidden = !message;
+    promptSyncConflictNotice.textContent = message;
+}
+
+function preservePromptConflictAsLocalDraft(role = '') {
+    if (!PROMPT_ROLES.includes(role)) return false;
+    const roleState = promptsData[role];
+    if (!roleState || !Array.isArray(roleState.variations)) return false;
+
+    const activeVariation = roleState.variations.find((variation) => variation.id === roleState.activeId) || null;
+    if (!activeVariation || activeVariation.isLocal) return false;
+
+    let localOverride = findLocalOverrideForPublicVariation(role, activeVariation);
+    if (!localOverride) {
+        localOverride = {
+            id: generateId(),
+            baseVariationId: activeVariation.id,
+            name: getPromptVariationDisplayName(activeVariation) || activeVariation.name || 'Промпт',
+            content: activeVariation.content || '',
+            isLocal: true
+        };
+        roleState.variations.push(localOverride);
+    } else {
+        localOverride.baseVariationId = activeVariation.id;
+        localOverride.name = getPromptVariationDisplayName(activeVariation) || activeVariation.name || 'Промпт';
+        localOverride.content = activeVariation.content || '';
+    }
+
+    roleState.activeId = localOverride.id;
+    saveLocalPromptsData();
+    dirtyPublicPromptRoles.delete(role);
+    clearPromptEditBaseline(role);
+    setPromptSyncConflictMessage(
+        role,
+        'Публичный промпт был изменён в другом окне или другим админом. Ваши правки сохранены как локальный скрытый draft; сравните и опубликуйте его вручную, если нужно.'
+    );
+    return true;
+}
+
+function resolvePromptSyncConflicts(remoteSnapshot = {}) {
+    const conflictRoles = [];
+    dirtyPublicPromptRoles.forEach((role) => {
+        if (!PROMPT_ROLES.includes(role)) return;
+        const baselineHash = promptEditRemoteBaselineHashes[role];
+        if (!baselineHash) return;
+        const remoteHash = getPublicPromptRoleSnapshotHash(remoteSnapshot, role);
+        if (remoteHash !== baselineHash) {
+            conflictRoles.push(role);
+        }
+    });
+
+    conflictRoles.forEach((role) => {
+        preservePromptConflictAsLocalDraft(role);
+    });
+
+    return conflictRoles;
+}
+
 function buildMergedPromptsSnapshot(firebaseData = {}) {
     const mergedSnapshot = { ...(firebaseData || {}) };
     if (!dirtyPublicPromptRoles.size) {
@@ -5483,6 +5633,7 @@ function applyDeferredPromptRemoteState() {
 
     if (pendingPromptsFirebaseSnapshot !== null && lastPromptsFirebaseSnapshot !== null) {
         const remoteSnapshot = pendingPromptsFirebaseSnapshot;
+        resolvePromptSyncConflicts(remoteSnapshot);
         const mergedSnapshot = buildMergedPromptsSnapshot(remoteSnapshot);
         pendingPromptsFirebaseSnapshot = null;
         initPromptsData(mergedSnapshot);
@@ -5506,14 +5657,19 @@ function beginPromptEditing(role = '') {
     isUserEditing = true;
     if (role) {
         currentEditingPromptRole = role;
+        rememberPromptEditBaseline(role);
     }
 }
 
 function endPromptEditing(role = '') {
+    const resolvedRole = role || currentEditingPromptRole || '';
     if (!role || currentEditingPromptRole === role) {
         currentEditingPromptRole = '';
     }
     isUserEditing = false;
+    if (resolvedRole && !dirtyPublicPromptRoles.has(resolvedRole)) {
+        clearPromptEditBaseline(resolvedRole);
+    }
     applyDeferredPromptRemoteState();
 }
 
@@ -6387,6 +6543,7 @@ function renderVariations() {
     }
 
     promptVariationsContainer.replaceChildren(fragment);
+    renderPromptSyncConflictNotice(role);
     updatePromptVisibilityButton();
     updatePromptHistoryButton();
     updatePromptLengthInfo(role);
@@ -6804,8 +6961,13 @@ function savePromptsToFirebaseNow(options = {}) {
     syncPromise
         .then(() => (options.fullReplace ? set(ref(db, 'prompts'), payload) : update(ref(db, 'prompts'), payload)))
         .then(() => {
-            roles.forEach(role => dirtyPublicPromptRoles.delete(role));
+            roles.forEach((role) => {
+                dirtyPublicPromptRoles.delete(role);
+                clearPromptEditBaseline(role);
+                setPromptSyncConflictMessage(role, '');
+            });
             debugLog('Prompts synced to Firebase');
+            renderPromptSyncConflictNotice();
         })
         .catch(e => console.error('Failed to sync:', e));
 }
@@ -10352,8 +10514,13 @@ function isRetryableRatingError(error) {
 async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RATING_SEND_ATTEMPTS) {
     const requestId = buildRequestId('rating');
     let lastError = null;
+    const runtimeRatingConfig = getRuntimeRatingRequestConfig();
+    const effectiveMaxAttempts = Math.min(
+        normalizeDebugPositiveInt(maxAttempts, runtimeRatingConfig.attempts, 1, RATING_SEND_ATTEMPTS),
+        runtimeRatingConfig.attempts
+    );
 
-    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    for (let attempt = 1; attempt <= effectiveMaxAttempts; attempt += 1) {
         try {
             const response = await fetchWithTimeout(RATE_WEBHOOK_URL, {
                 method: 'POST',
@@ -10366,7 +10533,7 @@ async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RAT
                     attempt,
                     sentAt: new Date().toISOString()
                 })
-            }, RATING_WEBHOOK_TIMEOUT_MS);
+            }, runtimeRatingConfig.timeoutMs);
 
             if (!response.ok) {
                 const err = new Error(`HTTP ${response.status}`);
@@ -10374,7 +10541,7 @@ async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RAT
                 throw err;
             }
 
-            let ratingMessage = await readWebhookResponse(response, RATING_WEBHOOK_TIMEOUT_MS);
+            let ratingMessage = await readWebhookResponse(response, runtimeRatingConfig.timeoutMs);
             ratingMessage = normalizeStructuredJsonText(ratingMessage);
             if (/^\s*<!doctype|^\s*<html/i.test(ratingMessage || '')) {
                 const err = new Error('Некорректный ответ сервера оценки');
@@ -10389,13 +10556,13 @@ async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RAT
             return ratingMessage.trim();
         } catch (error) {
             lastError = error;
-            if (attempt >= maxAttempts || !isRetryableRatingError(error)) {
+            if (attempt >= effectiveMaxAttempts || !isRetryableRatingError(error)) {
                 throw lastError;
             }
-            console.warn(`Rating webhook attempt ${attempt}/${maxAttempts} failed, retrying...`, error);
+            console.warn(`Rating webhook attempt ${attempt}/${effectiveMaxAttempts} failed, retrying...`, error);
             const baseDelay = Math.min(
-                RATING_SEND_RETRY_MAX_MS,
-                RATING_SEND_RETRY_BASE_MS * Math.pow(2, attempt - 1)
+                runtimeRatingConfig.retryMaxMs,
+                runtimeRatingConfig.retryBaseMs * Math.pow(2, attempt - 1)
             );
             const jitter = Math.floor(Math.random() * 250);
             await delay(baseDelay + jitter);

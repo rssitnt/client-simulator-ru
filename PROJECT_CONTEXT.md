@@ -85,11 +85,20 @@
   - new admin-only settings section edits the hidden client action suffix used before trigger node send
   - value is loaded from and saved to `app_config/clientConversationActionPrompt`
   - frontend falls back to cached/shared value and then to the built-in default suffix
+- Stabilized live integration smoke around rating:
+  - frontend now honors localhost-only `webhookDebugConfig:v1` for rating attempt/timeout tuning
+  - integration smoke seeds bounded rating config (`ratingAttempts=1`, `ratingTimeoutMs=45000`) instead of waiting for full production retry budget
+  - integration smoke clicks terminal notice CTA `Оценить` when present, else falls back to global rate button
+  - on transient rating error it retries once at the smoke level; latest verified run passed after one retry
+- Added multi-admin prompt conflict protection for public prompts:
+  - while editing a public role, frontend remembers the remote baseline hash for that role
+  - if remote public data changes before local edit is synced, the local public edit is preserved as a local hidden draft instead of overwriting remote data
+  - active prompt panel now shows an inline conflict notice explaining that remote changed and the local edit was moved into a draft for manual compare/publish
 
 ## Verification State
 - `script.js` parses successfully after latest pass.
 - `npm run test:smoke` passes.
-- `npm run test:smoke:integration` passes against live webhook flow.
+- `npm run test:smoke:integration` passes; latest run in this pass succeeded without retry.
 - `npm audit` reports `0 vulnerabilities`.
 
 ## Data / Inputs
