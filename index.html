@@ -17,7 +17,7 @@
         integrity="sha384-oaMLBGEzBOJx3UHwac0cVndtX5fxGQIfnAeFZ35RTgqPcYlbprH9o9PUV/F8Le07"
         crossorigin="anonymous"
     >
-<link rel="stylesheet" href="style.css?v=20260319-46">
+<link rel="stylesheet" href="style.css?v=20260320-12">
     
     <!-- Favicon -->
     <link rel="apple-touch-icon" sizes="180x180" href="favicon/apple-touch-icon.png">
@@ -267,6 +267,24 @@
                         </div>
                         <button id="partnerInviteAddBtn" class="btn-change admin-invite-btn">Выдать доступ</button>
                     </div>
+                    <details id="adminHiddenClientPromptAccordion" class="admin-hidden-prompt-section">
+                        <summary class="admin-hidden-prompt-summary">Скрытый prompt клиента</summary>
+                        <div class="admin-hidden-prompt-body">
+                            <div class="admin-hidden-prompt-hint">
+                                Этот текст автоматически дописывается к prompt клиента перед отправкой в trigger node.
+                            </div>
+                            <textarea
+                                id="adminHiddenClientPromptInput"
+                                class="admin-hidden-prompt-textarea"
+                                placeholder="Введите скрытый prompt клиента..."
+                                rows="10"
+                            ></textarea>
+                            <div class="admin-hidden-prompt-actions">
+                                <button id="adminHiddenClientPromptSaveBtn" class="btn-change">Сохранить</button>
+                                <button id="adminHiddenClientPromptResetBtn" class="btn-change btn-danger-subtle">Сбросить к умолчанию</button>
+                            </div>
+                        </div>
+                    </details>
                     <div class="admin-panel-header">
                         <span class="admin-panel-title">Пользователи и доступ</span>
                         <button id="adminRefreshBtn" class="btn-change">Обновить</button>
@@ -526,7 +544,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js" integrity="sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3" crossorigin="anonymous" defer></script>
     <!-- Turndown for HTML to Markdown conversion (WYSIWYG editing) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js" integrity="sha384-m6AyXEhyWRg2s2wrkDV64LGkaManYgMSAjn2U+zymzSJ42WthRSjCu1AqZJhoQV0" crossorigin="anonymous" defer></script>
-<script type="module" src="script.js?v=20260320-07"></script>
+<script type="module" src="script.js?v=20260320-16"></script>
     <!-- Last deployment trigger: 2026-02-10 18:34 -->
 </body>
 </html>

@@ -8,7 +8,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
 const outputDir = path.join(projectRoot, 'output', 'playwright');
 const login = 'smoke.admin@7271155.ru';
-const fio = 'Смоук Тестер';
+const fio = 'Integration Smoke';
 const mimeTypes = new Map([
     ['.html', 'text/html; charset=utf-8'],
     ['.js', 'application/javascript; charset=utf-8'],
@@ -71,7 +71,7 @@ function expect(condition, message) {
 }
 
 function logStep(message) {
-    process.stdout.write(`[smoke] ${message}\n`);
+    process.stdout.write(`[integration-smoke] ${message}\n`);
 }
 
 function loginToStorageKey(value) {
@@ -139,14 +139,13 @@ function createStaticFileServer(rootDir) {
             let fileStat = null;
             try {
                 fileStat = await stat(filePath);
-            } catch (error) {
+            } catch {
                 res.writeHead(404).end('Not found');
                 return;
             }
 
             if (fileStat.isDirectory()) {
                 filePath = path.join(filePath, 'index.html');
-                fileStat = await stat(filePath);
             }
 
             const content = await readFile(filePath);
@@ -173,7 +172,7 @@ function createStaticFileServer(rootDir) {
     });
 }
 
-async function installCommonRoutes(context, scenario) {
+async function installIntegrationRoutes(context) {
     await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js', async (route) => {
         await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAppStub });
     });
@@ -186,37 +185,6 @@ async function installCommonRoutes(context, scenario) {
     await context.route('http://127.0.0.1:7243/**', async (route) => {
         await route.fulfill({ status: 204, body: '' });
     });
-    await context.route('https://n8n-api.tradicia-k.ru/webhook/**', async (route) => {
-        const url = route.request().url();
-        const bodyText = route.request().postData() || '{}';
-        const payload = JSON.parse(bodyText);
-        scenario.requests.push({ url, payload });
-
-        if (url.endsWith('/client-simulator')) {
-            const responsePayload = scenario.handleChat(payload);
-            await route.fulfill({
-                status: 200,
-                contentType: 'application/json',
-                body: JSON.stringify(responsePayload)
-            });
-            return;
-        }
-
-        if (url.endsWith('/rate-manager')) {
-            await route.fulfill({
-                status: 200,
-                contentType: 'text/plain; charset=utf-8',
-                body: 'Smoke rating done\nИтог: сценарий завершился корректно.'
-            });
-            return;
-        }
-
-        await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({ ok: true })
-        });
-    });
 }
 
 async function seedLocalState(context) {
@@ -224,7 +192,7 @@ async function seedLocalState(context) {
     await context.addInitScript((payload) => {
         localStorage.setItem('authSession:v1', payload.authSession);
         localStorage.setItem('authUsers:v1', payload.authUsers);
-        localStorage.setItem('managerName', 'Смоук Тестер');
+        localStorage.setItem('managerName', 'Integration Smoke');
         localStorage.setItem('managerLogin', 'smoke.admin@7271155.ru');
         localStorage.setItem('userRole', 'admin');
         localStorage.setItem('systemPrompt', payload.prompts.systemPrompt);
@@ -232,57 +200,6 @@ async function seedLocalState(context) {
         localStorage.setItem('managerCallPrompt', payload.prompts.managerCallPrompt);
         localStorage.setItem('raterPrompt', payload.prompts.raterPrompt);
     }, seed);
-}
-
-function createEndConversationScenario() {
-    return {
-        requests: [],
-        chatCount: 0,
-        handleChat(payload) {
-            if (payload.chatInput === '/start') {
-                return { message: 'Здравствуйте. Что у вас за задача?' };
-            }
-            this.chatCount += 1;
-            return {
-                message: 'Понял. Тогда дальше неинтересно.',
-                conversationAction: {
-                    type: 'end_conversation',
-                    reason: 'lost_interest',
-                    shouldEvaluate: true
-                }
-            };
-        }
-    };
-}
-
-function createGoSilentScenario() {
-    return {
-        requests: [],
-        chatCount: 0,
-        handleChat(payload) {
-            if (payload.chatInput === '/start') {
-                return { message: 'Добрый день. Что предлагаете?' };
-            }
-            this.chatCount += 1;
-            if (this.chatCount === 1) {
-                return {
-                    message: '',
-                    conversationAction: {
-                        type: 'go_silent',
-                        reason: 'lost_interest'
-                    }
-                };
-            }
-            return {
-                message: 'Спасибо, но уже не актуально.',
-                conversationAction: {
-                    type: 'end_conversation',
-                    reason: 'resolved',
-                    shouldEvaluate: true
-                }
-            };
-        }
-    };
 }
 
 async function waitForChatReady(page) {
@@ -297,72 +214,64 @@ async function waitForChatReady(page) {
     });
 }
 
-async function runEndConversationFlow(browser, baseUrl) {
-    const scenario = createEndConversationScenario();
-    const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
-    await installCommonRoutes(context, scenario);
-    await seedLocalState(context);
-    const page = await context.newPage();
-
-    try {
-        logStep('run end_conversation scenario');
-        await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
-        await waitForChatReady(page);
-        await page.click('#startBtn');
-        await page.waitForSelector('text=Здравствуйте. Что у вас за задача?');
-
-        await page.fill('#userInput', 'уходи');
-        await page.click('#sendBtn');
-        await page.waitForSelector('text=Диалог завершен');
-        await page.waitForSelector('.conversation-action-note .btn-conversation-rate');
-
-        const isInputDisabled = await page.locator('#userInput').isDisabled();
-        expect(isInputDisabled, 'Input must be locked after end_conversation');
-
-        await page.click('.conversation-action-note .btn-conversation-rate');
-        await page.waitForSelector('text=Smoke rating done');
-        await page.waitForSelector('text=Диалог завершен');
-        expect(scenario.requests.some((item) => item.url.endsWith('/rate-manager')), 'Rating webhook was not called');
-    } catch (error) {
-        await ensureOutputDir();
-        await page.screenshot({ path: path.join(outputDir, 'smoke-end-conversation-failure.png'), fullPage: true });
-        throw error;
-    } finally {
-        await context.close();
-    }
+async function waitForNewConversationEvent(page, previousAssistantCount, previousNoticeCount) {
+    await page.waitForFunction(
+        ({ assistantCount, noticeCount }) => {
+            const assistantMessages = document.querySelectorAll('.message.assistant').length;
+            const notices = document.querySelectorAll('.conversation-action-note').length;
+            const errors = document.querySelectorAll('.message.error').length;
+            return assistantMessages > assistantCount || notices > noticeCount || errors > 0;
+        },
+        { assistantCount: previousAssistantCount, noticeCount: previousNoticeCount },
+        { timeout: 70000 }
+    );
 }
 
-async function runGoSilentFlow(browser, baseUrl) {
-    const scenario = createGoSilentScenario();
+async function runIntegrationFlow(browser, baseUrl) {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
-    await installCommonRoutes(context, scenario);
+    await installIntegrationRoutes(context);
     await seedLocalState(context);
     const page = await context.newPage();
 
     try {
-        logStep('run go_silent scenario');
+        logStep('open page');
         await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
         await waitForChatReady(page);
+
+        logStep('start conversation through live webhook');
         await page.click('#startBtn');
-        await page.waitForSelector('text=Добрый день. Что предлагаете?');
+        await page.waitForFunction(() => {
+            return document.querySelectorAll('.message.assistant, .conversation-action-note, .message.error').length > 0;
+        }, { timeout: 70000 });
 
-        await page.fill('#userInput', 'пришлите просто общий прайс');
+        const startErrorCount = await page.locator('.message.error').count();
+        expect(startErrorCount === 0, 'Start conversation returned an error');
+
+        const assistantCountBefore = await page.locator('.message.assistant').count();
+        const noticeCountBefore = await page.locator('.conversation-action-note').count();
+
+        logStep('send live follow-up');
+        await page.fill('#userInput', 'Нужен гидробур на CASE CX260C, дайте решение по комплектации и срокам.');
         await page.click('#sendBtn');
-        await page.waitForSelector('text=Клиент не ответил, но его ещё можно вернуть');
+        await waitForNewConversationEvent(page, assistantCountBefore, noticeCountBefore);
 
-        const isInputDisabledAfterSilent = await page.locator('#userInput').isDisabled();
-        expect(!isInputDisabledAfterSilent, 'Input must remain enabled after go_silent');
+        const sendErrorCount = await page.locator('.message.error').count();
+        expect(sendErrorCount === 0, 'Chat webhook returned an error after follow-up');
 
-        await page.fill('#userInput', 'возвращаю клиента конкретикой');
-        await page.click('#sendBtn');
-        await page.waitForSelector('text=Диалог завершен');
+        logStep('request rating through live webhook');
+        await page.click('#rateChat');
+        await page.waitForFunction(() => {
+            return document.querySelectorAll('.message.rating, .message.error').length > 0;
+        }, undefined, { timeout: 70000 });
 
-        const secondChatRequest = scenario.requests
-            .filter((item) => item.url.endsWith('/client-simulator') && item.payload.chatInput !== '/start')[1];
-        expect(secondChatRequest?.payload?.conversationActionState?.type === 'go_silent', 'go_silent state was not forwarded to the next chat request');
+        const ratingErrorCount = await page.locator('.message.error').count();
+        expect(ratingErrorCount === 0, 'Rating webhook returned an error');
+
+        const ratingCount = await page.locator('.message.rating').count();
+        expect(ratingCount > 0, 'Rating message was not rendered');
     } catch (error) {
         await ensureOutputDir();
-        await page.screenshot({ path: path.join(outputDir, 'smoke-go-silent-failure.png'), fullPage: true });
+        await page.screenshot({ path: path.join(outputDir, 'integration-smoke-failure.png'), fullPage: true });
         throw error;
     } finally {
         await context.close();
@@ -378,9 +287,8 @@ async function main() {
     });
 
     try {
-        await runEndConversationFlow(browser, baseUrl);
-        await runGoSilentFlow(browser, baseUrl);
-        logStep('all smoke scenarios passed');
+        await runIntegrationFlow(browser, baseUrl);
+        logStep('integration smoke passed');
     } finally {
         await browser.close();
         await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
@@ -388,6 +296,6 @@ async function main() {
 }
 
 main().catch((error) => {
-    console.error('[smoke] failed:', error);
+    console.error('[integration-smoke] failed:', error);
     process.exitCode = 1;
 });

@@ -65,6 +65,7 @@ const EMAIL_LINK_HINT_STORAGE_KEY = 'emailLinkHint:v1';
 const EMAIL_LINK_VERIFIED_HINT_STORAGE_KEY = 'emailLinkVerifiedHint:v1';
 const EMAIL_LINK_AUTH_READY_STORAGE_KEY = 'emailLinkAuthReady:v1';
 const EMAIL_LINK_PROCESSED_STORAGE_KEY = 'emailLinkProcessed:v1';
+const CLIENT_CONVERSATION_ACTION_PROMPT_STORAGE_KEY = 'clientConversationActionPrompt:v1';
 const EMAIL_LINK_PROCESSED_TTL_MS = 24 * 60 * 60 * 1000;
 const SESSION_ID_STORAGE_KEY = 'sessionId';
 const EMAIL_LINK_HINT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -89,7 +90,7 @@ const CONVERSATION_ACTION_TYPE = {
     GO_SILENT: 'go_silent'
 };
 const LEGACY_WARN_EXIT_ACTION_TYPE = 'warn_exit';
-const CLIENT_CONVERSATION_ACTION_PROMPT_SUFFIX = `
+const DEFAULT_CLIENT_CONVERSATION_ACTION_PROMPT_SUFFIX = `
 СЛУЖЕБНЫЙ КОНТРАКТ ПЛАТФОРМЫ
 Ты играешь клиента и можешь не только отвечать обычным текстом, но и управлять состоянием диалога.
 
@@ -98,17 +99,29 @@ const CLIENT_CONVERSATION_ACTION_PROMPT_SUFFIX = `
 - или JSON вида {"message":"текст клиента"}
 
 Когда клиент перестал отвечать, но его ещё можно вернуть:
-- верни JSON вида {"message":"","conversationAction":{"type":"go_silent","reason":"lost_interest"}}
-- если нужна короткая последняя реплика клиента перед молчанием, поле "message" можно заполнить
+- всегда возвращай JSON вида {"message":"","conversationAction":{"type":"go_silent","reason":"lost_interest"}}
+- если выбрал go_silent, поле "message" должно быть пустым
+- не добавляй текст ради вежливости, формальности, пояснения ухода или последней реплики
 
 Когда клиент окончательно завершил разговор:
-- верни JSON вида {"message":"финальная реплика клиента","conversationAction":{"type":"end_conversation","reason":"manager_failed","shouldEvaluate":true}}
+- по умолчанию верни JSON вида {"message":"","conversationAction":{"type":"end_conversation","reason":"manager_failed","shouldEvaluate":true}}
+- добавляй финальную реплику только если без неё смысл завершения теряется
 
 Используй go_silent или end_conversation, когда это реалистично:
-- менеджер тянет время и не даёт решения
-- клиент потерял интерес или уходит к конкурентам
-- менеджер давит, грубит или проваливает коммуникацию
+- клиента не устроили цена, сроки, условия, наличие, сервис или общая уверенность в решении
+- менеджер слабо обработал возражение и не убедил продолжать разговор
+- менеджер явно сливает диалог, грубит, обесценивает запрос или прямо отказывает
 - клиент получил всё нужное и разговор логично завершён
+
+Приоритет выбора инструмента:
+- go_silent выбирай, когда клиенту не хватило качества ответа: цена, сроки, условия или возражения обработаны слабо, доверие не появилось, интерес упал, и клиент просто молча уходит смотреть другие варианты
+- end_conversation выбирай, когда разговор для клиента закрыт окончательно: менеджер явно сливает диалог, посылает «смотрите сайт», «возвращайтесь потом», даёт только общий прайс вместо решения, грубит, обесценивает запрос, прямо отказывает или клиент сам внутренне принял окончательное решение больше не продолжать
+- клиент жёсткий и прагматичный: даже удовлетворительная, но неубедительная работа менеджера может привести к go_silent
+- если сомневаешься между ними: молчаливый уход без ответа = go_silent, явный окончательный разрыв = end_conversation
+- если клиента не устроили цена, сроки, сервис, наличие, риски или уверенность в решении, и менеджер не смог убедительно это обработать, по умолчанию выбирай go_silent
+- даже если клиент внутри уже решил не покупать, но реалистично он бы просто пропал и пошёл к конкурентам, всё равно выбирай go_silent, а не end_conversation
+- не используй end_conversation только потому, что предложение слабое, дорогое, долгое или неубедительное; для таких кейсов обычно реалистичнее go_silent
+- end_conversation используй только когда клиент реально проговаривает окончательный разрыв или когда поведение менеджера настолько плохое, что молчаливый уход уже не выглядит естественным
 
 Правила:
 - если клиент уже фактически ушёл, не продолжай обычный разговор из вежливости
@@ -415,6 +428,36 @@ async function readResponseTextWithTimeout(response, timeoutMs = WEBHOOK_DEFAULT
     }
 }
 
+async function readResponseJsonWithTimeout(
+    response,
+    timeoutMs = WEBHOOK_DEFAULT_TIMEOUT_MS,
+    timeoutMessage = '',
+    fallbackValue
+) {
+    const rawText = await readResponseTextWithTimeout(
+        response,
+        timeoutMs,
+        timeoutMessage || `Таймаут чтения JSON-ответа (${timeoutMs/1000}с).`
+    );
+    const trimmedText = String(rawText || '').trim();
+
+    if (!trimmedText) {
+        if (arguments.length >= 4) {
+            return fallbackValue;
+        }
+        throw new Error('Сервер вернул пустой JSON-ответ.');
+    }
+
+    try {
+        return JSON.parse(trimmedText);
+    } catch (error) {
+        if (arguments.length >= 4) {
+            return fallbackValue;
+        }
+        throw new Error('Сервер вернул некорректный JSON-ответ.');
+    }
+}
+
 function buildRequestId(prefix = 'req') {
     return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -519,6 +562,10 @@ const geminiTokenEndpointInput = document.getElementById('geminiTokenEndpointInp
 const geminiVoiceNameInput = document.getElementById('geminiVoiceNameInput');
 const saveVoiceConfigBtn = document.getElementById('saveVoiceConfigBtn');
 const clearVoiceConfigBtn = document.getElementById('clearVoiceConfigBtn');
+const adminHiddenClientPromptAccordion = document.getElementById('adminHiddenClientPromptAccordion');
+const adminHiddenClientPromptInput = document.getElementById('adminHiddenClientPromptInput');
+const adminHiddenClientPromptSaveBtn = document.getElementById('adminHiddenClientPromptSaveBtn');
+const adminHiddenClientPromptResetBtn = document.getElementById('adminHiddenClientPromptResetBtn');
 const adminPanelAccordion = document.getElementById('adminPanelAccordion');
 const adminPanel = document.getElementById('adminPanel');
 const adminRefreshBtn = document.getElementById('adminRefreshBtn');
@@ -607,6 +654,7 @@ let attestationPrevState = null;
 
 // State
 let conversationHistory = [];
+let conversationHistoryText = '';
 let isProcessing = false;
 let lastRating = null;
 let isDialogRated = false;
@@ -678,6 +726,8 @@ let currentUserPromptOverridesStore = null;
 let currentUserPromptOverridesSaveTimer = null;
 let queuedPromptOverridesPayload = null;
 let lastPromptOverridesRemoteHash = '';
+let pendingPromptOverridesRemoteStore = null;
+let pendingPromptOverridesRemoteHash = '';
 let currentUserPresenceConnectedUnsubscribe = null;
 let currentUserPresencePath = '';
 let currentUserPresenceDisconnect = null;
@@ -689,6 +739,11 @@ let adminRealtimeRevocations = null;
 let adminRealtimePresence = null;
 let adminUsersRenderQueued = false;
 let adminStatusRefreshTimerId = null;
+let adminUserRowsByLogin = new Map();
+let adminUsersTableInitialized = false;
+let pendingPromptsFirebaseSnapshot = null;
+const dirtyPromptOverrideRoles = new Set();
+let currentEditingPromptRole = '';
 let activeTickTimerId = null;
 let activeTimeFlushInFlight = false;
 let pendingActiveMs = 0;
@@ -700,7 +755,8 @@ let sessionRevocationCheckInFlight = false;
 let sessionRevocationListenersInitialized = false;
 let fioSaveTimeout = null;
 let sharedAppConfig = {
-    geminiTokenEndpoint: ''
+    geminiTokenEndpoint: '',
+    clientConversationActionPrompt: ''
 };
 let publicActiveIds = {
     client: null,
@@ -3446,6 +3502,15 @@ function resetAdminRealtimeTableData() {
     adminRealtimePresence = null;
 }
 
+function resetAdminUsersTableDomState() {
+    adminUserRowsByLogin.forEach((row) => row.remove());
+    adminUserRowsByLogin.clear();
+    adminUsersTableInitialized = false;
+    if (adminUsersTableBody) {
+        adminUsersTableBody.innerHTML = '';
+    }
+}
+
 function stopAdminRealtimeSync() {
     if (adminStatusRefreshTimerId) {
         clearInterval(adminStatusRefreshTimerId);
@@ -3461,6 +3526,7 @@ function stopAdminRealtimeSync() {
     adminRealtimeUnsubscribes = [];
     adminUsersRenderQueued = false;
     resetAdminRealtimeTableData();
+    resetAdminUsersTableDomState();
 }
 
 function scheduleAdminUsersTableRender() {
@@ -3531,38 +3597,7 @@ function startAdminRealtimeSync() {
     return true;
 }
 
-async function renderAdminUsersTable() {
-    if (!adminPanel || !adminUsersTableBody) return;
-    if (!isSettingsModalOpen()) {
-        stopAdminRealtimeSync();
-        return;
-    }
-
-    if (!isAdmin()) {
-        stopAdminRealtimeSync();
-        if (adminPanelAccordion) {
-            adminPanelAccordion.style.display = 'none';
-            adminPanelAccordion.removeAttribute('open');
-        }
-        return;
-    }
-
-    if (adminPanelAccordion) {
-        adminPanelAccordion.style.display = '';
-    }
-    adminUsersTableBody.innerHTML = '<tr><td colspan="6" class="admin-empty">Загрузка...</td></tr>';
-    await ensureCurrentUserAccessMirror();
-
-    startAdminRealtimeSync();
-    const liveDataReady = hasAdminRealtimeTableData();
-    const [users, invites, revocations, presenceEntries] = liveDataReady
-        ? [adminRealtimeUsers, adminRealtimeInvites, adminRealtimeRevocations, adminRealtimePresence]
-        : await Promise.all([
-            listAllUserRecords(),
-            listPartnerInvites(),
-            listAccessRevocations(),
-            Promise.resolve([])
-        ]);
+function buildAdminUsersTableRows(users, invites, revocations, presenceEntries) {
     const usersByLogin = new Map();
     const invitesByLogin = new Map();
     const revocationsByLogin = new Map();
@@ -3588,7 +3623,7 @@ async function renderAdminUsersTable() {
         if (isValidLogin(login)) presenceByLogin.set(login, item);
     });
 
-    const allLogins = Array.from(new Set([
+    return Array.from(new Set([
         ...usersByLogin.keys(),
         ...invitesByLogin.keys(),
         ...revocationsByLogin.keys()
@@ -3598,122 +3633,244 @@ async function renderAdminUsersTable() {
         const accessRevocation = revocationsByLogin.get(login) || null;
         if (user || invite) return true;
         return !isAccessRevokedForLogin(accessRevocation, login);
-    }).sort((a, b) => a.localeCompare(b));
-
-    if (!allLogins.length) {
-        adminUsersTableBody.innerHTML = '<tr><td colspan="6" class="admin-empty">Пользователи не найдены</td></tr>';
-        return;
-    }
-
-    adminUsersTableBody.innerHTML = '';
-    allLogins.forEach((login) => {
+    }).sort((a, b) => a.localeCompare(b)).map((login) => {
         const user = usersByLogin.get(login) || null;
         const invite = invitesByLogin.get(login) || null;
         const accessRevocation = revocationsByLogin.get(login) || null;
         const presence = presenceByLogin.get(login) || null;
-        const accessState = getAccessState(login, user, invite, accessRevocation);
-        const row = document.createElement('tr');
-        row.dataset.login = login;
+        return {
+            login,
+            user,
+            invite,
+            accessRevocation,
+            presence,
+            accessState: getAccessState(login, user, invite, accessRevocation)
+        };
+    });
+}
 
-        const loginCell = document.createElement('td');
-        loginCell.textContent = login;
+function setAdminUsersTableEmptyState(text) {
+    resetAdminUsersTableDomState();
+    if (!adminUsersTableBody) return;
+    const row = document.createElement('tr');
+    row.className = 'admin-empty-row';
+    const cell = document.createElement('td');
+    cell.colSpan = 6;
+    cell.className = 'admin-empty';
+    cell.textContent = text;
+    row.appendChild(cell);
+    adminUsersTableBody.appendChild(row);
+}
 
-        const roleCell = document.createElement('td');
-        if (user) {
+function createAdminUsersTableRow(login) {
+    const row = document.createElement('tr');
+    row.dataset.login = login;
+
+    const loginCell = document.createElement('td');
+    const roleCell = document.createElement('td');
+    const sourceCell = document.createElement('td');
+    sourceCell.className = 'admin-access-source';
+    const timeCell = document.createElement('td');
+    timeCell.className = 'admin-time';
+    const statusCell = document.createElement('td');
+    const statusMain = document.createElement('div');
+    statusMain.className = 'admin-status-main';
+    const presenceText = document.createElement('div');
+    statusCell.appendChild(statusMain);
+    statusCell.appendChild(presenceText);
+    const actionCell = document.createElement('td');
+    const actionBtn = document.createElement('button');
+    actionBtn.addEventListener('click', async () => {
+        const rowData = row._adminData;
+        if (!rowData) return;
+        const nextActive = !rowData.accessState.active;
+        if (!nextActive) {
+            const confirmed = confirm(`Закрыть доступ для ${rowData.login}?`);
+            if (!confirmed) return;
+        }
+        actionBtn.disabled = true;
+        try {
+            await toggleAccessForLogin(
+                rowData.login,
+                nextActive,
+                rowData.user,
+                rowData.invite,
+                rowData.accessRevocation
+            );
+            showCopyNotification(nextActive ? `Доступ открыт: ${rowData.login}` : `Доступ закрыт: ${rowData.login}`);
+            refreshAdminUsersTableAfterMutation();
+        } catch (error) {
+            console.error('Failed to toggle access:', error);
+            const fallback = error?.message ? String(error.message) : 'Не удалось изменить доступ';
+            showCopyNotification(fallback);
+        } finally {
+            actionBtn.disabled = false;
+        }
+    });
+    actionCell.appendChild(actionBtn);
+
+    row._adminCells = {
+        loginCell,
+        roleCell,
+        sourceCell,
+        timeCell,
+        statusCell,
+        statusMain,
+        presenceText,
+        actionCell,
+        actionBtn
+    };
+
+    row.appendChild(loginCell);
+    row.appendChild(roleCell);
+    row.appendChild(sourceCell);
+    row.appendChild(timeCell);
+    row.appendChild(statusCell);
+    row.appendChild(actionCell);
+
+    adminUserRowsByLogin.set(login, row);
+    return row;
+}
+
+function updateAdminUsersTableRow(row, rowData) {
+    row._adminData = rowData;
+    row.dataset.login = rowData.login;
+    const {
+        loginCell,
+        roleCell,
+        sourceCell,
+        timeCell,
+        statusCell,
+        statusMain,
+        presenceText,
+        actionBtn
+    } = row._adminCells;
+
+    loginCell.textContent = rowData.login;
+
+    if (rowData.user) {
+        if (!row._adminRoleSelect) {
             const roleSelect = document.createElement('select');
             roleSelect.className = 'admin-role-select';
             roleSelect.innerHTML = `
                 <option value="user">Юзер</option>
                 <option value="admin">Админ</option>
             `;
-            roleSelect.value = normalizeRole(user.role);
             roleSelect.addEventListener('change', async () => {
+                const currentRowData = row._adminData;
+                if (!currentRowData?.user) return;
                 const nextRole = normalizeRole(roleSelect.value);
                 roleSelect.disabled = true;
-                await patchUserRecord(user.login, {
-                    role: nextRole,
-                    lastSeenAt: new Date().toISOString()
-                });
-                roleSelect.disabled = false;
+                try {
+                    await patchUserRecord(currentRowData.user.login, {
+                        role: nextRole,
+                        lastSeenAt: new Date().toISOString()
+                    });
 
-                if (currentUser && user.login === currentUser.login) {
-                    currentUser.role = nextRole;
-                    syncSelectedRole(nextRole);
-                    void ensureCurrentUserAccessMirror(currentUser);
-                    applyRoleRestrictions();
+                    if (currentUser && currentRowData.user.login === currentUser.login) {
+                        currentUser.role = nextRole;
+                        syncSelectedRole(nextRole);
+                        void ensureCurrentUserAccessMirror(currentUser);
+                        applyRoleRestrictions();
+                    }
+                    showCopyNotification(`Роль ${currentRowData.user.login} обновлена`);
+                    refreshAdminUsersTableAfterMutation();
+                } finally {
+                    roleSelect.disabled = false;
                 }
-                showCopyNotification(`Роль ${user.login} обновлена`);
-                refreshAdminUsersTableAfterMutation();
             });
-            roleCell.appendChild(roleSelect);
-        } else {
-            roleCell.className = 'admin-muted';
-            roleCell.textContent = '—';
+            row._adminRoleSelect = roleSelect;
         }
+        roleCell.className = '';
+        row._adminRoleSelect.value = normalizeRole(rowData.user.role);
+        roleCell.replaceChildren(row._adminRoleSelect);
+    } else {
+        roleCell.replaceChildren();
+        roleCell.className = 'admin-muted';
+        roleCell.textContent = '—';
+    }
 
-        const sourceCell = document.createElement('td');
-        sourceCell.className = 'admin-access-source';
-        sourceCell.textContent = getAccessSourceLabel(login, user, invite, accessRevocation);
+    sourceCell.textContent = getAccessSourceLabel(rowData.login, rowData.user, rowData.invite, rowData.accessRevocation);
+    timeCell.textContent = rowData.user ? formatActiveTime(rowData.user.activeMs) : '—';
 
-        const timeCell = document.createElement('td');
-        timeCell.className = 'admin-time';
-        timeCell.textContent = user ? formatActiveTime(user.activeMs) : '—';
+    statusCell.className = `admin-access-status ${rowData.accessState.active ? 'is-active' : 'is-blocked'}`;
+    statusMain.textContent = rowData.accessState.label;
+    const presenceMeta = getAdminPresenceMeta(rowData.login, rowData.user, rowData.presence);
+    presenceText.className = `admin-presence ${presenceMeta.className}`.trim();
+    presenceText.textContent = presenceMeta.label;
 
-        const statusCell = document.createElement('td');
-        statusCell.className = `admin-access-status ${accessState.active ? 'is-active' : 'is-blocked'}`;
-        const statusMain = document.createElement('div');
-        statusMain.className = 'admin-status-main';
-        statusMain.textContent = accessState.label;
-        const presenceMeta = getAdminPresenceMeta(login, user, presence);
-        const presenceText = document.createElement('div');
-        presenceText.className = `admin-presence ${presenceMeta.className}`.trim();
-        presenceText.textContent = presenceMeta.label;
-        statusCell.appendChild(statusMain);
-        statusCell.appendChild(presenceText);
+    actionBtn.className = `btn-change ${rowData.accessState.active ? 'btn-danger-subtle' : ''}`.trim();
+    actionBtn.textContent = rowData.accessState.active ? 'Закрыть доступ' : 'Открыть доступ';
+}
 
-        const actionCell = document.createElement('td');
-        const actionBtn = document.createElement('button');
-        actionBtn.className = `btn-change ${accessState.active ? 'btn-danger-subtle' : ''}`.trim();
-        actionBtn.textContent = accessState.active ? 'Закрыть доступ' : 'Открыть доступ';
-        actionBtn.addEventListener('click', async () => {
-            const nextActive = !accessState.active;
-            if (!nextActive) {
-                const confirmed = confirm(`Закрыть доступ для ${login}?`);
-                if (!confirmed) return;
-            }
-            actionBtn.disabled = true;
-            try {
-                await toggleAccessForLogin(login, nextActive, user, invite, accessRevocation);
-                showCopyNotification(nextActive ? `Доступ открыт: ${login}` : `Доступ закрыт: ${login}`);
-                refreshAdminUsersTableAfterMutation();
-            } catch (error) {
-                console.error('Failed to toggle access:', error);
-                const fallback = error?.message ? String(error.message) : 'Не удалось изменить доступ';
-                showCopyNotification(fallback);
-            } finally {
-                actionBtn.disabled = false;
-            }
-        });
-        actionCell.appendChild(actionBtn);
+async function renderAdminUsersTable() {
+    if (!adminPanel || !adminUsersTableBody) return;
+    if (!isSettingsModalOpen()) {
+        stopAdminRealtimeSync();
+        return;
+    }
 
-        row.appendChild(loginCell);
-        row.appendChild(roleCell);
-        row.appendChild(sourceCell);
-        row.appendChild(timeCell);
-        row.appendChild(statusCell);
-        row.appendChild(actionCell);
+    if (!isAdmin()) {
+        stopAdminRealtimeSync();
+        if (adminPanelAccordion) {
+            adminPanelAccordion.style.display = 'none';
+            adminPanelAccordion.removeAttribute('open');
+        }
+        return;
+    }
+
+    if (adminPanelAccordion) {
+        adminPanelAccordion.style.display = '';
+    }
+    if (!adminUsersTableInitialized) {
+        setAdminUsersTableEmptyState('Загрузка...');
+    }
+    await ensureCurrentUserAccessMirror();
+
+    startAdminRealtimeSync();
+    const liveDataReady = hasAdminRealtimeTableData();
+    const [users, invites, revocations, presenceEntries] = liveDataReady
+        ? [adminRealtimeUsers, adminRealtimeInvites, adminRealtimeRevocations, adminRealtimePresence]
+        : await Promise.all([
+            listAllUserRecords(),
+            listPartnerInvites(),
+            listAccessRevocations(),
+            Promise.resolve([])
+        ]);
+    const rowsData = buildAdminUsersTableRows(users, invites, revocations, presenceEntries);
+    if (!rowsData.length) {
+        setAdminUsersTableEmptyState('Пользователи не найдены');
+        return;
+    }
+
+    adminUsersTableBody.querySelectorAll('.admin-empty-row').forEach((row) => row.remove());
+    const seenLogins = new Set();
+
+    rowsData.forEach((rowData) => {
+        let row = adminUserRowsByLogin.get(rowData.login);
+        if (!row) {
+            row = createAdminUsersTableRow(rowData.login);
+        }
+        updateAdminUsersTableRow(row, rowData);
         adminUsersTableBody.appendChild(row);
+        seenLogins.add(rowData.login);
     });
+
+    Array.from(adminUserRowsByLogin.entries()).forEach(([login, row]) => {
+        if (seenLogins.has(login)) return;
+        row.remove();
+        adminUserRowsByLogin.delete(login);
+    });
+
+    adminUsersTableInitialized = true;
 }
 
 function updateAdminUserTimeCell(login, activeMs) {
-    if (!adminUsersTableBody) return;
     const normalizedLogin = normalizeLogin(login);
     if (!normalizedLogin) return;
-    const safeLoginSelector = normalizedLogin.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    const row = adminUsersTableBody.querySelector(`tr[data-login="${safeLoginSelector}"]`);
+    const row = adminUserRowsByLogin.get(normalizedLogin);
     if (!row) return;
-    const timeCell = row.querySelector('.admin-time');
+    const timeCell = row._adminCells?.timeCell;
     if (!timeCell) return;
     timeCell.textContent = formatActiveTime(activeMs);
 }
@@ -4268,7 +4425,8 @@ function buildClientConversationActionStateInstruction(actionState = null) {
         return `
 ТЕКУЩЕЕ СОСТОЯНИЕ ДИАЛОГА
 Клиент уже перестал отвечать, но его ещё можно вернуть.
-Если новое сообщение менеджера слабое, неинтересное или не снимает проблему, можешь снова вернуть go_silent с пустым "message" или окончательно завершить разговор через end_conversation.
+Если новое сообщение менеджера снова не убеждает по цене, срокам, условиям или возражению, опять возвращай go_silent с пустым "message".
+Если менеджер после этого уже явно сливает разговор, посылает, грубит, обесценивает запрос или прямо отказывает, переходи в end_conversation.
 Если менеджер реально исправил ситуацию, можешь вернуться в обычный диалог.
         `.trim();
     }
@@ -4285,9 +4443,10 @@ function buildClientSystemPromptForWebhook(basePrompt, actionState = null) {
     const normalizedPrompt = String(basePrompt || '').trim();
     if (!normalizedPrompt) return '';
     const actionStateInstruction = buildClientConversationActionStateInstruction(actionState);
+    const hiddenClientPrompt = getConfiguredClientConversationActionPrompt();
     return [
         normalizedPrompt,
-        CLIENT_CONVERSATION_ACTION_PROMPT_SUFFIX,
+        hiddenClientPrompt,
         actionStateInstruction
     ].filter(Boolean).join('\n\n');
 }
@@ -5253,6 +5412,119 @@ function buildPromptOverridesPayload() {
     return normalizePromptOverridesStore(payload);
 }
 
+function getPromptOverridesRoleSnapshot(store, role) {
+    const normalizedStore = normalizePromptOverridesStore(store || {});
+    return {
+        variations: normalizedStore[role + '_variations'] || [],
+        activeId: normalizedStore[role + '_activeId'] || null
+    };
+}
+
+function recordDirtyPromptOverrideRoles(baseStore, nextStore) {
+    const normalizedBaseStore = normalizePromptOverridesStore(baseStore || {});
+    const normalizedNextStore = normalizePromptOverridesStore(nextStore || {});
+
+    PROMPT_ROLES.forEach((role) => {
+        const before = JSON.stringify(getPromptOverridesRoleSnapshot(normalizedBaseStore, role));
+        const after = JSON.stringify(getPromptOverridesRoleSnapshot(normalizedNextStore, role));
+        if (before !== after) {
+            dirtyPromptOverrideRoles.add(role);
+        }
+    });
+}
+
+function buildMergedPromptsSnapshot(firebaseData = {}) {
+    const mergedSnapshot = { ...(firebaseData || {}) };
+    if (!dirtyPublicPromptRoles.size) {
+        return mergedSnapshot;
+    }
+
+    dirtyPublicPromptRoles.forEach((role) => {
+        if (!PROMPT_ROLES.includes(role)) return;
+        const rolePayload = buildPromptsSyncPayload([role]);
+        mergedSnapshot[role + '_prompt'] = rolePayload[role + '_prompt'];
+        mergedSnapshot[role + '_variations'] = rolePayload[role + '_variations'];
+        mergedSnapshot[role + '_activeId'] = rolePayload[role + '_activeId'];
+    });
+
+    return mergedSnapshot;
+}
+
+function buildMergedPromptOverridesStore(remoteStore = {}) {
+    const mergedStore = normalizePromptOverridesStore(remoteStore || {});
+    if (!dirtyPromptOverrideRoles.size) {
+        return mergedStore;
+    }
+
+    const localStore = buildPromptOverridesPayload();
+    dirtyPromptOverrideRoles.forEach((role) => {
+        if (!PROMPT_ROLES.includes(role)) return;
+        mergedStore[role + '_variations'] = localStore[role + '_variations'] || [];
+        mergedStore[role + '_activeId'] = localStore[role + '_activeId'] || null;
+    });
+
+    return normalizePromptOverridesStore(mergedStore);
+}
+
+function applyDeferredPromptRemoteState() {
+    if (isUserEditing) return false;
+
+    let didApply = false;
+
+    if (pendingPromptOverridesRemoteStore !== null) {
+        const mergedPromptOverridesStore = buildMergedPromptOverridesStore(pendingPromptOverridesRemoteStore);
+        currentUserPromptOverridesStore = mergedPromptOverridesStore;
+        persistPromptOverridesStoreLocally(mergedPromptOverridesStore);
+        lastPromptOverridesRemoteHash = pendingPromptOverridesRemoteHash;
+        pendingPromptOverridesRemoteStore = null;
+        pendingPromptOverridesRemoteHash = '';
+        didApply = true;
+    }
+
+    if (pendingPromptsFirebaseSnapshot !== null && lastPromptsFirebaseSnapshot !== null) {
+        const remoteSnapshot = pendingPromptsFirebaseSnapshot;
+        const mergedSnapshot = buildMergedPromptsSnapshot(remoteSnapshot);
+        pendingPromptsFirebaseSnapshot = null;
+        initPromptsData(mergedSnapshot);
+        didApply = true;
+    }
+
+    if (!didApply) {
+        return false;
+    }
+
+    if (dirtyPublicPromptRoles.size) {
+        savePromptsToFirebase();
+    }
+    if (dirtyPromptOverrideRoles.size || queuedPromptOverridesPayload) {
+        queuePromptOverridesSave();
+    }
+    return true;
+}
+
+function beginPromptEditing(role = '') {
+    isUserEditing = true;
+    if (role) {
+        currentEditingPromptRole = role;
+    }
+}
+
+function endPromptEditing(role = '') {
+    if (!role || currentEditingPromptRole === role) {
+        currentEditingPromptRole = '';
+    }
+    isUserEditing = false;
+    applyDeferredPromptRemoteState();
+}
+
+function schedulePromptEditingEnd(role = '', delayMs = 2000) {
+    clearTimeout(editingTimeout);
+    editingTimeout = setTimeout(() => {
+        endPromptEditing(role);
+        debugLog('isUserEditing set to false (timeout)');
+    }, delayMs);
+}
+
 function queuePromptOverridesSave(payload = null) {
     if (!canSyncPromptOverrides()) return false;
     const normalizedPayload = normalizePromptOverridesStore(payload || buildPromptOverridesPayload());
@@ -5283,6 +5555,12 @@ async function savePromptOverridesToFirebaseNow(payload = null, options = {}) {
     }
 
     const normalizedPayload = normalizePromptOverridesStore(payload || queuedPromptOverridesPayload || buildPromptOverridesPayload());
+
+    if (pendingPromptOverridesRemoteStore !== null) {
+        queuedPromptOverridesPayload = normalizedPayload;
+        return false;
+    }
+
     queuedPromptOverridesPayload = null;
 
     if (!canSyncPromptOverrides()) {
@@ -5313,6 +5591,7 @@ async function savePromptOverridesToFirebaseNow(payload = null, options = {}) {
         );
         currentUserPromptOverridesStore = normalizedPayload;
         lastPromptOverridesRemoteHash = payloadHash;
+        dirtyPromptOverrideRoles.clear();
         return true;
     } catch (error) {
         console.error('Failed to sync prompt overrides:', error);
@@ -5329,6 +5608,9 @@ function stopCurrentUserPromptOverridesSubscription() {
     currentUserPromptOverridesStore = null;
     queuedPromptOverridesPayload = null;
     lastPromptOverridesRemoteHash = '';
+    pendingPromptOverridesRemoteStore = null;
+    pendingPromptOverridesRemoteHash = '';
+    dirtyPromptOverrideRoles.clear();
     if (currentUserPromptOverridesSaveTimer) {
         clearTimeout(currentUserPromptOverridesSaveTimer);
         currentUserPromptOverridesSaveTimer = null;
@@ -5367,19 +5649,21 @@ function startCurrentUserPromptOverridesSubscription(login = currentUser?.login 
             const localStore = loadLocalPromptsStore();
             const shouldBootstrapRemote = !promptOverridesStoreHasData(remoteStore) && promptOverridesStoreHasData(localStore);
             const effectiveStore = shouldBootstrapRemote ? localStore : remoteStore;
-
-            currentUserPromptOverridesStore = effectiveStore;
-            persistPromptOverridesStoreLocally(effectiveStore);
-            lastPromptOverridesRemoteHash = JSON.stringify(remoteStore);
+            const remoteStoreHash = JSON.stringify(remoteStore);
 
             if (shouldBootstrapRemote) {
                 queuePromptOverridesSave(effectiveStore);
             }
 
             if (isUserEditing || lastPromptsFirebaseSnapshot === null) {
+                pendingPromptOverridesRemoteStore = effectiveStore;
+                pendingPromptOverridesRemoteHash = remoteStoreHash;
                 return;
             }
 
+            currentUserPromptOverridesStore = effectiveStore;
+            persistPromptOverridesStoreLocally(effectiveStore);
+            lastPromptOverridesRemoteHash = remoteStoreHash;
             initPromptsData(lastPromptsFirebaseSnapshot || {});
         },
         (error) => {
@@ -5409,11 +5693,16 @@ function getLocalPromptsRoleData(role) {
 
 function saveLocalPromptsData(options = {}) {
     const normalizedPayload = buildPromptOverridesPayload();
+    recordDirtyPromptOverrideRoles(currentUserPromptOverridesStore, normalizedPayload);
     persistPromptOverridesStoreLocally(normalizedPayload);
     if (currentUserPromptOverridesStore !== null || canSyncPromptOverrides()) {
         currentUserPromptOverridesStore = normalizedPayload;
     }
     if (options.syncRemote === false || !canSyncPromptOverrides()) {
+        return normalizedPayload;
+    }
+    if (pendingPromptOverridesRemoteStore !== null) {
+        queuedPromptOverridesPayload = normalizedPayload;
         return normalizedPayload;
     }
     queuePromptOverridesSave(normalizedPayload);
@@ -6458,6 +6747,10 @@ function buildPromptsSyncPayload(roles = PROMPT_ROLES) {
     return payload;
 }
 
+function canSyncPublicPromptsToCloud(user = currentUser) {
+    return !!db && hasAdminAccount(user);
+}
+
 function queuePublicPromptSave(role) {
     if (!role) return;
     dirtyPublicPromptRoles.add(role);
@@ -6483,7 +6776,14 @@ function savePromptsToFirebaseNow(options = {}) {
         { location: 'script.js:savePromptsToFirebaseNow', hypothesisId: 'B' }
     );
     saveLocalPromptsData();
-    if (!db) return;
+    if (!canSyncPublicPromptsToCloud()) {
+        debugLog('Skipped cloud prompt sync: real admin access is required');
+        return;
+    }
+    if (pendingPromptsFirebaseSnapshot !== null) {
+        debugLog('Deferred cloud prompt sync: remote prompt snapshot is pending');
+        return;
+    }
 
     const roles = getNormalizedPromptSyncRoles(options.roles);
     const payload = buildPromptsSyncPayload(roles);
@@ -6500,9 +6800,7 @@ function savePromptsToFirebaseNow(options = {}) {
         return;
     }
 
-    const syncPromise = isAdmin()
-        ? ensureCurrentUserAccessMirror()
-        : Promise.resolve(true);
+    const syncPromise = ensureCurrentUserAccessMirror();
     syncPromise
         .then(() => (options.fullReplace ? set(ref(db, 'prompts'), payload) : update(ref(db, 'prompts'), payload)))
         .then(() => {
@@ -6530,6 +6828,7 @@ async function loadPrompts() {
             const promptsRef = ref(db, 'prompts');
             onValue(promptsRef, (snapshot) => {
                 const data = snapshot.val() || {};
+                const dataStr = JSON.stringify(data);
                 lastPromptsFirebaseSnapshot = data;
                 agentLog(
                     'Firebase onValue triggered',
@@ -6537,26 +6836,30 @@ async function loadPrompts() {
                     { location: 'script.js:loadPrompts.onValue', hypothesisId: 'C' }
                 );
                 debugLog('Firebase data received:', data);
-                
-                // Skip update if user is currently editing
+
                 if (isUserEditing) {
-                    debugLog('Skipping Firebase update - user is editing');
+                    pendingPromptsFirebaseSnapshot = data;
+                    lastFirebaseData = dataStr;
+                    debugLog('Deferring Firebase prompt update - user is editing');
                     return;
                 }
-                
-                // Skip if data hasn't changed
-                const dataStr = JSON.stringify(data);
+
                 if (lastFirebaseData === dataStr) {
                     debugLog('Skipping Firebase update - data unchanged');
                     return;
                 }
                 lastFirebaseData = dataStr;
+                pendingPromptsFirebaseSnapshot = null;
                 
                 if (Object.keys(data).length > 0) {
                     initPromptsData(data);
                 } else {
                     initPromptsData({});
-                    savePromptsToFirebaseNow({ fullReplace: true });
+                    if (canSyncPublicPromptsToCloud()) {
+                        savePromptsToFirebaseNow({ fullReplace: true });
+                    } else {
+                        debugLog('Skipped prompts bootstrap sync: real admin access is required');
+                    }
                 }
             }, (error) => {
                 console.error('Firebase read error:', error);
@@ -6568,13 +6871,19 @@ async function loadPrompts() {
             onValue(appConfigRef, (snapshot) => {
                 const data = snapshot.val() || {};
                 const sharedEndpoint = normalizeGeminiTokenEndpoint(data?.geminiTokenEndpoint || '');
+                const sharedClientActionPrompt = normalizeClientConversationActionPrompt(data?.clientConversationActionPrompt || '');
                 setSharedGeminiTokenEndpoint(sharedEndpoint);
+                setSharedClientConversationActionPrompt(sharedClientActionPrompt);
                 if (geminiTokenEndpointInput && settingsModal?.classList?.contains('active')) {
                     geminiTokenEndpointInput.value = getConfiguredGeminiTokenEndpoint();
+                }
+                if (adminHiddenClientPromptInput && settingsModal?.classList?.contains('active')) {
+                    adminHiddenClientPromptInput.value = getConfiguredClientConversationActionPrompt();
                 }
             }, (error) => {
                 console.error('App config read error:', error);
                 setSharedGeminiTokenEndpoint('');
+                setSharedClientConversationActionPrompt('');
             });
 
             const historyRef = ref(db, 'prompt_history');
@@ -6597,6 +6906,7 @@ async function loadPrompts() {
         }
     } else {
         setSharedGeminiTokenEndpoint('');
+        setSharedClientConversationActionPrompt('');
         initPromptsData({});
         promptHistory = getCachedLocalStorageJson(LOCAL_PROMPTS_HISTORY_STORAGE_KEY);
         if (!Array.isArray(promptHistory)) {
@@ -7044,6 +7354,34 @@ function setSharedGeminiTokenEndpoint(value) {
     sharedAppConfig.geminiTokenEndpoint = normalizeGeminiTokenEndpoint(value);
 }
 
+function normalizeClientConversationActionPrompt(value) {
+    return String(value || '').replace(/\r\n/g, '\n').trim();
+}
+
+function getSharedClientConversationActionPrompt() {
+    return normalizeClientConversationActionPrompt(sharedAppConfig?.clientConversationActionPrompt || '');
+}
+
+function setSharedClientConversationActionPrompt(value, options = {}) {
+    const { clearCache = false } = options;
+    const normalized = normalizeClientConversationActionPrompt(value);
+    sharedAppConfig.clientConversationActionPrompt = normalized;
+    if (normalized) {
+        setCachedStorageValue(CLIENT_CONVERSATION_ACTION_PROMPT_STORAGE_KEY, normalized);
+    } else if (clearCache) {
+        removeCachedStorageValue(CLIENT_CONVERSATION_ACTION_PROMPT_STORAGE_KEY);
+    }
+}
+
+function getConfiguredClientConversationActionPrompt() {
+    const sharedPrompt = getSharedClientConversationActionPrompt();
+    if (sharedPrompt) return sharedPrompt;
+    const cachedPrompt = normalizeClientConversationActionPrompt(
+        getCachedStorageValue(CLIENT_CONVERSATION_ACTION_PROMPT_STORAGE_KEY) || ''
+    );
+    return cachedPrompt || DEFAULT_CLIENT_CONVERSATION_ACTION_PROMPT_SUFFIX;
+}
+
 function getDefaultGeminiTokenEndpoint() {
     return String(
         (
@@ -7086,6 +7424,11 @@ function populateVoiceConfigFields() {
     }
 }
 
+function populateHiddenClientPromptField() {
+    if (!adminHiddenClientPromptInput) return;
+    adminHiddenClientPromptInput.value = getConfiguredClientConversationActionPrompt();
+}
+
 async function saveSharedGeminiTokenEndpointConfig(value) {
     if (!(db && selectedRole === 'admin')) return false;
     await ensureCurrentUserAccessMirror();
@@ -7093,6 +7436,42 @@ async function saveSharedGeminiTokenEndpointConfig(value) {
     await set(ref(db, `${APP_CONFIG_DB_PATH}/geminiTokenEndpoint`), normalized || null);
     setSharedGeminiTokenEndpoint(normalized);
     return true;
+}
+
+async function saveSharedClientConversationActionPromptConfig(value) {
+    if (!(db && selectedRole === 'admin')) return false;
+    await ensureCurrentUserAccessMirror();
+    const normalized = normalizeClientConversationActionPrompt(value);
+    await set(ref(db, `${APP_CONFIG_DB_PATH}/clientConversationActionPrompt`), normalized || null);
+    setSharedClientConversationActionPrompt(normalized);
+    return true;
+}
+
+async function saveHiddenClientPromptFromInput() {
+    const normalized = normalizeClientConversationActionPrompt(adminHiddenClientPromptInput?.value || '');
+    setSharedClientConversationActionPrompt(normalized, { clearCache: !normalized });
+    let sharedSaved = false;
+    try {
+        sharedSaved = await saveSharedClientConversationActionPromptConfig(normalized);
+    } catch (error) {
+        console.warn('Failed to save shared hidden client prompt:', error);
+    }
+    populateHiddenClientPromptField();
+    showCopyNotification(sharedSaved ? 'Скрытый prompt клиента сохранён' : 'Скрытый prompt клиента сохранён локально');
+}
+
+async function resetHiddenClientPromptToDefault() {
+    setSharedClientConversationActionPrompt('', { clearCache: true });
+    if (db && selectedRole === 'admin') {
+        try {
+            await ensureCurrentUserAccessMirror();
+            await set(ref(db, `${APP_CONFIG_DB_PATH}/clientConversationActionPrompt`), null);
+        } catch (error) {
+            console.warn('Failed to reset shared hidden client prompt:', error);
+        }
+    }
+    populateHiddenClientPromptField();
+    showCopyNotification('Скрытый prompt клиента сброшен к умолчанию');
 }
 
 async function saveVoiceModeConfigFromInputs() {
@@ -7187,14 +7566,23 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}) {
             })
         }, 20000);
         if (!tokenResponse.ok) {
-            const tokenErrorPayload = await tokenResponse.json().catch(() => ({}));
+            const tokenErrorPayload = await readResponseJsonWithTimeout(
+                tokenResponse,
+                10000,
+                'Таймаут чтения ошибки token endpoint.',
+                {}
+            );
             const tokenErrorText = String(tokenErrorPayload?.error || '').trim();
             if (tokenResponse.status === 401 || tokenResponse.status === 403) {
                 throw new Error(tokenErrorText || 'Нет доступа к голосовому режиму');
             }
             throw new Error(tokenErrorText || `Не удалось получить ключ сессии (HTTP ${tokenResponse.status})`);
         }
-        const tokenPayload = await tokenResponse.json();
+        const tokenPayload = await readResponseJsonWithTimeout(
+            tokenResponse,
+            20000,
+            'Таймаут чтения ответа token endpoint.'
+        );
         const token = String(
             tokenPayload?.client_secret?.value ||
             tokenPayload?.name ||
@@ -7650,7 +8038,7 @@ function appendGeminiVoiceDialogToChat() {
         }
 
         addMessage(text, role, false);
-        conversationHistory.push({ role, content: text });
+        appendConversationHistoryEntry({ role, content: text });
         appendedCount += 1;
     }
 
@@ -8053,6 +8441,7 @@ async function initGeminiVoiceCapture(clientSecret, sessionConfig) {
     });
     await peerConnection.setLocalDescription(offer);
 
+    const openAiRealtimeSdpTimeoutMs = 30000;
     const response = await fetchWithTimeout(
         `https://api.openai.com/v1/realtime?model=${encodeURIComponent(sessionConfig.model)}`,
         {
@@ -8063,15 +8452,25 @@ async function initGeminiVoiceCapture(clientSecret, sessionConfig) {
             },
             body: String(offer.sdp || '')
         },
-        30000
+        openAiRealtimeSdpTimeoutMs
     );
 
     if (!response.ok) {
-        const errorText = String(await response.text().catch(() => '')).trim();
+        const errorText = String(
+            await readResponseTextWithTimeout(
+                response,
+                Math.min(10000, openAiRealtimeSdpTimeoutMs),
+                'Таймаут чтения ошибки OpenAI Realtime SDP.'
+            ).catch(() => '')
+        ).trim();
         throw new Error(errorText || `OpenAI Realtime SDP error (HTTP ${response.status})`);
     }
 
-    const answerSdp = await response.text();
+    const answerSdp = await readResponseTextWithTimeout(
+        response,
+        openAiRealtimeSdpTimeoutMs,
+        'Таймаут чтения OpenAI Realtime SDP.'
+    );
     await peerConnection.setRemoteDescription({
         type: 'answer',
         sdp: answerSdp
@@ -8598,6 +8997,7 @@ function showSettingsModal() {
     roleChangePasswordInput.value = '';
     roleChangeError.style.display = 'none';
     populateVoiceConfigFields();
+    populateHiddenClientPromptField();
     settingsModal.classList.add('active');
 
     if (userRole === 'admin') {
@@ -8975,6 +9375,29 @@ bindEvent(clearVoiceConfigBtn, 'click', () => {
     });
 });
 
+bindEvent(adminHiddenClientPromptSaveBtn, 'click', () => {
+    saveHiddenClientPromptFromInput().catch((error) => {
+        console.error('Failed to save hidden client prompt:', error);
+        showCopyNotification('Ошибка сохранения скрытого prompt клиента');
+    });
+});
+
+bindEvent(adminHiddenClientPromptResetBtn, 'click', () => {
+    resetHiddenClientPromptToDefault().catch((error) => {
+        console.error('Failed to reset hidden client prompt:', error);
+        showCopyNotification('Ошибка сброса скрытого prompt клиента');
+    });
+});
+
+bindEvent(adminHiddenClientPromptInput, 'keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.key !== 'Enter') return;
+    e.preventDefault();
+    saveHiddenClientPromptFromInput().catch((error) => {
+        console.error('Failed to save hidden client prompt:', error);
+        showCopyNotification('Ошибка сохранения скрытого prompt клиента');
+    });
+});
+
 [geminiApiKeyInput, geminiTokenEndpointInput, geminiVoiceNameInput].forEach((input) => {
     bindEvent(input, 'keydown', (e) => {
         if (e.key !== 'Enter') return;
@@ -9232,8 +9655,27 @@ function addMessage(content, role, isMarkdown = false) {
     return messageDiv;
 }
 
-function clearChat() {
+function buildConversationHistoryLine(role, content) {
+    const speaker = role === 'user' ? 'Менеджер' : 'Клиент';
+    return `${speaker}: ${content}`;
+}
+
+function appendConversationHistoryEntry(entry) {
+    if (!entry || typeof entry !== 'object') return;
+    const role = entry.role === 'user' ? 'user' : 'assistant';
+    const content = String(entry.content || '');
+    conversationHistory.push({ role, content });
+    const nextLine = buildConversationHistoryLine(role, content);
+    conversationHistoryText = conversationHistoryText ? `${conversationHistoryText}\n\n${nextLine}` : nextLine;
+}
+
+function resetConversationHistory() {
     conversationHistory = [];
+    conversationHistoryText = '';
+}
+
+function clearChat() {
+    resetConversationHistory();
     lastRating = null;
     isDialogRated = false;
     clearConversationTerminalState();
@@ -9437,7 +9879,8 @@ async function sendMessage() {
     if (startDiv) startDiv.style.display = 'none';
     
     addMessage(userMessage, 'user', false);
-    conversationHistory.push({ role: 'user', content: userMessage });
+    const dialogHistory = conversationHistoryText.trim();
+    appendConversationHistoryEntry({ role: 'user', content: userMessage });
     updatePromptLock();
     updateSendBtnState();
     
@@ -9447,11 +9890,6 @@ async function sendMessage() {
     const loadingMsg = addMessage('', 'loading');
     
     try {
-        let dialogHistory = '';
-        conversationHistory.slice(0, -1).forEach((msg) => {
-            const role = msg.role === 'user' ? 'Менеджер' : 'Клиент';
-            dialogHistory += `${role}: ${msg.content}\n\n`;
-        });
         const requestId = buildRequestId('chat');
         
         const response = await fetchWithTimeout(WEBHOOK_URL, {
@@ -9460,7 +9898,7 @@ async function sendMessage() {
             body: JSON.stringify({
                 chatInput: userMessage,
                 systemPrompt,
-                dialogHistory: dialogHistory.trim(),
+                dialogHistory,
                 conversationActionState,
                 sessionId: clientSessionId,
                 requestId
@@ -9480,7 +9918,7 @@ async function sendMessage() {
         loadingMsg.remove();
         if (assistantMessage) {
             addMessage(assistantMessage, 'assistant', true);
-            conversationHistory.push({ role: 'assistant', content: assistantMessage });
+            appendConversationHistoryEntry({ role: 'assistant', content: assistantMessage });
         }
         updatePromptLock();
         updateSendBtnState();
@@ -9515,7 +9953,7 @@ async function startConversationHandler() {
     const systemPrompt = buildClientSystemPromptForWebhook(baseSystemPrompt, conversationActionState);
 
     refreshSessionIds(generateSessionId());
-    conversationHistory = [];
+    resetConversationHistory();
     lastRating = null;
     isDialogRated = false;
     removeReratePrompt();
@@ -9556,7 +9994,7 @@ async function startConversationHandler() {
         loadingMsg.remove();
         if (assistantMessage) {
             addMessage(assistantMessage, 'assistant', true);
-            conversationHistory.push({ role: 'assistant', content: assistantMessage });
+            appendConversationHistoryEntry({ role: 'assistant', content: assistantMessage });
         }
         updatePromptLock();
         updateSendBtnState();
@@ -9705,12 +10143,7 @@ function resetRatingUiForRerun() {
 }
 
 function buildDialogText() {
-    let dialogText = '';
-    conversationHistory.forEach((msg) => {
-        const role = msg.role === 'user' ? 'Менеджер' : 'Клиент';
-        dialogText += `${role}: ${msg.content}\n\n`;
-    });
-    return dialogText.trim();
+    return conversationHistoryText.trim();
 }
 
 function delay(ms) {
@@ -10214,12 +10647,7 @@ async function generateAIResponse() {
     aiAssistBtn.classList.add('loading');
     
     try {
-        let dialogHistory = '';
-        conversationHistory.forEach((msg) => {
-            const role = msg.role === 'user' ? 'Менеджер' : 'Клиент';
-            dialogHistory += `${role}: ${msg.content}\n\n`;
-        });
-        
+        const dialogHistory = conversationHistoryText.trim();
         const lastMessage = conversationHistory[conversationHistory.length - 1].content;
         const managerName = getManagerName();
         const fullPrompt = `Тебя зовут ${managerName}.\n\n${basePrompt}`;
@@ -10231,7 +10659,7 @@ async function generateAIResponse() {
             body: JSON.stringify({
                 systemPrompt: fullPrompt,
                 userMessage: lastMessage,
-                dialogHistory: dialogHistory.trim(),
+                dialogHistory,
                 sessionId: managerSessionId,
                 requestId
             })
@@ -10679,13 +11107,10 @@ const syncWYSIWYGDebounced = debounce(function(previewElement, textarea, callbac
         textarea.value = markdown;
         if (callback) callback(markdown);
         }
-        
-    // Reset editing flag after sync is complete
-    clearTimeout(editingTimeout);
-    editingTimeout = setTimeout(() => {
-        isUserEditing = false;
-        debugLog('isUserEditing set to false (timeout)');
-    }, 5000); // Increased to 5s to prevent race conditions with Firebase echo
+
+    const wrapper = previewElement?.closest('.prompt-wrapper');
+    const role = wrapper?.dataset?.instruction || '';
+    schedulePromptEditingEnd(role, 5000); // Increased to 5s to prevent race conditions with Firebase echo
 }, 300);
         
 // Force immediate sync of current editor content
@@ -10714,19 +11139,19 @@ function setupWYSIWYG(role, previewElement, textarea, callback) {
     previewElement.setAttribute('contenteditable', 'true');
     
     previewElement.addEventListener('input', () => {
-        isUserEditing = true;
+        beginPromptEditing(role);
         syncWYSIWYGDebounced(previewElement, textarea, callback);
 });
 
     previewElement.addEventListener('focus', () => {
-        isUserEditing = true;
+        beginPromptEditing(role);
 });
 
     previewElement.addEventListener('blur', () => {
         // Delay resetting the flag to allow sync to complete
         setTimeout(() => {
             syncCurrentEditorNow(role);
-            isUserEditing = false;
+            endPromptEditing(role);
         }, 500);
     });
     
@@ -11087,21 +11512,18 @@ window.addEventListener('resize', debounce(checkTabsCompactMode, 100));
 [systemPromptInput, managerPromptInput, managerCallPromptInput, raterPromptInput].forEach(input => {
     if (!input) return;
     input.addEventListener('input', () => {
-        isUserEditing = true;
         const wrapper = input.closest('.prompt-wrapper');
+        const role = wrapper?.dataset.instruction || '';
+        beginPromptEditing(role);
         if (wrapper) {
-            const role = wrapper.dataset.instruction;
             syncContentToData(role, input.value);
         }
-        // Reset editing flag after a delay
-        clearTimeout(editingTimeout);
-        editingTimeout = setTimeout(() => {
-            isUserEditing = false;
-        }, 2000);
+        schedulePromptEditingEnd(role, 2000);
     });
     
     input.addEventListener('focus', () => {
-        isUserEditing = true;
+        const role = input.closest('.prompt-wrapper')?.dataset.instruction || '';
+        beginPromptEditing(role);
     });
     
     input.addEventListener('blur', () => {
@@ -11111,7 +11533,7 @@ window.addEventListener('resize', debounce(checkTabsCompactMode, 100));
             if (role) {
                 checkpointPromptHistory(role);
             }
-            isUserEditing = false;
+            endPromptEditing(role);
         }, 500);
     });
 });

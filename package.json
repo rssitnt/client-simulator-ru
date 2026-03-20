@@ -5,10 +5,14 @@
   "type": "module",
   "scripts": {
     "start:token-server": "node server/gemini-token-server.mjs",
-    "test:smoke": "node scripts/smoke-e2e.mjs"
+    "test:smoke": "node scripts/smoke-e2e.mjs",
+    "test:smoke:integration": "node scripts/integration-smoke.mjs"
   },
   "devDependencies": {
-    "playwright-core": "^1.58.2"
+    "playwright": "^1.58.2"
+  },
+  "overrides": {
+    "minimatch": "9.0.7"
   },
   "dependencies": {
     "@google/genai": "^1.29.0"

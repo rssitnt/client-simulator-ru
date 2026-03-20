@@ -1215,11 +1215,6 @@ body.light-theme .message.user a {
     background: #1f1f1f;
 }
 
-.message.conversation-action-note.is-silent .conversation-action-note-box {
-    background: rgba(110, 79, 21, 0.28);
-    border-color: rgba(198, 148, 43, 0.5);
-}
-
 .conversation-action-note-text {
     color: #d7d7d7;
     font-size: 13px;
@@ -1251,11 +1246,6 @@ body.light-theme .message.user a {
 body.light-theme .conversation-action-note-box {
     background: #f1f1f1;
     border-color: #d7d7d7;
-}
-
-body.light-theme .message.conversation-action-note.is-silent .conversation-action-note-box {
-    background: rgba(255, 236, 194, 0.8);
-    border-color: rgba(188, 138, 34, 0.45);
 }
 
 body.light-theme .conversation-action-note-text {
@@ -3584,6 +3574,74 @@ body.light-theme .more-colors-popup {
     border-radius: 6px;
     padding: 0 10px;
     box-sizing: border-box;
+}
+
+.admin-hidden-prompt-section {
+    margin-bottom: 14px;
+    border: 1px solid #2f2f2f;
+    border-radius: 10px;
+    background: #202020;
+    overflow: hidden;
+}
+
+.admin-hidden-prompt-summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 12px 14px;
+    color: #d6d6d6;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.admin-hidden-prompt-summary::-webkit-details-marker {
+    display: none;
+}
+
+.admin-hidden-prompt-summary::after {
+    content: '▾';
+    color: #888;
+    transition: transform 0.2s ease;
+}
+
+.admin-hidden-prompt-section:not([open]) .admin-hidden-prompt-summary::after {
+    transform: rotate(-90deg);
+}
+
+.admin-hidden-prompt-body {
+    padding: 0 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.admin-hidden-prompt-hint {
+    color: #9b9b9b;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.admin-hidden-prompt-textarea {
+    width: 100%;
+    min-height: 220px;
+    resize: vertical;
+    background: #2c2c2c;
+    border: none;
+    border-radius: 8px;
+    color: #e0e0e0;
+    font-size: 13px;
+    line-height: 1.55;
+    padding: 12px 14px;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.admin-hidden-prompt-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
 .admin-invite-days {
