@@ -23,11 +23,21 @@ const OPENAI_REALTIME_MODEL = String(process.env.OPENAI_REALTIME_MODEL || 'gpt-4
 const OPENAI_DEFAULT_VOICE = String(process.env.OPENAI_DEFAULT_VOICE || 'alloy').trim().toLowerCase();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX_REQUESTS = 15;
+const RATE_LIMIT_BUCKET_TTL_MS = RATE_LIMIT_WINDOW_MS * 2;
+const FIREBASE_REQUEST_TIMEOUT_MS = (() => {
+    const configuredValue = Number.parseInt(String(process.env.FIREBASE_REQUEST_TIMEOUT_MS || ''), 10);
+    return Number.isFinite(configuredValue) && configuredValue > 0 ? configuredValue : 8000;
+})();
+const OPENAI_REQUEST_TIMEOUT_MS = (() => {
+    const configuredValue = Number.parseInt(String(process.env.OPENAI_REQUEST_TIMEOUT_MS || ''), 10);
+    return Number.isFinite(configuredValue) && configuredValue > 0 ? configuredValue : 15000;
+})();
 const MAX_JSON_BODY_BYTES = (() => {
     const configuredValue = Number.parseInt(String(process.env.MAX_JSON_BODY_BYTES || ''), 10);
     return Number.isFinite(configuredValue) && configuredValue > 0 ? configuredValue : 64 * 1024;
 })();
 const rateLimitBuckets = new Map();
+let nextRateLimitCleanupAt = 0;
 
 if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
     console.error('[gemini-token-server] Set at least one API key: GEMINI_API_KEY or OPENAI_API_KEY');
@@ -73,9 +83,12 @@ function sendJson(res, statusCode, payload, requestOrigin = '') {
     res.end(JSON.stringify(payload));
 }
 
-function createHttpError(statusCode, message) {
+function createHttpError(statusCode, message, cause = null) {
     const error = new Error(message);
     error.statusCode = statusCode;
+    if (cause) {
+        error.cause = cause;
+    }
     return error;
 }
 
@@ -148,11 +161,63 @@ function parseDateMs(value) {
     return Number.isFinite(ms) ? ms : null;
 }
 
+async function fetchWithTimeout(url, options = {}, timeoutMs, timeoutMessage) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    timeoutId.unref?.();
+
+    try {
+        return await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+    } catch (error) {
+        if (controller.signal.aborted) {
+            throw createHttpError(504, timeoutMessage, error);
+        }
+        throw error;
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+async function readJsonWithTimeout(response, timeoutMs, timeoutMessage, fallbackValue = null) {
+    let timeoutId = null;
+    const bodyPromise = response.json();
+    const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+            try {
+                response.body?.cancel?.();
+            } catch (error) {}
+            reject(createHttpError(504, timeoutMessage));
+        }, timeoutMs);
+        timeoutId.unref?.();
+    });
+
+    try {
+        return await Promise.race([bodyPromise, timeoutPromise]);
+    } catch (error) {
+        if (Number(error?.statusCode) === 504) {
+            throw error;
+        }
+        return fallbackValue;
+    } finally {
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+        }
+    }
+}
+
 async function readDbJson(path) {
     if (!FIREBASE_DATABASE_URL) return null;
-    const response = await fetch(`${FIREBASE_DATABASE_URL}/${path}.json`);
+    const response = await fetchWithTimeout(
+        `${FIREBASE_DATABASE_URL}/${path}.json`,
+        {},
+        FIREBASE_REQUEST_TIMEOUT_MS,
+        'Firebase RTDB request timed out'
+    );
     if (!response.ok) return null;
-    return response.json().catch(() => null);
+    return readJsonWithTimeout(response, FIREBASE_REQUEST_TIMEOUT_MS, 'Firebase RTDB response body timed out', null);
 }
 
 async function verifyLoginFallbackAccess(login) {
@@ -161,13 +226,16 @@ async function verifyLoginFallbackAccess(login) {
         throw new Error('Invalid login');
     }
     const key = loginToStorageKey(normalizedLogin);
-    const [userRaw, inviteRaw] = await Promise.all([
-        readDbJson(`users/${key}`),
-        readDbJson(`partner_invites/${key}`)
-    ]);
+    let userRaw = null;
+    try {
+        userRaw = await readDbJson(`users/${key}`);
+    } catch (error) {
+        if (!isAllowedEmailDomain(normalizedLogin) || Number(error?.statusCode) !== 504) {
+            throw error;
+        }
+    }
 
     const user = userRaw && typeof userRaw === 'object' ? userRaw : null;
-    const invite = inviteRaw && typeof inviteRaw === 'object' ? inviteRaw : null;
     const role = String(user?.role || '').trim().toLowerCase();
     if (role === 'admin') {
         return { login: normalizedLogin, source: 'admin-user' };
@@ -177,6 +245,8 @@ async function verifyLoginFallbackAccess(login) {
         return { login: normalizedLogin, source: 'domain-allowlist' };
     }
 
+    const inviteRaw = await readDbJson(`partner_invites/${key}`);
+    const invite = inviteRaw && typeof inviteRaw === 'object' ? inviteRaw : null;
     const inviteStatus = String(invite?.status || '').trim().toLowerCase();
     const expiresAtMs = parseDateMs(invite?.expiresAt);
     const isInviteActive = inviteStatus === 'active' && (!expiresAtMs || expiresAtMs > Date.now());
@@ -193,8 +263,19 @@ function getClientIp(req) {
     return String(req.socket?.remoteAddress || 'unknown');
 }
 
+function cleanupRateLimitBuckets(now) {
+    if (now < nextRateLimitCleanupAt || rateLimitBuckets.size === 0) return;
+    nextRateLimitCleanupAt = now + RATE_LIMIT_WINDOW_MS;
+    for (const [key, bucket] of rateLimitBuckets.entries()) {
+        if (!bucket || now - bucket.windowStart > RATE_LIMIT_BUCKET_TTL_MS) {
+            rateLimitBuckets.delete(key);
+        }
+    }
+}
+
 function isRateLimited(key) {
     const now = Date.now();
+    cleanupRateLimitBuckets(now);
     const bucket = rateLimitBuckets.get(key);
     if (!bucket || now - bucket.windowStart > RATE_LIMIT_WINDOW_MS) {
         rateLimitBuckets.set(key, { windowStart: now, count: 1 });
@@ -206,16 +287,23 @@ function isRateLimited(key) {
 }
 
 async function verifyFirebaseIdToken(idToken) {
-    const response = await fetch(
+    const response = await fetchWithTimeout(
         `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(FIREBASE_WEB_API_KEY)}`,
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ idToken })
-        }
+        },
+        FIREBASE_REQUEST_TIMEOUT_MS,
+        'Firebase identity lookup timed out'
     );
 
-    const payload = await response.json().catch(() => ({}));
+    const payload = await readJsonWithTimeout(
+        response,
+        FIREBASE_REQUEST_TIMEOUT_MS,
+        'Firebase identity response body timed out',
+        {}
+    );
     if (!response.ok) {
         const errorMessage = String(payload?.error?.message || 'Firebase verification failed');
         throw new Error(errorMessage);
@@ -282,16 +370,26 @@ async function createOpenAiRealtimeSession(requestBody = {}) {
         throw new Error('OPENAI_API_KEY is not configured');
     }
 
-    const response = await fetch('https://api.openai.com/v1/realtime/sessions', {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${OPENAI_API_KEY}`,
-            'Content-Type': 'application/json'
+    const response = await fetchWithTimeout(
+        'https://api.openai.com/v1/realtime/sessions',
+        {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(buildOpenAiRealtimeSessionConfig(requestBody))
         },
-        body: JSON.stringify(buildOpenAiRealtimeSessionConfig(requestBody))
-    });
+        OPENAI_REQUEST_TIMEOUT_MS,
+        'OpenAI realtime session request timed out'
+    );
 
-    const payload = await response.json().catch(() => ({}));
+    const payload = await readJsonWithTimeout(
+        response,
+        OPENAI_REQUEST_TIMEOUT_MS,
+        'OpenAI realtime session response body timed out',
+        {}
+    );
     if (!response.ok) {
         const errorMessage = String(payload?.error?.message || payload?.message || 'Failed to create OpenAI realtime session');
         throw new Error(errorMessage);

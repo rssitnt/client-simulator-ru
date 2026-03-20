@@ -4,7 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start:token-server": "node server/gemini-token-server.mjs"
+    "start:token-server": "node server/gemini-token-server.mjs",
+    "test:smoke": "node scripts/smoke-e2e.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.58.2"
   },
   "dependencies": {
     "@google/genai": "^1.29.0"

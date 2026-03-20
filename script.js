@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getDatabase, ref, onValue, set, get, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+import { getDatabase, ref, onValue, onDisconnect, set, get, update, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 import { getAuth, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
 
@@ -52,9 +52,12 @@ const AUTH_USERS_BY_UID_DB_PATH = 'users_by_uid';
 const PARTNER_INVITES_DB_PATH = 'partner_invites';
 const APP_CONFIG_DB_PATH = 'app_config';
 const ACCESS_REVOKE_DB_PATH = 'access_revocations';
+const USER_PRESENCE_DB_PATH = 'user_presence';
+const PROMPT_OVERRIDES_DB_PATH = 'prompt_overrides';
 const AUTH_LOCAL_STORAGE_KEY = 'authUsers:v1';
 const PARTNER_INVITES_STORAGE_KEY = 'partnerInvites:v1';
 const ACCESS_REVOKES_STORAGE_KEY = 'accessRevocations:v1';
+const ACTIVE_TIME_CARRYOVER_STORAGE_KEY = 'activeTimeCarryover:v1';
 const AUTH_SESSION_STORAGE_KEY = 'authSession:v1';
 const EMAIL_LINK_CONTEXT_STORAGE_KEY = 'emailLinkContext:v1';
 const PENDING_EMAIL_SIGNIN_LINK_STORAGE_KEY = 'pendingEmailSignInLink:v1';
@@ -81,6 +84,38 @@ const ACCESS_CONTROL_DECISION_ACTION = {
     CLOSE_SESSION: 'close_session',
     SHOW_HELP: 'show_help'
 };
+const CONVERSATION_ACTION_TYPE = {
+    END: 'end_conversation',
+    GO_SILENT: 'go_silent'
+};
+const LEGACY_WARN_EXIT_ACTION_TYPE = 'warn_exit';
+const CLIENT_CONVERSATION_ACTION_PROMPT_SUFFIX = `
+СЛУЖЕБНЫЙ КОНТРАКТ ПЛАТФОРМЫ
+Ты играешь клиента и можешь не только отвечать обычным текстом, но и управлять состоянием диалога.
+
+Когда клиент продолжает разговор:
+- можешь вернуть обычный текст
+- или JSON вида {"message":"текст клиента"}
+
+Когда клиент перестал отвечать, но его ещё можно вернуть:
+- верни JSON вида {"message":"","conversationAction":{"type":"go_silent","reason":"lost_interest"}}
+- если нужна короткая последняя реплика клиента перед молчанием, поле "message" можно заполнить
+
+Когда клиент окончательно завершил разговор:
+- верни JSON вида {"message":"финальная реплика клиента","conversationAction":{"type":"end_conversation","reason":"manager_failed","shouldEvaluate":true}}
+
+Используй go_silent или end_conversation, когда это реалистично:
+- менеджер тянет время и не даёт решения
+- клиент потерял интерес или уходит к конкурентам
+- менеджер давит, грубит или проваливает коммуникацию
+- клиент получил всё нужное и разговор логично завершён
+
+Правила:
+- если клиент уже фактически ушёл, не продолжай обычный разговор из вежливости
+- не объясняй формат JSON
+- возвращай либо обычный текст клиента, либо JSON-объект целиком
+- reason пиши коротким slug латиницей: lost_interest, price_rejection, manager_failed, lost_trust, resolved и т.д.
+`.trim();
 const CORPORATE_EMAIL_DOMAINS = new Set([
     '7271155.ru',
     '7274069.ru',
@@ -121,7 +156,13 @@ const MAX_FAILED_PASSWORD_ATTEMPTS = 15;
 const ACTIVE_IDLE_TIMEOUT_MS = 60000;
 const ACTIVE_TICK_MS = 5000;
 const ACTIVE_FLUSH_MS = 15000;
+const ACTIVE_TIME_CARRYOVER_TTL_MS = 24 * 60 * 60 * 1000;
 const SESSION_REVOCATION_CHECK_MS = 10000;
+const WEBHOOK_DEFAULT_TIMEOUT_MS = 45000;
+const CHAT_WEBHOOK_TIMEOUT_MS = 45000;
+const AI_HELPER_WEBHOOK_TIMEOUT_MS = 30000;
+const RATING_WEBHOOK_TIMEOUT_MS = 45000;
+const ATTESTATION_WEBHOOK_TIMEOUT_MS = 30000;
 const ELEVENLABS_WIDGET_ELEMENT_NAME = 'elevenlabs-convai';
 const ELEVENLABS_WIDGET_LOAD_TIMEOUT_MS = 4500;
 const ELEVENLABS_WIDGET_VERSION = '0.10.3';
@@ -321,7 +362,7 @@ function agentLog(message, dataFactory, meta = {}) {
 }
 
 // Utility function for fetch with timeout
-async function fetchWithTimeout(url, options = {}, timeoutMs = 300000) {
+async function fetchWithTimeout(url, options = {}, timeoutMs = WEBHOOK_DEFAULT_TIMEOUT_MS) {
     const requestUrl = typeof url === 'string' ? url : String(url?.url || url || '');
     debugLog(`[Fetch] Starting request to: ${requestUrl.slice(0, 50)}... with timeout: ${timeoutMs/1000}s`);
     const startTime = Date.now();
@@ -349,6 +390,28 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 300000) {
         throw error;
     } finally {
         clearTimeout(timeoutId);
+    }
+}
+
+async function readResponseTextWithTimeout(response, timeoutMs = WEBHOOK_DEFAULT_TIMEOUT_MS, timeoutMessage = '') {
+    let timeoutId = null;
+    const effectiveTimeoutMessage = timeoutMessage || `Таймаут чтения ответа (${timeoutMs/1000}с). Проверьте n8n workflow.`;
+    const textPromise = response.text();
+    const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+            try {
+                response.body?.cancel?.();
+            } catch (error) {}
+            reject(new Error(effectiveTimeoutMessage));
+        }, timeoutMs);
+    });
+
+    try {
+        return await Promise.race([textPromise, timeoutPromise]);
+    } finally {
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+        }
     }
 }
 
@@ -386,6 +449,7 @@ const managerNameInput = document.getElementById('managerName');
 const exitAttestationBtn = document.getElementById('exitAttestationBtn');
 const startAttestationBtn = document.getElementById('startAttestationBtn');
 const nameModal = document.getElementById('nameModal');
+const authForm = document.getElementById('authForm');
 const modalNameInput = document.getElementById('modalNameInput');
 const modalLoginInput = document.getElementById('modalLoginInput');
 const modalNameSubmit = document.getElementById('modalNameSubmit');
@@ -430,6 +494,7 @@ const aiImproveApplyNew = document.getElementById('aiImproveApplyNew');
 const aiImproveApplyCurrent = document.getElementById('aiImproveApplyCurrent');
 
 // Settings Modal Elements
+const adminPreviewToggleBtn = document.getElementById('adminPreviewToggleBtn');
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsModal = document.getElementById('settingsModal');
 const currentUserName = document.getElementById('currentUserName');
@@ -513,13 +578,21 @@ const EYE_OFF_ICON = `
     </svg>
 `;
 
+const CHIP_DELETE_ICON = `
+    <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+        <path d="M3 3l6 6"></path>
+        <path d="M9 3L3 9"></path>
+    </svg>
+`;
+
 let pendingImprovedPrompt = null;
 let pendingRole = null;
 let pendingName = null;
 let pendingVariationId = null;
 let pendingRatingImproveContext = null;
 let aiImproveMode = 'default';
-const LOCAL_PROMPTS_STORAGE_VERSION = 'v2';
+const LOCAL_PROMPTS_STORAGE_VERSION = 'v3';
+const LEGACY_LOCAL_PROMPTS_STORAGE_VERSION = 'v2';
 const HISTORY_LIMIT = 50;
 const LOCAL_PROMPTS_HISTORY_STORAGE_KEY = 'promptHistory';
 let promptHistory = [];
@@ -537,8 +610,11 @@ let conversationHistory = [];
 let isProcessing = false;
 let lastRating = null;
 let isDialogRated = false;
+let conversationTerminalAction = null;
+let conversationRecoverableAction = null;
 let isUserEditing = false;
 let lastFirebaseData = null;
+let lastPromptsFirebaseSnapshot = null;
 let selectedRole = 'user';
 let currentUser = null;
 let isAppBootstrapped = false;
@@ -588,17 +664,40 @@ let voiceModeOpenRequestId = 0;
 let voiceModeWidgetHideTimerId = 0;
 const elevenLabsSocketOpenState = new WeakMap();
 let reratePromptElement = null;
+let conversationActionNoticeElement = null;
 let attestationQueue = [];
 let isAttestationQueueFlushInProgress = false;
 let attestationQueueRetryTimer = null;
 let currentUserAccessMirrorSyncPromise = null;
+let currentUserRecordUnsubscribe = null;
+let authPasswordAutocompleteRequestId = 0;
+let currentUserRecordListenerLogin = '';
+let currentUserPromptOverridesUnsubscribe = null;
+let currentUserPromptOverridesListenerLogin = '';
+let currentUserPromptOverridesStore = null;
+let currentUserPromptOverridesSaveTimer = null;
+let queuedPromptOverridesPayload = null;
+let lastPromptOverridesRemoteHash = '';
+let currentUserPresenceConnectedUnsubscribe = null;
+let currentUserPresencePath = '';
+let currentUserPresenceDisconnect = null;
+let currentUserPresenceState = 'offline';
+let adminRealtimeUnsubscribes = [];
+let adminRealtimeUsers = null;
+let adminRealtimeInvites = null;
+let adminRealtimeRevocations = null;
+let adminRealtimePresence = null;
+let adminUsersRenderQueued = false;
+let adminStatusRefreshTimerId = null;
 let activeTickTimerId = null;
+let activeTimeFlushInFlight = false;
 let pendingActiveMs = 0;
 let lastActiveTickAt = Date.now();
 let lastUserActivityAt = Date.now();
 let hasActivityListeners = false;
 let lastSessionRevocationCheckAt = 0;
 let sessionRevocationCheckInFlight = false;
+let sessionRevocationListenersInitialized = false;
 let fioSaveTimeout = null;
 let sharedAppConfig = {
     geminiTokenEndpoint: ''
@@ -681,9 +780,18 @@ function hasAdminAccount(user = currentUser) {
     return normalizeRole(user?.role || 'user') === 'admin';
 }
 
+function isLocalhostAdminPreviewHost() {
+    const hostname = String(window?.location?.hostname || '').trim().toLowerCase();
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
+}
+
+function canUseAdminPreviewControls(user = currentUser) {
+    return hasAdminAccount(user) || isLocalhostAdminPreviewHost();
+}
+
 function syncSelectedRole(nextRole = selectedRole) {
     const normalizedNextRole = normalizeRole(nextRole);
-    const effectiveRole = hasAdminAccount()
+    const effectiveRole = canUseAdminPreviewControls()
         ? (normalizedNextRole === 'admin' ? 'admin' : 'user')
         : 'user';
 
@@ -693,6 +801,7 @@ function syncSelectedRole(nextRole = selectedRole) {
     if (currentRoleDisplay) {
         currentRoleDisplay.textContent = getRoleLabelUi(effectiveRole);
     }
+    syncAdminPreviewToggle(effectiveRole);
 
     return effectiveRole;
 }
@@ -953,6 +1062,24 @@ function removeCachedStorageValue(key) {
     removeSafeLocalStorageValue(key);
 }
 
+function listSafeLocalStorageKeysByPrefix(prefix = '') {
+    if (!isLocalStorageAccessible) return [];
+    try {
+        const keys = [];
+        for (let index = 0; index < localStorage.length; index += 1) {
+            const key = String(localStorage.key(index) || '');
+            if (!key) continue;
+            if (prefix && !key.startsWith(prefix)) continue;
+            keys.push(key);
+        }
+        return keys;
+    } catch (error) {
+        isLocalStorageAccessible = false;
+        console.warn('LocalStorage key enumeration unavailable:', error);
+        return [];
+    }
+}
+
 function setAuthSession(login) {
     setCachedStorageValue(AUTH_SESSION_STORAGE_KEY, JSON.stringify({
         login: normalizeLogin(login),
@@ -1049,6 +1176,161 @@ function loadLocalAccessRevokesStore() {
 
 function saveLocalAccessRevokesStore(store) {
     setCachedLocalStorageJson(ACCESS_REVOKES_STORAGE_KEY, store || {});
+}
+
+function loadActiveTimeCarryoverStore() {
+    return getCachedLocalStorageJson(ACTIVE_TIME_CARRYOVER_STORAGE_KEY);
+}
+
+function saveActiveTimeCarryoverStore(store, options = {}) {
+    const normalizedStore = (store && typeof store === 'object') ? store : {};
+    if (Object.keys(normalizedStore).length > 0) {
+        setCachedLocalStorageJson(ACTIVE_TIME_CARRYOVER_STORAGE_KEY, normalizedStore);
+    } else {
+        clearCachedLocalStorageJson(ACTIVE_TIME_CARRYOVER_STORAGE_KEY);
+    }
+    if (options.flushNow) {
+        flushLocalJsonStorageCacheNow();
+    }
+}
+
+function normalizeActiveTimeCarryover(raw, loginFallback = '') {
+    if (!raw || typeof raw !== 'object') return null;
+    const login = normalizeLogin(raw.login || loginFallback);
+    if (!isValidLogin(login)) return null;
+
+    const pendingMs = Math.max(0, Math.round(Number(raw.pendingMs) || 0));
+    const updatedAtMs = parseIsoMs(raw.updatedAt || '');
+    const inFlightMs = Math.max(0, Math.round(Number(raw.inFlightMs) || 0));
+    const inFlightAtMs = parseIsoMs(raw.inFlightAt || '');
+    if (!pendingMs && !inFlightMs) return null;
+    if (!updatedAtMs) return null;
+    if ((Date.now() - updatedAtMs) > ACTIVE_TIME_CARRYOVER_TTL_MS) return null;
+
+    return {
+        login,
+        pendingMs,
+        updatedAt: new Date(updatedAtMs).toISOString(),
+        inFlightMs: Math.min(pendingMs || inFlightMs, inFlightMs),
+        inFlightAt: inFlightAtMs ? new Date(inFlightAtMs).toISOString() : null
+    };
+}
+
+function pruneActiveTimeCarryoverStore(store = {}) {
+    const next = {};
+    Object.entries(store || {}).forEach(([key, value]) => {
+        const normalized = normalizeActiveTimeCarryover(value);
+        if (!normalized) return;
+        next[key] = normalized;
+    });
+    return next;
+}
+
+function getActiveTimeCarryover(login = '') {
+    const normalizedLogin = normalizeLogin(login);
+    if (!normalizedLogin) return null;
+    const key = loginToStorageKey(normalizedLogin);
+    const store = pruneActiveTimeCarryoverStore(loadActiveTimeCarryoverStore());
+    saveActiveTimeCarryoverStore(store);
+    return store[key] || null;
+}
+
+function updateActiveTimeCarryover(login, updater, options = {}) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!normalizedLogin || typeof updater !== 'function') return null;
+
+    const key = loginToStorageKey(normalizedLogin);
+    const store = pruneActiveTimeCarryoverStore(loadActiveTimeCarryoverStore());
+    const current = store[key] || {
+        login: normalizedLogin,
+        pendingMs: 0,
+        updatedAt: new Date().toISOString(),
+        inFlightMs: 0,
+        inFlightAt: null
+    };
+    const next = updater(current);
+    const normalizedNext = normalizeActiveTimeCarryover(next, normalizedLogin);
+    if (normalizedNext) {
+        store[key] = normalizedNext;
+    } else {
+        delete store[key];
+    }
+    saveActiveTimeCarryoverStore(store, options);
+    return normalizedNext || null;
+}
+
+function addActiveTimeCarryover(login, deltaMs, options = {}) {
+    const increment = Math.max(0, Math.round(Number(deltaMs) || 0));
+    if (!increment) return getActiveTimeCarryover(login);
+    return updateActiveTimeCarryover(login, (current) => ({
+        ...current,
+        pendingMs: Math.max(0, Number(current.pendingMs) || 0) + increment,
+        updatedAt: new Date().toISOString()
+    }), options);
+}
+
+function markActiveTimeCarryoverInFlight(login, deltaMs, inFlightAt, options = {}) {
+    const increment = Math.max(0, Math.round(Number(deltaMs) || 0));
+    const atIso = parseIsoMs(inFlightAt) ? new Date(inFlightAt).toISOString() : new Date().toISOString();
+    if (!increment) return getActiveTimeCarryover(login);
+    return updateActiveTimeCarryover(login, (current) => {
+        const pendingMs = Math.max(Math.max(0, Number(current.pendingMs) || 0), increment);
+        return {
+            ...current,
+            pendingMs,
+            inFlightMs: Math.min(pendingMs, increment),
+            inFlightAt: atIso,
+            updatedAt: atIso
+        };
+    }, options);
+}
+
+function acknowledgeActiveTimeCarryover(login, deltaMs, options = {}) {
+    const decrement = Math.max(0, Math.round(Number(deltaMs) || 0));
+    if (!decrement) return getActiveTimeCarryover(login);
+    return updateActiveTimeCarryover(login, (current) => {
+        const pendingMs = Math.max(0, (Number(current.pendingMs) || 0) - decrement);
+        if (!pendingMs) return null;
+        return {
+            ...current,
+            pendingMs,
+            inFlightMs: 0,
+            inFlightAt: null,
+            updatedAt: new Date().toISOString()
+        };
+    }, options);
+}
+
+function reconcileActiveTimeCarryover(login, lastSeenAt = '') {
+    const carryover = getActiveTimeCarryover(login);
+    if (!carryover?.inFlightMs || !carryover.inFlightAt) return carryover;
+    const lastSeenAtMs = parseIsoMs(lastSeenAt || '');
+    const inFlightAtMs = parseIsoMs(carryover.inFlightAt);
+    if (!lastSeenAtMs || !inFlightAtMs || lastSeenAtMs < inFlightAtMs) {
+        return carryover;
+    }
+    return acknowledgeActiveTimeCarryover(login, carryover.inFlightMs, { flushNow: true });
+}
+
+function normalizeUserPresence(raw, loginFallback = '') {
+    if (!raw || typeof raw !== 'object') return null;
+    const login = normalizeLogin(raw.login || loginFallback);
+    if (!isValidLogin(login)) return null;
+
+    const state = ['online', 'idle', 'away', 'hidden', 'offline'].includes(raw.state)
+        ? raw.state
+        : 'offline';
+    const updatedAtMs = parseIsoMs(raw.updatedAt);
+    const lastActiveAtMs = parseIsoMs(raw.lastActiveAt);
+
+    return {
+        login,
+        state,
+        sessionId: String(raw.sessionId || '').trim(),
+        role: normalizeRole(raw.role),
+        updatedAt: updatedAtMs ? new Date(updatedAtMs).toISOString() : null,
+        lastActiveAt: lastActiveAtMs ? new Date(lastActiveAtMs).toISOString() : null
+    };
 }
 
 function normalizeAccessRevocation(raw, loginFallback = '') {
@@ -1930,6 +2212,7 @@ async function finalizeEmailLinkVerification(login, signInLink) {
     if (modalLoginInput) {
         modalLoginInput.value = login;
     }
+    void syncModalPasswordAutocompleteMode(login);
     return true;
 }
 
@@ -2422,17 +2705,21 @@ function applyAuthenticatedUser(user) {
 
     updateUserNameDisplay();
     void ensureCurrentUserAccessMirror(normalized);
+    startCurrentUserRecordSubscription(normalized.login);
+    startCurrentUserPromptOverridesSubscription(normalized.login);
+    startCurrentUserPresenceSync(normalized.login);
     applyRoleRestrictions();
 }
 
 function resetCurrentSessionToAuth(message = '') {
-    if (activeTickTimerId) {
-        clearInterval(activeTickTimerId);
-        activeTickTimerId = null;
-    }
+    stopActiveTimeTrackingLoop();
+    activeTimeFlushInFlight = false;
     pendingActiveMs = 0;
     sessionRevocationCheckInFlight = false;
     lastSessionRevocationCheckAt = 0;
+    stopCurrentUserRecordSubscription();
+    stopCurrentUserPromptOverridesSubscription();
+    stopCurrentUserPresenceSync({ immediateOffline: true });
     currentUser = null;
     syncSelectedRole('user');
     clearAuthSession();
@@ -2465,6 +2752,8 @@ function setAuthMailHelpVisible(isVisible) {
 
 function markUserActivity() {
     lastUserActivityAt = Date.now();
+    ensureActiveTimeTrackingLoop();
+    syncCurrentUserPresenceState();
 }
 
 function initUserActivityTrackingListeners() {
@@ -2476,43 +2765,92 @@ function initUserActivityTrackingListeners() {
         window.addEventListener(eventName, markUserActivity, { passive: true });
     });
     window.addEventListener('focus', markUserActivity);
+    window.addEventListener('blur', () => {
+        pauseActiveTimeTracking({ ignoreVisibility: true, ignoreFocus: true });
+    });
     document.addEventListener('visibilitychange', () => {
-        markUserActivity();
-        if (document.visibilityState !== 'visible') {
-            flushActiveTime(true);
+        if (document.visibilityState === 'visible') {
+            markUserActivity();
+            return;
         }
+        pauseActiveTimeTracking({ ignoreVisibility: true, ignoreFocus: true, flushCarryoverNow: true });
     });
     window.addEventListener('beforeunload', () => {
-        flushActiveTime(true);
+        pauseActiveTimeTracking({ ignoreVisibility: true, ignoreFocus: true, flushCarryoverNow: true });
+        stopCurrentUserPresenceSync({ immediateOffline: true });
     });
     window.addEventListener('pagehide', () => {
-        flushActiveTime(true);
+        pauseActiveTimeTracking({ ignoreVisibility: true, ignoreFocus: true, flushCarryoverNow: true });
+        stopCurrentUserPresenceSync({ immediateOffline: true });
     });
 }
 
 function isUserCurrentlyActive() {
-    if (!currentUser) return false;
-    if (document.visibilityState !== 'visible') return false;
-    if (!document.hasFocus()) return false;
-    return Date.now() - lastUserActivityAt <= ACTIVE_IDLE_TIMEOUT_MS;
+    return canAccrueActiveTime(Date.now());
 }
 
 async function flushActiveTime(force = false) {
-    if (!currentUser) return;
-    if (!force && pendingActiveMs < ACTIVE_FLUSH_MS) return;
-    if (pendingActiveMs <= 0) return;
+    if (!currentUser || activeTimeFlushInFlight) return false;
+    if (!force && pendingActiveMs < ACTIVE_FLUSH_MS) return false;
+    if (pendingActiveMs <= 0) return false;
 
     const increment = Math.max(0, Math.round(pendingActiveMs));
+    if (!increment) return false;
+
     pendingActiveMs = 0;
+    activeTimeFlushInFlight = true;
+    const flushedAtIso = new Date().toISOString();
     currentUser.activeMs = Math.max(0, Number(currentUser.activeMs) + increment);
 
     if (isAdmin() && adminPanelAccordion?.style.display !== 'none') {
         updateAdminUserTimeCell(currentUser.login, currentUser.activeMs);
     }
-    await patchUserRecord(currentUser.login, {
-        activeMs: currentUser.activeMs,
-        lastSeenAt: new Date().toISOString()
-    });
+
+    markActiveTimeCarryoverInFlight(currentUser.login, increment, flushedAtIso, { flushNow: force });
+    try {
+        await patchUserRecord(currentUser.login, {
+            activeMs: currentUser.activeMs,
+            lastSeenAt: flushedAtIso
+        });
+        acknowledgeActiveTimeCarryover(currentUser.login, increment, { flushNow: force });
+        return true;
+    } finally {
+        activeTimeFlushInFlight = false;
+    }
+}
+
+async function replayActiveTimeCarryover() {
+    if (!currentUser) return 0;
+
+    const normalizedLogin = normalizeLogin(currentUser.login);
+    if (!normalizedLogin) return 0;
+
+    let carryover = reconcileActiveTimeCarryover(normalizedLogin, currentUser.lastSeenAt || '');
+    if (!carryover?.pendingMs || activeTimeFlushInFlight) return 0;
+
+    const increment = Math.max(0, Math.round(Number(carryover.pendingMs) || 0));
+    if (!increment) return 0;
+
+    activeTimeFlushInFlight = true;
+    const flushedAtIso = new Date().toISOString();
+    currentUser.activeMs = Math.max(0, Number(currentUser.activeMs) + increment);
+    currentUser.lastSeenAt = flushedAtIso;
+
+    if (isAdmin() && adminPanelAccordion?.style.display !== 'none') {
+        updateAdminUserTimeCell(currentUser.login, currentUser.activeMs);
+    }
+
+    markActiveTimeCarryoverInFlight(normalizedLogin, increment, flushedAtIso, { flushNow: true });
+    try {
+        await patchUserRecord(normalizedLogin, {
+            activeMs: currentUser.activeMs,
+            lastSeenAt: flushedAtIso
+        });
+        carryover = acknowledgeActiveTimeCarryover(normalizedLogin, increment, { flushNow: true });
+        return increment;
+    } finally {
+        activeTimeFlushInFlight = false;
+    }
 }
 
 async function enforceSessionRevocation(force = false) {
@@ -2524,6 +2862,7 @@ async function enforceSessionRevocation(force = false) {
         resetCurrentSessionToAuth('Сессия закрыта администратором. Войдите снова.');
         return true;
     }
+    if (typeof currentUserRecordUnsubscribe === 'function') return false;
     if (sessionRevocationCheckInFlight) return false;
 
     const now = Date.now();
@@ -2549,26 +2888,320 @@ async function enforceSessionRevocation(force = false) {
     return false;
 }
 
+function stopCurrentUserRecordSubscription() {
+    if (typeof currentUserRecordUnsubscribe === 'function') {
+        currentUserRecordUnsubscribe();
+    }
+    currentUserRecordUnsubscribe = null;
+    currentUserRecordListenerLogin = '';
+}
+
+function getCurrentUserPresencePath(login = currentUser?.login || '') {
+    const normalizedLogin = normalizeLogin(login);
+    if (!normalizedLogin) return '';
+    return `${USER_PRESENCE_DB_PATH}/${loginToStorageKey(normalizedLogin)}`;
+}
+
+function resolveCurrentUserPresenceState(now = Date.now()) {
+    if (!currentUser) return 'offline';
+    if (document.visibilityState !== 'visible') return 'hidden';
+    if (!document.hasFocus()) return 'away';
+    if ((now - lastUserActivityAt) > ACTIVE_IDLE_TIMEOUT_MS) return 'idle';
+    return 'online';
+}
+
+function buildCurrentUserPresencePayload(state = 'offline') {
+    const normalizedLogin = normalizeLogin(currentUser?.login || '');
+    const session = getAuthSession();
+    const payload = {
+        login: normalizedLogin,
+        sessionId: String(session?.signedAt || baseSessionId || '').trim(),
+        role: normalizeRole(currentUser?.role || 'user'),
+        state,
+        updatedAt: serverTimestamp()
+    };
+    if (state === 'online') {
+        payload.lastActiveAt = serverTimestamp();
+    }
+    return payload;
+}
+
+function stopCurrentUserPresenceSync(options = {}) {
+    const {
+        immediateOffline = false
+    } = options;
+    const normalizedLogin = normalizeLogin(currentUser?.login || '');
+    const presencePath = currentUserPresencePath || getCurrentUserPresencePath(normalizedLogin);
+
+    if (typeof currentUserPresenceConnectedUnsubscribe === 'function') {
+        currentUserPresenceConnectedUnsubscribe();
+    }
+    currentUserPresenceConnectedUnsubscribe = null;
+
+    if (!immediateOffline && currentUserPresenceDisconnect && typeof currentUserPresenceDisconnect.cancel === 'function') {
+        currentUserPresenceDisconnect.cancel().catch((error) => {
+            console.error('Failed to cancel presence disconnect hook:', error);
+        });
+    }
+    currentUserPresenceDisconnect = null;
+    currentUserPresencePath = '';
+    currentUserPresenceState = 'offline';
+
+    if (immediateOffline && db && presencePath && normalizedLogin) {
+        void update(ref(db, presencePath), {
+            ...buildCurrentUserPresencePayload('offline'),
+            login: normalizedLogin
+        }).catch((error) => {
+            console.error('Failed to publish offline presence:', error);
+        });
+    }
+}
+
+function syncCurrentUserPresenceState(force = false) {
+    if (!db || !currentUser) return false;
+    const normalizedLogin = normalizeLogin(currentUser.login);
+    if (!normalizedLogin) return false;
+
+    const nextState = resolveCurrentUserPresenceState(Date.now());
+    if (!force && nextState === currentUserPresenceState) return false;
+
+    const presencePath = currentUserPresencePath || getCurrentUserPresencePath(normalizedLogin);
+    if (!presencePath) return false;
+
+    currentUserPresenceState = nextState;
+    currentUserPresencePath = presencePath;
+    void update(ref(db, presencePath), buildCurrentUserPresencePayload(nextState)).catch((error) => {
+        console.error('Failed to sync current user presence:', error);
+    });
+    return true;
+}
+
+function startCurrentUserPresenceSync(login = currentUser?.login || '') {
+    const normalizedLogin = normalizeLogin(login);
+    if (!db || !normalizedLogin) {
+        stopCurrentUserPresenceSync();
+        return false;
+    }
+
+    const nextPath = getCurrentUserPresencePath(normalizedLogin);
+    if (typeof currentUserPresenceConnectedUnsubscribe === 'function' && currentUserPresencePath === nextPath) {
+        syncCurrentUserPresenceState(true);
+        return true;
+    }
+
+    stopCurrentUserPresenceSync();
+    currentUserPresencePath = nextPath;
+    currentUserPresenceConnectedUnsubscribe = onValue(
+        ref(db, '.info/connected'),
+        (snapshot) => {
+            if (snapshot.val() !== true || !currentUser || normalizeLogin(currentUser.login) !== normalizedLogin) {
+                return;
+            }
+
+            currentUserPresenceDisconnect = onDisconnect(ref(db, nextPath));
+            currentUserPresenceDisconnect.update({
+                state: 'offline',
+                updatedAt: serverTimestamp()
+            }).catch((error) => {
+                console.error('Failed to register presence disconnect hook:', error);
+            });
+            syncCurrentUserPresenceState(true);
+        },
+        (error) => {
+            console.error('Current user presence live sync failed:', error);
+        }
+    );
+    return true;
+}
+
+function syncCurrentUserSettingsState() {
+    if (!isSettingsModalOpen()) return;
+
+    if (settingsNameInput && document.activeElement !== settingsNameInput) {
+        settingsNameInput.value = currentUser?.fio || '';
+    }
+    if (accountLoginValue) {
+        accountLoginValue.textContent = currentUser?.login || '-';
+    }
+    ensureRoleChangeButtonVisible();
+
+    if (!adminPanelAccordion) return;
+    if (isAdmin()) {
+        adminPanelAccordion.style.display = '';
+        adminPanelAccordion.setAttribute('open', '');
+        startAdminRealtimeSync();
+    } else {
+        adminPanelAccordion.style.display = 'none';
+        adminPanelAccordion.removeAttribute('open');
+        stopAdminRealtimeSync();
+    }
+}
+
+function applyCurrentUserRealtimeRecord(freshUser) {
+    if (!freshUser || !currentUser) return;
+    const normalizedLogin = normalizeLogin(freshUser.login || currentUser.login);
+    if (!normalizedLogin || normalizeLogin(currentUser.login) !== normalizedLogin) return;
+
+    const previousName = currentUser.fio;
+    const previousRole = normalizeRole(currentUser.role);
+    const previousSelectedRole = normalizeRole(selectedRole || 'user');
+    const previousActiveMs = Number(currentUser.activeMs) || 0;
+    const merged = normalizeUserRecord({
+        ...currentUser,
+        ...freshUser
+    }, normalizedLogin) || currentUser;
+
+    merged.passwordHash = '';
+    merged.passwordHashScheme = null;
+    currentUser = merged;
+    if (hasAdminAccount(merged)) {
+        startCurrentUserPromptOverridesSubscription(normalizedLogin);
+    } else {
+        stopCurrentUserPromptOverridesSubscription();
+    }
+
+    const effectiveRole = syncSelectedRole(previousSelectedRole);
+    const roleChanged = previousRole !== normalizeRole(currentUser.role);
+    const selectedRoleChanged = effectiveRole !== previousSelectedRole;
+
+    if (previousName !== currentUser.fio) {
+        setCachedStorageValue(USER_NAME_KEY, currentUser.fio);
+        managerNameInput.value = currentUser.fio;
+    }
+
+    updateUserNameDisplay();
+    syncCurrentUserSettingsState();
+    if (roleChanged) {
+        syncCurrentUserPresenceState(true);
+    }
+
+    if (roleChanged || selectedRoleChanged) {
+        applyRoleRestrictions();
+        if (hasAdminAccount() && isSettingsModalOpen()) {
+            void renderAdminUsersTable();
+        }
+    } else if (hasAdminAccount() && adminPanelAccordion?.style.display !== 'none' && Number(currentUser.activeMs) !== previousActiveMs) {
+        updateAdminUserTimeCell(currentUser.login, currentUser.activeMs);
+    }
+}
+
+function startCurrentUserRecordSubscription(login) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!db || !normalizedLogin) {
+        stopCurrentUserRecordSubscription();
+        return false;
+    }
+    if (typeof currentUserRecordUnsubscribe === 'function' && currentUserRecordListenerLogin === normalizedLogin) {
+        return true;
+    }
+
+    stopCurrentUserRecordSubscription();
+    currentUserRecordListenerLogin = normalizedLogin;
+    currentUserRecordUnsubscribe = onValue(
+        ref(db, `${AUTH_USERS_DB_PATH}/${loginToStorageKey(normalizedLogin)}`),
+        (snapshot) => {
+            if (!currentUser || normalizeLogin(currentUser.login) !== normalizedLogin) return;
+            if (!snapshot.exists()) {
+                resetCurrentSessionToAuth('Сессия завершена. Войдите снова.');
+                return;
+            }
+
+            const freshUser = normalizeUserRecord(snapshot.val(), normalizedLogin);
+            if (!freshUser) return;
+
+            const session = getAuthSession();
+            if (!session?.login || normalizeLogin(session.login) !== normalizedLogin) return;
+            if (isSessionRevokedForSignedAt(session.signedAt, freshUser.sessionRevokedAt)) {
+                resetCurrentSessionToAuth('Сессия закрыта администратором. Войдите снова.');
+                return;
+            }
+
+            applyCurrentUserRealtimeRecord(freshUser);
+        },
+        (error) => {
+            console.error('Current user live sync failed:', error);
+        }
+    );
+    return true;
+}
+
 function startActiveTimeTracking() {
     initUserActivityTrackingListeners();
     lastUserActivityAt = Date.now();
     lastActiveTickAt = Date.now();
     pendingActiveMs = 0;
+    stopActiveTimeTrackingLoop();
 
-    if (activeTickTimerId) {
-        clearInterval(activeTickTimerId);
-        activeTickTimerId = null;
+    if (!sessionRevocationListenersInitialized) {
+        const enforceVisibleSessionRevocation = () => {
+            if (!currentUser) return;
+            if (document.visibilityState !== 'visible') return;
+            void enforceSessionRevocation(false);
+        };
+
+        window.addEventListener('focus', enforceVisibleSessionRevocation);
+        document.addEventListener('visibilitychange', enforceVisibleSessionRevocation);
+        sessionRevocationListenersInitialized = true;
     }
 
+    ensureActiveTimeTrackingLoop();
+    syncCurrentUserPresenceState(true);
+}
+
+function canAccrueActiveTime(now = Date.now(), options = {}) {
+    if (!currentUser) return false;
+    const ignoreVisibility = !!options.ignoreVisibility;
+    const ignoreFocus = !!options.ignoreFocus;
+    if (!ignoreVisibility && document.visibilityState !== 'visible') return false;
+    if (!ignoreFocus && !document.hasFocus()) return false;
+    return now - lastUserActivityAt <= ACTIVE_IDLE_TIMEOUT_MS;
+}
+
+function stopActiveTimeTrackingLoop() {
+    if (!activeTickTimerId) return;
+    clearInterval(activeTickTimerId);
+    activeTickTimerId = null;
+}
+
+function captureActiveTimeDelta(now = Date.now(), options = {}) {
+    const delta = Math.max(0, now - lastActiveTickAt);
+    lastActiveTickAt = now;
+    if (!delta) return 0;
+    if (!canAccrueActiveTime(now, options)) return 0;
+    pendingActiveMs += delta;
+    addActiveTimeCarryover(currentUser?.login || '', delta, { flushNow: !!options.flushCarryoverNow });
+    return delta;
+}
+
+function pauseActiveTimeTracking(options = {}) {
+    captureActiveTimeDelta(Date.now(), options);
+    if (options.flushCarryoverNow) {
+        flushLocalJsonStorageCacheNow();
+    }
+    stopActiveTimeTrackingLoop();
+    void flushActiveTime(true);
+    syncCurrentUserPresenceState(true);
+}
+
+function ensureActiveTimeTrackingLoop() {
+    if (activeTickTimerId || !canAccrueActiveTime(Date.now())) return;
+    lastActiveTickAt = Date.now();
     activeTickTimerId = setInterval(() => {
-        void enforceSessionRevocation(false);
-        if (!currentUser) return;
+        if (!currentUser) {
+            stopActiveTimeTrackingLoop();
+            return;
+        }
+
         const now = Date.now();
-        const delta = now - lastActiveTickAt;
-        lastActiveTickAt = now;
-        if (!isUserCurrentlyActive()) return;
-        pendingActiveMs += delta;
-        flushActiveTime(false);
+        if (!canAccrueActiveTime(now)) {
+            stopActiveTimeTrackingLoop();
+            void flushActiveTime(true);
+            syncCurrentUserPresenceState(true);
+            return;
+        }
+
+        captureActiveTimeDelta(now);
+        void flushActiveTime(false);
     }, ACTIVE_TICK_MS);
 }
 
@@ -2580,6 +3213,55 @@ function formatActiveTime(ms) {
     if (hours > 0) return `${hours}ч ${String(minutes).padStart(2, '0')}м`;
     if (minutes > 0) return `${minutes}м ${String(seconds).padStart(2, '0')}с`;
     return `${seconds}с`;
+}
+
+function formatPresenceRecency(iso) {
+    const timestampMs = parseIsoMs(iso || '');
+    if (!timestampMs) return 'нет сигнала';
+
+    const deltaMs = Math.max(0, Date.now() - timestampMs);
+    if (deltaMs < 90 * 1000) return 'только что';
+
+    const minutes = Math.round(deltaMs / (60 * 1000));
+    if (minutes < 60) return `${minutes} мин назад`;
+
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) return `${hours} ч назад`;
+
+    return new Date(timestampMs).toLocaleString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+function getAdminPresenceMeta(login, user, presence) {
+    const normalizedLogin = normalizeLogin(login);
+    const normalizedPresence = presence && normalizeLogin(presence.login) === normalizedLogin
+        ? presence
+        : null;
+    const updatedAt = normalizedPresence?.updatedAt || user?.lastSeenAt || '';
+
+    if (!normalizedPresence) {
+        return {
+            label: updatedAt ? `Был ${formatPresenceRecency(updatedAt)}` : 'Не в сети',
+            className: 'is-offline'
+        };
+    }
+
+    switch (normalizedPresence.state) {
+        case 'online':
+            return { label: 'Онлайн сейчас', className: 'is-online' };
+        case 'idle':
+            return { label: `Без активности, ${formatPresenceRecency(updatedAt)}`, className: 'is-idle' };
+        case 'away':
+            return { label: `Отошел, ${formatPresenceRecency(updatedAt)}`, className: 'is-away' };
+        case 'hidden':
+            return { label: `Скрыта вкладка, ${formatPresenceRecency(updatedAt)}`, className: 'is-hidden' };
+        default:
+            return { label: updatedAt ? `Был ${formatPresenceRecency(updatedAt)}` : 'Не в сети', className: 'is-offline' };
+    }
 }
 
 function formatInviteExpiry(iso) {
@@ -2750,10 +3432,114 @@ async function toggleAccessForLogin(login, nextActive, user, invite, accessRevoc
     }
 }
 
+function hasAdminRealtimeTableData() {
+    return Array.isArray(adminRealtimeUsers)
+        && Array.isArray(adminRealtimeInvites)
+        && Array.isArray(adminRealtimeRevocations)
+        && Array.isArray(adminRealtimePresence);
+}
+
+function resetAdminRealtimeTableData() {
+    adminRealtimeUsers = null;
+    adminRealtimeInvites = null;
+    adminRealtimeRevocations = null;
+    adminRealtimePresence = null;
+}
+
+function stopAdminRealtimeSync() {
+    if (adminStatusRefreshTimerId) {
+        clearInterval(adminStatusRefreshTimerId);
+        adminStatusRefreshTimerId = null;
+    }
+    if (Array.isArray(adminRealtimeUnsubscribes)) {
+        adminRealtimeUnsubscribes.forEach((unsubscribe) => {
+            if (typeof unsubscribe === 'function') {
+                unsubscribe();
+            }
+        });
+    }
+    adminRealtimeUnsubscribes = [];
+    adminUsersRenderQueued = false;
+    resetAdminRealtimeTableData();
+}
+
+function scheduleAdminUsersTableRender() {
+    if (adminUsersRenderQueued || !isSettingsModalOpen() || !isAdmin()) return;
+    adminUsersRenderQueued = true;
+    queueMicrotask(() => {
+        adminUsersRenderQueued = false;
+        void renderAdminUsersTable();
+    });
+}
+
+function refreshAdminUsersTableAfterMutation() {
+    if (!isSettingsModalOpen() || !isAdmin()) return;
+    if (db && adminRealtimeUnsubscribes.length > 0) {
+        scheduleAdminUsersTableRender();
+        return;
+    }
+    void renderAdminUsersTable();
+}
+
+function startAdminRealtimeSync() {
+    if (!db || adminRealtimeUnsubscribes.length > 0 || !isSettingsModalOpen() || !isAdmin()) return false;
+
+    const bindCollection = (path, assignData, errorLabel) => onValue(
+        ref(db, path),
+        (snapshot) => {
+            assignData(snapshot.val());
+            scheduleAdminUsersTableRender();
+        },
+        (error) => {
+            console.error(errorLabel, error);
+        }
+    );
+
+    adminRealtimeUnsubscribes = [
+        bindCollection(AUTH_USERS_DB_PATH, (raw) => {
+            adminRealtimeUsers = Object.values(raw || {})
+                .map((item) => normalizeUserRecord(item))
+                .filter(Boolean)
+                .sort((a, b) => a.login.localeCompare(b.login));
+        }, 'Admin users live sync failed:'),
+        bindCollection(PARTNER_INVITES_DB_PATH, (raw) => {
+            adminRealtimeInvites = Object.values(raw || {})
+                .map((item) => normalizePartnerInvite(item))
+                .filter(Boolean)
+                .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        }, 'Admin invites live sync failed:'),
+        bindCollection(ACCESS_REVOKE_DB_PATH, (raw) => {
+            adminRealtimeRevocations = Object.values(raw || {})
+                .map((item) => normalizeAccessRevocation(item))
+                .filter(Boolean)
+                .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+        }, 'Admin revocations live sync failed:'),
+        bindCollection(USER_PRESENCE_DB_PATH, (raw) => {
+            adminRealtimePresence = Object.values(raw || {})
+                .map((item) => normalizeUserPresence(item))
+                .filter(Boolean)
+                .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+        }, 'Admin presence live sync failed:')
+    ];
+    adminStatusRefreshTimerId = setInterval(() => {
+        if (!isSettingsModalOpen() || !isAdmin()) {
+            stopAdminRealtimeSync();
+            return;
+        }
+        scheduleAdminUsersTableRender();
+    }, 60 * 1000);
+    return true;
+}
+
 async function renderAdminUsersTable() {
     if (!adminPanel || !adminUsersTableBody) return;
+    if (!isSettingsModalOpen()) {
+        stopAdminRealtimeSync();
+        return;
+    }
 
     if (!isAdmin()) {
+        stopAdminRealtimeSync();
         if (adminPanelAccordion) {
             adminPanelAccordion.style.display = 'none';
             adminPanelAccordion.removeAttribute('open');
@@ -2767,14 +3553,20 @@ async function renderAdminUsersTable() {
     adminUsersTableBody.innerHTML = '<tr><td colspan="6" class="admin-empty">Загрузка...</td></tr>';
     await ensureCurrentUserAccessMirror();
 
-    const [users, invites, revocations] = await Promise.all([
-        listAllUserRecords(),
-        listPartnerInvites(),
-        listAccessRevocations()
-    ]);
+    startAdminRealtimeSync();
+    const liveDataReady = hasAdminRealtimeTableData();
+    const [users, invites, revocations, presenceEntries] = liveDataReady
+        ? [adminRealtimeUsers, adminRealtimeInvites, adminRealtimeRevocations, adminRealtimePresence]
+        : await Promise.all([
+            listAllUserRecords(),
+            listPartnerInvites(),
+            listAccessRevocations(),
+            Promise.resolve([])
+        ]);
     const usersByLogin = new Map();
     const invitesByLogin = new Map();
     const revocationsByLogin = new Map();
+    const presenceByLogin = new Map();
 
     users.forEach((user) => {
         const login = normalizeLogin(user?.login || '');
@@ -2789,6 +3581,11 @@ async function renderAdminUsersTable() {
     revocations.forEach((item) => {
         const login = normalizeLogin(item?.login || '');
         if (isValidLogin(login)) revocationsByLogin.set(login, item);
+    });
+
+    presenceEntries.forEach((item) => {
+        const login = normalizeLogin(item?.login || '');
+        if (isValidLogin(login)) presenceByLogin.set(login, item);
     });
 
     const allLogins = Array.from(new Set([
@@ -2813,6 +3610,7 @@ async function renderAdminUsersTable() {
         const user = usersByLogin.get(login) || null;
         const invite = invitesByLogin.get(login) || null;
         const accessRevocation = revocationsByLogin.get(login) || null;
+        const presence = presenceByLogin.get(login) || null;
         const accessState = getAccessState(login, user, invite, accessRevocation);
         const row = document.createElement('tr');
         row.dataset.login = login;
@@ -2845,7 +3643,7 @@ async function renderAdminUsersTable() {
                     applyRoleRestrictions();
                 }
                 showCopyNotification(`Роль ${user.login} обновлена`);
-                renderAdminUsersTable();
+                refreshAdminUsersTableAfterMutation();
             });
             roleCell.appendChild(roleSelect);
         } else {
@@ -2863,7 +3661,15 @@ async function renderAdminUsersTable() {
 
         const statusCell = document.createElement('td');
         statusCell.className = `admin-access-status ${accessState.active ? 'is-active' : 'is-blocked'}`;
-        statusCell.textContent = accessState.label;
+        const statusMain = document.createElement('div');
+        statusMain.className = 'admin-status-main';
+        statusMain.textContent = accessState.label;
+        const presenceMeta = getAdminPresenceMeta(login, user, presence);
+        const presenceText = document.createElement('div');
+        presenceText.className = `admin-presence ${presenceMeta.className}`.trim();
+        presenceText.textContent = presenceMeta.label;
+        statusCell.appendChild(statusMain);
+        statusCell.appendChild(presenceText);
 
         const actionCell = document.createElement('td');
         const actionBtn = document.createElement('button');
@@ -2879,7 +3685,7 @@ async function renderAdminUsersTable() {
             try {
                 await toggleAccessForLogin(login, nextActive, user, invite, accessRevocation);
                 showCopyNotification(nextActive ? `Доступ открыт: ${login}` : `Доступ закрыт: ${login}`);
-                await renderAdminUsersTable();
+                refreshAdminUsersTableAfterMutation();
             } catch (error) {
                 console.error('Failed to toggle access:', error);
                 const fallback = error?.message ? String(error.message) : 'Не удалось изменить доступ';
@@ -2969,7 +3775,7 @@ async function handleCreatePartnerInvite() {
 
         showCopyNotification(`Ссылка отправлена на ${login}`);
         if (partnerInviteEmailInput) partnerInviteEmailInput.value = '';
-        await renderAdminUsersTable();
+        refreshAdminUsersTableAfterMutation();
     } catch (error) {
         console.error('Failed to send partner invite link:', error);
         showCopyNotification(`Письмо не отправлено. ${getReadableFirebaseAuthError(error, 'invite')}`);
@@ -3155,6 +3961,7 @@ async function handleAuthSubmit() {
 
         setAuthSession(savedUser.login);
         applyAuthenticatedUser(savedUser);
+        await replayActiveTimeCarryover();
         clearEmailLinkAuthReady();
         clearEmailLinkHint();
         clearEmailLinkVerifiedHint();
@@ -3203,18 +4010,49 @@ async function restoreAuthSession() {
     }
     user.emailVerifiedAt = verifiedAt;
     applyAuthenticatedUser(user);
+    await replayActiveTimeCarryover();
     startActiveTimeTracking();
     return true;
 }
 
 // Check if current user is admin
 function isAdmin() {
-    return hasAdminAccount() && normalizeRole(selectedRole || 'user') === 'admin';
+    return canUseAdminPreviewControls() && normalizeRole(selectedRole || 'user') === 'admin';
+}
+
+function getAdminPreviewModeLabel(role = selectedRole) {
+    return normalizeRole(role) === 'admin' ? 'Вид: админ' : 'Вид: клиент';
+}
+
+function getAdminPreviewModeTitle(role = selectedRole) {
+    return normalizeRole(role) === 'admin'
+        ? 'Переключить на клиентский вид'
+        : 'Вернуться в админский вид';
+}
+
+function syncAdminPreviewToggle(roleOverride = null) {
+    if (!adminPreviewToggleBtn) return;
+    if (!canUseAdminPreviewControls()) {
+        adminPreviewToggleBtn.hidden = true;
+        adminPreviewToggleBtn.setAttribute('aria-hidden', 'true');
+        adminPreviewToggleBtn.disabled = true;
+        adminPreviewToggleBtn.dataset.mode = 'hidden';
+        return;
+    }
+    const resolvedRole = normalizeRole(
+        roleOverride || selectedRole || getCachedStorageValue(USER_ROLE_KEY, 'admin') || currentUser?.role || 'admin'
+    );
+    adminPreviewToggleBtn.hidden = false;
+    adminPreviewToggleBtn.setAttribute('aria-hidden', 'false');
+    adminPreviewToggleBtn.disabled = false;
+    adminPreviewToggleBtn.dataset.mode = resolvedRole;
+    adminPreviewToggleBtn.textContent = getAdminPreviewModeLabel(resolvedRole);
+    adminPreviewToggleBtn.title = getAdminPreviewModeTitle(resolvedRole);
 }
 
 function ensureRoleChangeButtonVisible(roleOverride = null) {
     if (!changeRoleBtn) return;
-    if (!hasAdminAccount()) {
+    if (!canUseAdminPreviewControls()) {
         changeRoleBtn.style.display = 'none';
         changeRoleBtn.style.visibility = 'hidden';
         changeRoleBtn.disabled = true;
@@ -3227,13 +4065,17 @@ function ensureRoleChangeButtonVisible(roleOverride = null) {
     changeRoleBtn.style.visibility = 'visible';
     changeRoleBtn.disabled = false;
     changeRoleBtn.textContent = resolvedRole === 'admin'
-        ? 'Переключить в режим пользователя'
-        : 'Вернуться в режим админа';
+        ? 'Показать как клиент'
+        : 'Вернуться в админский вид';
 }
 
 // Apply role-based restrictions
 function applyRoleRestrictions() {
     const isAdminUser = isAdmin();
+    const promptTextareas = document.querySelectorAll('.prompt-editor');
+    const previewElements = document.querySelectorAll('.prompt-preview');
+    const toolbarBtns = document.querySelectorAll('.toolbar-btn');
+    const toolbarDividers = document.querySelectorAll('.toolbar-divider');
 
     document.body.classList.toggle('user-mode', !isAdminUser);
     ensureRoleChangeButtonVisible();
@@ -3242,7 +4084,6 @@ function applyRoleRestrictions() {
         debugLog('User mode: Prompts are read-only');
         
         // Disable all prompt textareas
-        const promptTextareas = document.querySelectorAll('.prompt-editor');
         promptTextareas.forEach(textarea => {
             textarea.setAttribute('readonly', 'true');
             textarea.style.cursor = 'default';
@@ -3250,7 +4091,6 @@ function applyRoleRestrictions() {
         });
         
         // Disable all WYSIWYG preview editing
-        const previewElements = document.querySelectorAll('.prompt-preview');
         previewElements.forEach(preview => {
             preview.setAttribute('contenteditable', 'false');
             preview.style.cursor = 'default';
@@ -3265,12 +4105,10 @@ function applyRoleRestrictions() {
         // For now, let's keep it enabled
         
         // Hide format buttons and dividers in toolbar
-        const toolbarBtns = document.querySelectorAll('.toolbar-btn');
         toolbarBtns.forEach(btn => {
             btn.style.display = 'none';
         });
         
-        const toolbarDividers = document.querySelectorAll('.toolbar-divider');
         toolbarDividers.forEach(divider => {
             divider.style.display = 'none';
         });
@@ -3288,6 +4126,24 @@ function applyRoleRestrictions() {
         
     } else {
         debugLog('Admin mode: Full editing access');
+        promptTextareas.forEach(textarea => {
+            textarea.removeAttribute('readonly');
+            textarea.style.cursor = '';
+            textarea.style.backgroundColor = '';
+        });
+        previewElements.forEach(preview => {
+            preview.setAttribute('contenteditable', 'true');
+            preview.style.cursor = '';
+        });
+        toolbarBtns.forEach(btn => {
+            btn.style.display = '';
+        });
+        toolbarDividers.forEach(divider => {
+            divider.style.display = '';
+        });
+        if (aiImproveBtn) {
+            aiImproveBtn.style.display = '';
+        }
         if (exportPromptSettings) {
             exportPromptSettings.style.display = '';
         }
@@ -3299,11 +4155,14 @@ function applyRoleRestrictions() {
         }
     }
 
+    renderVariations();
+    updateAllPreviews();
     updatePromptVisibilityButton();
     updatePromptHistoryButton();
-    if (isAdminUser) {
+    if (isAdminUser && isSettingsModalOpen()) {
         renderAdminUsersTable();
     } else if (adminPanelAccordion) {
+        stopAdminRealtimeSync();
         adminPanelAccordion.style.display = 'none';
         adminPanelAccordion.removeAttribute('open');
     }
@@ -3377,6 +4236,104 @@ function extractApiResponse(data) {
     return '';
 }
 
+function normalizeConversationAction(rawAction) {
+    if (!rawAction || typeof rawAction !== 'object' || Array.isArray(rawAction)) {
+        return null;
+    }
+    const rawType = rawAction.type ?? rawAction.actionType ?? rawAction.action ?? '';
+    const type = typeof rawType === 'string' ? rawType.trim().toLowerCase() : '';
+    const normalizedType = type === LEGACY_WARN_EXIT_ACTION_TYPE
+        ? CONVERSATION_ACTION_TYPE.GO_SILENT
+        : type;
+    if (normalizedType !== CONVERSATION_ACTION_TYPE.END && normalizedType !== CONVERSATION_ACTION_TYPE.GO_SILENT) {
+        return null;
+    }
+    const rawReason = rawAction.reason ?? rawAction.code ?? '';
+    const reason = typeof rawReason === 'string' ? rawReason.trim().toLowerCase() : '';
+    const explicitShouldEvaluate = [rawAction.shouldEvaluate, rawAction.should_evaluate]
+        .find((value) => typeof value === 'boolean');
+    return {
+        type: normalizedType,
+        reason,
+        shouldEvaluate: typeof explicitShouldEvaluate === 'boolean'
+            ? explicitShouldEvaluate
+            : normalizedType === CONVERSATION_ACTION_TYPE.END
+    };
+}
+
+function buildClientConversationActionStateInstruction(actionState = null) {
+    if (!actionState || typeof actionState !== 'object') return '';
+    const normalizedType = String(actionState.type || '').trim().toLowerCase();
+    if (normalizedType === CONVERSATION_ACTION_TYPE.GO_SILENT) {
+        return `
+ТЕКУЩЕЕ СОСТОЯНИЕ ДИАЛОГА
+Клиент уже перестал отвечать, но его ещё можно вернуть.
+Если новое сообщение менеджера слабое, неинтересное или не снимает проблему, можешь снова вернуть go_silent с пустым "message" или окончательно завершить разговор через end_conversation.
+Если менеджер реально исправил ситуацию, можешь вернуться в обычный диалог.
+        `.trim();
+    }
+    if (normalizedType === CONVERSATION_ACTION_TYPE.END) {
+        return `
+ТЕКУЩЕЕ СОСТОЯНИЕ ДИАЛОГА
+Клиент уже завершил разговор. Не возвращайся в обычный диалог.
+        `.trim();
+    }
+    return '';
+}
+
+function buildClientSystemPromptForWebhook(basePrompt, actionState = null) {
+    const normalizedPrompt = String(basePrompt || '').trim();
+    if (!normalizedPrompt) return '';
+    const actionStateInstruction = buildClientConversationActionStateInstruction(actionState);
+    return [
+        normalizedPrompt,
+        CLIENT_CONVERSATION_ACTION_PROMPT_SUFFIX,
+        actionStateInstruction
+    ].filter(Boolean).join('\n\n');
+}
+
+function extractConversationAction(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        return null;
+    }
+    return normalizeConversationAction(
+        data.conversationAction ||
+        data.conversation_action ||
+        data.clientAction ||
+        data.client_action ||
+        null
+    );
+}
+
+function tryParseNestedConversationEnvelope(rawValue) {
+    const trimmed = String(rawValue || '').trim();
+    if (!trimmed || !(trimmed.startsWith('{') || trimmed.startsWith('[') || trimmed.startsWith('"'))) {
+        return null;
+    }
+
+    let parsed = null;
+    try {
+        parsed = JSON.parse(trimmed);
+    } catch (e) {
+        return null;
+    }
+
+    if (typeof parsed === 'string' && parsed.trim() !== trimmed) {
+        return tryParseNestedConversationEnvelope(parsed);
+    }
+
+    const conversationAction = extractConversationAction(parsed);
+    const message = extractApiResponse(parsed);
+    if (!conversationAction && !message) {
+        return null;
+    }
+
+    return {
+        message: message || '',
+        conversationAction: conversationAction || null
+    };
+}
+
 function formatStructuredDataForDisplay(value, depth = 0) {
     if (value === null || value === undefined) return '';
     if (typeof value === 'string') return value.trim();
@@ -3432,11 +4389,18 @@ function normalizeStructuredJsonText(text) {
     }
 }
 
-async function readWebhookResponse(response) {
+async function readWebhookEnvelope(response, timeoutMs = WEBHOOK_DEFAULT_TIMEOUT_MS) {
     const contentType = response.headers.get('content-type') || '';
-    const rawText = await response.text();
+    const rawText = await readResponseTextWithTimeout(
+        response,
+        timeoutMs,
+        `Таймаут чтения ответа webhook (${timeoutMs/1000}с). Проверьте n8n workflow.`
+    );
     if (!rawText || rawText.trim() === '') {
-        return '';
+        return {
+            message: '',
+            conversationAction: null
+        };
     }
     const trimmed = rawText.trim();
     let parsed = null;
@@ -3446,13 +4410,44 @@ async function readWebhookResponse(response) {
         parsed = null;
     }
     if (parsed) {
+        const conversationAction = extractConversationAction(parsed);
         const extracted = extractApiResponse(parsed);
-        return extracted || trimmed;
+        if (extracted) {
+            const nestedEnvelope = tryParseNestedConversationEnvelope(extracted);
+            if (nestedEnvelope) {
+                return nestedEnvelope;
+            }
+            return {
+                message: extracted,
+                conversationAction
+            };
+        }
+        if (conversationAction) {
+            return {
+                message: '',
+                conversationAction
+            };
+        }
+        return {
+            message: trimmed,
+            conversationAction: null
+        };
     }
     if (contentType.includes('application/json')) {
-        return trimmed;
+        return {
+            message: trimmed,
+            conversationAction: null
+        };
     }
-    return trimmed;
+    return {
+        message: trimmed,
+        conversationAction: null
+    };
+}
+
+async function readWebhookResponse(response, timeoutMs = WEBHOOK_DEFAULT_TIMEOUT_MS) {
+    const envelope = await readWebhookEnvelope(response, timeoutMs);
+    return envelope.message;
 }
 
 function debounce(func, wait) {
@@ -3934,25 +4929,468 @@ function generateId() {
     return 'var_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
 }
 
-function getPromptOwnerKey() {
-    const storedName = (getCachedStorageValue(USER_NAME_KEY, '') || managerNameInput?.value || 'guest')
+function normalizePromptOwnerName(value) {
+    return String(value || '')
         .trim()
         .toLowerCase()
         .replace(/\s+/g, '_');
-    const role = getCachedStorageValue(USER_ROLE_KEY, selectedRole) || selectedRole || 'user';
-    return `${role}:${storedName || 'guest'}`;
+}
+
+function buildLocalPromptsStorageKey(storageVersion, ownerKey) {
+    return `localPrompts:${storageVersion}:${ownerKey}`;
+}
+
+function getStablePromptOwnerKey() {
+    const normalizedLogin = normalizeLogin(currentUser?.login || auth?.currentUser?.email || '');
+    const fallbackUid = String(currentUser?.uid || getCurrentAuthUid() || '').trim();
+    const resolvedUid = resolveAuthUidForLogin(normalizedLogin, fallbackUid);
+    if (resolvedUid) {
+        return `uid:${resolvedUid}`;
+    }
+    if (normalizedLogin) {
+        return `login:${loginToStorageKey(normalizedLogin)}`;
+    }
+    const fallbackName = normalizePromptOwnerName(
+        getCachedStorageValue(USER_NAME_KEY, '') || managerNameInput?.value || currentUser?.fio || 'guest'
+    );
+    return `guest:${fallbackName || 'guest'}`;
+}
+
+function getCurrentLegacyPromptOwnerKeys() {
+    const normalizedNames = Array.from(
+        new Set(
+            [
+                currentUser?.fio || '',
+                getCachedStorageValue(USER_NAME_KEY, ''),
+                managerNameInput?.value || ''
+            ]
+                .map((value) => normalizePromptOwnerName(value))
+                .filter(Boolean)
+        )
+    );
+
+    if (!normalizedNames.length) {
+        normalizedNames.push('guest');
+    }
+
+    return normalizedNames.flatMap((name) => [`admin:${name}`, `user:${name}`]);
 }
 
 function getLocalPromptsStorageKey() {
-    return `localPrompts:${LOCAL_PROMPTS_STORAGE_VERSION}:${getPromptOwnerKey()}`;
+    return buildLocalPromptsStorageKey(LOCAL_PROMPTS_STORAGE_VERSION, getStablePromptOwnerKey());
+}
+
+function parseLegacyPromptStorageEntry(storageKey = '') {
+    const legacyPrefix = buildLocalPromptsStorageKey(LEGACY_LOCAL_PROMPTS_STORAGE_VERSION, '');
+    if (!storageKey.startsWith(legacyPrefix)) return null;
+    const ownerKey = storageKey.slice(legacyPrefix.length);
+    const separatorIndex = ownerKey.indexOf(':');
+    return {
+        ownerKey,
+        ownerRole: separatorIndex > 0 ? ownerKey.slice(0, separatorIndex) : '',
+        storageKey
+    };
+}
+
+function getKnownLocalPromptStoreLogins() {
+    const knownLogins = new Set();
+    const currentLogin = normalizeLogin(
+        currentUser?.login
+        || getCachedStorageValue(USER_LOGIN_KEY, '')
+        || auth?.currentUser?.email
+        || getAuthSession()?.login
+        || ''
+    );
+    if (currentLogin) {
+        knownLogins.add(currentLogin);
+    }
+
+    Object.values(loadLocalUsersStore() || {}).forEach((item) => {
+        const normalized = normalizeUserRecord(item);
+        if (normalized?.login) {
+            knownLogins.add(normalized.login);
+        }
+    });
+
+    return [...knownLogins];
+}
+
+function canAdoptAllLegacyPromptStores() {
+    const knownLogins = getKnownLocalPromptStoreLogins();
+    return knownLogins.length <= 1;
+}
+
+function getLegacyLocalPromptsStorageEntries() {
+    const currentStorageKey = getLocalPromptsStorageKey();
+    const currentNameEntries = getCurrentLegacyPromptOwnerKeys()
+        .map((ownerKey) => {
+            const separatorIndex = ownerKey.indexOf(':');
+            return {
+                ownerKey,
+                ownerRole: separatorIndex > 0 ? ownerKey.slice(0, separatorIndex) : '',
+                storageKey: buildLocalPromptsStorageKey(LEGACY_LOCAL_PROMPTS_STORAGE_VERSION, ownerKey)
+            };
+        })
+        .filter((entry) => entry.storageKey && entry.storageKey !== currentStorageKey);
+
+    const scannedEntries = canAdoptAllLegacyPromptStores()
+        ? listSafeLocalStorageKeysByPrefix(buildLocalPromptsStorageKey(LEGACY_LOCAL_PROMPTS_STORAGE_VERSION, ''))
+            .map((key) => parseLegacyPromptStorageEntry(key))
+            .filter((entry) => entry && entry.storageKey !== currentStorageKey)
+        : [];
+
+    return [...currentNameEntries, ...scannedEntries]
+        .filter((entry, index, list) => (
+            entry?.storageKey
+            && list.findIndex((candidate) => candidate.storageKey === entry.storageKey) === index
+        ));
+}
+
+function readPromptOverridesStoreByKey(storageKey) {
+    return normalizePromptOverridesStore(getCachedLocalStorageJson(storageKey));
+}
+
+function getPromptOverridesRoleDataFromStore(store = {}, role) {
+    const normalized = normalizePromptOverridesStore(store);
+    return {
+        variations: Array.isArray(normalized[role + '_variations']) ? normalized[role + '_variations'] : [],
+        activeId: typeof normalized[role + '_activeId'] === 'string' ? normalized[role + '_activeId'] : null
+    };
+}
+
+function promptOverridesRoleDataHasData(roleData = null) {
+    return !!(
+        roleData
+        && (Array.isArray(roleData.variations) && roleData.variations.length > 0 || roleData.activeId)
+    );
+}
+
+function mergeLegacyPromptOverridesStores(entries = []) {
+    const merged = {};
+
+    PROMPT_ROLES.forEach((role) => {
+        const seenIds = new Set();
+        const mergedVariations = [];
+        let mergedActiveId = null;
+
+        entries.forEach((entry) => {
+            const roleData = entry?.roleDataMap?.[role] || { variations: [], activeId: null };
+            if (!mergedActiveId && typeof roleData.activeId === 'string' && roleData.activeId.trim()) {
+                mergedActiveId = roleData.activeId.trim();
+            }
+            (roleData.variations || []).forEach((variation) => {
+                if (!variation || typeof variation.id !== 'string' || seenIds.has(variation.id)) return;
+                seenIds.add(variation.id);
+                mergedVariations.push(variation);
+            });
+        });
+
+        merged[role + '_variations'] = mergedVariations;
+        merged[role + '_activeId'] = mergedVariations.some((variation) => variation.id === mergedActiveId)
+            ? mergedActiveId
+            : null;
+    });
+
+    return normalizePromptOverridesStore(merged);
+}
+
+function clearLegacyLocalPromptsStorageKeys() {
+    getLegacyLocalPromptsStorageEntries().forEach((entry) => {
+        clearCachedLocalStorageJson(entry.storageKey);
+    });
 }
 
 function loadLocalPromptsStore() {
-    return getCachedLocalStorageJson(getLocalPromptsStorageKey());
+    const stableStorageKey = getLocalPromptsStorageKey();
+    const stableStore = readPromptOverridesStoreByKey(stableStorageKey);
+    const legacyEntries = getLegacyLocalPromptsStorageEntries()
+        .map((entry) => {
+            const store = readPromptOverridesStoreByKey(entry.storageKey);
+            return {
+                ...entry,
+                store,
+                roleDataMap: Object.fromEntries(
+                    PROMPT_ROLES.map((role) => [role, getPromptOverridesRoleDataFromStore(store, role)])
+                )
+            };
+        })
+        .filter((entry) => promptOverridesStoreHasData(entry.store));
+
+    if (!legacyEntries.length) {
+        return stableStore;
+    }
+
+    const migratedStore = mergeLegacyPromptOverridesStores([
+        {
+            ownerRole: '',
+            storageKey: stableStorageKey,
+            store: stableStore,
+            roleDataMap: Object.fromEntries(
+                PROMPT_ROLES.map((role) => [role, getPromptOverridesRoleDataFromStore(stableStore, role)])
+            )
+        },
+        ...legacyEntries
+    ]);
+    const stableHash = JSON.stringify(normalizePromptOverridesStore(stableStore));
+    const migratedHash = JSON.stringify(migratedStore);
+    if (stableHash === migratedHash) {
+        return stableStore;
+    }
+
+    if (!promptOverridesStoreHasData(migratedStore)) {
+        return stableStore;
+    }
+
+    setCachedLocalStorageJson(stableStorageKey, migratedStore);
+    legacyEntries.forEach((entry) => {
+        clearCachedLocalStorageJson(entry.storageKey);
+    });
+    return migratedStore;
+}
+
+function normalizePromptOverrideVariation(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const id = String(raw.id || '').trim();
+    if (!id) return null;
+    const baseVariationId = String(raw.baseVariationId || '').trim();
+    return {
+        id,
+        name: String(raw.name || 'Локальный').trim() || 'Локальный',
+        content: unescapeMarkdown(raw.content || ''),
+        isLocal: true,
+        baseVariationId: baseVariationId || null
+    };
+}
+
+function normalizePromptOverridesStore(rawStore = {}) {
+    const source = rawStore && typeof rawStore === 'object' ? rawStore : {};
+    const normalized = {};
+
+    PROMPT_ROLES.forEach((role) => {
+        const rawVariations = Array.isArray(source[role + '_variations'])
+            ? source[role + '_variations']
+            : [];
+        const seenIds = new Set();
+        const variations = rawVariations
+            .map((item) => normalizePromptOverrideVariation(item))
+            .filter((item) => {
+                if (!item || seenIds.has(item.id)) return false;
+                seenIds.add(item.id);
+                return true;
+            });
+        const requestedActiveId = typeof source[role + '_activeId'] === 'string'
+            ? String(source[role + '_activeId']).trim()
+            : '';
+
+        normalized[role + '_variations'] = variations;
+        normalized[role + '_activeId'] = variations.some((item) => item.id === requestedActiveId)
+            ? requestedActiveId
+            : null;
+    });
+
+    return normalized;
+}
+
+function promptOverridesStoreHasData(store = {}) {
+    const normalized = normalizePromptOverridesStore(store);
+    return PROMPT_ROLES.some((role) => {
+        const variations = normalized[role + '_variations'] || [];
+        const activeId = normalized[role + '_activeId'] || null;
+        return variations.length > 0 || !!activeId;
+    });
+}
+
+function getPromptOverridesStore() {
+    return currentUserPromptOverridesStore !== null
+        ? normalizePromptOverridesStore(currentUserPromptOverridesStore)
+        : loadLocalPromptsStore();
+}
+
+function persistPromptOverridesStoreLocally(store = {}) {
+    const normalized = normalizePromptOverridesStore(store);
+    if (promptOverridesStoreHasData(normalized)) {
+        setCachedLocalStorageJson(getLocalPromptsStorageKey(), normalized);
+    } else {
+        clearCachedLocalStorageJson(getLocalPromptsStorageKey());
+    }
+    clearLegacyLocalPromptsStorageKeys();
+    return normalized;
+}
+
+function getPromptOverridesDbPath(login = currentUser?.login || '') {
+    const normalizedLogin = normalizeLogin(login);
+    if (!normalizedLogin) return '';
+    return `${PROMPT_OVERRIDES_DB_PATH}/${loginToStorageKey(normalizedLogin)}`;
+}
+
+function canSyncPromptOverrides(user = currentUser) {
+    if (!db || !hasAdminAccount(user)) return false;
+    return !!normalizeLogin(user?.login || '');
+}
+
+function buildPromptOverridesPayload() {
+    const payload = {};
+
+    PROMPT_ROLES.forEach((role) => {
+        const roleState = promptsData[role] || { variations: [], activeId: null };
+        const localVariations = (roleState.variations || [])
+            .filter((variation) => variation && variation.isLocal)
+            .map((variation) => ({
+                id: variation.id,
+                name: variation.name || 'Локальный',
+                content: variation.content || '',
+                isLocal: true,
+                baseVariationId: typeof variation.baseVariationId === 'string' ? variation.baseVariationId : null
+            }));
+        const activeId = localVariations.some((variation) => variation.id === roleState.activeId)
+            ? roleState.activeId
+            : null;
+
+        payload[role + '_variations'] = localVariations;
+        payload[role + '_activeId'] = activeId;
+    });
+
+    return normalizePromptOverridesStore(payload);
+}
+
+function queuePromptOverridesSave(payload = null) {
+    if (!canSyncPromptOverrides()) return false;
+    const normalizedPayload = normalizePromptOverridesStore(payload || buildPromptOverridesPayload());
+    const payloadHash = JSON.stringify(normalizedPayload);
+    if (payloadHash === lastPromptOverridesRemoteHash) {
+        queuedPromptOverridesPayload = null;
+        if (currentUserPromptOverridesSaveTimer) {
+            clearTimeout(currentUserPromptOverridesSaveTimer);
+            currentUserPromptOverridesSaveTimer = null;
+        }
+        return false;
+    }
+
+    queuedPromptOverridesPayload = normalizedPayload;
+    if (currentUserPromptOverridesSaveTimer) {
+        clearTimeout(currentUserPromptOverridesSaveTimer);
+    }
+    currentUserPromptOverridesSaveTimer = window.setTimeout(() => {
+        void savePromptOverridesToFirebaseNow();
+    }, 800);
+    return true;
+}
+
+async function savePromptOverridesToFirebaseNow(payload = null, options = {}) {
+    if (currentUserPromptOverridesSaveTimer) {
+        clearTimeout(currentUserPromptOverridesSaveTimer);
+        currentUserPromptOverridesSaveTimer = null;
+    }
+
+    const normalizedPayload = normalizePromptOverridesStore(payload || queuedPromptOverridesPayload || buildPromptOverridesPayload());
+    queuedPromptOverridesPayload = null;
+
+    if (!canSyncPromptOverrides()) {
+        return false;
+    }
+
+    const normalizedLogin = normalizeLogin(
+        currentUserPromptOverridesListenerLogin || currentUser?.login || ''
+    );
+    if (!normalizedLogin) {
+        return false;
+    }
+
+    const payloadHash = JSON.stringify(normalizedPayload);
+    if (!options.force && payloadHash === lastPromptOverridesRemoteHash) {
+        return false;
+    }
+
+    const remotePath = getPromptOverridesDbPath(normalizedLogin);
+    if (!remotePath) {
+        return false;
+    }
+
+    try {
+        await set(
+            ref(db, remotePath),
+            promptOverridesStoreHasData(normalizedPayload) ? normalizedPayload : null
+        );
+        currentUserPromptOverridesStore = normalizedPayload;
+        lastPromptOverridesRemoteHash = payloadHash;
+        return true;
+    } catch (error) {
+        console.error('Failed to sync prompt overrides:', error);
+        return false;
+    }
+}
+
+function stopCurrentUserPromptOverridesSubscription() {
+    if (typeof currentUserPromptOverridesUnsubscribe === 'function') {
+        currentUserPromptOverridesUnsubscribe();
+    }
+    currentUserPromptOverridesUnsubscribe = null;
+    currentUserPromptOverridesListenerLogin = '';
+    currentUserPromptOverridesStore = null;
+    queuedPromptOverridesPayload = null;
+    lastPromptOverridesRemoteHash = '';
+    if (currentUserPromptOverridesSaveTimer) {
+        clearTimeout(currentUserPromptOverridesSaveTimer);
+        currentUserPromptOverridesSaveTimer = null;
+    }
+}
+
+function startCurrentUserPromptOverridesSubscription(login = currentUser?.login || '') {
+    const normalizedLogin = normalizeLogin(login);
+    const syncCandidateUser = currentUser
+        ? { ...currentUser, login: normalizedLogin }
+        : { login: normalizedLogin, role: 'user' };
+    if (!canSyncPromptOverrides(syncCandidateUser)) {
+        stopCurrentUserPromptOverridesSubscription();
+        return false;
+    }
+    if (
+        typeof currentUserPromptOverridesUnsubscribe === 'function'
+        && currentUserPromptOverridesListenerLogin === normalizedLogin
+    ) {
+        return true;
+    }
+
+    stopCurrentUserPromptOverridesSubscription();
+    currentUserPromptOverridesListenerLogin = normalizedLogin;
+    const remotePath = getPromptOverridesDbPath(normalizedLogin);
+    if (!remotePath) {
+        return false;
+    }
+
+    currentUserPromptOverridesUnsubscribe = onValue(
+        ref(db, remotePath),
+        (snapshot) => {
+            if (!currentUser || normalizeLogin(currentUser.login) !== normalizedLogin) return;
+
+            const remoteStore = normalizePromptOverridesStore(snapshot.exists() ? snapshot.val() : {});
+            const localStore = loadLocalPromptsStore();
+            const shouldBootstrapRemote = !promptOverridesStoreHasData(remoteStore) && promptOverridesStoreHasData(localStore);
+            const effectiveStore = shouldBootstrapRemote ? localStore : remoteStore;
+
+            currentUserPromptOverridesStore = effectiveStore;
+            persistPromptOverridesStoreLocally(effectiveStore);
+            lastPromptOverridesRemoteHash = JSON.stringify(remoteStore);
+
+            if (shouldBootstrapRemote) {
+                queuePromptOverridesSave(effectiveStore);
+            }
+
+            if (isUserEditing || lastPromptsFirebaseSnapshot === null) {
+                return;
+            }
+
+            initPromptsData(lastPromptsFirebaseSnapshot || {});
+        },
+        (error) => {
+            console.error('Prompt overrides live sync failed:', error);
+        }
+    );
+    return true;
 }
 
 function getLocalPromptsRoleData(role) {
-    const store = loadLocalPromptsStore();
+    const store = getPromptOverridesStore();
     const rawVariations = Array.isArray(store[role + '_variations']) ? store[role + '_variations'] : [];
     const variations = rawVariations
         .filter(v => v && typeof v === 'object' && typeof v.id === 'string')
@@ -3960,7 +5398,8 @@ function getLocalPromptsRoleData(role) {
             id: v.id,
             name: v.name || 'Локальный',
             content: unescapeMarkdown(v.content || ''),
-            isLocal: true
+            isLocal: true,
+            baseVariationId: typeof v.baseVariationId === 'string' ? v.baseVariationId : null
         }));
     return {
         variations,
@@ -3968,44 +5407,22 @@ function getLocalPromptsRoleData(role) {
     };
 }
 
-function saveLocalPromptsData() {
-    const payload = {};
-    let hasLocalData = false;
-
-    PROMPT_ROLES.forEach(role => {
-        const localVariations = (promptsData[role]?.variations || [])
-            .filter(v => v && v.isLocal)
-            .map(v => ({
-                id: v.id,
-                name: v.name || 'Локальный',
-                content: v.content || '',
-                isLocal: true
-            }));
-        const activeId = localVariations.some(v => v.id === promptsData[role].activeId)
-            ? promptsData[role].activeId
-            : null;
-
-        payload[role + '_variations'] = localVariations;
-        payload[role + '_activeId'] = activeId;
-        if (localVariations.length > 0 || activeId) {
-            hasLocalData = true;
-        }
-    });
-
-    if (hasLocalData) {
-        setCachedLocalStorageJson(getLocalPromptsStorageKey(), payload);
-    } else {
-        clearCachedLocalStorageJson(getLocalPromptsStorageKey());
+function saveLocalPromptsData(options = {}) {
+    const normalizedPayload = buildPromptOverridesPayload();
+    persistPromptOverridesStoreLocally(normalizedPayload);
+    if (currentUserPromptOverridesStore !== null || canSyncPromptOverrides()) {
+        currentUserPromptOverridesStore = normalizedPayload;
     }
+    if (options.syncRemote === false || !canSyncPromptOverrides()) {
+        return normalizedPayload;
+    }
+    queuePromptOverridesSave(normalizedPayload);
+    return normalizedPayload;
 }
 
 function getActiveRole() {
     const activeTab = document.querySelector('.instruction-tab.active');
     return activeTab ? activeTab.dataset.instruction : 'client';
-}
-
-function getActiveVariation(role = getActiveRole()) {
-    return (promptsData[role]?.variations || []).find(v => v.id === promptsData[role].activeId) || null;
 }
 
 function getPublicActiveId(role) {
@@ -4036,6 +5453,48 @@ function getPublicActiveContent(role) {
     if (!activeId) return '';
     const variation = (promptsData[role]?.variations || []).find(v => !v.isLocal && v.id === activeId);
     return variation ? (variation.content || '') : '';
+}
+
+function getVisibleVariations(role, isAdminUser = isAdmin()) {
+    const variations = promptsData[role]?.variations || [];
+    const shouldHideAttestation = !isAdminUser && !isAttestationMode;
+    const hiddenBaseIds = new Set();
+    if (isAdminUser) {
+        variations.forEach((variation) => {
+            if (!variation?.isLocal) return;
+            const basePublicVariation = findBasePublicVariationForLocal(role, variation);
+            if (basePublicVariation?.id) {
+                hiddenBaseIds.add(basePublicVariation.id);
+            }
+        });
+    }
+    return variations.filter((variation) => {
+        if (!isAdminUser && variation?.isLocal) return false;
+        if (isAdminUser && !variation?.isLocal && hiddenBaseIds.has(variation.id)) return false;
+        if (shouldHideAttestation && (variation?.name || '').trim().toLowerCase() === 'аттестация') return false;
+        return true;
+    });
+}
+
+function getActiveVariation(role = getActiveRole()) {
+    const variations = promptsData[role]?.variations || [];
+    const selected = variations.find(v => v.id === promptsData[role]?.activeId) || null;
+    if (isAdmin()) {
+        if (selected && !selected.isLocal) {
+            const localOverride = findLocalOverrideForPublicVariation(role, selected);
+            if (localOverride) {
+                return localOverride;
+            }
+        }
+        return selected;
+    }
+    const visibleVariations = getVisibleVariations(role, false);
+    if (!visibleVariations.length) return null;
+    if (selected && visibleVariations.some(v => v.id === selected.id)) {
+        return selected;
+    }
+    const publicActiveId = getPublicActiveId(role);
+    return visibleVariations.find(v => v.id === publicActiveId) || visibleVariations[0] || null;
 }
 
 function updatePromptVisibilityButton() {
@@ -4089,10 +5548,44 @@ function updatePromptLengthInfo(role = getActiveRole()) {
     promptLengthInfo.classList.toggle('is-over', currentLength > MANAGER_CALL_PROMPT_MAX_CHARS);
 }
 
-function buildLocalPromptName(name) {
-    const baseName = (name || 'Локальный').trim();
-    if (/\(локальный\)$/i.test(baseName)) return baseName;
-    return `${baseName} (локальный)`;
+function getPromptVariationDisplayName(variation) {
+    const rawName = String(variation?.name || '').trim();
+    if (!variation?.isLocal) {
+        return rawName;
+    }
+    return rawName.replace(/\s*\(локальный\)$/i, '').trim() || rawName;
+}
+
+function findLocalOverrideForPublicVariation(role, publicVariation) {
+    if (!publicVariation || publicVariation.isLocal) return null;
+    const publicId = String(publicVariation.id || '').trim();
+    const publicDisplayName = getPromptVariationDisplayName(publicVariation).toLowerCase();
+    return (promptsData[role]?.variations || []).find((variation) => {
+        if (!variation?.isLocal) return false;
+        const baseVariationId = String(variation.baseVariationId || '').trim();
+        if (baseVariationId && publicId && baseVariationId === publicId) {
+            return true;
+        }
+        return getPromptVariationDisplayName(variation).toLowerCase() === publicDisplayName;
+    }) || null;
+}
+
+function findBasePublicVariationForLocal(role, localVariation) {
+    if (!localVariation?.isLocal) return null;
+    const baseVariationId = String(localVariation.baseVariationId || '').trim();
+    if (baseVariationId) {
+        const linkedPublicVariation = (promptsData[role]?.variations || []).find((variation) => {
+            return !variation?.isLocal && String(variation.id || '').trim() === baseVariationId;
+        });
+        if (linkedPublicVariation) {
+            return linkedPublicVariation;
+        }
+    }
+
+    const localDisplayName = getPromptVariationDisplayName(localVariation).toLowerCase();
+    return (promptsData[role]?.variations || []).find((variation) => {
+        return !variation?.isLocal && getPromptVariationDisplayName(variation).toLowerCase() === localDisplayName;
+    }) || null;
 }
 
 function getUniqueVariationName(role, baseName) {
@@ -4114,9 +5607,17 @@ function makeActivePromptLocal(role) {
     const activeVariation = getActiveVariation(role);
     if (!activeVariation || activeVariation.isLocal) return false;
 
+    const existingLocalOverride = findLocalOverrideForPublicVariation(role, activeVariation);
+    if (existingLocalOverride) {
+        promptsData[role].activeId = existingLocalOverride.id;
+        saveLocalPromptsData();
+        return true;
+    }
+
     const localCopy = {
         id: generateId(),
-        name: getUniqueVariationName(role, buildLocalPromptName(activeVariation.name)),
+        baseVariationId: activeVariation.id,
+        name: getPromptVariationDisplayName(activeVariation) || activeVariation.name || 'Промпт',
         content: activeVariation.content || '',
         isLocal: true
     };
@@ -4130,12 +5631,24 @@ function publishActiveLocalPrompt(role) {
     const activeVariation = getActiveVariation(role);
     if (!activeVariation || !activeVariation.isLocal) return false;
 
+    const basePublicVariation = findBasePublicVariationForLocal(role, activeVariation);
+    if (basePublicVariation) {
+        basePublicVariation.name = getPromptVariationDisplayName(activeVariation) || basePublicVariation.name || 'Промпт';
+        basePublicVariation.content = activeVariation.content || '';
+        promptsData[role].variations = promptsData[role].variations.filter((variation) => variation !== activeVariation);
+        promptsData[role].activeId = basePublicVariation.id;
+        publicActiveIds[role] = basePublicVariation.id;
+        checkpointPromptHistory(role, basePublicVariation.id);
+        saveLocalPromptsData();
+        savePromptsToFirebaseNow({ roles: [role] });
+        return true;
+    }
+
     activeVariation.isLocal = false;
-    activeVariation.name = getUniqueVariationName(
-        role,
-        (activeVariation.name || '').replace(/\s*\(локальный\)$/i, '').trim() || 'Промпт'
-    );
+    activeVariation.baseVariationId = null;
+    activeVariation.name = getPromptVariationDisplayName(activeVariation) || 'Промпт';
     publicActiveIds[role] = activeVariation.id;
+    checkpointPromptHistory(role, activeVariation.id);
     saveLocalPromptsData();
     savePromptsToFirebaseNow({ roles: [role] });
     return true;
@@ -4338,7 +5851,7 @@ function setPrimaryActionMode(mode) {
 
 function updateSendBtnState() {
     const hasText = !!userInput.value.trim();
-    const showVoiceModeAction = !hasText && !isTextDialogStarted() && !isProcessing && !isDialogRated;
+    const showVoiceModeAction = !hasText && !isTextDialogStarted() && !isProcessing && !isDialogRated && !isConversationClosed();
 
     if (showVoiceModeAction) {
         setPrimaryActionMode('voice');
@@ -4347,7 +5860,7 @@ function updateSendBtnState() {
     }
 
     setPrimaryActionMode('send');
-    sendBtn.disabled = !hasText || isProcessing || isDialogRated;
+    sendBtn.disabled = !hasText || isProcessing || isDialogRated || isConversationClosed();
 }
 
 function lockDialogInput() {
@@ -4505,19 +6018,9 @@ function renderVariations() {
     const role = getActiveRole();
     if (!promptsData[role] || !promptVariationsContainer) return;
     
-    const variations = promptsData[role].variations;
-    let activeId = promptsData[role].activeId;
     const isAdminUser = isAdmin();
-    const shouldHideAttestation = !isAdminUser && !isAttestationMode;
-    const visibleVariations = shouldHideAttestation
-        ? variations.filter(v => (v.name || '').trim().toLowerCase() !== 'аттестация')
-        : variations;
-    const activeVisible = visibleVariations.find(v => v.id === activeId);
-    if (!activeVisible && visibleVariations.length > 0) {
-        activeId = visibleVariations[0].id;
-        promptsData[role].activeId = activeId;
-        updateEditorContent(role);
-    }
+    const visibleVariations = getVisibleVariations(role, isAdminUser);
+    const activeId = getActiveVariation(role)?.id || null;
     
     const fragment = document.createDocumentFragment();
 
@@ -4526,21 +6029,31 @@ function renderVariations() {
         chip.className = `prompt-variation-chip ${v.id === activeId ? 'active' : ''}`;
         chip.classList.toggle('local', !!v.isLocal);
 
+        if (v.isLocal) {
+            const visibilityIcon = document.createElement('span');
+            visibilityIcon.className = 'chip-visibility-indicator';
+            visibilityIcon.innerHTML = EYE_OFF_ICON;
+            setCustomTooltip(visibilityIcon, 'Скрыт от пользователей');
+            chip.appendChild(visibilityIcon);
+        }
+
         const chipName = document.createElement('span');
         chipName.className = 'chip-name';
-        chipName.textContent = v.name || '';
+        chipName.textContent = getPromptVariationDisplayName(v);
         chip.appendChild(chipName);
 
         let deleteBtn = null;
         if (visibleVariations.length > 1 && isAdminUser) {
-            deleteBtn = document.createElement('span');
+            deleteBtn = document.createElement('button');
             deleteBtn.className = 'delete-variation';
-            deleteBtn.textContent = '×';
+            deleteBtn.type = 'button';
+            deleteBtn.setAttribute('aria-label', `Удалить промпт ${getPromptVariationDisplayName(v) || ''}`.trim());
+            deleteBtn.innerHTML = CHIP_DELETE_ICON;
             chip.appendChild(deleteBtn);
         }
         
         chip.addEventListener('click', (e) => {
-            if (!e.target.classList.contains('delete-variation')) {
+            if (!e.target.closest('.delete-variation')) {
                 setActiveVariation(role, v.id);
             }
         });
@@ -4847,7 +6360,7 @@ function setActiveVariation(role, id) {
 }
 
 function updateEditorContent(role) {
-    const activeVar = promptsData[role].variations.find(v => v.id === promptsData[role].activeId);
+    const activeVar = getActiveVariation(role);
     const content = activeVar ? activeVar.content : '';
 
     const textarea = promptInputsByRole[role];
@@ -4907,7 +6420,7 @@ function syncContentToData(role, content) {
 }
 
 function getActiveContent(role) {
-    const v = promptsData[role].variations.find(v => v.id === promptsData[role].activeId);
+    const v = getActiveVariation(role);
     return v ? v.content : '';
 }
 
@@ -5016,7 +6529,8 @@ async function loadPrompts() {
         try {
             const promptsRef = ref(db, 'prompts');
             onValue(promptsRef, (snapshot) => {
-                const data = snapshot.val();
+                const data = snapshot.val() || {};
+                lastPromptsFirebaseSnapshot = data;
                 agentLog(
                     'Firebase onValue triggered',
                     { hasData: !!data, isUserEditing },
@@ -5038,14 +6552,15 @@ async function loadPrompts() {
                 }
                 lastFirebaseData = dataStr;
                 
-                if (data) {
+                if (Object.keys(data).length > 0) {
                     initPromptsData(data);
                 } else {
                     initPromptsData({});
                     savePromptsToFirebaseNow({ fullReplace: true });
-        }
+                }
             }, (error) => {
                 console.error('Firebase read error:', error);
+                lastPromptsFirebaseSnapshot = {};
                 initPromptsData({});
             });
 
@@ -5112,6 +6627,83 @@ function sanitizeModalNameInput() {
     }
 }
 
+function setModalPasswordAutocompleteMode(mode = 'current-password') {
+    if (!modalPasswordInput) return;
+    const normalizedMode = mode === 'new-password' ? 'new-password' : 'current-password';
+    modalPasswordInput.setAttribute('autocomplete', normalizedMode);
+    modalPasswordInput.setAttribute('name', normalizedMode === 'new-password' ? 'new-password' : 'password');
+    modalPasswordInput.dataset.autocompleteMode = normalizedMode;
+}
+
+async function resolveModalPasswordAutocompleteMode(login = modalLoginInput?.value || '') {
+    const normalizedLogin = normalizeLogin(login);
+    if (!isValidLogin(normalizedLogin)) {
+        return 'current-password';
+    }
+
+    if (getEmailLinkAuthReady(normalizedLogin)) {
+        return 'new-password';
+    }
+
+    const existingUser = await getUserRecordByLogin(normalizedLogin);
+    if (!existingUser) {
+        return 'new-password';
+    }
+
+    if (!!existingUser.emailVerifiedAt && isPendingFirstPasswordSetup(existingUser)) {
+        return 'new-password';
+    }
+
+    return 'current-password';
+}
+
+async function syncModalPasswordAutocompleteMode(login = modalLoginInput?.value || '') {
+    const requestId = ++authPasswordAutocompleteRequestId;
+    const nextMode = await resolveModalPasswordAutocompleteMode(login);
+    if (requestId !== authPasswordAutocompleteRequestId) return;
+    setModalPasswordAutocompleteMode(nextMode);
+}
+
+function repairModalAutofillCollision() {
+    if (!modalNameInput || !modalLoginInput) return;
+    const rawName = String(modalNameInput.value || '').trim();
+    if (!rawName || !/@/.test(rawName)) return;
+
+    const emailParts = rawName
+        .split(/\s+/)
+        .map((part) => normalizeLogin(part))
+        .filter((part) => isValidLogin(part));
+    const autofilledEmail = emailParts[0] || '';
+    if (!autofilledEmail) return;
+
+    const currentLogin = normalizeLogin(modalLoginInput.value || '');
+    if (!currentLogin || currentLogin === autofilledEmail) {
+        modalLoginInput.value = autofilledEmail;
+    }
+
+    const sanitizedName = sanitizeAuthName(rawName);
+    if (sanitizedName !== modalNameInput.value) {
+        modalNameInput.value = sanitizedName;
+    }
+}
+
+function scheduleModalAutofillRepair() {
+    window.setTimeout(() => {
+        repairModalAutofillCollision();
+        sanitizeModalNameInput();
+        void syncModalPasswordAutocompleteMode();
+    }, 80);
+    window.setTimeout(() => {
+        repairModalAutofillCollision();
+        sanitizeModalNameInput();
+        void syncModalPasswordAutocompleteMode();
+    }, 320);
+}
+
+const debouncedSyncModalPasswordAutocompleteMode = debounce(() => {
+    void syncModalPasswordAutocompleteMode();
+}, 180);
+
 function showNameModal() {
     if (!nameModal) return;
     nameModal.classList.add('active');
@@ -5125,38 +6717,70 @@ function showNameModal() {
     if (modalLoginInput && !modalLoginInput.value) {
         modalLoginInput.value = getCachedStorageValue(USER_LOGIN_KEY);
     }
-    if (modalPasswordInput) {
-        modalPasswordInput.value = '';
-    }
+    setModalPasswordAutocompleteMode('current-password');
     setPasswordVisibility(false);
     setAuthMailHelpVisible(false);
     setAuthError('');
+    scheduleModalAutofillRepair();
+    void syncModalPasswordAutocompleteMode();
     setTimeout(() => modalNameInput?.focus(), 100);
 }
 
 function hideNameModal() {
     if (!nameModal) return;
     nameModal.classList.remove('active');
+    if (modalPasswordInput) {
+        modalPasswordInput.value = '';
+    }
+    setPasswordVisibility(false);
+    setModalPasswordAutocompleteMode('current-password');
 }
 
-if (modalNameSubmit) {
+bindEvent(authForm, 'submit', (e) => {
+    e.preventDefault();
+    handleAuthSubmit();
+});
+
+if (!authForm && modalNameSubmit) {
     modalNameSubmit.addEventListener('click', () => {
         handleAuthSubmit();
     });
 }
 
-[modalNameInput, modalLoginInput, modalPasswordInput].forEach((input) => {
-    input?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            handleAuthSubmit();
-        }
-    });
-});
-
 if (modalNameInput) {
-    modalNameInput.addEventListener('input', sanitizeModalNameInput);
-    modalNameInput.addEventListener('focus', sanitizeModalNameInput);
+    modalNameInput.addEventListener('input', () => {
+        repairModalAutofillCollision();
+        sanitizeModalNameInput();
+    });
+    modalNameInput.addEventListener('focus', () => {
+        repairModalAutofillCollision();
+        sanitizeModalNameInput();
+    });
+    modalNameInput.addEventListener('change', () => {
+        repairModalAutofillCollision();
+        sanitizeModalNameInput();
+    });
+}
+
+if (modalLoginInput) {
+    modalLoginInput.addEventListener('change', () => {
+        repairModalAutofillCollision();
+        void syncModalPasswordAutocompleteMode();
+    });
+    modalLoginInput.addEventListener('input', () => {
+        repairModalAutofillCollision();
+        debouncedSyncModalPasswordAutocompleteMode();
+    });
+    modalLoginInput.addEventListener('blur', () => {
+        repairModalAutofillCollision();
+        void syncModalPasswordAutocompleteMode();
+    });
+}
+
+if (modalPasswordInput) {
+    modalPasswordInput.addEventListener('focus', () => {
+        void syncModalPasswordAutocompleteMode();
+    });
 }
 
 if (togglePasswordVisibilityBtn) {
@@ -6974,19 +8598,20 @@ function showSettingsModal() {
     roleChangePasswordInput.value = '';
     roleChangeError.style.display = 'none';
     populateVoiceConfigFields();
+    settingsModal.classList.add('active');
 
     if (userRole === 'admin') {
         if (adminPanelAccordion) {
             adminPanelAccordion.style.display = '';
             adminPanelAccordion.setAttribute('open', '');
         }
+        startAdminRealtimeSync();
         renderAdminUsersTable();
     } else if (adminPanelAccordion) {
         adminPanelAccordion.style.display = 'none';
         adminPanelAccordion.removeAttribute('open');
+        stopAdminRealtimeSync();
     }
-
-    settingsModal.classList.add('active');
 }
 
 const nameInputMeasureCanvas = document.createElement('canvas');
@@ -6998,6 +8623,7 @@ function autoResizeNameInput() {
 }
 
 function hideSettingsModal() {
+    stopAdminRealtimeSync();
     settingsModal.classList.remove('active');
 }
 
@@ -7015,7 +8641,7 @@ function toggleSettingsModal() {
 
 function updateUserNameDisplay() {
     const name = currentUser?.fio || getCachedStorageValue(USER_NAME_KEY) || 'Гость';
-    const role = hasAdminAccount()
+    const role = canUseAdminPreviewControls()
         ? normalizeRole(selectedRole || getCachedStorageValue(USER_ROLE_KEY, 'user') || 'user')
         : 'user';
     const roleIcon = getRoleIcon(role);
@@ -7108,11 +8734,15 @@ async function improvePromptWithAI() {
                 userMessage,
                 requestId
             })
-        });
+        }, AI_HELPER_WEBHOOK_TIMEOUT_MS);
         
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
-        const responseText = await response.text();
+        const responseText = await readResponseTextWithTimeout(
+            response,
+            AI_HELPER_WEBHOOK_TIMEOUT_MS,
+            `Таймаут чтения ответа AI helper (${AI_HELPER_WEBHOOK_TIMEOUT_MS/1000}с). Проверьте n8n workflow.`
+        );
         if (!responseText) throw new Error('Пустой ответ от сервера');
 
         let data;
@@ -7449,27 +9079,26 @@ if (savedTheme === 'light') {
 
 // Change role button
 changeRoleBtn.addEventListener('click', () => {
-    if (!hasAdminAccount()) return;
-    const currentRole = normalizeRole(selectedRole || getCachedStorageValue(USER_ROLE_KEY, 'admin') || currentUser?.role || 'admin');
-
-    if (currentRole === 'admin') {
-        if (confirm('Вы уверены, что хотите переключиться на роль Пользователя?')) {
-            switchRole('user');
-        }
-    } else {
-        switchRole('admin');
-    }
+    toggleAdminPreviewMode();
 });
 
+bindEvent(adminPreviewToggleBtn, 'click', toggleAdminPreviewMode);
+
 function switchRole(newRole) {
-    if (!hasAdminAccount()) {
-        throw new Error('Режим администратора доступен только админ-аккаунтам.');
+    if (!canUseAdminPreviewControls()) {
+        throw new Error('Режим администратора доступен только админ-аккаунтам или localhost-preview.');
     }
     const role = normalizeRole(newRole) === 'admin' ? 'admin' : 'user';
     const effectiveRole = syncSelectedRole(role);
     applyRoleRestrictions();
     updateUserNameDisplay();
     showCopyNotification(`Включен ${getRoleLabelUi(effectiveRole).toLowerCase()} режим`);
+}
+
+function toggleAdminPreviewMode() {
+    if (!canUseAdminPreviewControls()) return;
+    const currentRole = normalizeRole(selectedRole || getCachedStorageValue(USER_ROLE_KEY, 'admin') || currentUser?.role || 'admin');
+    switchRole(currentRole === 'admin' ? 'user' : 'admin');
 }
 
 // Cancel role change
@@ -7480,7 +9109,7 @@ roleChangeCancelBtn.addEventListener('click', () => {
 });
 
 roleChangeConfirmBtn.addEventListener('click', async () => {
-    if (!hasAdminAccount()) {
+    if (!canUseAdminPreviewControls()) {
         roleChangePassword.style.display = 'none';
         return;
     }
@@ -7607,6 +9236,7 @@ function clearChat() {
     conversationHistory = [];
     lastRating = null;
     isDialogRated = false;
+    clearConversationTerminalState();
     removeReratePrompt();
     updatePromptLock();
     unlockDialogInput();
@@ -7792,13 +9422,16 @@ function sanitizeRenderedHtml(html) {
 async function sendMessage() {
     if (!isChatReady) return;
     const userMessage = userInput.value.trim();
-    if (!userMessage || isProcessing || isDialogRated) return;
+    if (!userMessage || isProcessing || isDialogRated || isConversationClosed()) return;
 
-    const systemPrompt = validatePromptBeforeWebhook('client', systemPromptInput.value);
-    if (!systemPrompt) return;
+    const baseSystemPrompt = validatePromptBeforeWebhook('client', systemPromptInput.value);
+    if (!baseSystemPrompt) return;
+    const conversationActionState = getConversationActionStatePayload();
+    const systemPrompt = buildClientSystemPromptForWebhook(baseSystemPrompt, conversationActionState);
     
     isProcessing = true;
     toggleInputState(false);
+    removeConversationActionNotice();
     
     const startDiv = document.getElementById('startConversation');
     if (startDiv) startDiv.style.display = 'none';
@@ -7828,15 +9461,16 @@ async function sendMessage() {
                 chatInput: userMessage,
                 systemPrompt,
                 dialogHistory: dialogHistory.trim(),
+                conversationActionState,
                 sessionId: clientSessionId,
                 requestId
             })
-        });
+        }, CHAT_WEBHOOK_TIMEOUT_MS);
         
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
-        const assistantMessage = await readWebhookResponse(response);
-        if (!assistantMessage) {
+        const { message: assistantMessage, conversationAction } = await readWebhookEnvelope(response, CHAT_WEBHOOK_TIMEOUT_MS);
+        if (!assistantMessage && !conversationAction) {
             console.warn('Empty webhook response for user message.');
             loadingMsg.remove();
             addMessage('Ошибка: что-то сломалось. Обратитесь к администратору сайта.', 'error', false);
@@ -7844,32 +9478,48 @@ async function sendMessage() {
         }
         
         loadingMsg.remove();
-        addMessage(assistantMessage, 'assistant', true);
-        conversationHistory.push({ role: 'assistant', content: assistantMessage });
+        if (assistantMessage) {
+            addMessage(assistantMessage, 'assistant', true);
+            conversationHistory.push({ role: 'assistant', content: assistantMessage });
+        }
         updatePromptLock();
         updateSendBtnState();
+        handleConversationAction(conversationAction);
         
     } catch (error) {
         console.error('Error:', error);
         loadingMsg.remove();
         addMessage(`Ошибка: ${error.message}`, 'error', false);
+        if (isConversationSilent() && conversationRecoverableAction) {
+            showConversationActionNotice(conversationRecoverableAction);
+        }
     } finally {
         isProcessing = false;
         if (!lastRating) {
-            toggleInputState(true);
-            userInput.focus();
+            if (isConversationClosed()) {
+                lockDialogInput();
+            } else {
+                toggleInputState(true);
+                userInput.focus();
+            }
         }
     }
 }
 
 async function startConversationHandler() {
     if (!isChatReady) return;
-    const systemPrompt = validatePromptBeforeWebhook('client', systemPromptInput.value);
-    if (!systemPrompt) return;
+    const baseSystemPrompt = validatePromptBeforeWebhook('client', systemPromptInput.value);
+    if (!baseSystemPrompt) return;
+    clearConversationTerminalState();
+    const conversationActionState = getConversationActionStatePayload();
+    const systemPrompt = buildClientSystemPromptForWebhook(baseSystemPrompt, conversationActionState);
 
     refreshSessionIds(generateSessionId());
     conversationHistory = [];
     lastRating = null;
+    isDialogRated = false;
+    removeReratePrompt();
+    rateChatBtn.classList.remove('rated');
     updatePromptLock();
     toggleInputState(true);
     
@@ -7887,15 +9537,16 @@ async function startConversationHandler() {
                 chatInput: '/start',
                 systemPrompt,
                 dialogHistory: '',
+                conversationActionState,
                 sessionId: clientSessionId,
                 requestId
             })
-        });
+        }, CHAT_WEBHOOK_TIMEOUT_MS);
         
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
-        const assistantMessage = await readWebhookResponse(response);
-        if (!assistantMessage) {
+        const { message: assistantMessage, conversationAction } = await readWebhookEnvelope(response, CHAT_WEBHOOK_TIMEOUT_MS);
+        if (!assistantMessage && !conversationAction) {
             console.warn('Empty webhook response for /start.');
             loadingMsg.remove();
             addMessage('Ошибка: что-то сломалось. Обратитесь к администратору сайта.', 'error', false);
@@ -7903,10 +9554,16 @@ async function startConversationHandler() {
         }
         
         loadingMsg.remove();
-        addMessage(assistantMessage, 'assistant', true);
-        conversationHistory.push({ role: 'assistant', content: assistantMessage });
+        if (assistantMessage) {
+            addMessage(assistantMessage, 'assistant', true);
+            conversationHistory.push({ role: 'assistant', content: assistantMessage });
+        }
         updatePromptLock();
         updateSendBtnState();
+        handleConversationAction(conversationAction);
+        if (isConversationClosed()) {
+            lockDialogInput();
+        }
         
     } catch (error) {
         console.error('Error:', error);
@@ -7920,6 +9577,98 @@ function removeReratePrompt() {
         reratePromptElement.remove();
         reratePromptElement = null;
     }
+}
+
+function removeConversationActionNotice() {
+    if (conversationActionNoticeElement) {
+        conversationActionNoticeElement.remove();
+        conversationActionNoticeElement = null;
+    }
+}
+
+function clearConversationTerminalState() {
+    conversationTerminalAction = null;
+    conversationRecoverableAction = null;
+    removeConversationActionNotice();
+}
+
+function isConversationClosed() {
+    return !!conversationTerminalAction && conversationTerminalAction.type === CONVERSATION_ACTION_TYPE.END;
+}
+
+function isConversationSilent() {
+    return !!conversationRecoverableAction && conversationRecoverableAction.type === CONVERSATION_ACTION_TYPE.GO_SILENT;
+}
+
+function buildConversationActionNoticeText(action) {
+    if (action?.type === CONVERSATION_ACTION_TYPE.GO_SILENT) {
+        return 'Клиент не ответил, но его ещё можно вернуть';
+    }
+    return 'Диалог завершен';
+}
+
+function getConversationActionStatePayload() {
+    const action = conversationTerminalAction || conversationRecoverableAction;
+    if (!action) return null;
+    return {
+        type: action.type,
+        reason: typeof action.reason === 'string' ? action.reason : '',
+        shouldEvaluate: !!action.shouldEvaluate,
+        recoverable: action.type === CONVERSATION_ACTION_TYPE.GO_SILENT
+    };
+}
+
+function showConversationActionNotice(action) {
+    if (!action) return;
+    const isTerminal = action.type === CONVERSATION_ACTION_TYPE.END;
+    const shouldShowRateButton = isTerminal && action.shouldEvaluate !== false && !lastRating;
+    const wrapper = conversationActionNoticeElement || document.createElement('div');
+    wrapper.className = `message system-action conversation-action-note ${action.type === CONVERSATION_ACTION_TYPE.GO_SILENT ? 'is-silent' : 'is-terminal'}`;
+    wrapper.dataset.actionType = action.type;
+    wrapper.innerHTML = `
+        <div class="conversation-action-note-box">
+            <div class="conversation-action-note-text">${escapeHtml(buildConversationActionNoticeText(action))}</div>
+            ${shouldShowRateButton ? '<button class="btn-conversation-rate">Оценить</button>' : ''}
+        </div>
+    `;
+    const rateBtn = wrapper.querySelector('.btn-conversation-rate');
+    rateBtn?.addEventListener('click', async () => {
+        rateBtn.disabled = true;
+        rateBtn.textContent = 'Оцениваю...';
+        try {
+            await rateChat();
+        } finally {
+            if (conversationTerminalAction) {
+                showConversationActionNotice(conversationTerminalAction);
+            }
+        }
+    });
+    if (!wrapper.isConnected) {
+        chatMessages.appendChild(wrapper);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    conversationActionNoticeElement = wrapper;
+}
+
+function handleConversationAction(action) {
+    if (!action) {
+        conversationRecoverableAction = null;
+        removeConversationActionNotice();
+        return false;
+    }
+    showConversationActionNotice(action);
+    if (action.type === CONVERSATION_ACTION_TYPE.GO_SILENT) {
+        conversationTerminalAction = null;
+        conversationRecoverableAction = action;
+        return false;
+    }
+    if (action.type !== CONVERSATION_ACTION_TYPE.END) {
+        return false;
+    }
+    conversationRecoverableAction = null;
+    conversationTerminalAction = action;
+    lockDialogInput();
+    return false;
 }
 
 function showReratePrompt() {
@@ -7947,7 +9696,11 @@ function resetRatingUiForRerun() {
     lastRating = null;
     isDialogRated = false;
     rateChatBtn.classList.remove('rated');
-    unlockDialogInput();
+    if (isConversationClosed()) {
+        lockDialogInput();
+    } else {
+        unlockDialogInput();
+    }
     removeReratePrompt();
 }
 
@@ -8077,7 +9830,7 @@ async function sendAttestationJobWithRetry(job, maxAttempts = ATTESTATION_SEND_A
                     fileBase64,
                     fileMime
                 })
-            });
+            }, ATTESTATION_WEBHOOK_TIMEOUT_MS);
 
             if (!response.ok) {
                 const err = new Error(`HTTP ${response.status}`);
@@ -8180,7 +9933,7 @@ async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RAT
                     attempt,
                     sentAt: new Date().toISOString()
                 })
-            });
+            }, RATING_WEBHOOK_TIMEOUT_MS);
 
             if (!response.ok) {
                 const err = new Error(`HTTP ${response.status}`);
@@ -8188,7 +9941,7 @@ async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RAT
                 throw err;
             }
 
-            let ratingMessage = await readWebhookResponse(response);
+            let ratingMessage = await readWebhookResponse(response, RATING_WEBHOOK_TIMEOUT_MS);
             ratingMessage = normalizeStructuredJsonText(ratingMessage);
             if (/^\s*<!doctype|^\s*<html/i.test(ratingMessage || '')) {
                 const err = new Error('Некорректный ответ сервера оценки');
@@ -8268,6 +10021,9 @@ async function rateChat(options = {}) {
         if (isAttestationMode) {
             sendAttestationResult(dialogText, ratingMessage);
         }
+        if (isConversationClosed() && conversationTerminalAction) {
+            showConversationActionNotice(conversationTerminalAction);
+        }
         
     } catch (error) {
         console.error('Rating error details:', error);
@@ -8280,8 +10036,12 @@ async function rateChat(options = {}) {
         rateChatBtn.classList.remove('loading');
         aiAssistBtn.disabled = false;
         if (!lastRating) {
-            toggleInputState(true);
-            userInput.focus();
+            if (isConversationClosed()) {
+                lockDialogInput();
+            } else {
+                toggleInputState(true);
+                userInput.focus();
+            }
         }
     }
 }
@@ -8475,11 +10235,11 @@ async function generateAIResponse() {
                 sessionId: managerSessionId,
                 requestId
             })
-        });
+        }, AI_HELPER_WEBHOOK_TIMEOUT_MS);
         
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
-        const aiMessage = await readWebhookResponse(response);
+        const aiMessage = await readWebhookResponse(response, AI_HELPER_WEBHOOK_TIMEOUT_MS);
         if (!aiMessage) throw new Error('Пустой ответ');
         
         const cleanedMessage = aiMessage.trim().replace(/^["']|["']$/g, '').replace(/^(Менеджер|Manager):\s*/i, '');
@@ -9127,7 +10887,7 @@ function setupDragAndDropForPreview(previewElement, textarea) {
 // ============ EVENT LISTENERS ============
 
 function handlePrimaryActionClick() {
-    if (userInput.disabled || isProcessing || isDialogRated) {
+    if (userInput.disabled || isProcessing || isDialogRated || isConversationClosed()) {
         return;
     }
 

@@ -27,6 +27,11 @@
 npx http-server -p 3001
 ```
 
+Smoke e2e для основных dialog-flow:
+```bash
+npm run test:smoke
+```
+
 ## Безопасный голосовой режим (без API key в браузере)
 
 Чтобы сотрудники не вводили API key вручную:
@@ -94,6 +99,12 @@ npx http-server -p 3001
 - `{ "message": "текст" }`
 - `{ "output": "текст" }`
 - `{ "text": "текст" }`
+- `{ "message": "текст", "conversationAction": { "type": "go_silent", "reason": "lost_interest" } }`
+- `{ "message": "текст", "conversationAction": { "type": "end_conversation", "reason": "manager_failed", "shouldEvaluate": true } }`
+
+`conversationAction.type` поддерживает:
+- `go_silent` — клиент замолчал, но его ещё можно вернуть
+- `end_conversation` — диалог завершён
 
 ## Технологии
 

@@ -17,7 +17,7 @@
         integrity="sha384-oaMLBGEzBOJx3UHwac0cVndtX5fxGQIfnAeFZ35RTgqPcYlbprH9o9PUV/F8Le07"
         crossorigin="anonymous"
     >
-    <link rel="stylesheet" href="style.css?v=20260213-38">
+<link rel="stylesheet" href="style.css?v=20260319-46">
     
     <!-- Favicon -->
     <link rel="apple-touch-icon" sizes="180x180" href="favicon/apple-touch-icon.png">
@@ -31,6 +31,7 @@
     <div id="nameModal" class="modal-overlay">
         <div class="modal-content auth-modal-content">
             <div id="nameModalStep1">
+                <form id="authForm" class="auth-form" autocomplete="on" novalidate>
                 <h3>Добро пожаловать на платформу client-simulator.ru!</h3>
                 <p style="text-align: left; margin-bottom: 16px;">Здесь вы можете:</p>
                 <ol style="text-align: left; margin-bottom: 20px; padding-left: 20px; line-height: 1.6;">
@@ -38,10 +39,10 @@
                     <li>Оценивать диалоги ассистента по вашему регламенту</li>
                 </ol>
                 <p>Введите полное ФИО, рабочий email и пароль:</p>
-                <input type="text" id="modalNameInput" name="full_name" placeholder="ФИО (например: Иванов Иван Иванович)" maxlength="120" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" autofocus>
-                <input type="email" id="modalLoginInput" name="username" placeholder="Рабочий email компании или партнер по инвайту" maxlength="120" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false">
+                <input type="text" id="modalNameInput" name="name" placeholder="ФИО (например: Иванов Иван Иванович)" maxlength="120" autocomplete="name" autocorrect="off" autocapitalize="words" spellcheck="false" autofocus>
+                <input type="email" id="modalLoginInput" name="email" placeholder="Рабочий email компании или партнер по инвайту" maxlength="120" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false">
                 <div class="auth-password-wrap">
-                    <input type="password" id="modalPasswordInput" placeholder="Пароль (минимум 6 символов)" maxlength="80" autocomplete="current-password">
+                    <input type="password" id="modalPasswordInput" name="password" placeholder="Пароль (минимум 6 символов)" maxlength="80" minlength="6" autocomplete="current-password">
                     <button type="button" id="togglePasswordVisibility" class="auth-password-toggle" aria-label="Показать пароль">
                         <span class="icon-eye" aria-hidden="true">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -61,12 +62,13 @@
                 </div>
                 <p id="passwordError" style="color: red; font-size: 14px; display: none; margin-top: 10px;">Ошибка авторизации</p>
 
-                <button id="modalNameSubmit" class="btn-modal-submit">Войти</button>
+                <button id="modalNameSubmit" type="submit" class="btn-modal-submit">Войти</button>
                 <details id="authMailHelp" class="auth-mail-help" hidden open>
                     <summary>Где письмо и куда нажимать</summary>
                     <img id="authMailHelpImage" src="1.png" alt="Пример письма подтверждения с выделенной ссылкой входа" loading="lazy">
                     <p class="auth-mail-help-caption">После нажатия «Войти» откройте письмо и нажмите ссылку <strong>Sign in to client-simulator</strong>. Если письма нет, проверьте папку «Спам».</p>
                 </details>
+                </form>
             </div>
         </div>
     </div>
@@ -524,7 +526,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js" integrity="sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3" crossorigin="anonymous" defer></script>
     <!-- Turndown for HTML to Markdown conversion (WYSIWYG editing) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js" integrity="sha384-m6AyXEhyWRg2s2wrkDV64LGkaManYgMSAjn2U+zymzSJ42WthRSjCu1AqZJhoQV0" crossorigin="anonymous" defer></script>
-    <script type="module" src="script.js?v=20260310-01"></script>
+<script type="module" src="script.js?v=20260320-07"></script>
     <!-- Last deployment trigger: 2026-02-10 18:34 -->
 </body>
 </html>

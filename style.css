@@ -1194,6 +1194,74 @@ body.light-theme .message.user a {
     filter: brightness(1.08);
 }
 
+.message.conversation-action-note {
+    align-self: center;
+    background: transparent;
+    box-shadow: none;
+    border: 0;
+    padding: 0;
+    max-width: 95%;
+}
+
+.conversation-action-note-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid #2d2d2d;
+    background: #1f1f1f;
+}
+
+.message.conversation-action-note.is-silent .conversation-action-note-box {
+    background: rgba(110, 79, 21, 0.28);
+    border-color: rgba(198, 148, 43, 0.5);
+}
+
+.conversation-action-note-text {
+    color: #d7d7d7;
+    font-size: 13px;
+    line-height: 1.35;
+    text-align: center;
+}
+
+.btn-conversation-rate {
+    border: 0;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    color: #fff;
+    background: var(--color-accent);
+    transition: filter 0.2s ease, opacity 0.2s ease;
+}
+
+.btn-conversation-rate:hover:not(:disabled) {
+    filter: brightness(1.08);
+}
+
+.btn-conversation-rate:disabled {
+    cursor: default;
+    opacity: 0.7;
+}
+
+body.light-theme .conversation-action-note-box {
+    background: #f1f1f1;
+    border-color: #d7d7d7;
+}
+
+body.light-theme .message.conversation-action-note.is-silent .conversation-action-note-box {
+    background: rgba(255, 236, 194, 0.8);
+    border-color: rgba(188, 138, 34, 0.45);
+}
+
+body.light-theme .conversation-action-note-text {
+    color: #2f2f2f;
+}
+
 .message.loading {
     align-self: flex-start;
     background: #252525;
@@ -1571,6 +1639,28 @@ body.light-theme .dropdown-option.active {
     top: -1px;
 }
 
+.prompt-variation-chip .chip-visibility-indicator {
+    width: 14px;
+    height: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: currentColor;
+    opacity: 0.75;
+    flex-shrink: 0;
+}
+
+.prompt-variation-chip .chip-visibility-indicator svg {
+    width: 14px;
+    height: 14px;
+    display: block;
+    pointer-events: none;
+}
+
+.prompt-variation-chip.active .chip-visibility-indicator {
+    opacity: 0.9;
+}
+
 .prompt-variation-chip:hover {
     background: #252525;
     color: #e0e0e0;
@@ -1582,28 +1672,39 @@ body.light-theme .dropdown-option.active {
 }
 
 .prompt-variation-chip .delete-variation {
-    width: 18px;
-    height: 18px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    border: none;
+    padding: 0;
     background: rgba(0,0,0,0.25);
     color: inherit;
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 1;
+    line-height: 0;
     align-self: center;
     position: static;
     margin-left: 4px;
     margin-right: -3px;
     opacity: 0.7;
     transform: none;
+    cursor: pointer;
+    flex-shrink: 0;
+    appearance: none;
+    -webkit-appearance: none;
 }
 
 .prompt-variation-chip .delete-variation:hover {
     opacity: 1;
     background: rgba(0,0,0,0.4);
+}
+
+.prompt-variation-chip .delete-variation svg {
+    width: 10px;
+    height: 10px;
+    display: block;
+    pointer-events: none;
 }
 
 .add-variation-btn {
@@ -2441,6 +2542,10 @@ body.light-theme .ai-improve-modal textarea::-webkit-scrollbar-thumb:hover {
     padding: min(6vh, 48px) 0 20px;
 }
 
+.auth-form {
+    margin: 0;
+}
+
 .auth-mail-help {
     margin: 12px 0 0;
     border: 1px solid #2a2a2a;
@@ -2531,7 +2636,7 @@ body.light-theme .ai-improve-modal textarea::-webkit-scrollbar-thumb:hover {
 
 .auth-password-wrap input {
     margin-bottom: 0;
-    padding-right: 46px;
+    padding-right: 84px;
 }
 
 #modalPasswordInput::-ms-reveal,
@@ -2539,7 +2644,6 @@ body.light-theme .ai-improve-modal textarea::-webkit-scrollbar-thumb:hover {
     display: none;
 }
 
-#modalPasswordInput::-webkit-credentials-auto-fill-button,
 #modalPasswordInput::-webkit-contacts-auto-fill-button,
 #modalPasswordInput::-webkit-caps-lock-indicator {
     visibility: hidden;
@@ -2549,7 +2653,7 @@ body.light-theme .ai-improve-modal textarea::-webkit-scrollbar-thumb:hover {
 
 .auth-password-toggle {
     position: absolute;
-    right: 8px;
+    right: 36px;
     top: 50%;
     transform: translateY(-50%);
     width: 36px;
@@ -3507,12 +3611,41 @@ body.light-theme .more-colors-popup {
     white-space: nowrap;
 }
 
+.admin-status-main {
+    line-height: 1.2;
+}
+
+.admin-presence {
+    margin-top: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.2;
+    color: #8e8e8e;
+}
+
 .admin-access-status.is-active {
     color: #8fcb8f;
 }
 
 .admin-access-status.is-blocked {
     color: #e19393;
+}
+
+.admin-presence.is-online {
+    color: #77d48b;
+}
+
+.admin-presence.is-idle {
+    color: #d9c37d;
+}
+
+.admin-presence.is-away,
+.admin-presence.is-hidden {
+    color: #9db4db;
+}
+
+.admin-presence.is-offline {
+    color: #8e8e8e;
 }
 
 .admin-muted {
@@ -3772,6 +3905,23 @@ body.light-theme .admin-access-status.is-active {
 
 body.light-theme .admin-access-status.is-blocked {
     color: #b23b3b;
+}
+
+body.light-theme .admin-presence.is-online {
+    color: #2f7a38;
+}
+
+body.light-theme .admin-presence.is-idle {
+    color: #9d7700;
+}
+
+body.light-theme .admin-presence.is-away,
+body.light-theme .admin-presence.is-hidden {
+    color: #466b9c;
+}
+
+body.light-theme .admin-presence.is-offline {
+    color: #7a7a7a;
 }
 
 body.light-theme .admin-muted {
