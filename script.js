@@ -1172,6 +1172,39 @@ function loginToStorageKey(login) {
         .join('_');
 }
 
+function decodeStorageKeyToLogin(storageKey = '') {
+    if (!storageKey || typeof storageKey !== 'string') return '';
+    const parts = storageKey.split('_');
+    if (!parts.length) return '';
+    const chars = [];
+    for (const part of parts) {
+        if (!part) return '';
+        if (!/^[0-9a-fA-F]+$/.test(part)) return '';
+        const codePoint = Number.parseInt(part, 16);
+        if (!Number.isFinite(codePoint) || codePoint <= 0 || codePoint > 0x10FFFF) return '';
+        chars.push(String.fromCodePoint(codePoint));
+    }
+    return normalizeLogin(chars.join(''));
+}
+
+function resolveNormalizedLogin(raw, loginFallback = '', loginKey = '') {
+    const candidates = [
+        raw?.login,
+        raw?.email,
+        raw?.legacyLogin,
+        raw?.legacyKey,
+        loginFallback,
+        decodeStorageKeyToLogin(loginKey)
+    ];
+    for (const candidate of candidates) {
+        const normalizedLogin = normalizeLogin(candidate);
+        if (isValidLogin(normalizedLogin)) return normalizedLogin;
+    }
+    const decodedCandidate = decodeStorageKeyToLogin(raw?.legacyKey);
+    if (isValidLogin(decodedCandidate)) return decodedCandidate;
+    return '';
+}
+
 function getCurrentAuthUid() {
     return String(auth?.currentUser?.uid || '').trim();
 }
@@ -1725,9 +1758,9 @@ function normalizeUserPresence(raw, loginFallback = '') {
     };
 }
 
-function normalizeAccessRevocation(raw, loginFallback = '') {
+function normalizeAccessRevocation(raw, loginFallback = '', loginKey = '') {
     if (!raw || typeof raw !== 'object') return null;
-    const login = normalizeLogin(raw.login || loginFallback);
+    const login = resolveNormalizedLogin(raw, loginFallback, loginKey);
     if (!isValidLogin(login)) return null;
     return {
         login,
@@ -1823,8 +1856,8 @@ async function listAccessRevocations() {
             const snapshot = await firebaseGetWithTimeout(ACCESS_REVOKE_DB_PATH);
             if (snapshot.exists()) {
                 const raw = snapshot.val();
-                return Object.values(raw || {})
-                    .map((item) => normalizeAccessRevocation(item))
+                return Object.entries(raw || {})
+                    .map(([key, item]) => normalizeAccessRevocation(item, '', key))
                     .filter((item) => item && item.status === 'revoked')
                     .sort((a, b) => {
                         const aTime = parseIsoMs(a.updatedAt);
@@ -1837,8 +1870,8 @@ async function listAccessRevocations() {
             return [];
         } catch (error) {
             console.error('Failed to load access revocations from Firebase:', error);
-            return Object.values(localStore || {})
-                .map((item) => normalizeAccessRevocation(item))
+            return Object.entries(localStore || {})
+                .map(([key, item]) => normalizeAccessRevocation(item, '', key))
                 .filter((item) => item && item.status === 'revoked')
                 .sort((a, b) => {
                     const aTime = parseIsoMs(a.updatedAt);
@@ -1849,8 +1882,8 @@ async function listAccessRevocations() {
         }
     }
 
-    return Object.values(localStore || {})
-        .map((item) => normalizeAccessRevocation(item))
+    return Object.entries(localStore || {})
+        .map(([key, item]) => normalizeAccessRevocation(item, '', key))
         .filter((item) => item && item.status === 'revoked')
         .sort((a, b) => {
             const aTime = parseIsoMs(a.updatedAt);
@@ -2349,9 +2382,9 @@ async function sendMagicLinkToEmail(email, purpose = 'verify') {
     });
 }
 
-function normalizePartnerInvite(raw, loginFallback = '') {
+function normalizePartnerInvite(raw, loginFallback = '', loginKey = '') {
     if (!raw || typeof raw !== 'object') return null;
-    const login = normalizeLogin(raw.login || raw.email || loginFallback);
+    const login = resolveNormalizedLogin(raw, loginFallback, loginKey);
     if (!isValidLogin(login)) return null;
     const role = 'user';
     const status = raw.status === 'revoked' ? 'revoked' : 'active';
@@ -2517,8 +2550,8 @@ async function listPartnerInvites() {
             const snapshot = await firebaseGetWithTimeout(PARTNER_INVITES_DB_PATH);
             if (snapshot.exists()) {
                 const raw = snapshot.val();
-                const invites = Object.values(raw || {})
-                    .map((item) => normalizePartnerInvite(item))
+                const invites = Object.entries(raw || {})
+                    .map(([key, item]) => normalizePartnerInvite(item, '', key))
                     .filter(Boolean)
                     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
                 if (invites.length > 0) {
@@ -2529,15 +2562,15 @@ async function listPartnerInvites() {
             return [];
         } catch (error) {
             console.error('Failed to load partner invites from Firebase:', error);
-            return Object.values(localStore || {})
-                .map((item) => normalizePartnerInvite(item))
+            return Object.entries(localStore || {})
+                .map(([key, item]) => normalizePartnerInvite(item, '', key))
                 .filter(Boolean)
                 .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
         }
     }
 
-    return Object.values(localStore || {})
-        .map((item) => normalizePartnerInvite(item))
+    return Object.entries(localStore || {})
+        .map(([key, item]) => normalizePartnerInvite(item, '', key))
         .filter(Boolean)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
@@ -2883,9 +2916,9 @@ async function verifyPasswordHash(login, password, rawHash) {
     return false;
 }
 
-function normalizeUserRecord(raw, loginFallback = '') {
+function normalizeUserRecord(raw, loginFallback = '', loginKey = '') {
     if (!raw || typeof raw !== 'object') return null;
-    const login = normalizeLogin(raw.login || loginFallback);
+    const login = resolveNormalizedLogin(raw, loginFallback, loginKey);
     if (!isValidLogin(login)) return null;
     const uid = String(raw.uid || '').trim();
     const failedLoginAttempts = Math.max(0, Number(raw.failedLoginAttempts) || 0);
@@ -3128,8 +3161,8 @@ async function listAllUserRecords() {
             const snapshot = await firebaseGetWithTimeout(AUTH_USERS_DB_PATH);
             if (snapshot.exists()) {
                 const raw = snapshot.val();
-                const records = Object.values(raw || {})
-                    .map((item) => normalizeUserRecord(item))
+                const records = Object.entries(raw || {})
+                    .map(([key, item]) => normalizeUserRecord(item, '', key))
                     .filter(Boolean);
                 if (records.length > 0) {
                     return records.sort((a, b) => a.login.localeCompare(b.login));
@@ -3139,15 +3172,15 @@ async function listAllUserRecords() {
             return [];
         } catch (error) {
             console.error('Failed to load users list from Firebase:', error);
-            return Object.values(localStore || {})
-                .map((item) => normalizeUserRecord(item))
+            return Object.entries(localStore || {})
+                .map(([key, item]) => normalizeUserRecord(item, '', key))
                 .filter(Boolean)
                 .sort((a, b) => a.login.localeCompare(b.login));
         }
     }
 
-    return Object.values(localStore || {})
-        .map((item) => normalizeUserRecord(item))
+    return Object.entries(localStore || {})
+        .map(([key, item]) => normalizeUserRecord(item, '', key))
         .filter(Boolean)
         .sort((a, b) => a.login.localeCompare(b.login));
 }
@@ -4087,20 +4120,20 @@ function startAdminRealtimeSync() {
 
     adminRealtimeUnsubscribes = [
         bindCollection(AUTH_USERS_DB_PATH, (raw) => {
-            adminRealtimeUsers = Object.values(raw || {})
-                .map((item) => normalizeUserRecord(item))
+            adminRealtimeUsers = Object.entries(raw || {})
+                .map(([key, item]) => normalizeUserRecord(item, '', key))
                 .filter(Boolean)
                 .sort((a, b) => a.login.localeCompare(b.login));
         }, 'Admin users live sync failed:'),
         bindCollection(PARTNER_INVITES_DB_PATH, (raw) => {
-            adminRealtimeInvites = Object.values(raw || {})
-                .map((item) => normalizePartnerInvite(item))
+            adminRealtimeInvites = Object.entries(raw || {})
+                .map(([key, item]) => normalizePartnerInvite(item, '', key))
                 .filter(Boolean)
                 .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
         }, 'Admin invites live sync failed:'),
         bindCollection(ACCESS_REVOKE_DB_PATH, (raw) => {
-            adminRealtimeRevocations = Object.values(raw || {})
-                .map((item) => normalizeAccessRevocation(item))
+            adminRealtimeRevocations = Object.entries(raw || {})
+                .map(([key, item]) => normalizeAccessRevocation(item, '', key))
                 .filter(Boolean)
                 .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
         }, 'Admin revocations live sync failed:'),
@@ -6556,8 +6589,8 @@ function getKnownLocalPromptStoreLogins() {
         knownLogins.add(currentLogin);
     }
 
-    Object.values(loadLocalUsersStore() || {}).forEach((item) => {
-        const normalized = normalizeUserRecord(item);
+    Object.entries(loadLocalUsersStore() || {}).forEach(([key, item]) => {
+        const normalized = normalizeUserRecord(item, '', key);
         if (normalized?.login) {
             knownLogins.add(normalized.login);
         }
