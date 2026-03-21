@@ -17,7 +17,7 @@
         integrity="sha384-oaMLBGEzBOJx3UHwac0cVndtX5fxGQIfnAeFZ35RTgqPcYlbprH9o9PUV/F8Le07"
         crossorigin="anonymous"
     >
-<link rel="stylesheet" href="style.css?v=20260320-12">
+    <link rel="stylesheet" href="style.css?v=20260321-07">
     
     <!-- Favicon -->
     <link rel="apple-touch-icon" sizes="180x180" href="favicon/apple-touch-icon.png">
@@ -63,6 +63,10 @@
                 <p id="passwordError" style="color: red; font-size: 14px; display: none; margin-top: 10px;">Ошибка авторизации</p>
 
                 <button id="modalNameSubmit" type="submit" class="btn-modal-submit">Войти</button>
+                <div id="localhostDevAuthActions" class="auth-dev-actions" hidden>
+                    <button id="localhostDevAuthBtn" type="button" class="btn-modal-secondary">Войти локально без авторизации</button>
+                    <p class="auth-dev-caption">Только для localhost. Создаёт локальную dev-сессию и не трогает боевую авторизацию.</p>
+                </div>
                 <details id="authMailHelp" class="auth-mail-help" hidden open>
                     <summary>Где письмо и куда нажимать</summary>
                     <img id="authMailHelpImage" src="1.png" alt="Пример письма подтверждения с выделенной ссылкой входа" loading="lazy">
@@ -115,6 +119,21 @@
             <button class="modal-close" id="promptHistoryModalClose">&times;</button>
             <h3 id="promptHistoryTitle">История промпта</h3>
             <div id="promptHistoryList" class="prompt-history-list"></div>
+        </div>
+    </div>
+
+    <!-- Модальное окно сравнения draft/public -->
+    <div id="promptCompareModal" class="modal-overlay">
+        <div class="modal-content prompt-compare-modal">
+            <button class="modal-close" id="promptCompareModalClose">&times;</button>
+            <h3 id="promptCompareTitle">Сравнение draft и public</h3>
+            <div id="promptCompareSummary" class="prompt-compare-summary"></div>
+            <div id="promptCompareDiffView" class="diff-view prompt-compare-diff"></div>
+            <div class="ai-improve-actions prompt-compare-actions">
+                <button id="promptCompareCancel" class="btn-modal-cancel">Закрыть</button>
+                <button id="promptCompareRollback" class="btn-modal-submit btn-ai-apply-current">Откатить public</button>
+                <button id="promptComparePublish" class="btn-modal-submit">Опубликовать draft</button>
+            </div>
         </div>
     </div>
 
@@ -285,6 +304,31 @@
                             </div>
                         </div>
                     </details>
+                    <details id="adminScenarioLibraryAccordion" class="admin-hidden-prompt-section admin-scenario-library-section">
+                        <summary class="admin-hidden-prompt-summary">Сценарии тестирования</summary>
+                        <div class="admin-scenario-library-body">
+                            <div class="admin-hidden-prompt-hint">
+                                Локальные пресеты для ручной проверки менеджера. Они работают только в этом браузере и не меняют public prompt.
+                            </div>
+                            <div id="adminScenarioLibraryCurrent" class="admin-scenario-library-current"></div>
+                            <div id="adminScenarioLibraryList" class="admin-scenario-library-list"></div>
+                        </div>
+                    </details>
+                    <details id="adminWebhookDebugAccordion" class="admin-hidden-prompt-section admin-webhook-debug-section">
+                        <summary class="admin-hidden-prompt-summary">Диагностика webhook</summary>
+                        <div class="admin-webhook-debug-body">
+                            <div class="admin-webhook-debug-toolbar">
+                                <div class="admin-hidden-prompt-hint">
+                                    Последние запросы этого браузера: чат, старт, оценка, подсказка менеджеру, улучшение prompt и аттестация.
+                                </div>
+                                <button id="adminWebhookDebugClearBtn" class="btn-change btn-danger-subtle">Очистить лог</button>
+                            </div>
+                            <div id="adminWebhookDebugMeta" class="admin-webhook-debug-meta"></div>
+                            <div id="adminWebhookDebugList" class="admin-webhook-debug-list">
+                                <div class="admin-webhook-debug-empty">Лог пока пуст</div>
+                            </div>
+                        </div>
+                    </details>
                     <div class="admin-panel-header">
                         <span class="admin-panel-title">Пользователи и доступ</span>
                         <button id="adminRefreshBtn" class="btn-change">Обновить</button>
@@ -379,6 +423,17 @@
                 <div id="startConversation" class="start-conversation">
                     <button id="startBtn" class="btn-start">Начать диалог</button>
                     <button id="startAttestationBtn" class="btn-start btn-start-attestation">Начать аттестацию</button>
+                </div>
+            </div>
+            <div id="activeScenarioStrip" class="active-scenario-strip" hidden>
+                <div class="active-scenario-copy">
+                    <div id="activeScenarioTitle" class="active-scenario-title"></div>
+                    <div id="activeScenarioSummary" class="active-scenario-summary"></div>
+                </div>
+                <div class="active-scenario-actions">
+                    <button id="activeScenarioPrefillBtn" class="btn-change">Подставить сообщение</button>
+                    <button id="activeScenarioStartBtn" class="btn-change">Стартовать</button>
+                    <button id="activeScenarioClearBtn" class="btn-change btn-danger-subtle">Сбросить</button>
                 </div>
             </div>
             <div class="chat-input-container">
@@ -501,6 +556,8 @@
                             <path d="M12 7v5l3 2"></path>
                         </svg>
                     </button>
+                    <button id="promptCompareBtn" class="toolbar-btn toolbar-btn-compare" title="Сравнить draft с public" aria-label="Сравнить draft с public">Сравнить</button>
+                    <button id="promptRollbackBtn" class="toolbar-btn toolbar-btn-rollback" title="Откатить public к прошлой версии" aria-label="Откатить public к прошлой версии">Откат</button>
                     <span class="toolbar-divider"></span>
                     <button class="toolbar-btn" data-action="h1" title="Заголовок 1">H1</button>
                     <button class="toolbar-btn" data-action="h2" title="Заголовок 2">H2</button>
@@ -545,7 +602,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js" integrity="sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3" crossorigin="anonymous" defer></script>
     <!-- Turndown for HTML to Markdown conversion (WYSIWYG editing) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js" integrity="sha384-m6AyXEhyWRg2s2wrkDV64LGkaManYgMSAjn2U+zymzSJ42WthRSjCu1AqZJhoQV0" crossorigin="anonymous" defer></script>
-<script type="module" src="script.js?v=20260320-17"></script>
+    <script type="module" src="script.js?v=20260321-09"></script>
     <!-- Last deployment trigger: 2026-02-10 18:34 -->
 </body>
 </html>

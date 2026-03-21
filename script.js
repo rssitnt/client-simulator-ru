@@ -59,6 +59,7 @@ const PARTNER_INVITES_STORAGE_KEY = 'partnerInvites:v1';
 const ACCESS_REVOKES_STORAGE_KEY = 'accessRevocations:v1';
 const ACTIVE_TIME_CARRYOVER_STORAGE_KEY = 'activeTimeCarryover:v1';
 const AUTH_SESSION_STORAGE_KEY = 'authSession:v1';
+const LOCALHOST_DEV_AUTH_STORAGE_KEY = 'localhostDevAuthUser:v1';
 const EMAIL_LINK_CONTEXT_STORAGE_KEY = 'emailLinkContext:v1';
 const PENDING_EMAIL_SIGNIN_LINK_STORAGE_KEY = 'pendingEmailSignInLink:v1';
 const EMAIL_LINK_HINT_STORAGE_KEY = 'emailLinkHint:v1';
@@ -66,7 +67,11 @@ const EMAIL_LINK_VERIFIED_HINT_STORAGE_KEY = 'emailLinkVerifiedHint:v1';
 const EMAIL_LINK_AUTH_READY_STORAGE_KEY = 'emailLinkAuthReady:v1';
 const EMAIL_LINK_PROCESSED_STORAGE_KEY = 'emailLinkProcessed:v1';
 const CLIENT_CONVERSATION_ACTION_PROMPT_STORAGE_KEY = 'clientConversationActionPrompt:v1';
+const ACTIVE_TEST_SCENARIO_STORAGE_KEY = 'activeTestScenario:v1';
 const WEBHOOK_DEBUG_CONFIG_STORAGE_KEY = 'webhookDebugConfig:v1';
+const WEBHOOK_DEBUG_LOG_STORAGE_KEY = 'webhookDebugLog:v1';
+const WEBHOOK_DEBUG_LOG_MAX_ENTRIES = 40;
+const FIREBASE_FRONTEND_GET_TIMEOUT_MS = 4000;
 const EMAIL_LINK_PROCESSED_TTL_MS = 24 * 60 * 60 * 1000;
 const SESSION_ID_STORAGE_KEY = 'sessionId';
 const EMAIL_LINK_HINT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -130,6 +135,114 @@ const DEFAULT_CLIENT_CONVERSATION_ACTION_PROMPT_SUFFIX = `
 - возвращай либо обычный текст клиента, либо JSON-объект целиком
 - reason пиши коротким slug латиницей: lost_interest, price_rejection, manager_failed, lost_trust, resolved и т.д.
 `.trim();
+const DEFAULT_RATING_RESULT_PROMPT_SUFFIX = `
+СЛУЖЕБНЫЙ КОНТРАКТ ФОРМАТА ОЦЕНКИ
+Оцени диалог кратко, конкретно и без воды.
+
+Если можешь, возвращай JSON-объект такого вида:
+{
+  "summary": "короткий итог в 1-2 предложениях",
+  "outcome": "go_silent | end_conversation | continue | unknown",
+  "outcomeReason": "короткий slug причины, например lost_interest",
+  "whatKilledDialogue": "что именно сломало диалог",
+  "whatWasSalvageable": "что ещё можно было спасти или в какой точке разговор ещё можно было вернуть",
+  "whyClientLeft": "почему клиент выбрал именно такой исход",
+  "managerMistakes": ["короткая ошибка 1", "короткая ошибка 2"],
+  "managerWins": ["сильный момент 1"],
+  "nextBestStep": "лучший следующий шаг менеджера",
+  "crmActions": ["действие для CRM 1", "действие для CRM 2"]
+}
+
+Правила:
+- не заполняй поля выдумками; если данных нет, оставляй пустую строку или пустой массив
+- managerMistakes, managerWins и crmActions делай короткими массивами без длинных абзацев
+- whatKilledDialogue, whatWasSalvageable и whyClientLeft делай простым человеческим языком
+- если JSON неудобен, верни обычный текст, но по возможности придерживайся этой структуры
+`.trim();
+const TEST_SCENARIO_PRESETS = [
+    {
+        id: 'urgent-foreman',
+        name: 'Срочный прораб',
+        badge: 'Сроки горят',
+        summary: 'Нужен комплект под задачу быстро. Общие слова и долгие паузы раздражают.',
+        outcomeHint: 'Слабая конкретика быстро ведёт к потере интереса; явный слив — к разрыву.',
+        starterMessage: 'Нужен гидробур на CASE CX260C. Задача: 900 лунок в суглинках под буронабивные сваи, размерность 600 мм на 4500 мм. Дайте конкретное решение по комплекту, сроки горят — через неделю оборудование должно быть на объекте.',
+        promptSuffix: `
+SCENARIO_ID: urgent-foreman
+ТЕСТОВЫЙ СЦЕНАРИЙ
+Ты не случайный интересующийся, а срочный клиент с реальным объектом и жёсткими сроками.
+- ждёшь конкретное решение под технику и задачу, а не общие слова
+- быстро теряешь терпение, если менеджер тянет время, уходит в абстракции или не может подтвердить сроки
+- если ответ слабый, но без хамства, реалистично можешь просто замолчать и уйти искать дальше
+- если менеджер явно сливает разговор, даёт только общий прайс или посылает разбираться самому, разговор для тебя закрывается окончательно
+        `.trim()
+    },
+    {
+        id: 'price-sensitive',
+        name: 'Цена выше рынка',
+        badge: 'Цена',
+        summary: 'Сравнивает поставщиков. Высокую цену готов слушать только с сильным обоснованием.',
+        outcomeHint: 'Часто просто уходит молча, если цена выше ожиданий и аргументация слабая.',
+        starterMessage: 'Смотрю гидробур под тот же CASE, но сразу предупреждаю: рынок уже посмотрел. Если у вас цена выше средней, мне нужна очень понятная причина — сроки, сервис, наличие, гарантия. Иначе не вижу смысла переплачивать.',
+        promptSuffix: `
+SCENARIO_ID: price-sensitive
+ТЕСТОВЫЙ СЦЕНАРИЙ
+Ты прагматичный клиент, который уже сравнил рынок и болезненно реагирует на слабую ценовую аргументацию.
+- без сильного обоснования высокой цены не задерживаешься в разговоре
+- если цена выше ожиданий, а менеджер отвечает посредственно, реалистичнее просто уйти без ответа
+- окончательно завершаешь разговор, если менеджер обесценивает сравнение рынка, давит или грубит
+        `.trim()
+    },
+    {
+        id: 'service-risk',
+        name: 'Риск поломки на объекте',
+        badge: 'Сервис',
+        summary: 'Главный страх — встать посреди объекта без запчастей и выездного сервиса.',
+        outcomeHint: 'Если сервис и запчасти не подтверждены убедительно, охотно уходит к конкурентам.',
+        starterMessage: 'Меня больше всего волнует не сама железка, а что будет, если встанем посреди объекта. Сразу скажите, как у вас с сервисом, запчастями и выездом по поломке. Без этого даже цену обсуждать рано.',
+        promptSuffix: `
+SCENARIO_ID: service-risk
+ТЕСТОВЫЙ СЦЕНАРИЙ
+Ты клиент, для которого сервисный риск важнее красивой презентации.
+- сначала оцениваешь уверенность менеджера в сервисе, запчастях и выезде, а не только цену
+- если менеджер уходит от этих вопросов или отвечает расплывчато, доверие быстро падает
+- при слабой, но не токсичной отработке чаще просто уходишь без ответа
+- при откровенном сливе или ложной уверенности без фактов можешь закрыть разговор окончательно
+        `.trim()
+    },
+    {
+        id: 'soft-market-scout',
+        name: 'Смотрит рынок без привязки',
+        badge: 'Мягкий уход',
+        summary: 'Не конфликтный, но не готов терпеть слабую квалификацию. Часто просто пропадает.',
+        outcomeHint: 'Хороший сценарий для проверки `go_silent`: молчаливый уход реалистичнее явного разрыва.',
+        starterMessage: 'Пока смотрю варианты по гидробуру на CASE и хочу быстро понять, кто вообще умеет разговаривать по делу. Если есть внятный комплект и понятные условия — обсудим дальше.',
+        promptSuffix: `
+SCENARIO_ID: soft-market-scout
+ТЕСТОВЫЙ СЦЕНАРИЙ
+Ты вежливый, но холодный клиент, который ещё не привязан к поставщику.
+- если менеджер не впечатлил, чаще просто пропадаешь без финальной сцены
+- не обязан спорить, воспитывать менеджера или закрывать разговор словами
+- end_conversation оставляй для грубости, явного слива или окончательного конфликта
+        `.trim()
+    },
+    {
+        id: 'offended-owner',
+        name: 'Жёсткий собственник',
+        badge: 'Низкий порог',
+        summary: 'Не любит, когда его поучают или перекидывают на сайт. Рвёт разговор быстрее других.',
+        outcomeHint: 'При слабом тоне и высокомерии скорее завершит разговор, чем просто исчезнет.',
+        starterMessage: 'Мне не нужен ликбез и ссылки по кругу. Нужен взрослый разговор: что предложите под CASE CX260C, когда поставите и кто отвечает за сервис. Если будете водить вокруг да около — сразу разойдёмся.',
+        promptSuffix: `
+SCENARIO_ID: offended-owner
+ТЕСТОВЫЙ СЦЕНАРИЙ
+Ты жёсткий собственник с низкой терпимостью к высокомерию и пустым советам.
+- любые фразы уровня «смотрите сайт», «разберитесь сами», «возвращайтесь потом» воспринимаешь как слив
+- на слабую, но спокойную коммерческую работу ещё можешь отреагировать go_silent
+- на хамство, поучения, обесценивание запроса и явный слив чаще отвечаешь окончательным завершением разговора
+        `.trim()
+    }
+];
 const CORPORATE_EMAIL_DOMAINS = new Set([
     '7271155.ru',
     '7274069.ru',
@@ -177,6 +290,11 @@ const CHAT_WEBHOOK_TIMEOUT_MS = 45000;
 const AI_HELPER_WEBHOOK_TIMEOUT_MS = 30000;
 const RATING_WEBHOOK_TIMEOUT_MS = 45000;
 const ATTESTATION_WEBHOOK_TIMEOUT_MS = 30000;
+const AUTH_SESSION_RESTORE_TIMEOUT_MS = 6000;
+const AUTH_FLOW_STEP_TIMEOUT_MS = 12000;
+const AUTH_MAGIC_LINK_SEND_TIMEOUT_MS = 20000;
+const PROMPTS_REST_FALLBACK_TIMEOUT_MS = 5000;
+const FIREBASE_FRONTEND_WRITE_TIMEOUT_MS = 8000;
 const ELEVENLABS_WIDGET_ELEMENT_NAME = 'elevenlabs-convai';
 const ELEVENLABS_WIDGET_LOAD_TIMEOUT_MS = 4500;
 const ELEVENLABS_WIDGET_VERSION = '0.10.3';
@@ -407,6 +525,55 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = WEBHOOK_DEFAULT_T
     }
 }
 
+async function withPromiseTimeout(promise, timeoutMs, timeoutMessage = 'Операция превысила лимит ожидания.') {
+    let timeoutId = null;
+    const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+    });
+    try {
+        return await Promise.race([promise, timeoutPromise]);
+    } finally {
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+        }
+    }
+}
+
+function setAuthSubmitState(isLoading = false, label = AUTH_SUBMIT_DEFAULT_LABEL) {
+    if (!modalNameSubmit) return;
+    modalNameSubmit.disabled = !!isLoading;
+    modalNameSubmit.textContent = String(label || AUTH_SUBMIT_DEFAULT_LABEL).trim() || AUTH_SUBMIT_DEFAULT_LABEL;
+    modalNameSubmit.dataset.loading = isLoading ? 'true' : 'false';
+    modalNameSubmit.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+}
+
+async function runAuthStep(label, promiseFactory, timeoutMs = AUTH_FLOW_STEP_TIMEOUT_MS, timeoutMessage = '') {
+    setAuthSubmitState(true, label);
+    return withPromiseTimeout(
+        Promise.resolve().then(() => promiseFactory()),
+        timeoutMs,
+        timeoutMessage || `Шаг авторизации превысил лимит ожидания (${timeoutMs / 1000}с).`
+    );
+}
+
+async function firebaseGetWithTimeout(dbPath, timeoutMs = FIREBASE_FRONTEND_GET_TIMEOUT_MS) {
+    if (!db) return null;
+    return withPromiseTimeout(
+        get(ref(db, dbPath)),
+        timeoutMs,
+        `Firebase read timeout for ${dbPath}`
+    );
+}
+
+async function firebaseWriteWithTimeout(writeOperation, timeoutMs = FIREBASE_FRONTEND_WRITE_TIMEOUT_MS, label = 'Firebase write') {
+    if (typeof writeOperation !== 'function') return null;
+    return withPromiseTimeout(
+        Promise.resolve().then(() => writeOperation()),
+        timeoutMs,
+        `${label} timeout (${timeoutMs / 1000}с).`
+    );
+}
+
 async function readResponseTextWithTimeout(response, timeoutMs = WEBHOOK_DEFAULT_TIMEOUT_MS, timeoutMessage = '') {
     let timeoutId = null;
     const effectiveTimeoutMessage = timeoutMessage || `Таймаут чтения ответа (${timeoutMs/1000}с). Проверьте n8n workflow.`;
@@ -459,6 +626,33 @@ async function readResponseJsonWithTimeout(
     }
 }
 
+function buildFirebaseRestUrl(path = '') {
+    const baseUrl = String(firebaseConfig?.databaseURL || '').trim().replace(/\/+$/, '');
+    const normalizedPath = String(path || '').trim().replace(/^\/+/, '');
+    if (!baseUrl) return '';
+    if (!normalizedPath) return `${baseUrl}.json`;
+    return `${baseUrl}/${normalizedPath}.json`;
+}
+
+async function fetchFirebaseJsonViaRest(path, timeoutMs = PROMPTS_REST_FALLBACK_TIMEOUT_MS) {
+    const url = buildFirebaseRestUrl(path);
+    if (!url) return null;
+    const response = await fetchWithTimeout(url, {
+        method: 'GET',
+        credentials: 'omit',
+        cache: 'no-store'
+    }, timeoutMs);
+    if (!response.ok) {
+        throw new Error(`Firebase REST ${path} failed with HTTP ${response.status}`);
+    }
+    return readResponseJsonWithTimeout(
+        response,
+        timeoutMs,
+        `Таймаут чтения Firebase REST ${path} (${timeoutMs / 1000}с).`,
+        null
+    );
+}
+
 function buildRequestId(prefix = 'req') {
     return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -501,15 +695,20 @@ const nameModalStep1 = document.getElementById('nameModalStep1');
 const modalPasswordInput = document.getElementById('modalPasswordInput');
 const authMailHelp = document.getElementById('authMailHelp');
 const authMailHelpImage = document.getElementById('authMailHelpImage');
+const localhostDevAuthActions = document.getElementById('localhostDevAuthActions');
+const localhostDevAuthBtn = document.getElementById('localhostDevAuthBtn');
 const togglePasswordVisibilityBtn = document.getElementById('togglePasswordVisibility');
 const authErrorText = document.getElementById('passwordError');
 const promptVariationsContainer = document.getElementById('promptVariations');
 const promptSyncConflictNotice = document.getElementById('promptSyncConflictNotice');
 const promptLengthInfo = document.getElementById('promptLengthInfo');
+const AUTH_SUBMIT_DEFAULT_LABEL = String(modalNameSubmit?.textContent || 'Войти').trim() || 'Войти';
 
 // AI Improve Modal Elements
 const aiImproveBtn = document.getElementById('aiImproveBtn');
 const promptHistoryBtn = document.getElementById('promptHistoryBtn');
+const promptCompareBtn = document.getElementById('promptCompareBtn');
+const promptRollbackBtn = document.getElementById('promptRollbackBtn');
 const aiImproveModal = document.getElementById('aiImproveModal');
 const aiImproveModalClose = document.getElementById('aiImproveModalClose');
 const aiImproveModalTitle = document.getElementById('aiImproveModalTitle');
@@ -518,6 +717,14 @@ const promptHistoryModal = document.getElementById('promptHistoryModal');
 const promptHistoryModalClose = document.getElementById('promptHistoryModalClose');
 const promptHistoryTitle = document.getElementById('promptHistoryTitle');
 const promptHistoryList = document.getElementById('promptHistoryList');
+const promptCompareModal = document.getElementById('promptCompareModal');
+const promptCompareModalClose = document.getElementById('promptCompareModalClose');
+const promptCompareTitle = document.getElementById('promptCompareTitle');
+const promptCompareSummary = document.getElementById('promptCompareSummary');
+const promptCompareDiffView = document.getElementById('promptCompareDiffView');
+const promptCompareCancel = document.getElementById('promptCompareCancel');
+const promptCompareRollback = document.getElementById('promptCompareRollback');
+const promptComparePublish = document.getElementById('promptComparePublish');
 const voiceModeScreen = document.getElementById('voiceModeScreen');
 const voiceModeActions = document.getElementById('voiceModeActions');
 const voiceModeExitBtn = document.getElementById('voiceModeExitBtn');
@@ -568,6 +775,13 @@ const adminHiddenClientPromptAccordion = document.getElementById('adminHiddenCli
 const adminHiddenClientPromptInput = document.getElementById('adminHiddenClientPromptInput');
 const adminHiddenClientPromptSaveBtn = document.getElementById('adminHiddenClientPromptSaveBtn');
 const adminHiddenClientPromptResetBtn = document.getElementById('adminHiddenClientPromptResetBtn');
+const adminScenarioLibraryAccordion = document.getElementById('adminScenarioLibraryAccordion');
+const adminScenarioLibraryCurrent = document.getElementById('adminScenarioLibraryCurrent');
+const adminScenarioLibraryList = document.getElementById('adminScenarioLibraryList');
+const adminWebhookDebugAccordion = document.getElementById('adminWebhookDebugAccordion');
+const adminWebhookDebugMeta = document.getElementById('adminWebhookDebugMeta');
+const adminWebhookDebugList = document.getElementById('adminWebhookDebugList');
+const adminWebhookDebugClearBtn = document.getElementById('adminWebhookDebugClearBtn');
 const adminPanelAccordion = document.getElementById('adminPanelAccordion');
 const adminPanel = document.getElementById('adminPanel');
 const adminRefreshBtn = document.getElementById('adminRefreshBtn');
@@ -583,6 +797,12 @@ const instructionEditors = Array.from(document.querySelectorAll('.instruction-ed
 const instructionOptions = Array.from(document.querySelectorAll('.dropdown-option'));
 const selectedInstructionText = document.getElementById('selectedInstructionText');
 const instructionDropdown = document.getElementById('instructionDropdown');
+const activeScenarioStrip = document.getElementById('activeScenarioStrip');
+const activeScenarioTitle = document.getElementById('activeScenarioTitle');
+const activeScenarioSummary = document.getElementById('activeScenarioSummary');
+const activeScenarioPrefillBtn = document.getElementById('activeScenarioPrefillBtn');
+const activeScenarioStartBtn = document.getElementById('activeScenarioStartBtn');
+const activeScenarioClearBtn = document.getElementById('activeScenarioClearBtn');
 
 const promptInputsByRole = {
     client: systemPromptInput,
@@ -638,8 +858,11 @@ let pendingImprovedPrompt = null;
 let pendingRole = null;
 let pendingName = null;
 let pendingVariationId = null;
+let activePromptCompareContext = null;
 let pendingRatingImproveContext = null;
 let aiImproveMode = 'default';
+let webhookDebugEntries = loadWebhookDebugEntries();
+let webhookDebugRenderQueued = false;
 const LOCAL_PROMPTS_STORAGE_VERSION = 'v3';
 const LEGACY_LOCAL_PROMPTS_STORAGE_VERSION = 'v2';
 const HISTORY_LIMIT = 50;
@@ -668,7 +891,7 @@ let lastPromptsFirebaseSnapshot = null;
 let selectedRole = 'user';
 let currentUser = null;
 let isAppBootstrapped = false;
-let isWindowLoaded = document.readyState === 'complete';
+let isWindowLoaded = document.readyState !== 'loading';
 let isChatReady = false;
 let lockedPromptRole = null;
 let lockedPromptVariationId = null;
@@ -779,6 +1002,7 @@ let promptsData = {
 };
 const promptEditRemoteBaselineHashes = {};
 const promptSyncConflictMessages = {};
+let activeTestScenarioPresetId = '';
 
 function normalizeFio(value) {
     return String(value || '').trim().replace(/\s+/g, ' ');
@@ -839,6 +1063,42 @@ function getRoleIcon(role) {
 function hasAdminAccount(user = currentUser) {
     return normalizeRole(user?.role || 'user') === 'admin';
 }
+
+function normalizeTestScenarioPresetId(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    return TEST_SCENARIO_PRESETS.some((preset) => preset.id === normalized) ? normalized : '';
+}
+
+function getTestScenarioPresetById(presetId) {
+    const normalized = normalizeTestScenarioPresetId(presetId);
+    return TEST_SCENARIO_PRESETS.find((preset) => preset.id === normalized) || null;
+}
+
+function getStoredActiveTestScenarioPresetId() {
+    return normalizeTestScenarioPresetId(getCachedStorageValue(ACTIVE_TEST_SCENARIO_STORAGE_KEY, ''));
+}
+
+function persistActiveTestScenarioPresetId(presetId) {
+    const normalized = normalizeTestScenarioPresetId(presetId);
+    activeTestScenarioPresetId = normalized;
+    if (normalized) {
+        setCachedStorageValue(ACTIVE_TEST_SCENARIO_STORAGE_KEY, normalized);
+    } else {
+        removeCachedStorageValue(ACTIVE_TEST_SCENARIO_STORAGE_KEY);
+    }
+    return normalized;
+}
+
+function getActiveTestScenarioPreset(options = {}) {
+    const { requireAdminView = true } = options;
+    const preset = getTestScenarioPresetById(activeTestScenarioPresetId);
+    if (!preset) return null;
+    if (isAttestationMode) return null;
+    if (requireAdminView && !isAdmin()) return null;
+    return preset;
+}
+
+activeTestScenarioPresetId = getStoredActiveTestScenarioPresetId();
 
 function isLocalhostAdminPreviewHost() {
     const hostname = String(window?.location?.hostname || '').trim().toLowerCase();
@@ -1167,11 +1427,16 @@ function listSafeLocalStorageKeysByPrefix(prefix = '') {
     }
 }
 
-function setAuthSession(login) {
-    setCachedStorageValue(AUTH_SESSION_STORAGE_KEY, JSON.stringify({
-        login: normalizeLogin(login),
+function setAuthSession(login, options = {}) {
+    const normalizedLogin = normalizeLogin(login);
+    const sessionPayload = {
+        login: normalizedLogin,
         signedAt: new Date().toISOString()
-    }));
+    };
+    if (options.devBypass && isLocalhostAdminPreviewHost()) {
+        sessionPayload.devBypass = true;
+    }
+    setCachedStorageValue(AUTH_SESSION_STORAGE_KEY, JSON.stringify(sessionPayload));
 }
 
 function getAuthSession() {
@@ -1187,6 +1452,10 @@ function getAuthSession() {
 
 function clearAuthSession() {
     removeCachedStorageValue(AUTH_SESSION_STORAGE_KEY);
+}
+
+function isLocalhostDevBypassSession(session = getAuthSession()) {
+    return !!(isLocalhostAdminPreviewHost() && session?.devBypass && normalizeLogin(session?.login || ''));
 }
 
 function clearAuthCacheIdentity() {
@@ -1223,6 +1492,38 @@ function loadLocalUsersStore() {
 
 function saveLocalUsersStore(store) {
     setCachedLocalStorageJson(AUTH_LOCAL_STORAGE_KEY, store || {});
+}
+
+function getLocalhostDevAuthUser() {
+    if (!isLocalhostAdminPreviewHost()) return null;
+    const stored = getCachedLocalStorageJson(LOCALHOST_DEV_AUTH_STORAGE_KEY);
+    return normalizeUserRecord(stored, stored?.login);
+}
+
+function getLocalhostDevAuthUserByLogin(login = '') {
+    const normalizedLogin = normalizeLogin(login);
+    const stored = getLocalhostDevAuthUser();
+    if (!stored) return null;
+    if (normalizedLogin && stored.login !== normalizedLogin) return null;
+    return stored;
+}
+
+function saveLocalhostDevAuthUser(record) {
+    if (!isLocalhostAdminPreviewHost()) return null;
+    const normalized = normalizeUserRecord(record, record?.login);
+    if (!normalized) throw new Error('Invalid localhost dev auth user');
+    setCachedLocalStorageJson(LOCALHOST_DEV_AUTH_STORAGE_KEY, toLocalUserCachePayload(normalized));
+    return normalized;
+}
+
+function saveUserRecordToLocalCache(record) {
+    const normalized = normalizeUserRecord(record, record?.login);
+    if (!normalized) throw new Error('Invalid local user record');
+    const key = loginToStorageKey(normalized.login);
+    const localStore = loadLocalUsersStore();
+    localStore[key] = toLocalUserCachePayload(normalized);
+    saveLocalUsersStore(localStore);
+    return normalized;
 }
 
 function toLocalUserCachePayload(record) {
@@ -1442,14 +1743,14 @@ async function getAccessRevocation(login) {
     const normalizedLogin = normalizeLogin(login);
     if (!isValidLogin(normalizedLogin)) return null;
     const key = loginToStorageKey(normalizedLogin);
+    const localStore = loadLocalAccessRevokesStore();
 
     if (db) {
         try {
-            const snapshot = await get(ref(db, `${ACCESS_REVOKE_DB_PATH}/${key}`));
+            const snapshot = await firebaseGetWithTimeout(`${ACCESS_REVOKE_DB_PATH}/${key}`);
             if (snapshot.exists()) {
                 return normalizeAccessRevocation(snapshot.val(), normalizedLogin);
             }
-            const localStore = loadLocalAccessRevokesStore();
             if (Object.prototype.hasOwnProperty.call(localStore, key)) {
                 delete localStore[key];
                 saveLocalAccessRevokesStore(localStore);
@@ -1457,11 +1758,19 @@ async function getAccessRevocation(login) {
             return null;
         } catch (error) {
             console.error('Failed to load access revocation from Firebase:', error);
-            return null;
+            try {
+                const restValue = await fetchFirebaseJsonViaRest(`${ACCESS_REVOKE_DB_PATH}/${key}`, FIREBASE_FRONTEND_GET_TIMEOUT_MS);
+                const normalized = normalizeAccessRevocation(restValue, normalizedLogin);
+                if (normalized) {
+                    return normalized;
+                }
+            } catch (restError) {
+                console.error('Failed to load access revocation via Firebase REST:', restError);
+            }
+            return normalizeAccessRevocation(localStore[key], normalizedLogin);
         }
     }
 
-    const localStore = loadLocalAccessRevokesStore();
     return normalizeAccessRevocation(localStore[key], normalizedLogin);
 }
 
@@ -1481,11 +1790,13 @@ async function setAccessRevocation(login, isRevoked, meta = {}) {
 
     if (db) {
         try {
-            if (isRevoked) {
-                await set(ref(db, `${ACCESS_REVOKE_DB_PATH}/${key}`), payload);
-            } else {
-                await set(ref(db, `${ACCESS_REVOKE_DB_PATH}/${key}`), null);
-            }
+            await firebaseWriteWithTimeout(
+                () => isRevoked
+                    ? set(ref(db, `${ACCESS_REVOKE_DB_PATH}/${key}`), payload)
+                    : set(ref(db, `${ACCESS_REVOKE_DB_PATH}/${key}`), null),
+                FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
+                `Firebase write for ${ACCESS_REVOKE_DB_PATH}/${key}`
+            );
         } catch (error) {
             console.error('Failed to save access revocation in Firebase:', error);
         }
@@ -1502,9 +1813,10 @@ async function setAccessRevocation(login, isRevoked, meta = {}) {
 }
 
 async function listAccessRevocations() {
+    const localStore = loadLocalAccessRevokesStore();
     if (db) {
         try {
-            const snapshot = await get(ref(db, ACCESS_REVOKE_DB_PATH));
+            const snapshot = await firebaseGetWithTimeout(ACCESS_REVOKE_DB_PATH);
             if (snapshot.exists()) {
                 const raw = snapshot.val();
                 return Object.values(raw || {})
@@ -1521,11 +1833,18 @@ async function listAccessRevocations() {
             return [];
         } catch (error) {
             console.error('Failed to load access revocations from Firebase:', error);
-            return [];
+            return Object.values(localStore || {})
+                .map((item) => normalizeAccessRevocation(item))
+                .filter((item) => item && item.status === 'revoked')
+                .sort((a, b) => {
+                    const aTime = parseIsoMs(a.updatedAt);
+                    const bTime = parseIsoMs(b.updatedAt);
+                    if (aTime && bTime) return bTime - aTime;
+                    return 0;
+                });
         }
     }
 
-    const localStore = loadLocalAccessRevokesStore();
     return Object.values(localStore || {})
         .map((item) => normalizeAccessRevocation(item))
         .filter((item) => item && item.status === 'revoked')
@@ -2014,7 +2333,11 @@ async function sendMagicLinkToEmail(email, purpose = 'verify') {
         handleCodeInApp: true
     };
 
-    await sendSignInLinkToEmail(auth, normalizedEmail, actionCodeSettings);
+    await withPromiseTimeout(
+        sendSignInLinkToEmail(auth, normalizedEmail, actionCodeSettings),
+        AUTH_MAGIC_LINK_SEND_TIMEOUT_MS,
+        `Не удалось дождаться отправки письма (${AUTH_MAGIC_LINK_SEND_TIMEOUT_MS / 1000}с).`
+    );
     saveEmailLinkContext({
         email: normalizedEmail,
         purpose,
@@ -2052,14 +2375,14 @@ async function getPartnerInviteByLogin(login) {
     const normalizedLogin = normalizeLogin(login);
     if (!isValidLogin(normalizedLogin)) return null;
     const key = loginToStorageKey(normalizedLogin);
+    const localStore = loadLocalPartnerInvitesStore();
 
     if (db) {
         try {
-            const snapshot = await get(ref(db, `${PARTNER_INVITES_DB_PATH}/${key}`));
+            const snapshot = await firebaseGetWithTimeout(`${PARTNER_INVITES_DB_PATH}/${key}`);
             if (snapshot.exists()) {
                 return normalizePartnerInvite(snapshot.val(), normalizedLogin);
             }
-            const localStore = loadLocalPartnerInvitesStore();
             if (Object.prototype.hasOwnProperty.call(localStore, key)) {
                 delete localStore[key];
                 saveLocalPartnerInvitesStore(localStore);
@@ -2067,11 +2390,19 @@ async function getPartnerInviteByLogin(login) {
             return null;
         } catch (error) {
             console.error('Failed to load partner invite from Firebase:', error);
-            return null;
+            try {
+                const restValue = await fetchFirebaseJsonViaRest(`${PARTNER_INVITES_DB_PATH}/${key}`, FIREBASE_FRONTEND_GET_TIMEOUT_MS);
+                const normalized = normalizePartnerInvite(restValue, normalizedLogin);
+                if (normalized) {
+                    return normalized;
+                }
+            } catch (restError) {
+                console.error('Failed to load partner invite via Firebase REST:', restError);
+            }
+            return normalizePartnerInvite(localStore[key], normalizedLogin);
         }
     }
 
-    const localStore = loadLocalPartnerInvitesStore();
     return normalizePartnerInvite(localStore[key], normalizedLogin);
 }
 
@@ -2092,7 +2423,11 @@ async function savePartnerInvite(invite) {
 
     if (db) {
         try {
-            await set(ref(db, `${PARTNER_INVITES_DB_PATH}/${key}`), payload);
+            await firebaseWriteWithTimeout(
+                () => set(ref(db, `${PARTNER_INVITES_DB_PATH}/${key}`), payload),
+                FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
+                `Firebase write for ${PARTNER_INVITES_DB_PATH}/${key}`
+            );
         } catch (error) {
             console.error('Failed to save partner invite to Firebase:', error);
         }
@@ -2125,7 +2460,11 @@ async function patchPartnerInvite(login, patch = {}) {
 
     if (db) {
         try {
-            await update(ref(db, `${PARTNER_INVITES_DB_PATH}/${key}`), sanitizedPatch);
+            await firebaseWriteWithTimeout(
+                () => update(ref(db, `${PARTNER_INVITES_DB_PATH}/${key}`), sanitizedPatch),
+                FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
+                `Firebase patch for ${PARTNER_INVITES_DB_PATH}/${key}`
+            );
         } catch (error) {
             console.error('Failed to patch partner invite in Firebase:', error);
         }
@@ -2149,7 +2488,11 @@ async function deletePartnerInvite(login) {
 
     if (db) {
         try {
-            await set(ref(db, `${PARTNER_INVITES_DB_PATH}/${key}`), null);
+            await firebaseWriteWithTimeout(
+                () => set(ref(db, `${PARTNER_INVITES_DB_PATH}/${key}`), null),
+                FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
+                `Firebase delete for ${PARTNER_INVITES_DB_PATH}/${key}`
+            );
         } catch (error) {
             console.error('Failed to delete partner invite in Firebase:', error);
         }
@@ -2164,9 +2507,10 @@ async function deletePartnerInvite(login) {
 }
 
 async function listPartnerInvites() {
+    const localStore = loadLocalPartnerInvitesStore();
     if (db) {
         try {
-            const snapshot = await get(ref(db, PARTNER_INVITES_DB_PATH));
+            const snapshot = await firebaseGetWithTimeout(PARTNER_INVITES_DB_PATH);
             if (snapshot.exists()) {
                 const raw = snapshot.val();
                 const invites = Object.values(raw || {})
@@ -2181,11 +2525,13 @@ async function listPartnerInvites() {
             return [];
         } catch (error) {
             console.error('Failed to load partner invites from Firebase:', error);
-            return [];
+            return Object.values(localStore || {})
+                .map((item) => normalizePartnerInvite(item))
+                .filter(Boolean)
+                .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
         }
     }
 
-    const localStore = loadLocalPartnerInvitesStore();
     return Object.values(localStore || {})
         .map((item) => normalizePartnerInvite(item))
         .filter(Boolean)
@@ -2579,15 +2925,15 @@ async function getUserRecordByLogin(login) {
     const normalizedLogin = normalizeLogin(login);
     if (!normalizedLogin) return null;
     const key = loginToStorageKey(normalizedLogin);
+    const localStore = loadLocalUsersStore();
 
     if (db) {
         try {
-            const snapshot = await get(ref(db, `${AUTH_USERS_DB_PATH}/${key}`));
+            const snapshot = await firebaseGetWithTimeout(`${AUTH_USERS_DB_PATH}/${key}`);
             if (snapshot.exists()) {
                 const record = normalizeUserRecord(snapshot.val(), normalizedLogin);
                 if (record) return record;
             }
-            const localStore = loadLocalUsersStore();
             if (Object.prototype.hasOwnProperty.call(localStore, key)) {
                 delete localStore[key];
                 saveLocalUsersStore(localStore);
@@ -2595,10 +2941,26 @@ async function getUserRecordByLogin(login) {
             return null;
         } catch (error) {
             console.error('Failed to load user from Firebase:', error);
-            return null;
+            try {
+                const restValue = await fetchFirebaseJsonViaRest(`${AUTH_USERS_DB_PATH}/${key}`, FIREBASE_FRONTEND_GET_TIMEOUT_MS);
+                const normalized = normalizeUserRecord(restValue, normalizedLogin);
+                if (normalized) {
+                    return normalized;
+                }
+            } catch (restError) {
+                console.error('Failed to load user via Firebase REST:', restError);
+            }
+            return normalizeUserRecord(localStore[key], normalizedLogin);
         }
     }
 
+    return normalizeUserRecord(localStore[key], normalizedLogin);
+}
+
+function getLocalUserRecordByLogin(login) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!normalizedLogin) return null;
+    const key = loginToStorageKey(normalizedLogin);
     const localStore = loadLocalUsersStore();
     return normalizeUserRecord(localStore[key], normalizedLogin);
 }
@@ -2632,7 +2994,11 @@ async function saveUserRecord(record) {
 
     if (db) {
         try {
-            await set(ref(db, `${AUTH_USERS_DB_PATH}/${key}`), payload);
+            await firebaseWriteWithTimeout(
+                () => set(ref(db, `${AUTH_USERS_DB_PATH}/${key}`), payload),
+                FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
+                `Firebase write for ${AUTH_USERS_DB_PATH}/${key}`
+            );
         } catch (error) {
             console.error('Failed to save user to Firebase:', error);
         }
@@ -2705,7 +3071,11 @@ async function patchUserRecord(login, patch = {}, options = {}) {
 
     if (db) {
         try {
-            await update(ref(db, `${AUTH_USERS_DB_PATH}/${key}`), sanitizedPatch);
+            await firebaseWriteWithTimeout(
+                () => update(ref(db, `${AUTH_USERS_DB_PATH}/${key}`), sanitizedPatch),
+                FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
+                `Firebase patch for ${AUTH_USERS_DB_PATH}/${key}`
+            );
         } catch (error) {
             console.error('Failed to patch user in Firebase:', error);
         }
@@ -2729,7 +3099,11 @@ async function deleteUserRecord(login) {
 
     if (db) {
         try {
-            await set(ref(db, `${AUTH_USERS_DB_PATH}/${key}`), null);
+            await firebaseWriteWithTimeout(
+                () => set(ref(db, `${AUTH_USERS_DB_PATH}/${key}`), null),
+                FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
+                `Firebase delete for ${AUTH_USERS_DB_PATH}/${key}`
+            );
         } catch (error) {
             console.error('Failed to delete user in Firebase:', error);
         }
@@ -2744,9 +3118,10 @@ async function deleteUserRecord(login) {
 }
 
 async function listAllUserRecords() {
+    const localStore = loadLocalUsersStore();
     if (db) {
         try {
-            const snapshot = await get(ref(db, AUTH_USERS_DB_PATH));
+            const snapshot = await firebaseGetWithTimeout(AUTH_USERS_DB_PATH);
             if (snapshot.exists()) {
                 const raw = snapshot.val();
                 const records = Object.values(raw || {})
@@ -2760,11 +3135,13 @@ async function listAllUserRecords() {
             return [];
         } catch (error) {
             console.error('Failed to load users list from Firebase:', error);
-            return [];
+            return Object.values(localStore || {})
+                .map((item) => normalizeUserRecord(item))
+                .filter(Boolean)
+                .sort((a, b) => a.login.localeCompare(b.login));
         }
     }
 
-    const localStore = loadLocalUsersStore();
     return Object.values(localStore || {})
         .map((item) => normalizeUserRecord(item))
         .filter(Boolean)
@@ -2774,6 +3151,7 @@ async function listAllUserRecords() {
 function applyAuthenticatedUser(user) {
     const normalized = normalizeUserRecord(user, user?.login);
     if (!normalized) return;
+    const isDevBypassSession = isLocalhostDevBypassSession();
 
     currentUser = normalized;
     currentUser.passwordHash = '';
@@ -2791,10 +3169,16 @@ function applyAuthenticatedUser(user) {
     }
 
     updateUserNameDisplay();
-    void ensureCurrentUserAccessMirror(normalized);
-    startCurrentUserRecordSubscription(normalized.login);
-    startCurrentUserPromptOverridesSubscription(normalized.login);
-    startCurrentUserPresenceSync(normalized.login);
+    if (isDevBypassSession) {
+        stopCurrentUserRecordSubscription();
+        stopCurrentUserPromptOverridesSubscription();
+        stopCurrentUserPresenceSync();
+    } else {
+        void ensureCurrentUserAccessMirror(normalized);
+        startCurrentUserRecordSubscription(normalized.login);
+        startCurrentUserPromptOverridesSubscription(normalized.login);
+        startCurrentUserPresenceSync(normalized.login);
+    }
     applyRoleRestrictions();
 }
 
@@ -2827,6 +3211,85 @@ function setAuthError(message = '') {
     }
     authErrorText.textContent = message;
     authErrorText.style.display = 'block';
+}
+
+function syncLocalhostDevAuthActions() {
+    if (!localhostDevAuthActions || !localhostDevAuthBtn) return;
+    const isVisible = isLocalhostAdminPreviewHost();
+    localhostDevAuthActions.hidden = !isVisible;
+    localhostDevAuthBtn.disabled = !isVisible;
+}
+
+async function handleLocalhostDevAuth() {
+    if (!isLocalhostAdminPreviewHost()) return;
+    setAuthMailHelpVisible(false);
+    const fio = normalizeFio(modalNameInput?.value || '');
+    const login = normalizeLogin(modalLoginInput?.value || '');
+    const password = String(modalPasswordInput?.value || '');
+
+    if (!isValidFio(fio)) {
+        setAuthError('Введите полное ФИО (минимум 2 слова).');
+        modalNameInput?.focus();
+        return;
+    }
+    if (!isValidLogin(login)) {
+        setAuthError('Введите корректный email.');
+        modalLoginInput?.focus();
+        return;
+    }
+    if (password && !isValidPassword(password)) {
+        setAuthError('Для локального входа пароль либо пустой, либо минимум 6 символов.');
+        modalPasswordInput?.focus();
+        return;
+    }
+
+    setAuthError('');
+    setAuthSubmitState(true, 'Входим локально...');
+
+    try {
+        const nowIso = new Date().toISOString();
+        const existingLocalUser = getLocalUserRecordByLogin(login);
+        let passwordHash = String(existingLocalUser?.passwordHash || '');
+        if (password) {
+            passwordHash = await hashPassword(login, password);
+        }
+
+        const localUserPayload = {
+            ...(existingLocalUser || {}),
+            login,
+            fio,
+            role: 'user',
+            passwordHash,
+            passwordNeedsSetup: false,
+            emailVerifiedAt: existingLocalUser?.emailVerifiedAt || nowIso,
+            emailVerificationSentAt: null,
+            failedLoginAttempts: 0,
+            isBlocked: false,
+            blockedReason: null,
+            failedLoginBackoffUntil: null,
+            blockedAt: null,
+            sessionRevokedAt: null,
+            passwordHashScheme: passwordHash ? PASSWORD_HASH_FORMAT_PREFIX : (existingLocalUser?.passwordHashScheme || null),
+            createdAt: existingLocalUser?.createdAt || nowIso,
+            lastLoginAt: nowIso,
+            lastSeenAt: nowIso,
+            activeMs: Number(existingLocalUser?.activeMs) || 0
+        };
+        const localUser = saveLocalhostDevAuthUser(localUserPayload) || saveUserRecordToLocalCache(localUserPayload);
+        saveUserRecordToLocalCache(localUser);
+
+        setAuthSession(localUser.login, { devBypass: true });
+        applyAuthenticatedUser(localUser);
+        await replayActiveTimeCarryover();
+        hideNameModal();
+        startActiveTimeTracking();
+        showCopyNotification('Локальный вход включен');
+    } catch (error) {
+        console.error('Localhost auth bypass error:', error);
+        setAuthError('Не удалось включить локальный вход.');
+    } finally {
+        setAuthSubmitState(false);
+    }
 }
 
 function setAuthMailHelpVisible(isVisible) {
@@ -2945,6 +3408,7 @@ async function enforceSessionRevocation(force = false) {
     const session = getAuthSession();
     if (!session?.login) return false;
     if (normalizeLogin(session.login) !== currentUser.login) return false;
+    if (isLocalhostDevBypassSession(session)) return false;
     if (isSessionRevokedForSignedAt(session.signedAt, currentUser.sessionRevokedAt)) {
         resetCurrentSessionToAuth('Сессия закрыта администратором. Войдите снова.');
         return true;
@@ -3117,11 +3581,14 @@ function syncCurrentUserSettingsState() {
         adminPanelAccordion.style.display = '';
         adminPanelAccordion.setAttribute('open', '');
         startAdminRealtimeSync();
+        renderAdminScenarioLibrary();
+        renderWebhookDebugPanel();
     } else {
         adminPanelAccordion.style.display = 'none';
         adminPanelAccordion.removeAttribute('open');
         stopAdminRealtimeSync();
     }
+    renderActiveScenarioStrip();
 }
 
 function applyCurrentUserRealtimeRecord(freshUser) {
@@ -3186,9 +3653,16 @@ function startCurrentUserRecordSubscription(login) {
     currentUserRecordListenerLogin = normalizedLogin;
     currentUserRecordUnsubscribe = onValue(
         ref(db, `${AUTH_USERS_DB_PATH}/${loginToStorageKey(normalizedLogin)}`),
-        (snapshot) => {
+        async (snapshot) => {
             if (!currentUser || normalizeLogin(currentUser.login) !== normalizedLogin) return;
             if (!snapshot.exists()) {
+                if (isLocalhostAdminPreviewHost()) {
+                    const fallbackUser = getLocalUserRecordByLogin(normalizedLogin);
+                    if (fallbackUser) {
+                        applyCurrentUserRealtimeRecord(fallbackUser);
+                        return;
+                    }
+                }
                 resetCurrentSessionToAuth('Сессия завершена. Войдите снова.');
                 return;
             }
@@ -3996,13 +4470,28 @@ async function handleAuthSubmit() {
     }
 
     setAuthError('');
-    modalNameSubmit.disabled = true;
+    setAuthSubmitState(true, 'Проверяем данные...');
 
     try {
-        const didVerifyEmailLinkNow = await consumePendingEmailSignInLinkForLogin(login);
+        const didVerifyEmailLinkNow = await runAuthStep(
+            'Проверяем ссылку...',
+            () => consumePendingEmailSignInLinkForLogin(login),
+            AUTH_FLOW_STEP_TIMEOUT_MS,
+            'Не удалось проверить ссылку подтверждения. Попробуйте ещё раз.'
+        );
         const authReady = getEmailLinkAuthReady(login);
-        let existingUser = await getUserRecordByLogin(login);
-        const accessPolicy = await resolveAccessPolicy(login, existingUser);
+        let existingUser = await runAuthStep(
+            'Проверяем аккаунт...',
+            () => getUserRecordByLogin(login),
+            AUTH_FLOW_STEP_TIMEOUT_MS,
+            'Не удалось проверить аккаунт. Попробуйте ещё раз.'
+        );
+        const accessPolicy = await runAuthStep(
+            'Проверяем доступ...',
+            () => resolveAccessPolicy(login, existingUser),
+            AUTH_FLOW_STEP_TIMEOUT_MS,
+            'Не удалось проверить доступ. Попробуйте ещё раз.'
+        );
         if (!accessPolicy || accessPolicy.decision !== 'allow') {
             const deniedMessage = resolveAccessPolicyDecisionMessage(accessPolicy);
             applySessionPolicy(accessPolicy || { decision: 'deny', reason: ACCESS_CONTROL_DECISION_REASON.NOT_FOUND }, {
@@ -4044,19 +4533,44 @@ async function handleAuthSubmit() {
             const canSetPasswordAfterLink = existingIsVerified && hasEmailLinkVerification;
             const shouldVerifyPassword = !passwordNeedsSetup && !canSetPasswordAfterLink;
             const isPasswordValid = shouldVerifyPassword ? await passwordValid() : true;
-            if (shouldVerifyPassword && !isPasswordValid) {
+            const localhostLocalUser = isLocalhostAdminPreviewHost() ? getLocalUserRecordByLogin(login) : null;
+            const canUseLocalhostPasswordFallback = shouldVerifyPassword &&
+                !isPasswordValid &&
+                !!localhostLocalUser?.passwordHash &&
+                await verifyPasswordHash(login, password, localhostLocalUser.passwordHash);
+
+            if (canUseLocalhostPasswordFallback) {
+                existingUser = normalizeUserRecord({
+                    ...existingUser,
+                    ...localhostLocalUser,
+                    login,
+                    fio,
+                    role: existingUser.role === 'admin'
+                        ? 'admin'
+                        : normalizeRole(accessPolicy.role || localhostLocalUser.role || existingUser.role),
+                    emailVerifiedAt: existingUser.emailVerifiedAt || localhostLocalUser.emailVerifiedAt || null,
+                    sessionRevokedAt: existingUser.sessionRevokedAt || localhostLocalUser.sessionRevokedAt || null
+                }, login) || existingUser;
+            }
+
+            if (shouldVerifyPassword && !isPasswordValid && !canUseLocalhostPasswordFallback) {
                 const failedAttempts = Math.max(0, Number(existingUser.failedLoginAttempts) || 0) + 1;
                 const shouldBlock = failedAttempts >= MAX_FAILED_PASSWORD_ATTEMPTS;
                 const backoffMs = shouldBlock ? null : computeFailedLoginBackoffMs(failedAttempts);
                 const backoffUntilAt = backoffMs ? new Date(nowIso).getTime() + backoffMs : null;
-                await patchUserRecord(login, {
-                    failedLoginAttempts: failedAttempts,
-                    isBlocked: shouldBlock,
-                    blockedAt: shouldBlock ? nowIso : null,
-                    blockedReason: shouldBlock ? 'failed_attempts' : null,
-                    failedLoginBackoffUntil: backoffUntilAt ? new Date(backoffUntilAt).toISOString() : null,
-                    lastSeenAt: nowIso
-                });
+                await runAuthStep(
+                    'Сохраняем попытку...',
+                    () => patchUserRecord(login, {
+                        failedLoginAttempts: failedAttempts,
+                        isBlocked: shouldBlock,
+                        blockedAt: shouldBlock ? nowIso : null,
+                        blockedReason: shouldBlock ? 'failed_attempts' : null,
+                        failedLoginBackoffUntil: backoffUntilAt ? new Date(backoffUntilAt).toISOString() : null,
+                        lastSeenAt: nowIso
+                    }),
+                    AUTH_FLOW_STEP_TIMEOUT_MS,
+                    'Не удалось сохранить попытку входа. Попробуйте ещё раз.'
+                );
 
                 if (shouldBlock) {
                     throw new Error('Сайт заблокирован для этого аккаунта после 15 неверных попыток ввода пароля. Обратитесь к администратору.');
@@ -4129,24 +4643,45 @@ async function handleAuthSubmit() {
             };
         }
 
-        let savedUser = await saveUserRecord(targetUser);
+        let savedUser = await runAuthStep(
+            'Сохраняем аккаунт...',
+            () => saveUserRecord(targetUser),
+            AUTH_FLOW_STEP_TIMEOUT_MS,
+            'Не удалось сохранить аккаунт. Попробуйте ещё раз.'
+        );
         if (shouldMarkInviteAsVerifiedFromHint && accessPolicy?.invite) {
-            await patchPartnerInvite(login, {
-                emailVerifiedAt: nowIso
-            });
+            await runAuthStep(
+                'Обновляем приглашение...',
+                () => patchPartnerInvite(login, {
+                    emailVerifiedAt: nowIso
+                }),
+                AUTH_FLOW_STEP_TIMEOUT_MS,
+                'Не удалось обновить приглашение. Попробуйте ещё раз.'
+            );
         }
 
         const isVerified = !!savedUser.emailVerifiedAt;
         if (!isVerified) {
-            await sendMagicLinkToEmail(login, 'verify');
-            savedUser = await patchUserRecord(login, {
-                emailVerificationSentAt: nowIso
-            }) || savedUser;
+            await runAuthStep(
+                'Отправляем письмо...',
+                () => sendMagicLinkToEmail(login, 'verify'),
+                AUTH_MAGIC_LINK_SEND_TIMEOUT_MS,
+                'Не удалось отправить письмо подтверждения. Попробуйте ещё раз.'
+            );
+            savedUser = await runAuthStep(
+                'Фиксируем письмо...',
+                () => patchUserRecord(login, {
+                    emailVerificationSentAt: nowIso
+                }),
+                AUTH_FLOW_STEP_TIMEOUT_MS,
+                'Письмо отправлено, но не удалось сохранить статус отправки. Попробуйте ещё раз.'
+            ) || savedUser;
             setAuthError('Мы отправили ссылку подтверждения на email. Откройте письмо и повторите вход.');
             setAuthMailHelpVisible(true);
             return;
         }
 
+        setAuthSubmitState(true, 'Входим...');
         setAuthSession(savedUser.login);
         applyAuthenticatedUser(savedUser);
         await replayActiveTimeCarryover();
@@ -4159,13 +4694,25 @@ async function handleAuthSubmit() {
         console.error('Auth error:', error);
         setAuthError(getReadableFirebaseAuthError(error, 'login'));
     } finally {
-        modalNameSubmit.disabled = false;
+        setAuthSubmitState(false);
     }
 }
 
 async function restoreAuthSession() {
     const session = getAuthSession();
     if (!session?.login) return false;
+    if (isLocalhostDevBypassSession(session)) {
+        const localUser = getLocalhostDevAuthUserByLogin(session.login) || getLocalUserRecordByLogin(session.login);
+        if (!localUser) {
+            clearAuthSession();
+            clearAuthCacheIdentity();
+            return false;
+        }
+        applyAuthenticatedUser(localUser);
+        hideNameModal();
+        startActiveTimeTracking();
+        return true;
+    }
     const user = await getUserRecordByLogin(session.login);
     if (!user) {
         clearAuthSession();
@@ -4255,6 +4802,25 @@ function ensureRoleChangeButtonVisible(roleOverride = null) {
     changeRoleBtn.textContent = resolvedRole === 'admin'
         ? 'Показать как клиент'
         : 'Вернуться в админский вид';
+}
+
+function ensureLocalhostDevPreviewSession() {
+    if (!isLocalhostAdminPreviewHost() || !currentUser || hasAdminAccount(currentUser) || isLocalhostDevBypassSession()) {
+        return false;
+    }
+
+    const nowIso = new Date().toISOString();
+    const localUser = saveLocalhostDevAuthUser({
+        ...currentUser,
+        role: 'user',
+        emailVerifiedAt: currentUser.emailVerifiedAt || nowIso,
+        lastLoginAt: currentUser.lastLoginAt || nowIso,
+        lastSeenAt: nowIso
+    });
+    saveUserRecordToLocalCache(localUser);
+    setAuthSession(localUser.login, { devBypass: true });
+    applyAuthenticatedUser(localUser);
+    return true;
 }
 
 // Apply role-based restrictions
@@ -4347,6 +4913,7 @@ function applyRoleRestrictions() {
     updateAllPreviews();
     updatePromptVisibilityButton();
     updatePromptHistoryButton();
+    refreshScenarioLibraryUi();
     if (isAdminUser && isSettingsModalOpen()) {
         renderAdminUsersTable();
     } else if (adminPanelAccordion) {
@@ -4475,11 +5042,196 @@ function buildClientSystemPromptForWebhook(basePrompt, actionState = null) {
     if (!normalizedPrompt) return '';
     const actionStateInstruction = buildClientConversationActionStateInstruction(actionState);
     const hiddenClientPrompt = getConfiguredClientConversationActionPrompt();
+    const activeScenarioPrompt = getActiveTestScenarioPromptSuffix();
     return [
         normalizedPrompt,
         hiddenClientPrompt,
+        activeScenarioPrompt,
         actionStateInstruction
     ].filter(Boolean).join('\n\n');
+}
+
+function buildRatingPlatformContextInstruction() {
+    const actionState = getConversationActionStatePayload();
+    const activeScenario = getActiveTestScenarioPreset();
+    const lines = [];
+
+    if (!actionState && !activeScenario) {
+        return '';
+    }
+
+    lines.push('СЛУЖЕБНЫЙ КОНТЕКСТ ПЛАТФОРМЫ');
+    if (actionState) {
+        lines.push(`Платформа уже зафиксировала исход диалога: ${actionState.type}`);
+        if (actionState.reason) {
+            lines.push(`Причина исхода по данным платформы: ${actionState.reason}`);
+        }
+        if (actionState.recoverable) {
+            lines.push('Этот исход recoverable: клиента ещё можно было вернуть.');
+        }
+    }
+    if (activeScenario) {
+        lines.push(`Активный тестовый сценарий: ${activeScenario.name} (${activeScenario.id})`);
+        lines.push(`Суть сценария: ${activeScenario.summary}`);
+    }
+    return lines.join('\n');
+}
+
+function buildRaterPromptForWebhook(basePrompt) {
+    const normalizedPrompt = String(basePrompt || '').trim();
+    if (!normalizedPrompt) return '';
+    const platformContext = buildRatingPlatformContextInstruction();
+    return [
+        normalizedPrompt,
+        DEFAULT_RATING_RESULT_PROMPT_SUFFIX,
+        platformContext
+    ].filter(Boolean).join('\n\n');
+}
+
+function getActiveTestScenarioPromptSuffix() {
+    return String(getActiveTestScenarioPreset()?.promptSuffix || '').trim();
+}
+
+function fillActiveScenarioStarterMessage(options = {}) {
+    const preset = getActiveTestScenarioPreset();
+    if (!preset || !userInput) return false;
+    const { quiet = false } = options;
+    userInput.value = String(preset.starterMessage || '').trim();
+    autoResizeTextarea(userInput);
+    updateSendBtnState();
+    if (!quiet) {
+        showCopyNotification(`Подставлено первое сообщение: ${preset.name}`);
+    }
+    return true;
+}
+
+function renderActiveScenarioStrip() {
+    if (!activeScenarioStrip || !activeScenarioTitle || !activeScenarioSummary) return;
+    const preset = getActiveTestScenarioPreset();
+    if (!preset) {
+        activeScenarioStrip.hidden = true;
+        activeScenarioTitle.textContent = '';
+        activeScenarioSummary.textContent = '';
+        return;
+    }
+
+    activeScenarioTitle.textContent = `Сценарий: ${preset.name}`;
+    activeScenarioSummary.textContent = `${preset.summary} ${preset.outcomeHint}`;
+    activeScenarioStrip.hidden = false;
+    if (activeScenarioStartBtn) {
+        activeScenarioStartBtn.disabled = !isChatReady || isProcessing;
+    }
+}
+
+function renderAdminScenarioLibrary() {
+    if (!adminScenarioLibraryCurrent || !adminScenarioLibraryList) return;
+
+    if (!isAdmin()) {
+        adminScenarioLibraryCurrent.innerHTML = '';
+        adminScenarioLibraryList.innerHTML = '';
+        return;
+    }
+
+    const activePreset = getTestScenarioPresetById(activeTestScenarioPresetId);
+    if (activePreset) {
+        adminScenarioLibraryCurrent.innerHTML = `
+            <div class="admin-scenario-current-card">
+                <div class="admin-scenario-current-copy">
+                    <strong>Сейчас выбран: ${escapeHtml(activePreset.name)}</strong>
+                    <span>${escapeHtml(activePreset.summary)}</span>
+                    <span>Первое сообщение уже можно отправлять или запускать из плашки возле чата.</span>
+                </div>
+                <div class="admin-scenario-card-actions">
+                    <button type="button" class="btn-change" data-scenario-current-action="prefill">Подставить сообщение</button>
+                    <button type="button" class="btn-change btn-danger-subtle" data-scenario-current-action="clear">Сбросить</button>
+                </div>
+            </div>
+        `;
+    } else {
+        adminScenarioLibraryCurrent.innerHTML = `
+            <div class="admin-scenario-current-card">
+                <div class="admin-scenario-current-copy">
+                    <strong>Сценарий не выбран</strong>
+                    <span>Выбери пресет ниже, чтобы быстро задать тип клиента и стартовое сообщение для теста.</span>
+                </div>
+            </div>
+        `;
+    }
+
+    adminScenarioLibraryList.innerHTML = TEST_SCENARIO_PRESETS.map((preset) => {
+        const isActive = preset.id === activeTestScenarioPresetId;
+        return `
+            <div class="admin-scenario-card${isActive ? ' is-active' : ''}" data-scenario-id="${preset.id}">
+                <div class="admin-scenario-card-head">
+                    <div class="admin-scenario-card-title">${escapeHtml(preset.name)}</div>
+                    <span class="admin-scenario-card-tag">${escapeHtml(preset.badge)}</span>
+                </div>
+                <div class="admin-scenario-card-summary">${escapeHtml(preset.summary)}</div>
+                <div class="admin-scenario-card-note"><strong>Поведение:</strong> ${escapeHtml(preset.outcomeHint)}</div>
+                <div class="admin-scenario-card-actions">
+                    <button type="button" class="btn-change" data-scenario-action="apply" data-scenario-id="${preset.id}">
+                        ${isActive ? 'Выбран' : 'Выбрать'}
+                    </button>
+                    <button type="button" class="btn-change" data-scenario-action="launch" data-scenario-id="${preset.id}">Запустить</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function refreshScenarioLibraryUi() {
+    renderAdminScenarioLibrary();
+    renderActiveScenarioStrip();
+}
+
+function setActiveTestScenarioPreset(presetId, options = {}) {
+    const { quiet = false, prefillStarter = true } = options;
+    const preset = getTestScenarioPresetById(presetId);
+    if (!preset) {
+        clearActiveTestScenarioPreset({ quiet });
+        return false;
+    }
+
+    persistActiveTestScenarioPresetId(preset.id);
+    refreshScenarioLibraryUi();
+    if (prefillStarter) {
+        fillActiveScenarioStarterMessage({ quiet: true });
+    } else {
+        updateSendBtnState();
+    }
+    if (!quiet) {
+        showCopyNotification(`Сценарий "${preset.name}" выбран`);
+    }
+    return true;
+}
+
+function clearActiveTestScenarioPreset(options = {}) {
+    const { quiet = false } = options;
+    persistActiveTestScenarioPresetId('');
+    refreshScenarioLibraryUi();
+    if (!quiet) {
+        showCopyNotification('Тестовый сценарий сброшен');
+    }
+}
+
+async function launchActiveTestScenarioPreset(presetId = activeTestScenarioPresetId) {
+    const preset = getTestScenarioPresetById(presetId);
+    if (!preset || !isChatReady || isProcessing || isAttestationMode) return false;
+
+    const hasExistingDialog = conversationHistory.length > 0 || document.querySelector('.message');
+    if (hasExistingDialog) {
+        const confirmed = confirm('Текущий чат будет очищен и сценарий начнется заново. Продолжить?');
+        if (!confirmed) return false;
+        clearChat();
+    }
+
+    setActiveTestScenarioPreset(preset.id, { quiet: true, prefillStarter: true });
+    await startConversationHandler();
+    if (preset.starterMessage && !isConversationClosed()) {
+        await sendMessage();
+    }
+    showCopyNotification(`Сценарий "${preset.name}" запущен`);
+    return true;
 }
 
 function extractConversationAction(data) {
@@ -4579,6 +5331,329 @@ function normalizeStructuredJsonText(text) {
     }
 }
 
+function normalizeStructuredString(value) {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'string') return value.trim();
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    return formatStructuredDataForDisplay(value).trim();
+}
+
+function normalizeStructuredStringList(value) {
+    if (value === null || value === undefined) return [];
+    if (Array.isArray(value)) {
+        return value
+            .flatMap(item => normalizeStructuredStringList(item))
+            .filter(Boolean);
+    }
+    const text = normalizeStructuredString(value);
+    if (!text) return [];
+    return text
+        .split('\n')
+        .map(line => line.replace(/^[-*•]\s*/, '').trim())
+        .filter(Boolean);
+}
+
+function getFirstPresentValue(source, keys = []) {
+    if (!source || typeof source !== 'object') return null;
+    for (const key of keys) {
+        if (!Object.prototype.hasOwnProperty.call(source, key)) continue;
+        const value = source[key];
+        if (value === null || value === undefined) continue;
+        if (typeof value === 'string' && value.trim() === '') continue;
+        if (Array.isArray(value) && value.length === 0) continue;
+        return value;
+    }
+    return null;
+}
+
+function normalizeRatingOutcome(value) {
+    const normalized = normalizeStructuredString(value).toLowerCase();
+    if (!normalized) return '';
+    if (
+        normalized === CONVERSATION_ACTION_TYPE.GO_SILENT ||
+        normalized.includes('go_silent') ||
+        normalized.includes('silent') ||
+        normalized.includes('молча') ||
+        normalized.includes('не ответ')
+    ) {
+        return CONVERSATION_ACTION_TYPE.GO_SILENT;
+    }
+    if (
+        normalized === CONVERSATION_ACTION_TYPE.END ||
+        normalized.includes('end_conversation') ||
+        normalized.includes('заверш') ||
+        normalized.includes('закрыт') ||
+        normalized.includes('разрыв')
+    ) {
+        return CONVERSATION_ACTION_TYPE.END;
+    }
+    if (
+        normalized === 'continue' ||
+        normalized.includes('continue') ||
+        normalized.includes('ongoing') ||
+        normalized.includes('продолж')
+    ) {
+        return 'continue';
+    }
+    if (normalized === 'unknown') return 'unknown';
+    return normalized;
+}
+
+function normalizeRatingStructuredPayload(source) {
+    if (!source || typeof source !== 'object' || Array.isArray(source)) {
+        return null;
+    }
+
+    const summary = normalizeStructuredString(getFirstPresentValue(source, [
+        'summary',
+        'verdict',
+        'overallSummary',
+        'overall_summary',
+        'resultSummary',
+        'result_summary'
+    ]));
+    const outcome = normalizeRatingOutcome(getFirstPresentValue(source, [
+        'outcome',
+        'outcomeType',
+        'outcome_type',
+        'conversationOutcome',
+        'conversation_outcome'
+    ]));
+    const outcomeReason = normalizeStructuredString(getFirstPresentValue(source, [
+        'outcomeReason',
+        'outcome_reason',
+        'reason',
+        'clientOutcomeReason',
+        'client_outcome_reason'
+    ]));
+    const whatKilledDialogue = normalizeStructuredString(getFirstPresentValue(source, [
+        'whatKilledDialogue',
+        'what_killed_dialogue',
+        'dialogueFailure',
+        'dialogue_failure',
+        'failureReason',
+        'failure_reason'
+    ]));
+    const whatWasSalvageable = normalizeStructuredString(getFirstPresentValue(source, [
+        'whatWasSalvageable',
+        'what_was_salvageable',
+        'salvageable',
+        'salvageableWindow',
+        'salvageable_window'
+    ]));
+    const whyClientLeft = normalizeStructuredString(getFirstPresentValue(source, [
+        'whyClientLeft',
+        'why_client_left',
+        'clientReason',
+        'client_reason',
+        'clientExitReason',
+        'client_exit_reason'
+    ]));
+    const nextBestStep = normalizeStructuredString(getFirstPresentValue(source, [
+        'nextBestStep',
+        'next_best_step',
+        'nextStep',
+        'next_step'
+    ]));
+    const managerMistakes = normalizeStructuredStringList(getFirstPresentValue(source, [
+        'managerMistakes',
+        'manager_mistakes',
+        'mistakes',
+        'errors'
+    ]));
+    const managerWins = normalizeStructuredStringList(getFirstPresentValue(source, [
+        'managerWins',
+        'manager_wins',
+        'wins',
+        'strengths'
+    ]));
+    const crmActions = normalizeStructuredStringList(getFirstPresentValue(source, [
+        'crmActions',
+        'crm_actions',
+        'actionsForCrm',
+        'actions_for_crm',
+        'recommendedActions',
+        'recommended_actions'
+    ]));
+
+    const hasUsefulFields = Boolean(
+        summary ||
+        outcome ||
+        outcomeReason ||
+        whatKilledDialogue ||
+        whatWasSalvageable ||
+        whyClientLeft ||
+        nextBestStep ||
+        managerMistakes.length ||
+        managerWins.length ||
+        crmActions.length
+    );
+    if (!hasUsefulFields) return null;
+
+    return {
+        summary,
+        outcome,
+        outcomeReason,
+        whatKilledDialogue,
+        whatWasSalvageable,
+        whyClientLeft,
+        managerMistakes,
+        managerWins,
+        nextBestStep,
+        crmActions
+    };
+}
+
+function tryParseRatingStructuredPayload(value, depth = 0) {
+    if (depth > 4 || value === null || value === undefined) return null;
+
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed || !(trimmed.startsWith('{') || trimmed.startsWith('[') || trimmed.startsWith('"'))) {
+            return null;
+        }
+        try {
+            return tryParseRatingStructuredPayload(JSON.parse(trimmed), depth + 1);
+        } catch (error) {
+            return null;
+        }
+    }
+
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            const parsed = tryParseRatingStructuredPayload(item, depth + 1);
+            if (parsed) return parsed;
+        }
+        return null;
+    }
+
+    if (typeof value !== 'object') return null;
+
+    const direct = normalizeRatingStructuredPayload(value);
+    if (direct) return direct;
+
+    const nestedKeys = [
+        'rating',
+        'result',
+        'data',
+        'output',
+        'response',
+        'message',
+        'content',
+        'analysis'
+    ];
+    for (const key of nestedKeys) {
+        if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
+        const nested = tryParseRatingStructuredPayload(value[key], depth + 1);
+        if (nested) return nested;
+    }
+
+    return null;
+}
+
+function getRatingOutcomeLabel(outcome) {
+    if (outcome === CONVERSATION_ACTION_TYPE.GO_SILENT) {
+        return 'Клиент ушёл молча';
+    }
+    if (outcome === CONVERSATION_ACTION_TYPE.END) {
+        return 'Диалог завершен';
+    }
+    if (outcome === 'continue') {
+        return 'Диалог можно было продолжать';
+    }
+    if (outcome === 'unknown') {
+        return 'Исход не определён';
+    }
+    return '';
+}
+
+function getRatingOutcomeReasonLabel(reason) {
+    const normalized = String(reason || '').trim().toLowerCase();
+    if (!normalized) return '';
+    const map = {
+        lost_interest: 'пропал интерес',
+        price_rejection: 'не устроила цена',
+        manager_failed: 'менеджер не убедил',
+        lost_trust: 'пропало доверие',
+        resolved: 'вопрос закрыт',
+        next_step_agreed: 'согласован следующий шаг',
+        hard_refusal: 'жёсткий отказ',
+        soft_refusal: 'мягкий отказ',
+        timeout: 'клиент перестал отвечать'
+    };
+    return map[normalized] || normalized.replace(/[_-]+/g, ' ');
+}
+
+function buildRatingResultExportText(result) {
+    if (!result || typeof result !== 'object') return '';
+
+    const blocks = [];
+    if (result.summary) {
+        blocks.push(result.summary);
+    }
+
+    const outcomeParts = [];
+    const outcomeLabel = getRatingOutcomeLabel(result.outcome);
+    const outcomeReasonLabel = getRatingOutcomeReasonLabel(result.outcomeReason);
+    if (outcomeLabel) outcomeParts.push(outcomeLabel);
+    if (outcomeReasonLabel) outcomeParts.push(outcomeReasonLabel);
+    if (outcomeParts.length) {
+        blocks.push(`Исход: ${outcomeParts.join(' · ')}`);
+    }
+
+    if (result.whatKilledDialogue) {
+        blocks.push(`Что убило диалог:\n${result.whatKilledDialogue}`);
+    }
+    if (result.whatWasSalvageable) {
+        blocks.push(`Что ещё можно было спасти:\n${result.whatWasSalvageable}`);
+    }
+    if (result.whyClientLeft) {
+        blocks.push(`Почему клиент ушёл:\n${result.whyClientLeft}`);
+    }
+    if (result.managerMistakes?.length) {
+        blocks.push(`Ошибки менеджера:\n- ${result.managerMistakes.join('\n- ')}`);
+    }
+    if (result.managerWins?.length) {
+        blocks.push(`Сильные моменты:\n- ${result.managerWins.join('\n- ')}`);
+    }
+    if (result.nextBestStep) {
+        blocks.push(`Лучший следующий шаг:\n${result.nextBestStep}`);
+    }
+    if (result.crmActions?.length) {
+        blocks.push(`Действия для CRM:\n- ${result.crmActions.join('\n- ')}`);
+    }
+
+    return blocks.filter(Boolean).join('\n\n').trim();
+}
+
+function normalizeRatingWebhookResult(rawText, fallbackOutcomeState = null) {
+    const trimmed = String(rawText || '').trim();
+    const structured = tryParseRatingStructuredPayload(trimmed);
+    if (structured) {
+        if (!structured.outcome && fallbackOutcomeState?.type) {
+            structured.outcome = fallbackOutcomeState.type;
+        }
+        if (!structured.outcomeReason && fallbackOutcomeState?.reason) {
+            structured.outcomeReason = fallbackOutcomeState.reason;
+        }
+        const exportText = buildRatingResultExportText(structured) || normalizeStructuredJsonText(trimmed) || trimmed;
+        return {
+            rawText: trimmed,
+            exportText: exportText.trim(),
+            displayText: exportText.trim(),
+            structured
+        };
+    }
+
+    const displayText = normalizeStructuredJsonText(trimmed) || trimmed;
+    return {
+        rawText: trimmed,
+        exportText: displayText.trim(),
+        displayText: displayText.trim(),
+        structured: null
+    };
+}
+
 async function readWebhookEnvelope(response, timeoutMs = WEBHOOK_DEFAULT_TIMEOUT_MS) {
     const contentType = response.headers.get('content-type') || '';
     const rawText = await readResponseTextWithTimeout(
@@ -4638,6 +5713,257 @@ async function readWebhookEnvelope(response, timeoutMs = WEBHOOK_DEFAULT_TIMEOUT
 async function readWebhookResponse(response, timeoutMs = WEBHOOK_DEFAULT_TIMEOUT_MS) {
     const envelope = await readWebhookEnvelope(response, timeoutMs);
     return envelope.message;
+}
+
+function loadWebhookDebugEntries() {
+    try {
+        const raw = localStorage.getItem(WEBHOOK_DEBUG_LOG_STORAGE_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return [];
+        return parsed
+            .filter((entry) => entry && typeof entry === 'object' && typeof entry.id === 'string')
+            .slice(0, WEBHOOK_DEBUG_LOG_MAX_ENTRIES);
+    } catch (error) {
+        console.warn('Failed to load webhook debug log:', error);
+        return [];
+    }
+}
+
+function saveWebhookDebugEntries() {
+    try {
+        localStorage.setItem(
+            WEBHOOK_DEBUG_LOG_STORAGE_KEY,
+            JSON.stringify(webhookDebugEntries.slice(0, WEBHOOK_DEBUG_LOG_MAX_ENTRIES))
+        );
+    } catch (error) {
+        console.warn('Failed to save webhook debug log:', error);
+    }
+}
+
+function getWebhookDebugTypeLabel(type) {
+    switch (String(type || '').trim()) {
+    case 'chat':
+        return 'Чат';
+    case 'chat_start':
+        return 'Старт';
+    case 'rating':
+        return 'Оценка';
+    case 'manager_assist':
+        return 'Подсказка';
+    case 'improve':
+        return 'Улучшение';
+    case 'attestation':
+        return 'Аттестация';
+    default:
+        return 'Webhook';
+    }
+}
+
+function getWebhookDebugStatusLabel(status) {
+    switch (String(status || '').trim()) {
+    case 'ok':
+        return 'OK';
+    case 'error':
+        return 'Ошибка';
+    default:
+        return 'В работе';
+    }
+}
+
+function normalizeWebhookDebugEndpoint(endpoint) {
+    const raw = String(endpoint || '').trim();
+    if (!raw) return '-';
+    try {
+        const parsed = new URL(raw, window.location.origin);
+        return `${parsed.hostname}${parsed.pathname}`;
+    } catch (error) {
+        return raw;
+    }
+}
+
+function truncateWebhookDebugText(value, maxLength = 220) {
+    const normalized = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return '';
+    if (normalized.length <= maxLength) return normalized;
+    return `${normalized.slice(0, maxLength - 1)}…`;
+}
+
+function formatWebhookDebugTime(value) {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toLocaleTimeString('ru-RU', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+}
+
+function formatWebhookDebugDuration(durationMs) {
+    const normalized = Number(durationMs);
+    if (!Number.isFinite(normalized) || normalized < 0) return '—';
+    if (normalized < 1000) return `${Math.round(normalized)} мс`;
+    if (normalized < 10000) return `${(normalized / 1000).toFixed(1)} с`;
+    return `${Math.round(normalized / 1000)} с`;
+}
+
+function renderWebhookDebugPanel() {
+    if (!adminWebhookDebugList || !adminWebhookDebugMeta) return;
+
+    const total = webhookDebugEntries.length;
+    const pendingCount = webhookDebugEntries.filter((entry) => entry.status === 'pending').length;
+    const errorCount = webhookDebugEntries.filter((entry) => entry.status === 'error').length;
+    adminWebhookDebugMeta.textContent = total
+        ? `Показаны последние ${Math.min(total, WEBHOOK_DEBUG_LOG_MAX_ENTRIES)} запросов. В работе: ${pendingCount}. Ошибок: ${errorCount}.`
+        : 'Показываются последние запросы этого браузера. Здесь удобно смотреть requestId, endpoint, время и текст ошибки.';
+
+    if (!total) {
+        adminWebhookDebugList.innerHTML = '<div class="admin-webhook-debug-empty">Лог пока пуст</div>';
+        return;
+    }
+
+    adminWebhookDebugList.innerHTML = webhookDebugEntries.map((entry) => {
+        const status = String(entry.status || 'pending');
+        const startedAtText = formatWebhookDebugTime(entry.startedAt);
+        const finishedAtText = entry.finishedAt ? formatWebhookDebugTime(entry.finishedAt) : '';
+        const durationText = formatWebhookDebugDuration(entry.durationMs);
+        const timingText = finishedAtText
+            ? `${startedAtText} -> ${finishedAtText} • ${durationText}`
+            : `${startedAtText} • ${durationText}`;
+        const detailFields = [
+            {
+                label: 'Endpoint',
+                value: `<code>${escapeHtml(entry.endpointLabel || '-')}</code>`
+            },
+            {
+                label: 'Request ID',
+                value: `<code>${escapeHtml(entry.requestId || '-')}</code>`
+            },
+            entry.attempt != null
+                ? { label: 'Попытка', value: escapeHtml(`${entry.attempt}`) }
+                : null,
+            entry.httpStatus != null
+                ? { label: 'HTTP', value: escapeHtml(`${entry.httpStatus}`) }
+                : null,
+            entry.timeoutMs != null
+                ? { label: 'Таймаут', value: escapeHtml(formatWebhookDebugDuration(entry.timeoutMs)) }
+                : null,
+            entry.resultMessage
+                ? { label: 'Результат', value: escapeHtml(entry.resultMessage) }
+                : null,
+            entry.errorMessage
+                ? { label: 'Ошибка', value: escapeHtml(entry.errorMessage) }
+                : null
+        ].filter(Boolean);
+
+        return `
+            <div class="admin-webhook-debug-item is-${status}">
+                <div class="admin-webhook-debug-head">
+                    <div class="admin-webhook-debug-title">
+                        <span>${escapeHtml(getWebhookDebugTypeLabel(entry.type))}</span>
+                        <span class="admin-webhook-debug-status is-${status}">${escapeHtml(getWebhookDebugStatusLabel(status))}</span>
+                    </div>
+                    <div class="admin-webhook-debug-time">${escapeHtml(timingText)}</div>
+                </div>
+                <div class="admin-webhook-debug-grid">
+                    ${detailFields.map((field) => `
+                        <div class="admin-webhook-debug-field">
+                            <div class="admin-webhook-debug-label">${escapeHtml(field.label)}</div>
+                            <div class="admin-webhook-debug-value">${field.value}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function queueWebhookDebugRender() {
+    if (webhookDebugRenderQueued) return;
+    webhookDebugRenderQueued = true;
+    queueMicrotask(() => {
+        webhookDebugRenderQueued = false;
+        renderWebhookDebugPanel();
+    });
+}
+
+function updateWebhookDebugEntry(entryId, updater) {
+    if (!entryId || typeof updater !== 'function') return;
+    let updated = false;
+    webhookDebugEntries = webhookDebugEntries.map((entry) => {
+        if (entry.id !== entryId) return entry;
+        updated = true;
+        return updater(entry);
+    });
+    if (!updated) return;
+    saveWebhookDebugEntries();
+    queueWebhookDebugRender();
+}
+
+function startWebhookDebugRequest({ type, endpoint, requestId, attempt = null, timeoutMs = null, method = 'POST' } = {}) {
+    const startedAtMs = Date.now();
+    const entryId = buildRequestId('webhook_dbg');
+    webhookDebugEntries = [
+        {
+            id: entryId,
+            type: String(type || '').trim() || 'webhook',
+            requestId: String(requestId || '').trim(),
+            attempt: Number.isFinite(Number(attempt)) ? Number(attempt) : null,
+            endpointLabel: normalizeWebhookDebugEndpoint(endpoint),
+            method: String(method || 'POST').trim().toUpperCase(),
+            timeoutMs: Number.isFinite(Number(timeoutMs)) ? Number(timeoutMs) : null,
+            status: 'pending',
+            startedAt: new Date(startedAtMs).toISOString(),
+            startedAtMs,
+            finishedAt: '',
+            durationMs: null,
+            httpStatus: null,
+            resultMessage: '',
+            errorMessage: ''
+        },
+        ...webhookDebugEntries
+    ].slice(0, WEBHOOK_DEBUG_LOG_MAX_ENTRIES);
+    saveWebhookDebugEntries();
+    queueWebhookDebugRender();
+    return entryId;
+}
+
+function finishWebhookDebugRequest(entryId, details = {}) {
+    updateWebhookDebugEntry(entryId, (entry) => {
+        const finishedAtMs = Date.now();
+        return {
+            ...entry,
+            status: details.status === 'error' ? 'error' : 'ok',
+            finishedAt: new Date(finishedAtMs).toISOString(),
+            durationMs: Number.isFinite(entry.startedAtMs) ? finishedAtMs - entry.startedAtMs : null,
+            httpStatus: Number.isFinite(Number(details.httpStatus)) ? Number(details.httpStatus) : entry.httpStatus,
+            resultMessage: truncateWebhookDebugText(details.resultMessage || ''),
+            errorMessage: truncateWebhookDebugText(details.errorMessage || '')
+        };
+    });
+}
+
+function failWebhookDebugRequest(entryId, error, fallbackStatus = null) {
+    const message = truncateWebhookDebugText(error?.message || error || 'Неизвестная ошибка');
+    const httpStatus = Number(error?.httpStatus || fallbackStatus || 0) || null;
+    updateWebhookDebugEntry(entryId, (entry) => {
+        const finishedAtMs = Date.now();
+        return {
+            ...entry,
+            status: 'error',
+            finishedAt: new Date(finishedAtMs).toISOString(),
+            durationMs: Number.isFinite(entry.startedAtMs) ? finishedAtMs - entry.startedAtMs : null,
+            httpStatus,
+            errorMessage: message
+        };
+    });
+}
+
+function clearWebhookDebugEntries() {
+    webhookDebugEntries = [];
+    saveWebhookDebugEntries();
+    renderWebhookDebugPanel();
 }
 
 function debounce(func, wait) {
@@ -5908,6 +7234,7 @@ function getVisibleVariations(role, isAdminUser = isAdmin()) {
         variations.forEach((variation) => {
             if (!variation?.isLocal) return;
             const basePublicVariation = findBasePublicVariationForLocal(role, variation);
+            if (isBrokenEmptyLocalOverride(role, variation, basePublicVariation)) return;
             if (basePublicVariation?.id) {
                 hiddenBaseIds.add(basePublicVariation.id);
             }
@@ -5925,6 +7252,9 @@ function getActiveVariation(role = getActiveRole()) {
     const variations = promptsData[role]?.variations || [];
     const selected = variations.find(v => v.id === promptsData[role]?.activeId) || null;
     if (isAdmin()) {
+        if (selected?.isLocal && isBrokenEmptyLocalOverride(role, selected)) {
+            return findBasePublicVariationForLocal(role, selected) || selected;
+        }
         if (selected && !selected.isLocal) {
             const localOverride = findLocalOverrideForPublicVariation(role, selected);
             if (localOverride) {
@@ -5978,6 +7308,75 @@ function updatePromptHistoryButton() {
     promptHistoryBtn.style.display = activeVariation ? '' : 'none';
 }
 
+function getPromptCompareContext(role = getActiveRole()) {
+    if (!PROMPT_ROLES.includes(role)) return null;
+    const activeVariation = getActiveVariation(role);
+    if (!activeVariation) return null;
+
+    if (activeVariation.isLocal) {
+        const publicVariation = findBasePublicVariationForLocal(role, activeVariation);
+        if (!publicVariation) return null;
+        return {
+            role,
+            publicVariation,
+            draftVariation: activeVariation,
+            activeVariation
+        };
+    }
+
+    const draftVariation = findLocalOverrideForPublicVariation(role, activeVariation);
+    if (!draftVariation) return null;
+
+    return {
+        role,
+        publicVariation: activeVariation,
+        draftVariation,
+        activeVariation
+    };
+}
+
+function getPromptHistoryVariation(role = getActiveRole(), activeVariation = getActiveVariation(role)) {
+    if (!PROMPT_ROLES.includes(role) || !activeVariation) return null;
+    if (activeVariation.isLocal) {
+        return findBasePublicVariationForLocal(role, activeVariation);
+    }
+    return activeVariation;
+}
+
+function getPromptRollbackEntry(role = getActiveRole(), historyVariation = getPromptHistoryVariation(role)) {
+    if (!historyVariation || historyVariation.isLocal) return null;
+    const currentContent = String(historyVariation.content || '');
+    return getPromptHistoryEntries(role, historyVariation.id)
+        .find((entry) => String(entry.content || '') !== currentContent) || null;
+}
+
+function updatePromptWorkflowButtons(role = getActiveRole()) {
+    const isAdminUser = isAdmin();
+    const compareContext = isAdminUser ? getPromptCompareContext(role) : null;
+    const historyVariation = isAdminUser ? getPromptHistoryVariation(role) : null;
+    const rollbackEntry = isAdminUser ? getPromptRollbackEntry(role, historyVariation) : null;
+
+    if (promptCompareBtn) {
+        promptCompareBtn.style.display = compareContext ? '' : 'none';
+        if (compareContext) {
+            const compareLabel = compareContext.activeVariation?.isLocal
+                ? 'Сравнить текущий draft с public'
+                : 'Сравнить hidden draft с public';
+            setCustomTooltip(promptCompareBtn, compareLabel);
+        }
+    }
+
+    if (promptRollbackBtn) {
+        promptRollbackBtn.style.display = rollbackEntry ? '' : 'none';
+        if (rollbackEntry && historyVariation) {
+            const rollbackLabel = historyVariation.isLocal
+                ? 'Откатить hidden draft'
+                : 'Откатить public к прошлой версии';
+            setCustomTooltip(promptRollbackBtn, rollbackLabel);
+        }
+    }
+}
+
 function updatePromptLengthInfo(role = getActiveRole()) {
     if (!promptLengthInfo) return;
     if (role !== 'manager_call') {
@@ -6001,6 +7400,32 @@ function getPromptVariationDisplayName(variation) {
     return rawName.replace(/\s*\(локальный\)$/i, '').trim() || rawName;
 }
 
+function hasMeaningfulPromptContent(content = '') {
+    return String(content || '').trim().length > 0;
+}
+
+function promptsStateHasMeaningfulContent(role = '') {
+    const rolesToCheck = role && PROMPT_ROLES.includes(role) ? [role] : PROMPT_ROLES;
+    return rolesToCheck.some((targetRole) => {
+        const variations = promptsData[targetRole]?.variations || [];
+        return variations.some((variation) => hasMeaningfulPromptContent(variation?.content || ''));
+    });
+}
+
+function firebasePromptSnapshotHasMeaningfulContent(firebaseData = {}, role = '') {
+    const rolesToCheck = role && PROMPT_ROLES.includes(role) ? [role] : PROMPT_ROLES;
+    return rolesToCheck.some((targetRole) => {
+        const legacyKey = `${targetRole}_prompt`;
+        if (hasMeaningfulPromptContent(firebaseData?.[legacyKey] || '')) {
+            return true;
+        }
+        const variations = Array.isArray(firebaseData?.[`${targetRole}_variations`])
+            ? firebaseData[`${targetRole}_variations`]
+            : [];
+        return variations.some((variation) => hasMeaningfulPromptContent(variation?.content || ''));
+    });
+}
+
 function findLocalOverrideForPublicVariation(role, publicVariation) {
     if (!publicVariation || publicVariation.isLocal) return null;
     const publicId = String(publicVariation.id || '').trim();
@@ -6009,9 +7434,10 @@ function findLocalOverrideForPublicVariation(role, publicVariation) {
         if (!variation?.isLocal) return false;
         const baseVariationId = String(variation.baseVariationId || '').trim();
         if (baseVariationId && publicId && baseVariationId === publicId) {
-            return true;
+            return !isBrokenEmptyLocalOverride(role, variation, publicVariation);
         }
-        return getPromptVariationDisplayName(variation).toLowerCase() === publicDisplayName;
+        return getPromptVariationDisplayName(variation).toLowerCase() === publicDisplayName
+            && !isBrokenEmptyLocalOverride(role, variation, publicVariation);
     }) || null;
 }
 
@@ -6031,6 +7457,39 @@ function findBasePublicVariationForLocal(role, localVariation) {
     return (promptsData[role]?.variations || []).find((variation) => {
         return !variation?.isLocal && getPromptVariationDisplayName(variation).toLowerCase() === localDisplayName;
     }) || null;
+}
+
+function isBrokenEmptyLocalOverride(role, localVariation, basePublicVariation = null) {
+    if (!localVariation?.isLocal) return false;
+    if (hasMeaningfulPromptContent(localVariation.content || '')) return false;
+    const resolvedBaseVariation = basePublicVariation || findBasePublicVariationForLocal(role, localVariation);
+    return hasMeaningfulPromptContent(resolvedBaseVariation?.content || '');
+}
+
+function repairRoleActiveVariationSelection(role) {
+    const roleState = promptsData[role];
+    if (!roleState?.activeId || !Array.isArray(roleState.variations)) return false;
+
+    const activeVariation = roleState.variations.find((variation) => variation.id === roleState.activeId) || null;
+    if (!activeVariation?.isLocal) return false;
+
+    const basePublicVariation = findBasePublicVariationForLocal(role, activeVariation);
+    if (!isBrokenEmptyLocalOverride(role, activeVariation, basePublicVariation)) {
+        return false;
+    }
+
+    const fallbackPublicVariation =
+        basePublicVariation
+        || roleState.variations.find((variation) => !variation?.isLocal && hasMeaningfulPromptContent(variation.content || ''))
+        || roleState.variations.find((variation) => !variation?.isLocal)
+        || null;
+
+    if (!fallbackPublicVariation?.id || fallbackPublicVariation.id === roleState.activeId) {
+        return false;
+    }
+
+    roleState.activeId = fallbackPublicVariation.id;
+    return true;
 }
 
 function getUniqueVariationName(role, baseName) {
@@ -6075,15 +7534,20 @@ function makeActivePromptLocal(role) {
 function publishActiveLocalPrompt(role) {
     const activeVariation = getActiveVariation(role);
     if (!activeVariation || !activeVariation.isLocal) return false;
+    const draftDisplayName = getPromptVariationDisplayName(activeVariation) || activeVariation.name || 'Draft';
 
     const basePublicVariation = findBasePublicVariationForLocal(role, activeVariation);
     if (basePublicVariation) {
+        ensurePromptHistoryBaseline(role, basePublicVariation);
         basePublicVariation.name = getPromptVariationDisplayName(activeVariation) || basePublicVariation.name || 'Промпт';
         basePublicVariation.content = activeVariation.content || '';
         promptsData[role].variations = promptsData[role].variations.filter((variation) => variation !== activeVariation);
         promptsData[role].activeId = basePublicVariation.id;
         publicActiveIds[role] = basePublicVariation.id;
-        checkpointPromptHistory(role, basePublicVariation.id);
+        checkpointPromptHistory(role, basePublicVariation.id, {
+            kind: 'publish',
+            note: `Опубликован draft «${draftDisplayName}»`
+        });
         saveLocalPromptsData();
         savePromptsToFirebaseNow({ roles: [role] });
         return true;
@@ -6093,7 +7557,10 @@ function publishActiveLocalPrompt(role) {
     activeVariation.baseVariationId = null;
     activeVariation.name = getPromptVariationDisplayName(activeVariation) || 'Промпт';
     publicActiveIds[role] = activeVariation.id;
-    checkpointPromptHistory(role, activeVariation.id);
+    checkpointPromptHistory(role, activeVariation.id, {
+        kind: 'publish',
+        note: `Опубликован draft «${draftDisplayName}»`
+    });
     saveLocalPromptsData();
     savePromptsToFirebaseNow({ roles: [role] });
     return true;
@@ -6207,6 +7674,7 @@ function setAttestationMode(enabled) {
         if (startAttestationBtn) {
             startAttestationBtn.style.display = 'none';
         }
+        renderActiveScenarioStrip();
         showCopyNotification('Режим аттестации включен');
     } else {
         if (attestationPrevState) {
@@ -6222,6 +7690,7 @@ function setAttestationMode(enabled) {
         if (startAttestationBtn) {
             startAttestationBtn.style.display = '';
         }
+        renderActiveScenarioStrip();
         showCopyNotification('Режим аттестации выключен');
     }
 }
@@ -6254,6 +7723,7 @@ function setChatLoadingState(isLoading) {
         toggleInputState(false);
         setStartButtonsEnabled(false);
         userInput.placeholder = 'Загрузка...';
+        renderActiveScenarioStrip();
         return;
     }
     toggleInputState(true);
@@ -6261,6 +7731,7 @@ function setChatLoadingState(isLoading) {
     if (!isDialogRated) {
         userInput.placeholder = '';
     }
+    renderActiveScenarioStrip();
 }
 
 function updateChatReadyState() {
@@ -6271,6 +7742,13 @@ function updateChatReadyState() {
     if (ready && document.activeElement === document.body) {
         userInput.focus();
     }
+}
+
+function syncWindowReadyState() {
+    const nextReady = document.readyState !== 'loading';
+    if (nextReady === isWindowLoaded) return;
+    isWindowLoaded = nextReady;
+    updateChatReadyState();
 }
 
 function isTextDialogStarted() {
@@ -6352,6 +7830,7 @@ function initPromptsData(firebaseData = {}) {
         { location: 'script.js:initPromptsData', hypothesisId: 'A' }
     );
     let didRestorePublicPrompt = false;
+    let didRepairBrokenPromptSelection = false;
 
     PROMPT_ROLES.forEach(role => {
         const legacyKey = role === 'client'
@@ -6426,6 +7905,10 @@ function initPromptsData(firebaseData = {}) {
             promptsData[role].activeId = null;
         }
 
+        if (repairRoleActiveVariationSelection(role)) {
+            didRepairBrokenPromptSelection = true;
+        }
+
         if (!lastHistoryContent[role]) lastHistoryContent[role] = {};
         promptsData[role].variations.forEach(v => {
             lastHistoryContent[role][v.id] = v.content || '';
@@ -6451,6 +7934,10 @@ function initPromptsData(firebaseData = {}) {
         savePromptsToFirebaseNow();
     } else {
         saveLocalPromptsData();
+    }
+
+    if (didRepairBrokenPromptSelection) {
+        debugLog('Recovered from broken empty local prompt selection');
     }
 
     renderVariations();
@@ -6546,9 +8033,13 @@ function renderVariations() {
     renderPromptSyncConflictNotice(role);
     updatePromptVisibilityButton();
     updatePromptHistoryButton();
+    updatePromptWorkflowButtons(role);
     updatePromptLengthInfo(role);
     if (promptHistoryModal?.classList.contains('active')) {
         renderPromptHistory();
+    }
+    if (promptCompareModal?.classList.contains('active')) {
+        renderPromptCompareModalContent(role);
     }
 }
 
@@ -6578,6 +8069,40 @@ function getPromptHistoryEntries(role, variationId) {
     return promptHistory.filter(item => getPromptHistoryKey(item.role, item.variationId) === key);
 }
 
+function ensurePromptHistoryBaseline(role, variation) {
+    if (!isAdmin() || !role || !variation || variation.isLocal) return false;
+    if (getPromptHistoryEntries(role, variation.id).length) return false;
+
+    promptHistory.push({
+        id: generateId(),
+        ts: Date.now(),
+        role,
+        variationId: variation.id,
+        variationName: variation.name,
+        content: variation.content || '',
+        kind: 'baseline',
+        note: 'Базовая public-версия'
+    });
+    savePromptHistory();
+    if (promptHistoryModal?.classList.contains('active')) {
+        renderPromptHistory();
+    }
+    return true;
+}
+
+function getPromptHistoryKindLabel(kind = 'edit') {
+    switch (String(kind || 'edit')) {
+    case 'baseline':
+        return 'База';
+    case 'publish':
+        return 'Публикация';
+    case 'restore':
+        return 'Откат';
+    default:
+        return 'Изменение';
+    }
+}
+
 function renderPromptHistory() {
     if (!promptHistoryList || !promptHistoryTitle) return;
     if (!isAdmin()) {
@@ -6593,9 +8118,19 @@ function renderPromptHistory() {
         return;
     }
 
-    promptHistoryTitle.textContent = `История: ${getRoleLabel(role)} · ${activeVariation.name || 'Без названия'}`;
+    const historyVariation = getPromptHistoryVariation(role, activeVariation);
+    if (!historyVariation) {
+        promptHistoryTitle.textContent = `История: ${getRoleLabel(role)} · ${activeVariation.name || 'Без названия'}`;
+        promptHistoryList.innerHTML = '<div class="changes-empty">У этого draft пока нет public-истории.</div>';
+        return;
+    }
 
-    const items = getPromptHistoryEntries(role, activeVariation.id).slice(0, HISTORY_LIMIT);
+    const isDraftView = !!activeVariation.isLocal;
+    promptHistoryTitle.textContent = isDraftView
+        ? `Журнал public: ${getRoleLabel(role)} · ${historyVariation.name || 'Без названия'}`
+        : `История: ${getRoleLabel(role)} · ${historyVariation.name || 'Без названия'}`;
+
+    const items = getPromptHistoryEntries(role, historyVariation.id).slice(0, HISTORY_LIMIT);
     promptHistoryList.innerHTML = '';
     if (!items.length) {
         promptHistoryList.innerHTML = '<div class="changes-empty">Пока нет изменений у этого промпта.</div>';
@@ -6618,18 +8153,25 @@ function renderPromptHistory() {
 
         const changeTime = document.createElement('div');
         changeTime.className = 'change-time';
-        changeTime.textContent = time;
+        changeTime.textContent = `${getPromptHistoryKindLabel(entry.kind)} · ${time}`;
+
+        const changeNote = document.createElement('div');
+        changeNote.className = 'change-note';
+        changeNote.textContent = entry.note || '';
+        changeNote.hidden = !entry.note;
 
         const restoreButton = document.createElement('button');
         restoreButton.className = 'btn-restore';
         restoreButton.dataset.id = entry.id;
         restoreButton.textContent = 'Восстановить';
 
-        changeMeta.append(changeTitle, changeTime);
+        changeMeta.append(changeTitle, changeTime, changeNote);
         item.append(changeMeta, restoreButton);
         restoreButton.addEventListener('click', (e) => {
             e.stopPropagation();
-            restorePromptVersion(entry.id, role, activeVariation.id);
+            restorePromptVersion(entry.id, role, historyVariation.id, {
+                keepCurrentSelection: !!activeVariation.isLocal
+            });
         });
         prepareCustomTooltips(item);
         promptHistoryList.appendChild(item);
@@ -6667,19 +8209,23 @@ function savePromptHistory() {
     }
 }
 
-function checkpointPromptHistory(role, variationId = promptsData[role]?.activeId) {
+function checkpointPromptHistory(role, variationId = promptsData[role]?.activeId, options = {}) {
     if (!role || !variationId) return;
     const variation = (promptsData[role]?.variations || []).find(v => v.id === variationId);
     if (!variation || variation.isLocal) return;
-    recordPromptHistory(role, variation);
+    recordPromptHistory(role, variation, options);
 }
 
-function recordPromptHistory(role, variation) {
+function recordPromptHistory(role, variation, options = {}) {
     if (!isAdmin()) return;
     if (!variation) return;
     const content = variation.content || '';
     const lastContent = lastHistoryContent[role]?.[variation.id] ?? '';
     if (content === lastContent) return;
+
+    const normalizedOptions = typeof options === 'string'
+        ? { kind: options }
+        : (options && typeof options === 'object' ? options : {});
 
     const entry = {
         id: generateId(),
@@ -6687,7 +8233,9 @@ function recordPromptHistory(role, variation) {
         role,
         variationId: variation.id,
         variationName: variation.name,
-        content
+        content,
+        kind: normalizedOptions.kind || 'edit',
+        note: String(normalizedOptions.note || '')
     };
 
     promptHistory.unshift(entry);
@@ -6698,7 +8246,7 @@ function recordPromptHistory(role, variation) {
     }
 }
 
-function restorePromptVersion(entryId, role = getActiveRole(), variationId = getActiveVariation(role)?.id) {
+function restorePromptVersion(entryId, role = getActiveRole(), variationId = getActiveVariation(role)?.id, options = {}) {
     if (!isAdmin()) return;
     const entry = promptHistory.find(item =>
         item.id === entryId &&
@@ -6709,6 +8257,7 @@ function restorePromptVersion(entryId, role = getActiveRole(), variationId = get
 
     role = entry.role;
     const variations = promptsData[role]?.variations || [];
+    const previousActiveId = promptsData[role]?.activeId || null;
     let targetVar = variations.find(v => v.id === entry.variationId);
     if (!targetVar) {
         targetVar = {
@@ -6721,13 +8270,22 @@ function restorePromptVersion(entryId, role = getActiveRole(), variationId = get
         targetVar.content = entry.content;
     }
 
-    promptsData[role].activeId = targetVar.id;
+    const keepCurrentSelection = !!options.keepCurrentSelection &&
+        !!previousActiveId &&
+        variations.some(v => v.id === previousActiveId);
+    promptsData[role].activeId = keepCurrentSelection ? previousActiveId : targetVar.id;
     renderVariations();
     updateEditorContent(role);
-    checkpointPromptHistory(role, targetVar.id);
+    checkpointPromptHistory(role, targetVar.id, {
+        kind: 'restore',
+        note: `Из версии ${formatHistoryTime(entry.ts)}`
+    });
     savePromptsToFirebaseNow({ roles: [role] });
     if (promptHistoryModal?.classList.contains('active')) {
         renderPromptHistory();
+    }
+    if (promptCompareModal?.classList.contains('active')) {
+        renderPromptCompareModalContent(role);
     }
 }
 
@@ -6813,10 +8371,17 @@ function updateEditorContent(role) {
     const preview = promptPreviewByRole[role];
     
     if (textarea && preview) {
-        // Only update if content has actually changed to prevent cursor jumping
-        if (textarea.value !== content) {
+        const renderedHtml = renderMarkdown(content);
+        const textareaNeedsUpdate = textarea.value !== content;
+        const previewNeedsUpdate = preview.dataset.renderedMarkdown !== content;
+
+        if (textareaNeedsUpdate) {
             textarea.value = content;
-            preview.innerHTML = renderMarkdown(content);
+        }
+
+        if (previewNeedsUpdate) {
+            preview.innerHTML = renderedHtml;
+            preview.dataset.renderedMarkdown = content;
             if (typeof hljs !== 'undefined') {
                 const codeBlocks = preview.querySelectorAll('pre code');
                 if (codeBlocks.length > 0) {
@@ -6850,6 +8415,9 @@ function syncContentToData(role, content) {
                 updatePromptLengthInfo(role);
             }
             return false;
+        }
+        if (!activeVar.isLocal) {
+            ensurePromptHistoryBaseline(role, activeVar);
         }
         activeVar.content = content;
         if (activeVar.isLocal) {
@@ -6972,100 +8540,127 @@ function savePromptsToFirebaseNow(options = {}) {
         .catch(e => console.error('Failed to sync:', e));
 }
 
-async function loadPrompts() {
-    await consumeEmailVerificationLinkIfPresent();
-
-    const restored = await restoreAuthSession();
-    if (!restored) {
-        selectedRole = 'user';
-        setCachedStorageValue(USER_ROLE_KEY, 'user');
-        showNameModal();
-    } else {
-        hideNameModal();
-        debugLog(`Welcome back, ${currentUser?.fio || 'user'} (${selectedRole})`);
+function setupPromptsAndConfigListeners() {
+    if (!db) {
+        setSharedGeminiTokenEndpoint('');
+        setSharedClientConversationActionPrompt('');
+        return;
     }
 
-    if (db) {
-        try {
-            const promptsRef = ref(db, 'prompts');
-            onValue(promptsRef, (snapshot) => {
-                const data = snapshot.val() || {};
-                const dataStr = JSON.stringify(data);
-                lastPromptsFirebaseSnapshot = data;
-                agentLog(
-                    'Firebase onValue triggered',
-                    { hasData: !!data, isUserEditing },
-                    { location: 'script.js:loadPrompts.onValue', hypothesisId: 'C' }
-                );
-                debugLog('Firebase data received:', data);
+    try {
+        const promptsRef = ref(db, 'prompts');
+        onValue(promptsRef, (snapshot) => {
+            const data = snapshot.val() || {};
+            const dataStr = JSON.stringify(data);
+            lastPromptsFirebaseSnapshot = data;
+            agentLog(
+                'Firebase onValue triggered',
+                { hasData: !!data, isUserEditing },
+                { location: 'script.js:loadPrompts.onValue', hypothesisId: 'C' }
+            );
+            debugLog('Firebase data received:', data);
 
-                if (isUserEditing) {
-                    pendingPromptsFirebaseSnapshot = data;
-                    lastFirebaseData = dataStr;
-                    debugLog('Deferring Firebase prompt update - user is editing');
-                    return;
-                }
-
-                if (lastFirebaseData === dataStr) {
-                    debugLog('Skipping Firebase update - data unchanged');
-                    return;
-                }
+            if (isUserEditing) {
+                pendingPromptsFirebaseSnapshot = data;
                 lastFirebaseData = dataStr;
-                pendingPromptsFirebaseSnapshot = null;
-                
-                if (Object.keys(data).length > 0) {
-                    initPromptsData(data);
-                } else {
-                    initPromptsData({});
-                    if (canSyncPublicPromptsToCloud()) {
-                        savePromptsToFirebaseNow({ fullReplace: true });
-                    } else {
-                        debugLog('Skipped prompts bootstrap sync: real admin access is required');
-                    }
-                }
-            }, (error) => {
-                console.error('Firebase read error:', error);
-                lastPromptsFirebaseSnapshot = {};
+                debugLog('Deferring Firebase prompt update - user is editing');
+                return;
+            }
+
+            if (lastFirebaseData === dataStr) {
+                debugLog('Skipping Firebase update - data unchanged');
+                return;
+            }
+            lastFirebaseData = dataStr;
+            pendingPromptsFirebaseSnapshot = null;
+
+            if (Object.keys(data).length > 0) {
+                initPromptsData(data);
+            } else {
                 initPromptsData({});
-            });
-
-            const appConfigRef = ref(db, APP_CONFIG_DB_PATH);
-            onValue(appConfigRef, (snapshot) => {
-                const data = snapshot.val() || {};
-                const sharedEndpoint = normalizeGeminiTokenEndpoint(data?.geminiTokenEndpoint || '');
-                const sharedClientActionPrompt = normalizeClientConversationActionPrompt(data?.clientConversationActionPrompt || '');
-                setSharedGeminiTokenEndpoint(sharedEndpoint);
-                setSharedClientConversationActionPrompt(sharedClientActionPrompt);
-                if (geminiTokenEndpointInput && settingsModal?.classList?.contains('active')) {
-                    geminiTokenEndpointInput.value = getConfiguredGeminiTokenEndpoint();
-                }
-                if (adminHiddenClientPromptInput && settingsModal?.classList?.contains('active')) {
-                    adminHiddenClientPromptInput.value = getConfiguredClientConversationActionPrompt();
-                }
-            }, (error) => {
-                console.error('App config read error:', error);
-                setSharedGeminiTokenEndpoint('');
-                setSharedClientConversationActionPrompt('');
-            });
-
-            const historyRef = ref(db, 'prompt_history');
-            onValue(historyRef, (snapshot) => {
-                const historyData = snapshot.val();
-                if (Array.isArray(historyData)) {
-                    promptHistory = historyData;
-                } else if (historyData && typeof historyData === 'object') {
-                    promptHistory = Object.values(historyData);
+                if (canSyncPublicPromptsToCloud()) {
+                    savePromptsToFirebaseNow({ fullReplace: true });
                 } else {
-                    promptHistory = [];
+                    debugLog('Skipped prompts bootstrap sync: real admin access is required');
                 }
-                if (promptHistoryModal?.classList.contains('active')) {
-                    renderPromptHistory();
-                }
-            });
-        } catch (e) {
-            console.error('Error setting up Firebase listener:', e);
+            }
+        }, (error) => {
+            console.error('Firebase read error:', error);
+            lastPromptsFirebaseSnapshot = {};
             initPromptsData({});
+        });
+
+        const appConfigRef = ref(db, APP_CONFIG_DB_PATH);
+        onValue(appConfigRef, (snapshot) => {
+            const data = snapshot.val() || {};
+            const sharedEndpoint = normalizeGeminiTokenEndpoint(data?.geminiTokenEndpoint || '');
+            const sharedClientActionPrompt = normalizeClientConversationActionPrompt(data?.clientConversationActionPrompt || '');
+            setSharedGeminiTokenEndpoint(sharedEndpoint);
+            setSharedClientConversationActionPrompt(sharedClientActionPrompt);
+            if (geminiTokenEndpointInput && settingsModal?.classList?.contains('active')) {
+                geminiTokenEndpointInput.value = getConfiguredGeminiTokenEndpoint();
+            }
+            if (adminHiddenClientPromptInput && settingsModal?.classList?.contains('active')) {
+                adminHiddenClientPromptInput.value = getConfiguredClientConversationActionPrompt();
+            }
+        }, (error) => {
+            console.error('App config read error:', error);
+            setSharedGeminiTokenEndpoint('');
+            setSharedClientConversationActionPrompt('');
+        });
+
+        const historyRef = ref(db, 'prompt_history');
+        onValue(historyRef, (snapshot) => {
+            const historyData = snapshot.val();
+            if (Array.isArray(historyData)) {
+                promptHistory = historyData;
+            } else if (historyData && typeof historyData === 'object') {
+                promptHistory = Object.values(historyData);
+            } else {
+                promptHistory = [];
+            }
+            if (promptHistoryModal?.classList.contains('active')) {
+                renderPromptHistory();
+            }
+        });
+    } catch (error) {
+        console.error('Error setting up Firebase listener:', error);
+        setSharedGeminiTokenEndpoint('');
+        setSharedClientConversationActionPrompt('');
+        initPromptsData({});
+    }
+}
+
+async function bootstrapPromptsViaRestFallback() {
+    if (!db || promptsStateHasMeaningfulContent('client')) return false;
+    try {
+        const data = await fetchFirebaseJsonViaRest('prompts', PROMPTS_REST_FALLBACK_TIMEOUT_MS);
+        if (data && typeof data === 'object' && firebasePromptSnapshotHasMeaningfulContent(data, 'client')) {
+            debugLog('Bootstrapping prompts via Firebase REST fallback');
+            lastPromptsFirebaseSnapshot = data;
+            lastFirebaseData = JSON.stringify(data);
+            initPromptsData(data);
+            return true;
         }
+    } catch (error) {
+        console.warn('Failed to bootstrap prompts via Firebase REST fallback:', error);
+    }
+    return false;
+}
+
+async function loadPrompts() {
+    // Bootstrap prompt UI from local cache immediately, without waiting for the first
+    // live Firebase snapshot. This prevents blank editors when RTDB is slow or stalls.
+    initPromptsData({});
+    promptHistory = getCachedLocalStorageJson(LOCAL_PROMPTS_HISTORY_STORAGE_KEY);
+    if (!Array.isArray(promptHistory)) {
+        promptHistory = [];
+    }
+    renderPromptHistory();
+
+    if (db) {
+        setupPromptsAndConfigListeners();
+        await bootstrapPromptsViaRestFallback();
     } else {
         setSharedGeminiTokenEndpoint('');
         setSharedClientConversationActionPrompt('');
@@ -7075,6 +8670,47 @@ async function loadPrompts() {
             promptHistory = [];
         }
         renderPromptHistory();
+    }
+
+    await consumeEmailVerificationLinkIfPresent();
+
+    let restored = false;
+    try {
+        restored = await withPromiseTimeout(
+            restoreAuthSession(),
+            AUTH_SESSION_RESTORE_TIMEOUT_MS,
+            `Таймаут восстановления сессии (${AUTH_SESSION_RESTORE_TIMEOUT_MS / 1000}с).`
+        );
+    } catch (error) {
+        console.warn('Auth session restore timed out or failed:', error);
+        clearAuthSession();
+        clearAuthCacheIdentity();
+        restored = false;
+    }
+
+    if (!restored) {
+        const lateSession = getAuthSession();
+        if (lateSession?.login) {
+            try {
+                restored = await restoreAuthSession();
+            } catch (error) {
+                console.warn('Late auth session restore failed:', error);
+                restored = false;
+            }
+        }
+    }
+
+    if (!restored) {
+        selectedRole = 'user';
+        setCachedStorageValue(USER_ROLE_KEY, 'user');
+        showNameModal();
+    } else {
+        hideNameModal();
+        debugLog(`Welcome back, ${currentUser?.fio || 'user'} (${selectedRole})`);
+    }
+
+    if (!promptsStateHasMeaningfulContent('client')) {
+        await bootstrapPromptsViaRestFallback();
     }
 }
 
@@ -7179,15 +8815,17 @@ const debouncedSyncModalPasswordAutocompleteMode = debounce(() => {
 function showNameModal() {
     if (!nameModal) return;
     nameModal.classList.add('active');
+    syncLocalhostDevAuthActions();
+    const localhostDevUser = getLocalhostDevAuthUser();
     if (nameModalStep1) {
         nameModalStep1.style.display = 'block';
     }
     if (modalNameInput && !modalNameInput.value) {
-        modalNameInput.value = sanitizeAuthName(getCachedStorageValue(USER_NAME_KEY));
+        modalNameInput.value = sanitizeAuthName(getCachedStorageValue(USER_NAME_KEY) || localhostDevUser?.fio || '');
         sanitizeModalNameInput();
     }
     if (modalLoginInput && !modalLoginInput.value) {
-        modalLoginInput.value = getCachedStorageValue(USER_LOGIN_KEY);
+        modalLoginInput.value = getCachedStorageValue(USER_LOGIN_KEY) || localhostDevUser?.login || '';
     }
     setModalPasswordAutocompleteMode('current-password');
     setPasswordVisibility(false);
@@ -7212,6 +8850,8 @@ bindEvent(authForm, 'submit', (e) => {
     e.preventDefault();
     handleAuthSubmit();
 });
+
+bindEvent(localhostDevAuthBtn, 'click', handleLocalhostDevAuth);
 
 if (!authForm && modalNameSubmit) {
     modalNameSubmit.addEventListener('click', () => {
@@ -9127,6 +10767,57 @@ function hideVoiceModeModal() {
     }, 120);
 }
 
+function buildPromptCompareDiffHtml(publicContent = '', draftContent = '') {
+    const safePublicContent = String(publicContent || '');
+    const safeDraftContent = String(draftContent || '');
+    const diffApi = globalThis.Diff;
+    if (!diffApi?.diffWordsWithSpace) {
+        const fallbackHtml = escapeHtml(safeDraftContent).replace(/\n/g, '<br>');
+        return `<div class="prompt-compare-richdiff">${fallbackHtml}</div>`;
+    }
+
+    const parts = diffApi.diffWordsWithSpace(safePublicContent, safeDraftContent);
+    const html = parts.map((part) => {
+        const safeValue = escapeHtml(part.value || '').replace(/\n/g, '<br>');
+        if (!safeValue) return '';
+        if (part.added) {
+            return `<span class="diff-added-inline">${safeValue}</span>`;
+        }
+        if (part.removed) {
+            return `<span class="diff-removed-inline">${safeValue}</span>`;
+        }
+        return safeValue;
+    }).join('');
+
+    return `<div class="prompt-compare-richdiff">${html || '<span class="changes-empty">Без различий.</span>'}</div>`;
+}
+
+function renderPromptCompareModalContent(role = getActiveRole()) {
+    if (!promptCompareTitle || !promptCompareSummary || !promptCompareDiffView) return;
+    const context = getPromptCompareContext(role);
+    activePromptCompareContext = context;
+    if (!context) {
+        if (promptCompareModal?.classList.contains('active')) {
+            hidePromptCompareModal();
+        }
+        return;
+    }
+
+    const { publicVariation, draftVariation } = context;
+    const rollbackEntry = getPromptRollbackEntry(role, publicVariation);
+    promptCompareTitle.textContent = `Сравнение: ${getRoleLabel(role)} · ${getPromptVariationDisplayName(publicVariation) || 'Без названия'}`;
+    promptCompareSummary.innerHTML = `
+        <strong>Public:</strong> ${escapeHtml(getPromptVariationDisplayName(publicVariation) || 'Без названия')}
+        <br>
+        <strong>Draft:</strong> ${escapeHtml(getPromptVariationDisplayName(draftVariation) || 'Без названия')}
+    `;
+    promptCompareDiffView.innerHTML = buildPromptCompareDiffHtml(publicVariation.content || '', draftVariation.content || '');
+    if (promptCompareRollback) {
+        promptCompareRollback.hidden = !rollbackEntry;
+        promptCompareRollback.disabled = !rollbackEntry;
+    }
+}
+
 function showPromptHistoryModal() {
     hideTooltip(true);
     if (!promptHistoryModal) return;
@@ -9137,6 +10828,63 @@ function showPromptHistoryModal() {
 function hidePromptHistoryModal() {
     if (!promptHistoryModal) return;
     promptHistoryModal.classList.remove('active');
+}
+
+function showPromptCompareModal() {
+    hideTooltip(true);
+    if (!promptCompareModal) return;
+    syncCurrentEditorNow();
+    if (!getPromptCompareContext()) {
+        showCopyNotification('У этого промпта пока нет draft для сравнения.');
+        return;
+    }
+    renderPromptCompareModalContent();
+    promptCompareModal.classList.add('active');
+}
+
+function hidePromptCompareModal() {
+    if (!promptCompareModal) return;
+    promptCompareModal.classList.remove('active');
+    activePromptCompareContext = null;
+}
+
+function publishComparedDraft() {
+    hideTooltip(true);
+    const context = getPromptCompareContext();
+    if (!context) {
+        showCopyNotification('Draft для публикации не найден.');
+        hidePromptCompareModal();
+        return;
+    }
+
+    syncCurrentEditorNow();
+    promptsData[context.role].activeId = context.draftVariation.id;
+    if (!publishActiveLocalPrompt(context.role)) {
+        showCopyNotification('Не удалось опубликовать draft.');
+        return;
+    }
+
+    renderVariations();
+    updateEditorContent(context.role);
+    hidePromptCompareModal();
+    showCopyNotification('Draft опубликован в public.');
+}
+
+function rollbackPublicPrompt(role = getActiveRole()) {
+    hideTooltip(true);
+    const historyVariation = getPromptHistoryVariation(role);
+    const rollbackEntry = getPromptRollbackEntry(role, historyVariation);
+    if (!historyVariation || !rollbackEntry) {
+        showCopyNotification('Нет предыдущей public-версии для отката.');
+        return false;
+    }
+
+    syncCurrentEditorNow();
+    restorePromptVersion(rollbackEntry.id, role, historyVariation.id, {
+        keepCurrentSelection: !!getActiveVariation(role)?.isLocal
+    });
+    showCopyNotification('Public-версия откатена к прошлой ревизии.');
+    return true;
 }
 
 // ============ SETTINGS MODAL FUNCTIONS ============
@@ -9167,6 +10915,8 @@ function showSettingsModal() {
             adminPanelAccordion.style.display = '';
             adminPanelAccordion.setAttribute('open', '');
         }
+        renderAdminScenarioLibrary();
+        renderWebhookDebugPanel();
         startAdminRealtimeSync();
         renderAdminUsersTable();
     } else if (adminPanelAccordion) {
@@ -9174,6 +10924,7 @@ function showSettingsModal() {
         adminPanelAccordion.removeAttribute('open');
         stopAdminRealtimeSync();
     }
+    renderActiveScenarioStrip();
 }
 
 const nameInputMeasureCanvas = document.createElement('canvas');
@@ -9287,9 +11038,17 @@ async function improvePromptWithAI() {
         btnText.textContent = randomMsg;
     }, 2500);
     
+    let debugEntryId = null;
+    let response = null;
     try {
         const requestId = buildRequestId('improve');
-        const response = await fetchWithTimeout(AI_IMPROVE_WEBHOOK_URL, {
+        debugEntryId = startWebhookDebugRequest({
+            type: 'improve',
+            endpoint: AI_IMPROVE_WEBHOOK_URL,
+            requestId,
+            timeoutMs: AI_HELPER_WEBHOOK_TIMEOUT_MS
+        });
+        response = await fetchWithTimeout(AI_IMPROVE_WEBHOOK_URL, {
             method: 'POST',
             headers: buildJsonRequestHeaders(requestId, 'improve'),
             body: JSON.stringify({
@@ -9298,7 +11057,11 @@ async function improvePromptWithAI() {
             })
         }, AI_HELPER_WEBHOOK_TIMEOUT_MS);
         
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (!response.ok) {
+            const httpError = new Error(`HTTP ${response.status}`);
+            httpError.httpStatus = response.status;
+            throw httpError;
+        }
         
         const responseText = await readResponseTextWithTimeout(
             response,
@@ -9319,6 +11082,10 @@ async function improvePromptWithAI() {
         const rawResponse = extractApiResponse(data);
         
         if (!rawResponse) throw new Error('Не удалось получить текст из ответа');
+        finishWebhookDebugRequest(debugEntryId, {
+            httpStatus: response.status,
+            resultMessage: `Ответ ${rawResponse.trim().length} симв.`
+        });
         
         // Clean the text for saving (remove ~~deleted~~ and unwrap ++added++)
         const cleanPrompt = rawResponse
@@ -9337,6 +11104,7 @@ async function improvePromptWithAI() {
         showSemanticDiff(rawResponse);
         
     } catch (error) {
+        failWebhookDebugRequest(debugEntryId, error, response?.status);
         console.error('AI improve error:', error);
         alert('Ошибка улучшения: ' + error.message);
     } finally {
@@ -9422,6 +11190,9 @@ function applyImprovedPrompt(targetMode = 'new') {
     let targetVariation = null;
     let createdNew = false;
     if (targetMode === 'current' && sourceVariation) {
+        if (!sourceVariation.isLocal) {
+            ensurePromptHistoryBaseline(pendingRole, sourceVariation);
+        }
         sourceVariation.content = pendingImprovedPrompt;
         targetVariation = sourceVariation;
     } else {
@@ -9468,11 +11239,17 @@ function applyImprovedPrompt(targetMode = 'new') {
 
 bindEvent(aiImproveBtn, 'click', showAiImproveModal);
 bindEvent(promptHistoryBtn, 'click', showPromptHistoryModal);
+bindEvent(promptCompareBtn, 'click', showPromptCompareModal);
+bindEvent(promptRollbackBtn, 'click', () => rollbackPublicPrompt());
 bindEvent(promptVisibilityBtn, 'click', toggleActivePromptVisibility);
 bindEvent(aiImproveModalClose, 'click', hideAiImproveModal);
 bindEvent(aiImproveCancel, 'click', hideAiImproveModal);
 bindEvent(aiImproveSubmit, 'click', improvePromptWithAI);
 bindEvent(promptHistoryModalClose, 'click', hidePromptHistoryModal);
+bindEvent(promptCompareModalClose, 'click', hidePromptCompareModal);
+bindEvent(promptCompareCancel, 'click', hidePromptCompareModal);
+bindEvent(promptComparePublish, 'click', publishComparedDraft);
+bindEvent(promptCompareRollback, 'click', () => rollbackPublicPrompt());
 
 bindEvent(aiImproveBack, 'click', () => {
     if (aiImproveStep1) aiImproveStep1.style.display = 'block';
@@ -9558,6 +11335,43 @@ bindEvent(adminHiddenClientPromptInput, 'keydown', (e) => {
         console.error('Failed to save hidden client prompt:', error);
         showCopyNotification('Ошибка сохранения скрытого prompt клиента');
     });
+});
+
+bindEvent(adminWebhookDebugClearBtn, 'click', () => {
+    clearWebhookDebugEntries();
+    showCopyNotification('Лог webhook очищен');
+});
+
+bindEvent(adminScenarioLibraryList, 'click', (event) => {
+    const actionBtn = event.target.closest('[data-scenario-action]');
+    if (!actionBtn) return;
+    const presetId = actionBtn.dataset.scenarioId || '';
+    const action = actionBtn.dataset.scenarioAction || '';
+    if (action === 'apply') {
+        setActiveTestScenarioPreset(presetId);
+        return;
+    }
+    if (action === 'launch') {
+        launchActiveTestScenarioPreset(presetId).catch((error) => {
+            console.error('Failed to launch test scenario:', error);
+            showCopyNotification('Ошибка запуска сценария');
+        });
+    }
+});
+
+bindEvent(adminScenarioLibraryCurrent, 'click', (event) => {
+    const actionBtn = event.target.closest('[data-scenario-current-action]');
+    if (!actionBtn) return;
+    const action = actionBtn.dataset.scenarioCurrentAction || '';
+    if (action === 'prefill') {
+        if (!fillActiveScenarioStarterMessage()) {
+            showCopyNotification('Сначала выбери сценарий');
+        }
+        return;
+    }
+    if (action === 'clear') {
+        clearActiveTestScenarioPreset();
+    }
 });
 
 [geminiApiKeyInput, geminiTokenEndpointInput, geminiVoiceNameInput].forEach((input) => {
@@ -9674,6 +11488,9 @@ function switchRole(newRole) {
         throw new Error('Режим администратора доступен только админ-аккаунтам или localhost-preview.');
     }
     const role = normalizeRole(newRole) === 'admin' ? 'admin' : 'user';
+    if (role === 'admin') {
+        ensureLocalhostDevPreviewSession();
+    }
     const effectiveRole = syncSelectedRole(role);
     applyRoleRestrictions();
     updateUserNameDisplay();
@@ -9783,6 +11600,13 @@ if (promptHistoryModal) {
         }
     });
 }
+if (promptCompareModal) {
+    promptCompareModal.addEventListener('click', (e) => {
+        if (e.target === promptCompareModal) {
+            hidePromptCompareModal();
+        }
+    });
+}
 
 // ============ CHAT FUNCTIONS ============
 
@@ -9811,6 +11635,136 @@ function addMessage(content, role, isMarkdown = false) {
         contentDiv.textContent = content;
     }
     
+    messageDiv.appendChild(contentDiv);
+    chatMessages.appendChild(messageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    return messageDiv;
+}
+
+function appendRatingTextSection(container, title, text, options = {}) {
+    const normalizedText = String(text || '').trim();
+    if (!normalizedText) return;
+
+    const { fullWidth = false } = options;
+    const section = document.createElement('section');
+    section.className = `rating-section${fullWidth ? ' is-full' : ''}`;
+
+    const titleEl = document.createElement('h4');
+    titleEl.className = 'rating-section-title';
+    titleEl.textContent = title;
+
+    const bodyEl = document.createElement('div');
+    bodyEl.className = 'rating-section-body';
+    bodyEl.textContent = normalizedText;
+
+    section.appendChild(titleEl);
+    section.appendChild(bodyEl);
+    container.appendChild(section);
+}
+
+function appendRatingListSection(container, title, items, options = {}) {
+    const normalizedItems = Array.isArray(items)
+        ? items.map(item => String(item || '').trim()).filter(Boolean)
+        : [];
+    if (!normalizedItems.length) return;
+
+    const { fullWidth = false } = options;
+    const section = document.createElement('section');
+    section.className = `rating-section${fullWidth ? ' is-full' : ''}`;
+
+    const titleEl = document.createElement('h4');
+    titleEl.className = 'rating-section-title';
+    titleEl.textContent = title;
+
+    const listEl = document.createElement('ul');
+    listEl.className = 'rating-section-list';
+    normalizedItems.forEach((item) => {
+        const listItem = document.createElement('li');
+        listItem.textContent = item;
+        listEl.appendChild(listItem);
+    });
+
+    section.appendChild(titleEl);
+    section.appendChild(listEl);
+    container.appendChild(section);
+}
+
+function addRatingMessage(ratingResult) {
+    if (!ratingResult?.structured) {
+        return addMessage(ratingResult?.displayText || '', 'rating', true);
+    }
+
+    const structured = ratingResult.structured;
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message rating structured-rating';
+    if (structured.outcome) {
+        messageDiv.dataset.ratingOutcome = structured.outcome;
+    }
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+
+    const card = document.createElement('div');
+    card.className = 'rating-card';
+
+    const header = document.createElement('div');
+    header.className = 'rating-card-header';
+
+    const headingCopy = document.createElement('div');
+    headingCopy.className = 'rating-card-heading';
+
+    const eyebrow = document.createElement('div');
+    eyebrow.className = 'rating-card-eyebrow';
+    eyebrow.textContent = 'Оценка диалога';
+    headingCopy.appendChild(eyebrow);
+
+    if (structured.summary) {
+        const summary = document.createElement('div');
+        summary.className = 'rating-card-summary';
+        summary.textContent = structured.summary;
+        headingCopy.appendChild(summary);
+    }
+
+    const headerMeta = document.createElement('div');
+    headerMeta.className = 'rating-card-meta';
+
+    const outcomeLabel = getRatingOutcomeLabel(structured.outcome);
+    if (outcomeLabel) {
+        const outcomeBadge = document.createElement('div');
+        outcomeBadge.className = `rating-outcome-badge${structured.outcome ? ` is-${structured.outcome}` : ''}`;
+        outcomeBadge.textContent = outcomeLabel;
+        headerMeta.appendChild(outcomeBadge);
+    }
+
+    const outcomeReason = getRatingOutcomeReasonLabel(structured.outcomeReason);
+    if (outcomeReason) {
+        const outcomeReasonEl = document.createElement('div');
+        outcomeReasonEl.className = 'rating-outcome-reason';
+        outcomeReasonEl.textContent = `Причина: ${outcomeReason}`;
+        headerMeta.appendChild(outcomeReasonEl);
+    }
+
+    header.appendChild(headingCopy);
+    if (headerMeta.childElementCount) {
+        header.appendChild(headerMeta);
+    }
+    card.appendChild(header);
+
+    const sections = document.createElement('div');
+    sections.className = 'rating-sections';
+    appendRatingTextSection(sections, 'Что убило диалог', structured.whatKilledDialogue);
+    appendRatingTextSection(sections, 'Что ещё можно было спасти', structured.whatWasSalvageable);
+    appendRatingTextSection(sections, 'Почему клиент ушёл', structured.whyClientLeft, { fullWidth: true });
+    appendRatingListSection(sections, 'Ошибки менеджера', structured.managerMistakes);
+    appendRatingListSection(sections, 'Сильные моменты', structured.managerWins);
+    appendRatingTextSection(sections, 'Лучший следующий шаг', structured.nextBestStep, { fullWidth: true });
+    appendRatingListSection(sections, 'Действия для CRM', structured.crmActions, { fullWidth: true });
+
+    if (sections.childElementCount) {
+        card.appendChild(sections);
+    }
+
+    contentDiv.appendChild(card);
     messageDiv.appendChild(contentDiv);
     chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -9865,6 +11819,7 @@ function clearChat() {
         });
     }
     setStartButtonsEnabled(isChatReady);
+    renderActiveScenarioStrip();
 }
 
 function escapeHtml(value) {
@@ -10050,11 +12005,19 @@ async function sendMessage() {
     userInput.style.height = '44px';
     
     const loadingMsg = addMessage('', 'loading');
+    let debugEntryId = null;
+    let response = null;
     
     try {
         const requestId = buildRequestId('chat');
-        
-        const response = await fetchWithTimeout(WEBHOOK_URL, {
+        debugEntryId = startWebhookDebugRequest({
+            type: 'chat',
+            endpoint: WEBHOOK_URL,
+            requestId,
+            timeoutMs: CHAT_WEBHOOK_TIMEOUT_MS
+        });
+
+        response = await fetchWithTimeout(WEBHOOK_URL, {
             method: 'POST',
             headers: buildJsonRequestHeaders(requestId, 'chat'),
             body: JSON.stringify({
@@ -10067,15 +12030,26 @@ async function sendMessage() {
             })
         }, CHAT_WEBHOOK_TIMEOUT_MS);
         
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (!response.ok) {
+            const httpError = new Error(`HTTP ${response.status}`);
+            httpError.httpStatus = response.status;
+            throw httpError;
+        }
         
         const { message: assistantMessage, conversationAction } = await readWebhookEnvelope(response, CHAT_WEBHOOK_TIMEOUT_MS);
         if (!assistantMessage && !conversationAction) {
+            failWebhookDebugRequest(debugEntryId, new Error('Пустой ответ webhook'), response.status);
             console.warn('Empty webhook response for user message.');
             loadingMsg.remove();
             addMessage('Ошибка: что-то сломалось. Обратитесь к администратору сайта.', 'error', false);
             return;
         }
+        finishWebhookDebugRequest(debugEntryId, {
+            httpStatus: response.status,
+            resultMessage: conversationAction
+                ? `Инструмент: ${conversationAction.type}`
+                : `Ответ ${String(assistantMessage || '').trim().length} симв.`
+        });
         
         loadingMsg.remove();
         if (assistantMessage) {
@@ -10087,6 +12061,7 @@ async function sendMessage() {
         handleConversationAction(conversationAction);
         
     } catch (error) {
+        failWebhookDebugRequest(debugEntryId, error, response?.status);
         console.error('Error:', error);
         loadingMsg.remove();
         addMessage(`Ошибка: ${error.message}`, 'error', false);
@@ -10127,10 +12102,18 @@ async function startConversationHandler() {
     if (startDiv) startDiv.style.display = 'none';
     
     const loadingMsg = addMessage('', 'loading');
+    let debugEntryId = null;
+    let response = null;
     
     try {
         const requestId = buildRequestId('chat_start');
-        const response = await fetchWithTimeout(WEBHOOK_URL, {
+        debugEntryId = startWebhookDebugRequest({
+            type: 'chat_start',
+            endpoint: WEBHOOK_URL,
+            requestId,
+            timeoutMs: CHAT_WEBHOOK_TIMEOUT_MS
+        });
+        response = await fetchWithTimeout(WEBHOOK_URL, {
             method: 'POST',
             headers: buildJsonRequestHeaders(requestId, 'chat_start'),
             body: JSON.stringify({
@@ -10143,15 +12126,26 @@ async function startConversationHandler() {
             })
         }, CHAT_WEBHOOK_TIMEOUT_MS);
         
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (!response.ok) {
+            const httpError = new Error(`HTTP ${response.status}`);
+            httpError.httpStatus = response.status;
+            throw httpError;
+        }
         
         const { message: assistantMessage, conversationAction } = await readWebhookEnvelope(response, CHAT_WEBHOOK_TIMEOUT_MS);
         if (!assistantMessage && !conversationAction) {
+            failWebhookDebugRequest(debugEntryId, new Error('Пустой ответ webhook'), response.status);
             console.warn('Empty webhook response for /start.');
             loadingMsg.remove();
             addMessage('Ошибка: что-то сломалось. Обратитесь к администратору сайта.', 'error', false);
             return;
         }
+        finishWebhookDebugRequest(debugEntryId, {
+            httpStatus: response.status,
+            resultMessage: conversationAction
+                ? `Инструмент: ${conversationAction.type}`
+                : `Ответ ${String(assistantMessage || '').trim().length} симв.`
+        });
         
         loadingMsg.remove();
         if (assistantMessage) {
@@ -10166,6 +12160,7 @@ async function startConversationHandler() {
         }
         
     } catch (error) {
+        failWebhookDebugRequest(debugEntryId, error, response?.status);
         console.error('Error:', error);
         loadingMsg.remove();
         addMessage(`Ошибка: ${error.message}`, 'error', false);
@@ -10405,8 +12400,17 @@ async function sendAttestationJobWithRetry(job, maxAttempts = ATTESTATION_SEND_A
     let lastError = null;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        let debugEntryId = null;
+        let response = null;
         try {
-            const response = await fetchWithTimeout(ATTESTATION_WEBHOOK_URL, {
+            debugEntryId = startWebhookDebugRequest({
+                type: 'attestation',
+                endpoint: ATTESTATION_WEBHOOK_URL,
+                requestId: job.requestId,
+                attempt,
+                timeoutMs: ATTESTATION_WEBHOOK_TIMEOUT_MS
+            });
+            response = await fetchWithTimeout(ATTESTATION_WEBHOOK_URL, {
                 method: 'POST',
                 headers: buildJsonRequestHeaders(job.requestId, 'attestation'),
                 body: JSON.stringify({
@@ -10432,8 +12436,13 @@ async function sendAttestationJobWithRetry(job, maxAttempts = ATTESTATION_SEND_A
                 err.httpStatus = response.status;
                 throw err;
             }
+            finishWebhookDebugRequest(debugEntryId, {
+                httpStatus: response.status,
+                resultMessage: 'Отправлено'
+            });
             return true;
         } catch (error) {
+            failWebhookDebugRequest(debugEntryId, error, response?.status);
             lastError = error;
             if (attempt >= maxAttempts || !isRetryableAttestationError(error)) {
                 throw lastError;
@@ -10515,23 +12524,40 @@ async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RAT
     const requestId = buildRequestId('rating');
     let lastError = null;
     const runtimeRatingConfig = getRuntimeRatingRequestConfig();
+    const conversationOutcomeState = getConversationActionStatePayload();
+    const activeScenarioPreset = getActiveTestScenarioPreset();
+    const effectiveRaterPrompt = buildRaterPromptForWebhook(raterPrompt);
     const effectiveMaxAttempts = Math.min(
         normalizeDebugPositiveInt(maxAttempts, runtimeRatingConfig.attempts, 1, RATING_SEND_ATTEMPTS),
         runtimeRatingConfig.attempts
     );
 
     for (let attempt = 1; attempt <= effectiveMaxAttempts; attempt += 1) {
+        let debugEntryId = null;
+        let response = null;
         try {
-            const response = await fetchWithTimeout(RATE_WEBHOOK_URL, {
+            debugEntryId = startWebhookDebugRequest({
+                type: 'rating',
+                endpoint: RATE_WEBHOOK_URL,
+                requestId,
+                attempt,
+                timeoutMs: runtimeRatingConfig.timeoutMs
+            });
+            response = await fetchWithTimeout(RATE_WEBHOOK_URL, {
                 method: 'POST',
                 headers: buildJsonRequestHeaders(requestId, 'rating'),
                 body: JSON.stringify({
                     dialog: dialogText,
-                    raterPrompt,
+                    raterPrompt: effectiveRaterPrompt,
                     sessionId: raterSessionId,
                     requestId,
                     attempt,
-                    sentAt: new Date().toISOString()
+                    sentAt: new Date().toISOString(),
+                    conversationOutcome: conversationOutcomeState?.type || '',
+                    conversationOutcomeReason: conversationOutcomeState?.reason || '',
+                    conversationOutcomeRecoverable: !!conversationOutcomeState?.recoverable,
+                    activeScenarioPresetId: activeScenarioPreset?.id || '',
+                    activeScenarioPresetName: activeScenarioPreset?.name || ''
                 })
             }, runtimeRatingConfig.timeoutMs);
 
@@ -10541,20 +12567,27 @@ async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RAT
                 throw err;
             }
 
-            let ratingMessage = await readWebhookResponse(response, runtimeRatingConfig.timeoutMs);
-            ratingMessage = normalizeStructuredJsonText(ratingMessage);
-            if (/^\s*<!doctype|^\s*<html/i.test(ratingMessage || '')) {
+            const rawRatingMessage = await readWebhookResponse(response, runtimeRatingConfig.timeoutMs);
+            const ratingResult = normalizeRatingWebhookResult(rawRatingMessage, conversationOutcomeState);
+            if (/^\s*<!doctype|^\s*<html/i.test(ratingResult.displayText || '')) {
                 const err = new Error('Некорректный ответ сервера оценки');
                 err.httpStatus = 502;
                 throw err;
             }
-            if (!ratingMessage || ratingMessage.trim() === '') {
+            if (!ratingResult.displayText || ratingResult.displayText.trim() === '') {
                 const err = new Error('Пустой ответ');
                 err.httpStatus = 204;
                 throw err;
             }
-            return ratingMessage.trim();
+            finishWebhookDebugRequest(debugEntryId, {
+                httpStatus: response.status,
+                resultMessage: ratingResult.structured?.summary
+                    ? `Оценка: ${ratingResult.structured.summary}`
+                    : `Ответ ${ratingResult.displayText.trim().length} симв.`
+            });
+            return ratingResult;
         } catch (error) {
+            failWebhookDebugRequest(debugEntryId, error, response?.status);
             lastError = error;
             if (attempt >= effectiveMaxAttempts || !isRetryableRatingError(error)) {
                 throw lastError;
@@ -10606,20 +12639,20 @@ async function rateChat(options = {}) {
         if (!dialogText) {
             throw new Error('Нет диалога для оценки');
         }
-        const ratingMessage = await requestRatingWithRetry(dialogText, raterPrompt, RATING_SEND_ATTEMPTS);
+        const ratingResult = await requestRatingWithRetry(dialogText, raterPrompt, RATING_SEND_ATTEMPTS);
         
         loadingMsg.remove();
-        lastRating = ratingMessage;
-        const ratingMsgElement = addMessage(ratingMessage, 'rating', true);
+        lastRating = ratingResult.exportText;
+        addRatingMessage(ratingResult);
         
         // Add button to improve manager prompt based on rating
-        addImproveFromRatingButton(dialogText, ratingMessage);
+        addImproveFromRatingButton(dialogText, ratingResult.exportText);
         
         isDialogRated = true;
         lockDialogInput();
         rateChatBtn.classList.add('rated');
         if (isAttestationMode) {
-            sendAttestationResult(dialogText, ratingMessage);
+            sendAttestationResult(dialogText, ratingResult.exportText);
         }
         if (isConversationClosed() && conversationTerminalAction) {
             showConversationActionNotice(conversationTerminalAction);
@@ -10813,6 +12846,8 @@ async function generateAIResponse() {
     rateChatBtn.disabled = true;
     aiAssistBtn.classList.add('loading');
     
+    let debugEntryId = null;
+    let response = null;
     try {
         const dialogHistory = conversationHistoryText.trim();
         const lastMessage = conversationHistory[conversationHistory.length - 1].content;
@@ -10820,7 +12855,13 @@ async function generateAIResponse() {
         const fullPrompt = `Тебя зовут ${managerName}.\n\n${basePrompt}`;
         const requestId = buildRequestId('manager_assist');
         
-        const response = await fetchWithTimeout(MANAGER_ASSISTANT_WEBHOOK_URL, {
+        debugEntryId = startWebhookDebugRequest({
+            type: 'manager_assist',
+            endpoint: MANAGER_ASSISTANT_WEBHOOK_URL,
+            requestId,
+            timeoutMs: AI_HELPER_WEBHOOK_TIMEOUT_MS
+        });
+        response = await fetchWithTimeout(MANAGER_ASSISTANT_WEBHOOK_URL, {
             method: 'POST',
             headers: buildJsonRequestHeaders(requestId, 'manager_assist'),
             body: JSON.stringify({
@@ -10832,10 +12873,18 @@ async function generateAIResponse() {
             })
         }, AI_HELPER_WEBHOOK_TIMEOUT_MS);
         
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (!response.ok) {
+            const httpError = new Error(`HTTP ${response.status}`);
+            httpError.httpStatus = response.status;
+            throw httpError;
+        }
         
         const aiMessage = await readWebhookResponse(response, AI_HELPER_WEBHOOK_TIMEOUT_MS);
         if (!aiMessage) throw new Error('Пустой ответ');
+        finishWebhookDebugRequest(debugEntryId, {
+            httpStatus: response.status,
+            resultMessage: `Ответ ${aiMessage.trim().length} симв.`
+        });
         
         const cleanedMessage = aiMessage.trim().replace(/^["']|["']$/g, '').replace(/^(Менеджер|Manager):\s*/i, '');
         
@@ -10845,6 +12894,7 @@ async function generateAIResponse() {
         userInput.focus();
         
     } catch (error) {
+        failWebhookDebugRequest(debugEntryId, error, response?.status);
         console.error('AI generation error:', error);
         alert('Ошибка: ' + error.message);
     } finally {
@@ -11367,6 +13417,11 @@ function initWYSIWYGMode() {
     setupWYSIWYG('manager', promptPreviewByRole.manager, managerPromptInput, (c) => syncContentToData('manager', c));
     setupWYSIWYG('manager_call', promptPreviewByRole.manager_call, managerCallPromptInput, (c) => syncContentToData('manager_call', c));
     setupWYSIWYG('rater', promptPreviewByRole.rater, raterPromptInput, (c) => syncContentToData('rater', c));
+
+    // Rehydrate visible editors after WYSIWYG init. In some browser/profile states
+    // textareas are already populated, but previews stay blank until we repaint them.
+    updateAllPreviews();
+    updateEditorContent(getActiveRole());
 }
 
 // ============ DRAG & DROP ============
@@ -11508,6 +13563,20 @@ bindEvent(userInput, 'input', () => {
     autoResizeTextarea(userInput);
     updateSendBtnState();
     });
+bindEvent(activeScenarioPrefillBtn, 'click', () => {
+    if (!fillActiveScenarioStarterMessage()) {
+        showCopyNotification('Сначала выбери сценарий');
+    }
+});
+bindEvent(activeScenarioStartBtn, 'click', () => {
+    launchActiveTestScenarioPreset().catch((error) => {
+        console.error('Failed to launch active test scenario:', error);
+        showCopyNotification('Ошибка запуска сценария');
+    });
+});
+bindEvent(activeScenarioClearBtn, 'click', () => {
+    clearActiveTestScenarioPreset();
+});
 bindEvent(clearChatBtn, 'click', () => { if (confirm('Очистить чат?')) clearChat(); });
 bindEvent(startBtn, 'click', startConversationHandler);
 bindEvent(rateChatBtn, 'click', rateChat);
@@ -11915,9 +13984,75 @@ document.querySelectorAll('.toolbar-btn').forEach(btn => {
 // Cloud save button - REMOVED
 // Autosave is handled by debounce logic
 
+function installLocalhostTestHooks() {
+    if (!isLocalhostAdminPreviewHost()) return;
+
+    window.__CLIENT_SIMULATOR_TEST_HOOKS__ = {
+        getPublicPromptsSnapshot() {
+            return JSON.parse(JSON.stringify(buildPromptsSyncPayload(PROMPT_ROLES)));
+        },
+        simulateRemotePromptsSnapshot(nextSnapshot = {}) {
+            const data = nextSnapshot && typeof nextSnapshot === 'object' ? nextSnapshot : {};
+            const dataStr = JSON.stringify(data);
+            lastPromptsFirebaseSnapshot = data;
+
+            if (isUserEditing) {
+                pendingPromptsFirebaseSnapshot = data;
+                lastFirebaseData = dataStr;
+                return { deferred: true };
+            }
+
+            if (lastFirebaseData === dataStr) {
+                return { deferred: false, skipped: 'unchanged' };
+            }
+
+            lastFirebaseData = dataStr;
+            pendingPromptsFirebaseSnapshot = null;
+            if (Object.keys(data).length > 0) {
+                initPromptsData(data);
+            } else {
+                initPromptsData({});
+            }
+            return { deferred: false };
+        },
+        forceEndPromptEditing(role = '') {
+            syncCurrentEditorNow(role || getActiveRole());
+            endPromptEditing(role || getActiveRole());
+            return true;
+        },
+        forceBeginPromptEditing(role = '') {
+            beginPromptEditing(role || getActiveRole());
+            return true;
+        },
+        getPromptUiState(role = getActiveRole()) {
+            const activeVariation = getActiveVariation(role);
+            const visibleVariations = getVisibleVariations(role, isAdmin()).map((variation) => ({
+                id: variation.id,
+                name: getPromptVariationDisplayName(variation),
+                isLocal: !!variation.isLocal
+            }));
+            return {
+                role,
+                selectedRole,
+                isAdminView: isAdmin(),
+                activeId: activeVariation?.id || null,
+                activeName: activeVariation ? getPromptVariationDisplayName(activeVariation) : '',
+                activeIsLocal: !!activeVariation?.isLocal,
+                activeContent: getActiveContent(role),
+                visibleVariations,
+                conflictMessage: String(promptSyncConflictMessages[role] || ''),
+                hiddenClientPrompt: getConfiguredClientConversationActionPrompt(),
+                activeScenarioPresetId: activeTestScenarioPresetId,
+                activeScenarioPresetName: getTestScenarioPresetById(activeTestScenarioPresetId)?.name || ''
+            };
+        }
+    };
+}
+
 // ============ INITIALIZATION ============
 
 setChatLoadingState(true);
+installLocalhostTestHooks();
 loadAttestationQueue();
 loadPrompts()
     .catch((error) => {
@@ -11932,10 +14067,17 @@ initSpeechRecognition();
 autoResizeTextarea(userInput);
 prepareCustomTooltips();
 initCustomTooltipLayer();
+document.addEventListener('readystatechange', syncWindowReadyState);
 window.addEventListener('load', () => {
     isWindowLoaded = true;
     updateChatReadyState();
 });
+window.addEventListener('pageshow', () => {
+    isWindowLoaded = true;
+    updateChatReadyState();
+});
+queueMicrotask(syncWindowReadyState);
+setTimeout(syncWindowReadyState, 0);
 
 if (attestationQueue.length > 0) {
     scheduleAttestationQueueRetry(600);
@@ -11961,4 +14103,6 @@ setupDragAndDropForPreview(promptPreviewByRole.rater, raterPromptInput);
         setTimeout(() => {
     initWYSIWYGMode();
     renderVariations();
+    updateAllPreviews();
+    updateEditorContent(getActiveRole());
 }, 200);
