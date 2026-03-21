@@ -708,7 +708,6 @@ const AUTH_SUBMIT_DEFAULT_LABEL = String(modalNameSubmit?.textContent || 'Вой
 const aiImproveBtn = document.getElementById('aiImproveBtn');
 const promptHistoryBtn = document.getElementById('promptHistoryBtn');
 const promptCompareBtn = document.getElementById('promptCompareBtn');
-const promptRollbackBtn = document.getElementById('promptRollbackBtn');
 const aiImproveModal = document.getElementById('aiImproveModal');
 const aiImproveModalClose = document.getElementById('aiImproveModalClose');
 const aiImproveModalTitle = document.getElementById('aiImproveModalTitle');
@@ -717,13 +716,18 @@ const promptHistoryModal = document.getElementById('promptHistoryModal');
 const promptHistoryModalClose = document.getElementById('promptHistoryModalClose');
 const promptHistoryTitle = document.getElementById('promptHistoryTitle');
 const promptHistoryList = document.getElementById('promptHistoryList');
+const promptHistoryItemModal = document.getElementById('promptHistoryItemModal');
+const promptHistoryItemModalClose = document.getElementById('promptHistoryItemModalClose');
+const promptHistoryItemCloseBtn = document.getElementById('promptHistoryItemCloseBtn');
+const promptHistoryItemTitle = document.getElementById('promptHistoryItemTitle');
+const promptHistoryItemMeta = document.getElementById('promptHistoryItemMeta');
+const promptHistoryItemDiffView = document.getElementById('promptHistoryItemDiffView');
 const promptCompareModal = document.getElementById('promptCompareModal');
 const promptCompareModalClose = document.getElementById('promptCompareModalClose');
 const promptCompareTitle = document.getElementById('promptCompareTitle');
 const promptCompareSummary = document.getElementById('promptCompareSummary');
 const promptCompareDiffView = document.getElementById('promptCompareDiffView');
 const promptCompareCancel = document.getElementById('promptCompareCancel');
-const promptCompareRollback = document.getElementById('promptCompareRollback');
 const promptComparePublish = document.getElementById('promptComparePublish');
 const voiceModeScreen = document.getElementById('voiceModeScreen');
 const voiceModeActions = document.getElementById('voiceModeActions');
@@ -4000,6 +4004,21 @@ function hasAdminRealtimeTableData() {
         && Array.isArray(adminRealtimePresence);
 }
 
+function getAdminUsersTableFallbackRows() {
+    const normalizedLogin = normalizeLogin(currentUser?.login || '');
+    if (!isAdmin() || !isValidLogin(normalizedLogin)) return [];
+
+    const normalizedCurrentUser = normalizeUserRecord(currentUser, normalizedLogin);
+    if (!normalizedCurrentUser) return [];
+
+    return buildAdminUsersTableRows(
+        [normalizedCurrentUser],
+        [],
+        [],
+        []
+    );
+}
+
 function resetAdminRealtimeTableData() {
     adminRealtimeUsers = null;
     adminRealtimeInvites = null;
@@ -4333,41 +4352,57 @@ async function renderAdminUsersTable() {
     await ensureCurrentUserAccessMirror();
 
     startAdminRealtimeSync();
-    const liveDataReady = hasAdminRealtimeTableData();
-    const [users, invites, revocations, presenceEntries] = liveDataReady
-        ? [adminRealtimeUsers, adminRealtimeInvites, adminRealtimeRevocations, adminRealtimePresence]
-        : await Promise.all([
-            listAllUserRecords(),
-            listPartnerInvites(),
-            listAccessRevocations(),
-            Promise.resolve([])
-        ]);
-    const rowsData = buildAdminUsersTableRows(users, invites, revocations, presenceEntries);
-    if (!rowsData.length) {
-        setAdminUsersTableEmptyState('Пользователи не найдены');
-        return;
-    }
+    try {
+        const liveDataReady = hasAdminRealtimeTableData();
+        const [users, invites, revocations, presenceEntries] = liveDataReady
+            ? [adminRealtimeUsers, adminRealtimeInvites, adminRealtimeRevocations, adminRealtimePresence]
+            : await Promise.all([
+                listAllUserRecords(),
+                listPartnerInvites(),
+                listAccessRevocations(),
+                Promise.resolve([])
+            ]);
 
-    adminUsersTableBody.querySelectorAll('.admin-empty-row').forEach((row) => row.remove());
-    const seenLogins = new Set();
-
-    rowsData.forEach((rowData) => {
-        let row = adminUserRowsByLogin.get(rowData.login);
-        if (!row) {
-            row = createAdminUsersTableRow(rowData.login);
+        let rowsData = buildAdminUsersTableRows(users, invites, revocations, presenceEntries);
+        if (!rowsData.length) {
+            rowsData = getAdminUsersTableFallbackRows();
         }
-        updateAdminUsersTableRow(row, rowData);
-        adminUsersTableBody.appendChild(row);
-        seenLogins.add(rowData.login);
-    });
 
-    Array.from(adminUserRowsByLogin.entries()).forEach(([login, row]) => {
-        if (seenLogins.has(login)) return;
-        row.remove();
-        adminUserRowsByLogin.delete(login);
-    });
+        if (!rowsData.length) {
+            const isEmailVerified = !!auth?.currentUser?.emailVerified;
+            const hint = isEmailVerified
+                ? 'Пользователи не найдены или нет доступа к таблице.'
+                : 'Проверьте подтверждение email в Firebase Auth (email не подтверждён), затем обновите страницу.';
+            setAdminUsersTableEmptyState(hint);
+            adminUsersTableInitialized = true;
+            return;
+        }
 
-    adminUsersTableInitialized = true;
+        adminUsersTableBody.querySelectorAll('.admin-empty-row').forEach((row) => row.remove());
+        const seenLogins = new Set();
+
+        rowsData.forEach((rowData) => {
+            let row = adminUserRowsByLogin.get(rowData.login);
+            if (!row) {
+                row = createAdminUsersTableRow(rowData.login);
+            }
+            updateAdminUsersTableRow(row, rowData);
+            adminUsersTableBody.appendChild(row);
+            seenLogins.add(rowData.login);
+        });
+
+        Array.from(adminUserRowsByLogin.entries()).forEach(([login, row]) => {
+            if (seenLogins.has(login)) return;
+            row.remove();
+            adminUserRowsByLogin.delete(login);
+        });
+
+        adminUsersTableInitialized = true;
+    } catch (error) {
+        console.error('Failed to render admin users table:', error);
+        setAdminUsersTableEmptyState('Ошибка загрузки таблицы пользователей. Проверьте права доступа Firebase и актуальность сессии.');
+        adminUsersTableInitialized = true;
+    }
 }
 
 function updateAdminUserTimeCell(login, activeMs) {
@@ -7366,15 +7401,6 @@ function updatePromptWorkflowButtons(role = getActiveRole()) {
         }
     }
 
-    if (promptRollbackBtn) {
-        promptRollbackBtn.style.display = rollbackEntry ? '' : 'none';
-        if (rollbackEntry && historyVariation) {
-            const rollbackLabel = historyVariation.isLocal
-                ? 'Откатить hidden draft'
-                : 'Откатить public к прошлой версии';
-            setCustomTooltip(promptRollbackBtn, rollbackLabel);
-        }
-    }
 }
 
 function updatePromptLengthInfo(role = getActiveRole()) {
@@ -8103,10 +8129,47 @@ function getPromptHistoryKindLabel(kind = 'edit') {
     }
 }
 
+function buildPromptHistoryEntryDiffHtml(previousContent = '', currentContent = '') {
+    return buildPromptCompareDiffHtml(previousContent, currentContent);
+}
+
+function showPromptHistoryItem(entry = {}, previousContent = '', role = getActiveRole(), variationId) {
+    if (!promptHistoryItemModal || !promptHistoryItemTitle || !promptHistoryItemMeta || !promptHistoryItemDiffView) return;
+
+    const safeRole = entry.role || role;
+    const safeVariationId = entry.variationId || variationId;
+    const normalizedEntry = {
+        ...entry,
+        id: entry.id,
+        role: safeRole,
+        variationId: safeVariationId,
+        kind: entry.kind || 'edit',
+        ts: entry.ts || Date.now(),
+        variationName: entry.variationName || 'Без названия',
+        note: entry.note || ''
+    };
+
+    const title = `${getRoleLabel(normalizedEntry.role)} · ${normalizedEntry.variationName || 'Без названия'}`;
+    const time = formatHistoryTime(normalizedEntry.ts);
+    const kindLabel = getPromptHistoryKindLabel(normalizedEntry.kind);
+    const noteLabel = normalizedEntry.note ? `<br><strong>Примечание:</strong> ${escapeHtml(normalizedEntry.note)}` : '';
+    promptHistoryItemTitle.textContent = `Версия: ${title}`;
+    promptHistoryItemMeta.innerHTML = `<strong>${kindLabel}</strong> · ${escapeHtml(time)}${noteLabel}`;
+    promptHistoryItemDiffView.innerHTML = buildPromptHistoryEntryDiffHtml(previousContent, String(entry?.content || ''));
+
+    promptHistoryItemModal.classList.add('active');
+}
+
+function hidePromptHistoryItemModal() {
+    if (!promptHistoryItemModal) return;
+    promptHistoryItemModal.classList.remove('active');
+}
+
 function renderPromptHistory() {
     if (!promptHistoryList || !promptHistoryTitle) return;
     if (!isAdmin()) {
         promptHistoryList.innerHTML = '';
+        hidePromptHistoryItemModal();
         return;
     }
 
@@ -8132,16 +8195,20 @@ function renderPromptHistory() {
 
     const items = getPromptHistoryEntries(role, historyVariation.id).slice(0, HISTORY_LIMIT);
     promptHistoryList.innerHTML = '';
+    hidePromptHistoryItemModal();
     if (!items.length) {
         promptHistoryList.innerHTML = '<div class="changes-empty">Пока нет изменений у этого промпта.</div>';
         return;
     }
 
-    items.forEach(entry => {
+    items.forEach((entry, index) => {
         const item = document.createElement('div');
         item.className = 'change-item';
+        item.dataset.entryId = entry.id;
         const title = `${getRoleLabel(entry.role)} · ${entry.variationName || 'Без названия'}`;
         const time = formatHistoryTime(entry.ts);
+        const previousEntry = items[index + 1] || null;
+        const previousContent = previousEntry ? String(previousEntry.content || '') : '';
 
         const changeMeta = document.createElement('div');
         changeMeta.className = 'change-meta';
@@ -8173,7 +8240,9 @@ function renderPromptHistory() {
                 keepCurrentSelection: !!activeVariation.isLocal
             });
         });
-        prepareCustomTooltips(item);
+        item.addEventListener('click', () => {
+            showPromptHistoryItem(entry, previousContent, role, historyVariation.id);
+        });
         promptHistoryList.appendChild(item);
     });
 }
@@ -10812,16 +10881,13 @@ function renderPromptCompareModalContent(role = getActiveRole()) {
         <strong>Draft:</strong> ${escapeHtml(getPromptVariationDisplayName(draftVariation) || 'Без названия')}
     `;
     promptCompareDiffView.innerHTML = buildPromptCompareDiffHtml(publicVariation.content || '', draftVariation.content || '');
-    if (promptCompareRollback) {
-        promptCompareRollback.hidden = !rollbackEntry;
-        promptCompareRollback.disabled = !rollbackEntry;
-    }
 }
 
 function showPromptHistoryModal() {
     hideTooltip(true);
     if (!promptHistoryModal) return;
     renderPromptHistory();
+    hidePromptHistoryItemModal();
     promptHistoryModal.classList.add('active');
 }
 
@@ -11240,7 +11306,6 @@ function applyImprovedPrompt(targetMode = 'new') {
 bindEvent(aiImproveBtn, 'click', showAiImproveModal);
 bindEvent(promptHistoryBtn, 'click', showPromptHistoryModal);
 bindEvent(promptCompareBtn, 'click', showPromptCompareModal);
-bindEvent(promptRollbackBtn, 'click', () => rollbackPublicPrompt());
 bindEvent(promptVisibilityBtn, 'click', toggleActivePromptVisibility);
 bindEvent(aiImproveModalClose, 'click', hideAiImproveModal);
 bindEvent(aiImproveCancel, 'click', hideAiImproveModal);
@@ -11249,7 +11314,8 @@ bindEvent(promptHistoryModalClose, 'click', hidePromptHistoryModal);
 bindEvent(promptCompareModalClose, 'click', hidePromptCompareModal);
 bindEvent(promptCompareCancel, 'click', hidePromptCompareModal);
 bindEvent(promptComparePublish, 'click', publishComparedDraft);
-bindEvent(promptCompareRollback, 'click', () => rollbackPublicPrompt());
+bindEvent(promptHistoryItemModalClose, 'click', hidePromptHistoryItemModal);
+bindEvent(promptHistoryItemCloseBtn, 'click', hidePromptHistoryItemModal);
 
 bindEvent(aiImproveBack, 'click', () => {
     if (aiImproveStep1) aiImproveStep1.style.display = 'block';
@@ -11604,6 +11670,13 @@ if (promptCompareModal) {
     promptCompareModal.addEventListener('click', (e) => {
         if (e.target === promptCompareModal) {
             hidePromptCompareModal();
+        }
+    });
+}
+if (promptHistoryItemModal) {
+    promptHistoryItemModal.addEventListener('click', (e) => {
+        if (e.target === promptHistoryItemModal) {
+            hidePromptHistoryItemModal();
         }
     });
 }

@@ -213,3 +213,12 @@
 - Consider adding retry/copy actions into the new webhook debug panel once the basic observability proves useful.
 - Decide whether admin table needs row-level diffing for invite/source/status tooltips beyond current keyed patching.
 - When realism contour starts for real, build Phase 1 harness first; planning docs already live in `automations/realism-contour`.
+- User request (2026-03-21): выдать роль `admin` для `qwertaf134@gmail.com`; для выполнения нужна правка в Firebase (в `users` и `users_by_uid` на основе его UID), поскольку frontend- и DB-гарантии не позволяют назначить роль через UI без уже существующего админа.
+
+- 2026-03-21: обновил локальный экспорт client-simulator-default-rtdb-export.json: роли admin для users/71_77_65_72_74_61_66_31_33_34_40_67_6d_61_69_6c_2e_63_6f_6d и users_by_uid/tWRvimjZcvVwLL54HMmvYDZuoLT2 установлены (uid=tWRvimjZcvVwLL54HMmvYDZuoLT2). Для фактического применения нужно импортировать дамп или применить изменения в RTDB.
+- 2026-03-21: добавил защиту рендера админ-таблицы пользователей в `script.js`:
+  - если Firebase не возвращает список пользователей, таблица больше не зависает на `Загрузка...` и показывает диагностический текст;
+  - добавлен fallback-ряд текущего авторизованного админа, чтобы в крайнем случае не было пустоты и интерфейс не «падал»;
+  - в ошибках рендера теперь фиксируется лог и понятное сообщение о проблемах доступа к Firebase-сессии.
+- 2026-03-21: убрал кнопку(и) отката из панели админки: удалён promptRollbackBtn из тулбара инструкций и promptCompareRollback из модалки сравнения (index.html). В script.js удалены переменные, блоки показа/подсказки состояния rollback и обработчики кликов для этих кнопок; внутренняя функция ollbackPublicPrompt и метка estore в истории пока оставлены как резервная функциональность (без кнопки для запуска).
+- 2026-03-21: добавлен клик по карточке записи истории: теперь каждый блок в списке истории промпта открывает модальное окно с диффом относительно предыдущей версии (зелёное = добавлено, красное = удалено, без изменений — обычный текст). Кнопка «Восстановить» осталась отдельным действием.

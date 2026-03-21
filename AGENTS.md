@@ -21,6 +21,16 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-21`, a read-only follow-up on Windows sign-in forms for RDP/Windows App was run from the repo workspace:
+  - current session resolves as `ARTEMKIRILLOV\qwert`; `cmd /c whoami /upn` says the user is not a domain user
+  - `Get-LocalUser` shows `qwert` with `PrincipalSource=MicrosoftAccount`, while `Win32_UserAccount` still reports it as a local account/profile (`C:\Users\qwert`)
+  - registry under `HKCU\Software\Microsoft\IdentityCRL\UserExtendedProperties` exposes linked Microsoft account email `qwertaf134@gmail.com`
+  - practical username forms to try first in Windows App: `ARTEMKIRILLOV\qwert`, `.\qwert`, `qwert`, then `MicrosoftAccount\qwertaf134@gmail.com` or plain `qwertaf134@gmail.com` if Microsoft-account auth is required
+- As of `2026-03-20`, a read-only Windows remote-access sidecar check was run from the repo workspace:
+  - current user `ARTEMKIRILLOV\qwert`; local account in `Administrators`, current token non-elevated; Windows reports `PasswordRequired=True`, `PasswordLastSet=2025-11-20`
+  - active non-loopback IPv4s seen on `Беспроводная сеть` (`192.168.1.72`), `SetupVPN` (`172.16.9.2`), Hyper-V vSwitches (`172.31.128.1`, `172.26.112.1`), plus several APIPA interfaces
+  - no Tailscale install/service/binary detected via uninstall registry, `Get-Service`, or `where.exe`
+  - Windows Firewall profiles enabled; RDP disabled (`fDenyTSConnections=1`), `TermService` stopped/manual, no listener on `3389`, built-in Remote Desktop firewall rules present but disabled
 - As of `2026-03-19`, the latest completed pass focused on token-server robustness and frontend prompt-sync performance.
 - Already fixed in this codebase:
   - client-side self-escalation to admin

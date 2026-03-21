@@ -3297,6 +3297,14 @@ body.light-theme .btn-icon:hover {
     padding: 8px 10px;
     color: #ccc;
     font-size: 12px;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+    border: 1px solid transparent;
+}
+
+.change-item:hover {
+    background: #292929;
+    border-color: #353535;
 }
 
 .change-meta {
@@ -5017,6 +5025,25 @@ body.voice-mode-active > :not(#voiceModeScreen):not(#voiceModeActions):not(#elev
     padding-right: 4px;
 }
 
+.prompt-history-entry-modal {
+    max-width: 760px;
+    width: min(94vw, 760px);
+    position: relative;
+    border: none;
+    text-align: left;
+}
+
+.prompt-history-entry-meta {
+    margin-bottom: 10px;
+    color: #999;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.prompt-history-entry-meta strong {
+    color: #f1f1f1;
+}
+
 
 .modal-close {
     position: absolute;
@@ -5108,6 +5135,18 @@ body.light-theme .prompt-compare-summary {
 }
 
 body.light-theme .prompt-compare-summary strong {
+    color: #1a1a1a;
+}
+
+body.light-theme .prompt-history-entry-modal {
+    background: #fff;
+}
+
+body.light-theme .prompt-history-entry-meta {
+    color: #666;
+}
+
+body.light-theme .prompt-history-entry-meta strong {
     color: #1a1a1a;
 }
 

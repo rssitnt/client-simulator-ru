@@ -122,6 +122,19 @@
         </div>
     </div>
 
+    <!-- Окно просмотра выбранного изменения промпта -->
+    <div id="promptHistoryItemModal" class="modal-overlay">
+        <div class="modal-content prompt-history-entry-modal">
+            <button class="modal-close" id="promptHistoryItemModalClose">&times;</button>
+            <h3 id="promptHistoryItemTitle">Содержимое версии</h3>
+            <div id="promptHistoryItemMeta" class="prompt-compare-summary prompt-history-entry-meta"></div>
+            <div id="promptHistoryItemDiffView" class="diff-view prompt-compare-diff"></div>
+            <div class="ai-improve-actions">
+                <button id="promptHistoryItemCloseBtn" class="btn-modal-cancel">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Модальное окно сравнения draft/public -->
     <div id="promptCompareModal" class="modal-overlay">
         <div class="modal-content prompt-compare-modal">
@@ -131,7 +144,6 @@
             <div id="promptCompareDiffView" class="diff-view prompt-compare-diff"></div>
             <div class="ai-improve-actions prompt-compare-actions">
                 <button id="promptCompareCancel" class="btn-modal-cancel">Закрыть</button>
-                <button id="promptCompareRollback" class="btn-modal-submit btn-ai-apply-current">Откатить public</button>
                 <button id="promptComparePublish" class="btn-modal-submit">Опубликовать draft</button>
             </div>
         </div>
@@ -557,7 +569,6 @@
                         </svg>
                     </button>
                     <button id="promptCompareBtn" class="toolbar-btn toolbar-btn-compare" title="Сравнить draft с public" aria-label="Сравнить draft с public">Сравнить</button>
-                    <button id="promptRollbackBtn" class="toolbar-btn toolbar-btn-rollback" title="Откатить public к прошлой версии" aria-label="Откатить public к прошлой версии">Откат</button>
                     <span class="toolbar-divider"></span>
                     <button class="toolbar-btn" data-action="h1" title="Заголовок 1">H1</button>
                     <button class="toolbar-btn" data-action="h2" title="Заголовок 2">H2</button>
