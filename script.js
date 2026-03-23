@@ -333,6 +333,7 @@ const PASSWORD_HASH_KEY_BYTES = 32;
 const PASSWORD_HASH_SALT_BYTES = 16;
 const PASSWORD_HASH_FORMAT_PREFIX = 'pbkdf2:v1';
 const PASSWORD_HASH_FALLBACK_PREFIX = 'sha256:v1';
+const LEGACY_PASSWORD_HASH_HEX_RE = /^[a-fA-F0-9]{64}$/;
 const FAILED_LOGIN_BACKOFF_BASE_MS = 1200;
 const FAILED_LOGIN_BACKOFF_MAX_MS = 60 * 1000;
 const DEFAULT_RATER_PROMPT = `РОЛЬ
@@ -1051,7 +1052,7 @@ function isValidPassword(value) {
 }
 
 function normalizeRole(value) {
-    return value === 'admin' ? 'admin' : 'user';
+    return String(value || '').trim().toLowerCase() === 'admin' ? 'admin' : 'user';
 }
 
 function getRoleLabelUi(role) {
@@ -2826,6 +2827,13 @@ function parsePasswordHashWithState(rawHash = '') {
         };
     }
 
+    if (LEGACY_PASSWORD_HASH_HEX_RE.test(normalized)) {
+        return {
+            format: 'sha256-legacy',
+            raw: normalized
+        };
+    }
+
     return { format: 'legacy', raw: normalized };
 }
 
@@ -2908,6 +2916,31 @@ async function verifyPasswordHash(login, password, rawHash) {
         try {
             const legacyHash = await hashPasswordSha256Legacy(secret);
             return legacyHash === (parsed.raw || '');
+        } catch (error) {
+            return false;
+        }
+    }
+
+    if (parsed.format === 'sha256-legacy') {
+        try {
+            const passwordInput = String(password || '');
+            const loginCandidates = new Set([
+                normalizeLogin(login),
+                String(login || '').trim()
+            ]);
+            const hashCandidates = new Set([passwordInput]);
+            for (const loginCandidate of loginCandidates) {
+                if (loginCandidate) {
+                    hashCandidates.add(normalizePasswordSecret(loginCandidate, passwordInput));
+                }
+            }
+
+            const rawHash = (parsed.raw || '').toLowerCase();
+            for (const candidate of hashCandidates) {
+                if (!candidate) continue;
+                const candidateHash = await hashPasswordSha256Legacy(candidate);
+                if (candidateHash === rawHash) return true;
+            }
         } catch (error) {
             return false;
         }
@@ -3156,6 +3189,30 @@ async function deleteUserRecord(login) {
 
 async function listAllUserRecords() {
     const localStore = loadLocalUsersStore();
+
+    const collectUsersFromByUidMirror = async () => {
+        try {
+            const mirrorSnapshot = await firebaseGetWithTimeout(AUTH_USERS_BY_UID_DB_PATH);
+            if (!mirrorSnapshot.exists()) return [];
+            const rawMirror = mirrorSnapshot.val();
+            const recordsFromMirror = Object.entries(rawMirror || {})
+                .map(([key, item]) => normalizeUserRecord({
+                    ...item,
+                    uid: String(item?.uid || key || '').trim(),
+                    role: item?.role || 'user'
+                }, item?.login))
+                .filter(Boolean)
+                .sort((a, b) => a.login.localeCompare(b.login));
+
+            if (recordsFromMirror.length > 0) {
+                return recordsFromMirror;
+            }
+        } catch (error) {
+            console.warn('Failed to load users from users_by_uid mirror:', error);
+        }
+        return [];
+    };
+
     if (db) {
         try {
             const snapshot = await firebaseGetWithTimeout(AUTH_USERS_DB_PATH);
@@ -3168,10 +3225,21 @@ async function listAllUserRecords() {
                     return records.sort((a, b) => a.login.localeCompare(b.login));
                 }
             }
+
+            const mirrorRecords = await collectUsersFromByUidMirror();
+            if (mirrorRecords.length > 0) {
+                return mirrorRecords;
+            }
+
             saveLocalUsersStore({});
             return [];
         } catch (error) {
             console.error('Failed to load users list from Firebase:', error);
+            const mirroredRecords = await collectUsersFromByUidMirror();
+            if (mirroredRecords.length > 0) {
+                return mirroredRecords;
+            }
+
             return Object.entries(localStore || {})
                 .map(([key, item]) => normalizeUserRecord(item, '', key))
                 .filter(Boolean)
@@ -4397,6 +4465,17 @@ async function renderAdminUsersTable() {
             ]);
 
         let rowsData = buildAdminUsersTableRows(users, invites, revocations, presenceEntries);
+        if (!rowsData.length && liveDataReady) {
+            const usersFallback = await listAllUserRecords();
+            if (usersFallback.length > 0) {
+                rowsData = buildAdminUsersTableRows(
+                    usersFallback,
+                    invites,
+                    revocations,
+                    presenceEntries
+                );
+            }
+        }
         if (!rowsData.length) {
             rowsData = getAdminUsersTableFallbackRows();
         }

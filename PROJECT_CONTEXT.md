@@ -78,6 +78,10 @@
   - root cause: the login flow disabled the submit button immediately, but major steps (`consumePendingEmailSignInLinkForLogin`, user lookup, access-policy resolution, verification-email send) had no user-visible stage text, and magic-link send had no dedicated timeout
   - auth submit button now shows step labels (`Проверяем ссылку...`, `Проверяем аккаунт...`, `Проверяем доступ...`, `Отправляем письмо...`, `Входим...`) instead of a silent darkened state
   - `sendMagicLinkToEmail()` now has a hard timeout via `withPromiseTimeout(...)`
+- 2026-03-23: auth compatibility update for legacy accounts:
+  - добавлена проверка старых sha256-хешей без префикса в `script.js` (формат `raw` 64-символьный hex), чтобы учётки из предыдущих версий не падали на “Неверный логин или пароль”
+  - после успешной проверки такой формы хеша учётка мигрирует в новый `pbkdf2:v1` при следующем сохранении сессии
+  - добавлена поддержка двух вариантов legacy-проверки: `password` и `login::password` для случаев, где старый код хешировал только пароль
   - `handleAuthSubmit()` wraps key async stages in bounded `runAuthStep(...)`, so hangs surface as readable auth errors instead of an indefinitely disabled button
   - extended staged auth labels to Firebase write points too (`Сохраняем попытку...`, `Сохраняем аккаунт...`, `Обновляем приглашение...`, `Фиксируем письмо...`), which narrows real-world stalls down to the exact write step instead of leaving the last read-status text on screen
   - for localhost/stubborn browser cases where RTDB writes hang instead of rejecting, added `firebaseWriteWithTimeout(...)` to user/invite/revocation writes so the existing local-cache fallback can proceed instead of blocking login on `Сохраняем аккаунт...`
@@ -198,6 +202,9 @@
   - go_silent flow
 - `npm run test:smoke:integration` passes; `rate-manager` may still need one bounded smoke-level retry on transient timeout.
 - `npm audit` reports `0 vulnerabilities`.
+- `script.js` hash-совместимость:
+  - поддержка legacy SHA-256 без префикса добавлена для старых аккаунтов, `node --check script.js` проходит.
+  - `npm run test:smoke` в этой итерации упёрся не в auth-flow, а в общий таймаут сценария сравнения/публикации промпта (внешняя нестабильность интеграции), поэтому авторизацию в бою нужно проверить вручную сразу после деплоя.
 
 ## Data / Inputs
 - Real call transcript source noted by user:
@@ -223,3 +230,5 @@
 - 2026-03-21: убрал кнопку(и) отката из панели админки: удалён promptRollbackBtn из тулбара инструкций и promptCompareRollback из модалки сравнения (index.html). В script.js удалены переменные, блоки показа/подсказки состояния rollback и обработчики кликов для этих кнопок; внутренняя функция ollbackPublicPrompt и метка estore в истории пока оставлены как резервная функциональность (без кнопки для запуска).
 - 2026-03-21: добавлен клик по карточке записи истории: теперь каждый блок в списке истории промпта открывает модальное окно с диффом относительно предыдущей версии (зелёное = добавлено, красное = удалено, без изменений — обычный текст). Кнопка «Восстановить» осталась отдельным действием.
 - 2026-03-21: устранён падение списка пользователей после импорта RTDB: в `script.js` добавлена устойчивная нормализация логинов в `users/partner_invites/access_revocations` по ключу узла (декодирование `loginToStorageKey`) и переход к `Object.entries(...).map(([key,item])=>normalizeX(..., key))` в списках. Это возвращает пользователей в таблицу даже если импорт сохранил только ключи без явного `login`.
+- 2026-03-21: в `database.rules.json` добавлены parent-level `.read` для `users`, `users_by_uid`, `partner_invites`, `access_revocations` (только для админа), чтобы админка корректно могла считать списки; публичного доступа нет.
+- 2026-03-21: `normalizeRole` в `script.js` теперь нормализует значение роли регистронезависимо (`Admin`/`admin` и т.п. обрабатываются одинаково).
