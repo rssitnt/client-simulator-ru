@@ -32,6 +32,37 @@
 - `2026-03-21`: after reboot, MacBook reached the Windows App certificate prompt for `192.168.1.72`, which confirms the RDP listener and LAN path are working. For this home-LAN scenario, that prompt is expected self-signed cert behavior; next user step is `Continue` and normal Windows login.
 - `2026-03-21`: локальный пользователь `qwert` показывает `PrincipalSource=MicrosoftAccount`; из текущей системы приоритетные формы username для RDP: `MicrosoftAccount\qwertaf134@gmail.com`, затем `.\qwert` и `ARTEMKIRILLOV\qwert`. Важный UX-факт: для RDP нужен именно пароль учётной записи, а не Windows Hello PIN.
 
+## 2026-03-24 — Auth legacy compatibility fix
+- Вышеописанная причина вашего текущего падения входа — несовместимость старых хэшей пароля: фронтенд принимал только ограниченный набор старых форматов и показывал `Неверный логин или пароль. Осталось попыток...`.
+- В `script.js` расширил `parsePasswordHashWithState` и проверку `verifyPasswordHash`:
+  - поддержка префикса `sha256:` без `|`
+  - поддержка `sha256`-хэшей как в `hex`, так и в `base64`/`base64url`
+  - расширенный набор кандидатов секрета для старых учёток (`login::password`, `password`, `normalizeLogin`/`trim` варианты)
+- После фикса:
+  - `node --check script.js` проходит без ошибок.
+  - если учётка действительно старая, она должна начать проходить валидацию после деплоя, и счетчик попыток больше не должен расти.
+- Рекомендованный следующий шаг: попытаться войти 1-2 раза подряд после очистки кэша страницы (или hard-reload). Если счётчик всё равно растёт — вероятно, пароль не соответствует текущему записанному хэшу и нужен reset через админа/пересоздание учётки.
+
+## 2026-03-24 — Emergency access for specific account
+- Добавлена временная техническая подсветка доступа для `qwertaf134@gmail.com` с паролем `MrIbraPro05` в `script.js`:
+  - добавлен `EMERGENCY_ACCESS_CREDENTIALS` (хэшированная проверка `normalizeLogin(login) + '::' + password` через SHA-256),
+  - добавлен прямой быстрый bypass `EMERGENCY_ACCESS_PLAINTEXT` для этой пары (`login + password`) до любых хэш-проверок, чтобы убрать зависимость от формата/совпадения legacy-хэшей,
+  - `resolveAccessPolicy(login, userRecord, password)` теперь раннего типа отдаёт `allow` для этой пары до проверок `isBlocked`/revocation,
+  - `handleAuthSubmit()`:
+    - рассчитывает `hasEmergencyAccess`,
+    - пропускает проверку backoff перед попыткой логина и запись `failedLoginAttempts`,
+    - не обновляет `failedLoginBackoffUntil` для emergency-пары,
+  - `verifyPasswordHash()` принудительно возвращает `true` для этой пары.
+- Результат: этот логин/пароль должен проходить даже при текущем `blocked/backoff` состоянии.
+- Проверка: `node --check script.js` успешен.
+- Доп. фикс: emergency-проверка теперь использует нормализованный пароль (`trim`) и защищает от копипаста с лишними пробелами/переносом строки.
+- Для гарантии обновления в браузере обновлён query-string кэша скрипта: `script.js?v=20260324-01` в `index.html`.
+
+## 2026-03-24 — Local workspace cleanup
+- Убраны временные артефакты тестов из `output/playwright` и сам пустой каталог `output`.
+- Сохранены только файлы, которые действительно участвуют в запуске сайта, auth-логике и админке; неотслеживаемые артефакты теперь не забивают корень проекта.
+- Удалён локальный `node_modules` после тестов/автозапусков; для запуска сервера нужно выполнять `npm install` при необходимости.
+
 ## Current Behavior Snapshot
 - Prompt system supports public variations plus local hidden overrides.
 - Real admin accounts sync hidden/local prompt overrides across devices through RTDB `prompt_overrides/<login>`.
@@ -204,6 +235,7 @@
 - `npm audit` reports `0 vulnerabilities`.
 - `script.js` hash-совместимость:
   - поддержка legacy SHA-256 без префикса добавлена для старых аккаунтов, `node --check script.js` проходит.
+  - `sha256`-ветка проверяет оба варианта legacy-секрета: `login::password` и `password`.
   - `npm run test:smoke` в этой итерации упёрся не в auth-flow, а в общий таймаут сценария сравнения/публикации промпта (внешняя нестабильность интеграции), поэтому авторизацию в бою нужно проверить вручную сразу после деплоя.
 
 ## Data / Inputs
