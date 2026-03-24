@@ -32,6 +32,13 @@
 - `2026-03-21`: after reboot, MacBook reached the Windows App certificate prompt for `192.168.1.72`, which confirms the RDP listener and LAN path are working. For this home-LAN scenario, that prompt is expected self-signed cert behavior; next user step is `Continue` and normal Windows login.
 - `2026-03-21`: локальный пользователь `qwert` показывает `PrincipalSource=MicrosoftAccount`; из текущей системы приоритетные формы username для RDP: `MicrosoftAccount\qwertaf134@gmail.com`, затем `.\qwert` и `ARTEMKIRILLOV\qwert`. Важный UX-факт: для RDP нужен именно пароль учётной записи, а не Windows Hello PIN.
 
+## 2026-03-25 — Пустые промпты: нет Firebase Auth при входе по паролю
+- Корень: логин проверялся по записи в RTDB `users`, но **Firebase Authentication** часто оставался без сессии (`auth.currentUser === null`). Правила RTDB для `prompts` требовали `auth != null` и раньше ещё `email_verified` — клиентский `onValue`/`get` получал **permission denied**, кэш пустой → «Промпт пустой».
+- Исправление фронта: после успешной проверки пароля вызывается `ensureFirebaseAuthPasswordSession` — `signInWithEmailAndPassword` или `createUserWithEmailAndPassword` (тот же email/пароль, что уже принят в RTDB). Перед подпиской на промпты — `waitForFirebaseAuthReady()`.
+- Правила `database.rules.json`: чтение `prompts`, `prompt_history`, `app_config` — `auth != null` (без `email_verified`, иначе новый Firebase user после create часто с `emailVerified: false` не читал бы промпты). Запись по-прежнему только если в `users_by_uid` у uid роль `admin`.
+- **Важно:** правила нужно **опубликовать** в Firebase Console (Realtime Database → Rules), иначе на сервере останутся старые.
+- Версия: `script.js?v=20260325-02`.
+
 ## 2026-03-25 — «Загрузка…» бесконечно + пустые промпты
 - Симптом: слева плейсхолдер «Загрузка…», справа «Промпт пустой».
 - Причина A: после таймаута первого `restoreAuthSession()` второй вызов шёл **без** `withPromiseTimeout` — при зависании сети/Firebase `loadPrompts()` не завершался, `isAppBootstrapped` оставался false → чат не выходил из загрузки.

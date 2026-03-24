@@ -1,6 +1,14 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getDatabase, ref, onValue, onDisconnect, set, get, update, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
-import { getAuth, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import {
+    getAuth,
+    sendSignInLinkToEmail,
+    isSignInWithEmailLink,
+    signInWithEmailLink,
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    signOut
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
 
 // Initialize Firebase
@@ -669,6 +677,67 @@ async function fetchFirebaseJsonViaRest(path, timeoutMs = PROMPTS_REST_FALLBACK_
         `Таймаут чтения Firebase REST ${path} (${timeoutMs / 1000}с).`,
         null
     );
+}
+
+async function waitForFirebaseAuthReady() {
+    if (!auth) return;
+    try {
+        if (typeof auth.authStateReady === 'function') {
+            await auth.authStateReady();
+        }
+    } catch (error) {
+        console.warn('waitForFirebaseAuthReady failed:', error);
+    }
+}
+
+async function ensureFirebaseAuthPasswordSession(login, password) {
+    if (!auth || !login || !password) return;
+    const email = normalizeLogin(login);
+    if (!isValidLogin(email)) return;
+
+    await waitForFirebaseAuthReady();
+
+    if (auth.currentUser) {
+        const cur = normalizeLogin(auth.currentUser.email || '');
+        if (cur === email) {
+            try {
+                await auth.currentUser.getIdToken(true);
+            } catch (error) {
+                console.warn('Firebase ID token refresh failed:', error);
+            }
+            return;
+        }
+        try {
+            await signOut(auth);
+        } catch (error) {
+            console.warn('Firebase signOut before re-login failed:', error);
+        }
+    }
+
+    try {
+        await signInWithEmailAndPassword(auth, email, password);
+        return;
+    } catch (e1) {
+        try {
+            await createUserWithEmailAndPassword(auth, email, password);
+            return;
+        } catch (e2) {
+            const c2 = String(e2?.code || '');
+            if (c2 === 'auth/email-already-in-use') {
+                try {
+                    await signInWithEmailAndPassword(auth, email, password);
+                    return;
+                } catch (e3) {
+                    console.warn(
+                        'Firebase Auth: аккаунт уже существует, но пароль не подошёл (возможен только вход по ссылке из письма).',
+                        e3?.code || e3
+                    );
+                }
+            } else {
+                console.warn('ensureFirebaseAuthPasswordSession:', c2 || e2);
+            }
+        }
+    }
 }
 
 function buildRequestId(prefix = 'req') {
@@ -5043,6 +5112,11 @@ async function handleAuthSubmit() {
         }
 
         setAuthSubmitState(true, 'Входим...');
+        try {
+            await ensureFirebaseAuthPasswordSession(login, password);
+        } catch (error) {
+            console.warn('Firebase Auth session sync failed:', error);
+        }
         setAuthSession(savedUser.login);
         applyAuthenticatedUser(savedUser);
         await replayActiveTimeCarryover();
@@ -9254,6 +9328,7 @@ async function loadPrompts() {
     renderPromptHistory();
 
     if (db) {
+        await waitForFirebaseAuthReady();
         setupPromptsAndConfigListeners();
         await bootstrapPromptsViaRestFallback();
     } else {

@@ -32,16 +32,16 @@
       }
     },
     "prompts": {
-      ".read": "auth != null && auth.token.email_verified == true",
-      ".write": "auth != null && auth.token.email_verified == true && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'"
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'"
     },
     "prompt_history": {
-      ".read": "auth != null && auth.token.email_verified == true",
-      ".write": "auth != null && auth.token.email_verified == true && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'"
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'"
     },
     "app_config": {
-      ".read": "auth != null && auth.token.email_verified == true",
-      ".write": "auth != null && auth.token.email_verified == true && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'"
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'"
     }
   }
 }
