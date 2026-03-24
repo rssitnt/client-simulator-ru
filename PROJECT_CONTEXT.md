@@ -32,6 +32,13 @@
 - `2026-03-21`: after reboot, MacBook reached the Windows App certificate prompt for `192.168.1.72`, which confirms the RDP listener and LAN path are working. For this home-LAN scenario, that prompt is expected self-signed cert behavior; next user step is `Continue` and normal Windows login.
 - `2026-03-21`: локальный пользователь `qwert` показывает `PrincipalSource=MicrosoftAccount`; из текущей системы приоритетные формы username для RDP: `MicrosoftAccount\qwertaf134@gmail.com`, затем `.\qwert` и `ARTEMKIRILLOV\qwert`. Важный UX-факт: для RDP нужен именно пароль учётной записи, а не Windows Hello PIN.
 
+## 2026-03-24 — Prompts visible in UI but empty (Firebase vs browser)
+- Симптом: в консоли RTDB промпты есть, в приложении «Промпт пустой», роль в UI — админ.
+- Частая причина: правила `database.rules.json` для `prompts` требуют `auth.token.email_verified == true`; консоль Firebase не использует JWT пользователя, браузер — да. При `permission_denied` срабатывает fallback из `localStorage`; пустой кэш → пустой редактор. Проверка: Firebase Authentication → пользователь → подтверждение email; в DevTools консоль на `Firebase read error`.
+- Доп. причины: отложенное применение снапшота при `isUserEditing` (фокус в редакторе без blur); пустой локальный draft админа поверх публичного варианта.
+- Правки в `script.js`: при выборе публичного варианта не показывать пустой локальный override, если публичный непустой; `applyDeferredPromptRemoteState` применяет отложенный снапшот без лишнего условия на `lastPromptsFirebaseSnapshot`; при возврате на вкладку (`visibilitychange`) сброс отложенного состояния если есть pending remote.
+- Версия скрипта в `index.html`: `script.js?v=20260324-04`.
+
 ## 2026-03-24 — Auth legacy compatibility fix
 - Вышеописанная причина вашего текущего падения входа — несовместимость старых хэшей пароля: фронтенд принимал только ограниченный набор старых форматов и показывал `Неверный логин или пароль. Осталось попыток...`.
 - В `script.js` расширил `parsePasswordHashWithState` и проверку `verifyPasswordHash`:

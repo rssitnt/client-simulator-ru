@@ -1594,13 +1594,16 @@ function toLocalUserCachePayload(record) {
     if (!record || typeof record !== 'object') return null;
     const normalized = normalizeUserRecord(record, record?.login);
     if (!normalized) return null;
+    const cachedPasswordHash = String(record?.passwordHash || '').trim();
+    const cachedPasswordHashScheme = String(record?.passwordHashScheme || '').trim();
+    const shouldKeepPasswordHash = cachedPasswordHash.length > 0;
 
     return {
         uid: normalized.uid,
         login: normalized.login,
         fio: normalized.fio,
         role: normalized.role,
-        passwordHash: '',
+        passwordHash: shouldKeepPasswordHash ? cachedPasswordHash : '',
         passwordNeedsSetup: normalized.passwordNeedsSetup,
         emailVerifiedAt: normalized.emailVerifiedAt,
         emailVerificationSentAt: normalized.emailVerificationSentAt,
@@ -1610,7 +1613,9 @@ function toLocalUserCachePayload(record) {
         failedLoginBackoffUntil: normalized.failedLoginBackoffUntil,
         blockedAt: normalized.blockedAt,
         sessionRevokedAt: normalized.sessionRevokedAt,
-        passwordHashScheme: null,
+        passwordHashScheme: shouldKeepPasswordHash
+            ? (cachedPasswordHashScheme || null)
+            : null,
         createdAt: normalized.createdAt,
         lastLoginAt: normalized.lastLoginAt,
         lastSeenAt: normalized.lastSeenAt,
@@ -3296,6 +3301,12 @@ async function patchUserRecord(login, patch = {}, options = {}) {
         ...sanitizedPatch,
         login: normalizedLogin
     };
+    if (!Object.prototype.hasOwnProperty.call(sanitizedPatch, 'passwordHash')) {
+        const prevHash = String((toLocalUserCachePayload(localStore[key]) || {}).passwordHash || '').trim();
+        if (prevHash) {
+            merged.passwordHash = prevHash;
+        }
+    }
     localStore[key] = toLocalUserCachePayload(merged);
     saveLocalUsersStore(localStore);
     return normalizeUserRecord(merged, normalizedLogin);
@@ -7435,7 +7446,7 @@ function applyDeferredPromptRemoteState() {
         didApply = true;
     }
 
-    if (pendingPromptsFirebaseSnapshot !== null && lastPromptsFirebaseSnapshot !== null) {
+    if (pendingPromptsFirebaseSnapshot !== null) {
         const remoteSnapshot = pendingPromptsFirebaseSnapshot;
         resolvePromptSyncConflicts(remoteSnapshot);
         const mergedSnapshot = buildMergedPromptsSnapshot(remoteSnapshot);
@@ -7736,6 +7747,10 @@ function getActiveVariation(role = getActiveRole()) {
         if (selected && !selected.isLocal) {
             const localOverride = findLocalOverrideForPublicVariation(role, selected);
             if (localOverride) {
+                if (!hasMeaningfulPromptContent(localOverride.content)
+                    && hasMeaningfulPromptContent(selected.content)) {
+                    return selected;
+                }
                 return localOverride;
             }
         }
@@ -8304,7 +8319,13 @@ function initPromptsData(firebaseData = {}, options = {}) {
     const allowEmptyOverwrite = !!options.forceApplyEmpty;
     const isIncomingMeaningful = firebasePromptSnapshotHasMeaningfulContent(normalizedData);
     let appliedRolesCount = 0;
-    if (!allowEmptyOverwrite && !isIncomingMeaningful && promptsStateHasMeaningfulContent()) {
+    if (!allowEmptyOverwrite && !isIncomingMeaningful) {
+        if (!promptsStateHasMeaningfulContent()) {
+            debugLog('Skipping empty prompt init because state is empty and no meaningful incoming payload', {
+                allowEmptyOverwrite
+            });
+            return false;
+        }
         debugLog('Skipping prompt init from non-meaningful payload to protect existing content', { allowEmptyOverwrite });
         return false;
     }
@@ -9141,8 +9162,6 @@ function setupPromptsAndConfigListeners() {
             const fallbackSnapshot = loadCachedPublicPromptsSnapshot() || loadCachedPublicPromptsEmergencySnapshot();
             if (fallbackSnapshot) {
                 initPromptsData(fallbackSnapshot);
-            } else if (!promptsStateHasMeaningfulContent()) {
-                initPromptsData({});
             }
         });
 
@@ -9186,8 +9205,6 @@ function setupPromptsAndConfigListeners() {
         const fallbackSnapshot = loadCachedPublicPromptsSnapshot() || loadCachedPublicPromptsEmergencySnapshot();
         if (fallbackSnapshot) {
             initPromptsData(fallbackSnapshot);
-        } else if (!promptsStateHasMeaningfulContent()) {
-            initPromptsData({});
         }
     }
 }
@@ -9227,7 +9244,7 @@ async function loadPrompts() {
             lastFirebaseData = JSON.stringify(emergencyBackupSnapshot);
             debugLog('Loaded prompts from emergency backup snapshot');
         } else {
-            initPromptsData({});
+            debugLog('No local prompt snapshots available before Firebase bootstrap');
         }
     }
     promptHistory = getCachedLocalStorageJson(LOCAL_PROMPTS_HISTORY_STORAGE_KEY);
@@ -9243,7 +9260,7 @@ async function loadPrompts() {
         setSharedGeminiTokenEndpoint('');
         setSharedClientConversationActionPrompt('');
         if (!cachedPublicPromptsSnapshot) {
-            initPromptsData({});
+            debugLog('Firebase unavailable and no cached prompt snapshot');
         }
         promptHistory = getCachedLocalStorageJson(LOCAL_PROMPTS_HISTORY_STORAGE_KEY);
         if (!Array.isArray(promptHistory)) {
@@ -14760,6 +14777,16 @@ window.addEventListener('load', () => {
 window.addEventListener('pageshow', () => {
     isWindowLoaded = true;
     updateChatReadyState();
+});
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    if (pendingPromptsFirebaseSnapshot === null && pendingPromptOverridesRemoteStore === null) return;
+    try {
+        syncCurrentEditorNow(getActiveRole());
+        endPromptEditing(getActiveRole());
+    } catch (e) {
+        console.warn('Deferred prompt state flush on visibility failed:', e);
+    }
 });
 queueMicrotask(syncWindowReadyState);
 setTimeout(syncWindowReadyState, 0);
