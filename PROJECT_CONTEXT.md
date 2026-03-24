@@ -39,6 +39,12 @@
   - `ensureFirebaseAuthPasswordSession` больше не проглатывает ошибки и реально валит вход, если Firebase Auth-сессия не открылась;
   - `restoreAuthSession()` теперь сбрасывает устаревшую локальную сессию без Firebase Auth и показывает понятное сообщение: нужно войти ещё раз;
   - кэш-версия обновлена до `script.js?v=20260325-03`.
+- Ещё один выявленный сценарий: `setupPromptsAndConfigListeners()` раньше запускался до нормального Firebase Auth-входа, ловил отказ/тихий срыв и не переоткрывался после логина.
+- Доп. правка:
+  - защищённые realtime-listeners теперь хранят unsubscribe-и и умеют перезапускаться;
+  - до появления `auth.currentUser` они вообще не поднимаются;
+  - после успешного входа вызывается `refreshProtectedFirebaseDataAfterAuth()` и заново подтягиваются `prompts`, `prompt_history`, `app_config`;
+  - кэш-версия обновлена до `script.js?v=20260325-04`.
 
 ## 2026-03-25 — Пустые промпты: нет Firebase Auth при входе по паролю
 - Корень: логин проверялся по записи в RTDB `users`, но **Firebase Authentication** часто оставался без сессии (`auth.currentUser === null`). Правила RTDB для `prompts` требовали `auth != null` и раньше ещё `email_verified` — клиентский `onValue`/`get` получал **permission denied**, кэш пустой → «Промпт пустой».

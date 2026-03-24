@@ -1080,6 +1080,7 @@ let currentUserPresenceConnectedUnsubscribe = null;
 let currentUserPresencePath = '';
 let currentUserPresenceDisconnect = null;
 let currentUserPresenceState = 'offline';
+let protectedRealtimeUnsubscribes = [];
 let adminRealtimeUnsubscribes = [];
 let adminRealtimeUsers = null;
 let adminRealtimeInvites = null;
@@ -3547,6 +3548,7 @@ function resetCurrentSessionToAuth(message = '') {
     pendingActiveMs = 0;
     sessionRevocationCheckInFlight = false;
     lastSessionRevocationCheckAt = 0;
+    stopProtectedRealtimeListeners();
     stopCurrentUserRecordSubscription();
     stopCurrentUserPromptOverridesSubscription();
     stopCurrentUserPresenceSync({ immediateOffline: true });
@@ -5153,6 +5155,12 @@ async function handleAuthSubmit() {
             AUTH_FLOW_STEP_TIMEOUT_MS,
             'Не удалось открыть Firebase-сессию. Проверьте Email/Password в Firebase Authentication и повторите вход.'
         );
+        await runAuthStep(
+            'Подключаем промпты...',
+            () => refreshProtectedFirebaseDataAfterAuth(),
+            AUTH_FLOW_STEP_TIMEOUT_MS,
+            'Firebase-сессия открыта, но не удалось заново подключить промпты. Обновите страницу и повторите вход.'
+        );
         setAuthSession(savedUser.login);
         applyAuthenticatedUser(savedUser);
         await replayActiveTimeCarryover();
@@ -5187,6 +5195,7 @@ async function restoreAuthSession() {
 
     await waitForFirebaseAuthReady();
     if (!hasFirebaseAuthSessionForLogin(session.login)) {
+        stopProtectedRealtimeListeners();
         clearAuthSession();
         clearAuthCacheIdentity();
         setAuthError('Сессия устарела после обновления. Войдите ещё раз, чтобы заново открыть доступ к промптам.');
@@ -9225,6 +9234,18 @@ function savePromptsToFirebaseNow(options = {}) {
         .catch(e => console.error('Failed to sync:', e));
 }
 
+function stopProtectedRealtimeListeners() {
+    if (!Array.isArray(protectedRealtimeUnsubscribes) || !protectedRealtimeUnsubscribes.length) return;
+    protectedRealtimeUnsubscribes.forEach((unsubscribe) => {
+        try {
+            if (typeof unsubscribe === 'function') unsubscribe();
+        } catch (error) {
+            console.warn('Failed to stop protected realtime listener:', error);
+        }
+    });
+    protectedRealtimeUnsubscribes = [];
+}
+
 function setupPromptsAndConfigListeners() {
     if (!db) {
         setSharedGeminiTokenEndpoint('');
@@ -9232,9 +9253,11 @@ function setupPromptsAndConfigListeners() {
         return;
     }
 
+    stopProtectedRealtimeListeners();
+
     try {
         const promptsRef = ref(db, 'prompts');
-        onValue(promptsRef, (snapshot) => {
+        const unsubscribePrompts = onValue(promptsRef, (snapshot) => {
             const data = normalizePromptSnapshotForCache(snapshot.val() || {});
             const dataStr = JSON.stringify(data);
             if (firebasePromptSnapshotHasMeaningfulContent(data)) {
@@ -9283,9 +9306,10 @@ function setupPromptsAndConfigListeners() {
                 initPromptsData(fallbackSnapshot);
             }
         });
+        protectedRealtimeUnsubscribes.push(unsubscribePrompts);
 
         const appConfigRef = ref(db, APP_CONFIG_DB_PATH);
-        onValue(appConfigRef, (snapshot) => {
+        const unsubscribeAppConfig = onValue(appConfigRef, (snapshot) => {
             const data = snapshot.val() || {};
             const sharedEndpoint = normalizeGeminiTokenEndpoint(data?.geminiTokenEndpoint || '');
             const sharedClientActionPrompt = normalizeClientConversationActionPrompt(data?.clientConversationActionPrompt || '');
@@ -9302,9 +9326,10 @@ function setupPromptsAndConfigListeners() {
             setSharedGeminiTokenEndpoint('');
             setSharedClientConversationActionPrompt('');
         });
+        protectedRealtimeUnsubscribes.push(unsubscribeAppConfig);
 
         const historyRef = ref(db, 'prompt_history');
-        onValue(historyRef, (snapshot) => {
+        const unsubscribeHistory = onValue(historyRef, (snapshot) => {
             const historyData = snapshot.val();
             if (Array.isArray(historyData)) {
                 promptHistory = historyData;
@@ -9317,6 +9342,7 @@ function setupPromptsAndConfigListeners() {
                 renderPromptHistory();
             }
         });
+        protectedRealtimeUnsubscribes.push(unsubscribeHistory);
         } catch (error) {
         console.error('Error setting up Firebase listener:', error);
         setSharedGeminiTokenEndpoint('');
@@ -9326,6 +9352,14 @@ function setupPromptsAndConfigListeners() {
             initPromptsData(fallbackSnapshot);
         }
     }
+}
+
+async function refreshProtectedFirebaseDataAfterAuth() {
+    if (!db) return false;
+    await waitForFirebaseAuthReady();
+    setupPromptsAndConfigListeners();
+    const bootstrapped = await bootstrapPromptsViaRestFallback();
+    return bootstrapped || promptsStateHasMeaningfulContent();
 }
 
 async function bootstrapPromptsViaRestFallback() {
@@ -9374,8 +9408,14 @@ async function loadPrompts() {
 
     if (db) {
         await waitForFirebaseAuthReady();
-        setupPromptsAndConfigListeners();
-        await bootstrapPromptsViaRestFallback();
+        if (auth?.currentUser) {
+            setupPromptsAndConfigListeners();
+            await bootstrapPromptsViaRestFallback();
+        } else {
+            setSharedGeminiTokenEndpoint('');
+            setSharedClientConversationActionPrompt('');
+            debugLog('Skipping protected Firebase listeners until Firebase Auth session is ready');
+        }
     } else {
         setSharedGeminiTokenEndpoint('');
         setSharedClientConversationActionPrompt('');
@@ -9445,7 +9485,7 @@ async function loadPrompts() {
         debugLog(`Welcome back, ${currentUser?.fio || 'user'} (${selectedRole})`);
     }
 
-    if (!promptsStateHasMeaningfulContent('client')) {
+    if (auth?.currentUser && !promptsStateHasMeaningfulContent('client')) {
         await bootstrapPromptsViaRestFallback();
     }
 }
