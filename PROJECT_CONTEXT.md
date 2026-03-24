@@ -32,6 +32,12 @@
 - `2026-03-21`: after reboot, MacBook reached the Windows App certificate prompt for `192.168.1.72`, which confirms the RDP listener and LAN path are working. For this home-LAN scenario, that prompt is expected self-signed cert behavior; next user step is `Continue` and normal Windows login.
 - `2026-03-21`: локальный пользователь `qwert` показывает `PrincipalSource=MicrosoftAccount`; из текущей системы приоритетные формы username для RDP: `MicrosoftAccount\qwertaf134@gmail.com`, затем `.\qwert` и `ARTEMKIRILLOV\qwert`. Важный UX-факт: для RDP нужен именно пароль учётной записи, а не Windows Hello PIN.
 
+## 2026-03-25 — «Загрузка…» бесконечно + пустые промпты
+- Симптом: слева плейсхолдер «Загрузка…», справа «Промпт пустой».
+- Причина A: после таймаута первого `restoreAuthSession()` второй вызов шёл **без** `withPromiseTimeout` — при зависании сети/Firebase `loadPrompts()` не завершался, `isAppBootstrapped` оставался false → чат не выходил из загрузки.
+- Причина B (UX): готовность интерфейса ждала конца всего блока auth в `loadPrompts()`. Теперь после подключения слушателей промптов и REST-fallback выставляются `isAppBootstrapped` и `updateChatReadyState()`, чтобы снять «Загрузка…» до завершения восстановления сессии.
+- Версия скрипта: `script.js?v=20260325-01`.
+
 ## 2026-03-24 — Prompts visible in UI but empty (Firebase vs browser)
 - Симптом: в консоли RTDB промпты есть, в приложении «Промпт пустой», роль в UI — админ.
 - Частая причина: правила `database.rules.json` для `prompts` требуют `auth.token.email_verified == true`; консоль Firebase не использует JWT пользователя, браузер — да. При `permission_denied` срабатывает fallback из `localStorage`; пустой кэш → пустой редактор. Проверка: Firebase Authentication → пользователь → подтверждение email; в DevTools консоль на `Firebase read error`.

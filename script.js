@@ -9269,6 +9269,9 @@ async function loadPrompts() {
         renderPromptHistory();
     }
 
+    isAppBootstrapped = true;
+    updateChatReadyState();
+
     await consumeEmailVerificationLinkIfPresent();
 
     let restored = false;
@@ -9295,9 +9298,19 @@ async function loadPrompts() {
         const lateSession = getAuthSession();
         if (lateSession?.login) {
             try {
-                restored = await restoreAuthSession();
+                restored = await withPromiseTimeout(
+                    restoreAuthSession(),
+                    AUTH_SESSION_RESTORE_TIMEOUT_MS,
+                    `Таймаут повторного восстановления сессии (${AUTH_SESSION_RESTORE_TIMEOUT_MS / 1000}с).`
+                );
             } catch (error) {
-                console.warn('Late auth session restore failed:', error);
+                const message = String(error?.message || '').toLowerCase();
+                const isTimeout = message.includes('таймаут') || message.includes('timeout');
+                if (isTimeout) {
+                    console.warn('Late auth session restore timed out:', error);
+                } else {
+                    console.warn('Late auth session restore failed:', error);
+                }
                 restored = false;
             }
         }
