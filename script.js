@@ -690,22 +690,35 @@ async function waitForFirebaseAuthReady() {
     }
 }
 
+function getFirebaseAuthLogin() {
+    return normalizeLogin(auth?.currentUser?.email || '');
+}
+
+function hasFirebaseAuthSessionForLogin(login = '') {
+    const normalizedLogin = normalizeLogin(login);
+    if (!normalizedLogin) return false;
+    return getFirebaseAuthLogin() === normalizedLogin;
+}
+
 async function ensureFirebaseAuthPasswordSession(login, password) {
-    if (!auth || !login || !password) return;
+    if (!auth || !login || !password) {
+        throw new Error('Firebase Auth недоступен для открытия сессии.');
+    }
     const email = normalizeLogin(login);
-    if (!isValidLogin(email)) return;
+    if (!isValidLogin(email)) {
+        throw new Error('Укажите корректный email для Firebase Auth.');
+    }
 
     await waitForFirebaseAuthReady();
 
     if (auth.currentUser) {
-        const cur = normalizeLogin(auth.currentUser.email || '');
-        if (cur === email) {
+        if (hasFirebaseAuthSessionForLogin(email)) {
             try {
                 await auth.currentUser.getIdToken(true);
             } catch (error) {
                 console.warn('Firebase ID token refresh failed:', error);
             }
-            return;
+            return true;
         }
         try {
             await signOut(auth);
@@ -714,30 +727,46 @@ async function ensureFirebaseAuthPasswordSession(login, password) {
         }
     }
 
+    let lastError = null;
+
     try {
         await signInWithEmailAndPassword(auth, email, password);
-        return;
+        if (hasFirebaseAuthSessionForLogin(email)) {
+            return true;
+        }
     } catch (e1) {
+        lastError = e1;
         try {
             await createUserWithEmailAndPassword(auth, email, password);
-            return;
+            if (hasFirebaseAuthSessionForLogin(email)) {
+                return true;
+            }
         } catch (e2) {
             const c2 = String(e2?.code || '');
             if (c2 === 'auth/email-already-in-use') {
                 try {
                     await signInWithEmailAndPassword(auth, email, password);
-                    return;
+                    if (hasFirebaseAuthSessionForLogin(email)) {
+                        return true;
+                    }
                 } catch (e3) {
+                    lastError = e3;
                     console.warn(
                         'Firebase Auth: аккаунт уже существует, но пароль не подошёл (возможен только вход по ссылке из письма).',
                         e3?.code || e3
                     );
                 }
             } else {
+                lastError = e2;
                 console.warn('ensureFirebaseAuthPasswordSession:', c2 || e2);
             }
         }
     }
+
+    if (lastError) {
+        throw lastError;
+    }
+    throw new Error('Не удалось открыть Firebase Auth-сессию.');
 }
 
 function buildRequestId(prefix = 'req') {
@@ -2420,6 +2449,12 @@ function getReadableFirebaseAuthError(error, context = 'generic') {
     const code = String(error?.code || '').trim();
     if (code === 'auth/configuration-not-found' || code === 'auth/operation-not-allowed') {
         return 'Email-подтверждение не настроено в Firebase. Включите Authentication -> Sign-in method -> Email link (passwordless) и добавьте домен сайта в Authorized domains.';
+    }
+    if (code === 'auth/invalid-credential' || code === 'auth/invalid-login-credentials' || code === 'auth/wrong-password') {
+        return 'Firebase Auth не смог открыть сессию по этому email/паролю. Выйдите и войдите заново. Если не поможет: в Firebase Authentication включите Email/Password и проверьте, что для этого email не остался старый пароль.';
+    }
+    if (code === 'auth/email-already-in-use') {
+        return 'Для этого email уже есть отдельный аккаунт в Firebase Auth с другим паролем. Нужен вход тем паролем или сброс/очистка этого аккаунта в Firebase Authentication.';
     }
     if (code === 'auth/unauthorized-domain') {
         return 'Домен сайта не разрешен в Firebase Auth. Добавьте текущий домен в Authorized domains.';
@@ -5112,11 +5147,12 @@ async function handleAuthSubmit() {
         }
 
         setAuthSubmitState(true, 'Входим...');
-        try {
-            await ensureFirebaseAuthPasswordSession(login, password);
-        } catch (error) {
-            console.warn('Firebase Auth session sync failed:', error);
-        }
+        await runAuthStep(
+            'Открываем Firebase-сессию...',
+            () => ensureFirebaseAuthPasswordSession(login, password),
+            AUTH_FLOW_STEP_TIMEOUT_MS,
+            'Не удалось открыть Firebase-сессию. Проверьте Email/Password в Firebase Authentication и повторите вход.'
+        );
         setAuthSession(savedUser.login);
         applyAuthenticatedUser(savedUser);
         await replayActiveTimeCarryover();
@@ -5148,6 +5184,15 @@ async function restoreAuthSession() {
         startActiveTimeTracking();
         return true;
     }
+
+    await waitForFirebaseAuthReady();
+    if (!hasFirebaseAuthSessionForLogin(session.login)) {
+        clearAuthSession();
+        clearAuthCacheIdentity();
+        setAuthError('Сессия устарела после обновления. Войдите ещё раз, чтобы заново открыть доступ к промптам.');
+        return false;
+    }
+
     const user = await getUserRecordByLogin(session.login);
     if (!user) {
         clearAuthSession();

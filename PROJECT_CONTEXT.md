@@ -32,6 +32,14 @@
 - `2026-03-21`: after reboot, MacBook reached the Windows App certificate prompt for `192.168.1.72`, which confirms the RDP listener and LAN path are working. For this home-LAN scenario, that prompt is expected self-signed cert behavior; next user step is `Continue` and normal Windows login.
 - `2026-03-21`: локальный пользователь `qwert` показывает `PrincipalSource=MicrosoftAccount`; из текущей системы приоритетные формы username для RDP: `MicrosoftAccount\qwertaf134@gmail.com`, затем `.\qwert` и `ARTEMKIRILLOV\qwert`. Важный UX-факт: для RDP нужен именно пароль учётной записи, а не Windows Hello PIN.
 
+## 2026-03-25 — Старая локальная сессия без Firebase Auth
+- По консоли пользователя: `users/... timeout`, `access_revocations/... timeout`, `restoreAuthSession timed out`, при этом `prompts` остаются пустыми.
+- Вывод: после прежней кастомной сессии в `localStorage` UI считает пользователя вошедшим, но в Firebase Auth нет живой сессии; из-за этого RTDB-узлы, требующие `auth != null`, не читаются.
+- Доп. правка в `script.js`:
+  - `ensureFirebaseAuthPasswordSession` больше не проглатывает ошибки и реально валит вход, если Firebase Auth-сессия не открылась;
+  - `restoreAuthSession()` теперь сбрасывает устаревшую локальную сессию без Firebase Auth и показывает понятное сообщение: нужно войти ещё раз;
+  - кэш-версия обновлена до `script.js?v=20260325-03`.
+
 ## 2026-03-25 — Пустые промпты: нет Firebase Auth при входе по паролю
 - Корень: логин проверялся по записи в RTDB `users`, но **Firebase Authentication** часто оставался без сессии (`auth.currentUser === null`). Правила RTDB для `prompts` требовали `auth != null` и раньше ещё `email_verified` — клиентский `onValue`/`get` получал **permission denied**, кэш пустой → «Промпт пустой».
 - Исправление фронта: после успешной проверки пароля вызывается `ensureFirebaseAuthPasswordSession` — `signInWithEmailAndPassword` или `createUserWithEmailAndPassword` (тот же email/пароль, что уже принят в RTDB). Перед подпиской на промпты — `waitForFirebaseAuthReady()`.
@@ -365,7 +373,9 @@
   - если Firebase не возвращает список пользователей, таблица больше не зависает на `Загрузка...` и показывает диагностический текст;
   - добавлен fallback-ряд текущего авторизованного админа, чтобы в крайнем случае не было пустоты и интерфейс не «падал»;
   - в ошибках рендера теперь фиксируется лог и понятное сообщение о проблемах доступа к Firebase-сессии.
-- 2026-03-21: убрал кнопку(и) отката из панели админки: удалён promptRollbackBtn из тулбара инструкций и promptCompareRollback из модалки сравнения (index.html). В script.js удалены переменные, блоки показа/подсказки состояния rollback и обработчики кликов для этих кнопок; внутренняя функция ollbackPublicPrompt и метка estore в истории пока оставлены как резервная функциональность (без кнопки для запуска).
+- 2026-03-21: убрал кнопку(и) отката из панели админки: удалён promptRollbackBtn из тулбара инструкций и promptCompareRollback из модалки сравнения (index.html). В script.js удалены переменные, блоки показа/подсказки состояния rollback и обработчики кликов для этих кнопок; внутренняя функция 
+ollbackPublicPrompt и метка 
+estore в истории пока оставлены как резервная функциональность (без кнопки для запуска).
 - 2026-03-21: добавлен клик по карточке записи истории: теперь каждый блок в списке истории промпта открывает модальное окно с диффом относительно предыдущей версии (зелёное = добавлено, красное = удалено, без изменений — обычный текст). Кнопка «Восстановить» осталась отдельным действием.
 - 2026-03-21: устранён падение списка пользователей после импорта RTDB: в `script.js` добавлена устойчивная нормализация логинов в `users/partner_invites/access_revocations` по ключу узла (декодирование `loginToStorageKey`) и переход к `Object.entries(...).map(([key,item])=>normalizeX(..., key))` в списках. Это возвращает пользователей в таблицу даже если импорт сохранил только ключи без явного `login`.
 - 2026-03-21: в `database.rules.json` добавлены parent-level `.read` для `users`, `users_by_uid`, `partner_invites`, `access_revocations` (только для админа), чтобы админка корректно могла считать списки; публичного доступа нет.
