@@ -644,10 +644,18 @@ function buildFirebaseRestUrl(path = '') {
     return `${baseUrl}/${normalizedPath}.json`;
 }
 
-async function fetchFirebaseJsonViaRest(path, timeoutMs = PROMPTS_REST_FALLBACK_TIMEOUT_MS) {
+async function fetchFirebaseJsonViaRest(path, timeoutMs = PROMPTS_REST_FALLBACK_TIMEOUT_MS, options = {}) {
+    const includeAuth = options?.includeAuth !== false;
     const url = buildFirebaseRestUrl(path);
     if (!url) return null;
-    const response = await fetchWithTimeout(url, {
+    let requestUrl = url;
+    if (includeAuth) {
+        const token = await getFirebaseAuthIdToken().catch(() => '');
+        if (token) {
+            requestUrl += (requestUrl.includes('?') ? '&' : '?') + `auth=${encodeURIComponent(token)}`;
+        }
+    }
+    const response = await fetchWithTimeout(requestUrl, {
         method: 'GET',
         credentials: 'omit',
         cache: 'no-store'

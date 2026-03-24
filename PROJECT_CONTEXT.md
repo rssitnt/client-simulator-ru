@@ -325,6 +325,11 @@
 - Рекомендуется сделать hard-refresh после деплоя и проверить вкладки `client/manager/...`, что значения больше не уходят в ноль после перезагрузки.
 - Для принудительного обновления в браузере поднят query-cache кода в `index.html` до `script.js?v=20260324-03`.
 
+## 2026-03-24 — Auth-aware REST fallback
+- Повторный массовый провал после релога на production мог быть связан с тем, что REST-резервный путь восстановления промптов (`bootstrapPromptsViaRestFallback`) считывал Firebase без токена из защищённых правил `.read = auth != null`.
+- В `script.js` `fetchFirebaseJsonViaRest()` теперь по умолчанию пытается добавить `?auth=<Firebase idToken>` к URL, если пользователь уже авторизован, и только после этого делает запрос.
+- Это добавляет дополнительный путь восстановления на случай коротких сбоев/пустых SDK-снимков без потери локальных данных.
+
 ## Open Next Steps
 - Revisit prompt sync further if multi-admin concurrent public edits still collide semantically.
 - Consider diff-based Firebase prompt writes instead of full role payloads where practical.
