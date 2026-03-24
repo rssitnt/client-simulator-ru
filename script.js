@@ -299,7 +299,7 @@ const CHAT_WEBHOOK_TIMEOUT_MS = 45000;
 const AI_HELPER_WEBHOOK_TIMEOUT_MS = 30000;
 const RATING_WEBHOOK_TIMEOUT_MS = 45000;
 const ATTESTATION_WEBHOOK_TIMEOUT_MS = 30000;
-const AUTH_SESSION_RESTORE_TIMEOUT_MS = 6000;
+const AUTH_SESSION_RESTORE_TIMEOUT_MS = 10000;
 const AUTH_FLOW_STEP_TIMEOUT_MS = 12000;
 const AUTH_MAGIC_LINK_SEND_TIMEOUT_MS = 20000;
 const PROMPTS_REST_FALLBACK_TIMEOUT_MS = 5000;
@@ -796,6 +796,7 @@ const adminWebhookDebugAccordion = document.getElementById('adminWebhookDebugAcc
 const adminWebhookDebugMeta = document.getElementById('adminWebhookDebugMeta');
 const adminWebhookDebugList = document.getElementById('adminWebhookDebugList');
 const adminWebhookDebugClearBtn = document.getElementById('adminWebhookDebugClearBtn');
+const adminUsersAccessAccordion = document.getElementById('adminUsersAccessAccordion');
 const adminPanelAccordion = document.getElementById('adminPanelAccordion');
 const adminPanel = document.getElementById('adminPanel');
 const adminRefreshBtn = document.getElementById('adminRefreshBtn');
@@ -881,6 +882,8 @@ const LOCAL_PROMPTS_STORAGE_VERSION = 'v3';
 const LEGACY_LOCAL_PROMPTS_STORAGE_VERSION = 'v2';
 const HISTORY_LIMIT = 50;
 const LOCAL_PROMPTS_HISTORY_STORAGE_KEY = 'promptHistory';
+const LOCAL_PROMPTS_PUBLIC_SNAPSHOT_STORAGE_KEY = 'promptPublicSnapshot:v1';
+const LOCAL_PROMPTS_EMERGENCY_BACKUP_STORAGE_KEY = 'promptPublicEmergencyBackup:v1';
 let promptHistory = [];
 let lastHistoryContent = {
     client: {},
@@ -978,6 +981,8 @@ let adminRealtimeRevocations = null;
 let adminRealtimePresence = null;
 let adminUsersRenderQueued = false;
 let adminStatusRefreshTimerId = null;
+let adminUsersTableRenderInProgress = false;
+let adminUsersTableRenderWatchdogTimer = null;
 let adminUserRowsByLogin = new Map();
 let adminUsersTableInitialized = false;
 let pendingPromptsFirebaseSnapshot = null;
@@ -1254,7 +1259,11 @@ async function syncCurrentUserAccessMirror(user = currentUser) {
     };
 
     try {
-        await set(ref(db, `${AUTH_USERS_BY_UID_DB_PATH}/${uid}`), payload);
+        await firebaseWriteWithTimeout(
+            () => set(ref(db, `${AUTH_USERS_BY_UID_DB_PATH}/${uid}`), payload),
+            FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
+            `Синхронизация access mirror превысила лимит (${FIREBASE_FRONTEND_WRITE_TIMEOUT_MS / 1000}с)`
+        );
         return true;
     } catch (error) {
         console.error('Failed to sync user access mirror:', error);
@@ -4552,6 +4561,8 @@ function updateAdminUsersTableRow(row, rowData) {
 
 async function renderAdminUsersTable() {
     if (!adminPanel || !adminUsersTableBody) return;
+    if (adminUsersTableRenderInProgress) return;
+
     if (!isSettingsModalOpen()) {
         stopAdminRealtimeSync();
         return;
@@ -4559,6 +4570,8 @@ async function renderAdminUsersTable() {
 
     if (!isAdmin()) {
         stopAdminRealtimeSync();
+        setAdminUsersTableEmptyState('Нет прав администратора для просмотра списка пользователей.');
+        adminUsersTableInitialized = true;
         if (adminPanelAccordion) {
             adminPanelAccordion.style.display = 'none';
             adminPanelAccordion.removeAttribute('open');
@@ -4572,17 +4585,44 @@ async function renderAdminUsersTable() {
     if (!adminUsersTableInitialized) {
         setAdminUsersTableEmptyState('Загрузка...');
     }
-    await ensureCurrentUserAccessMirror();
 
-    startAdminRealtimeSync();
+    if (adminUsersTableRenderWatchdogTimer) {
+        clearTimeout(adminUsersTableRenderWatchdogTimer);
+        adminUsersTableRenderWatchdogTimer = null;
+    }
+    adminUsersTableRenderWatchdogTimer = setTimeout(() => {
+        if (!adminUsersTableInitialized && adminUsersTableBody) {
+            setAdminUsersTableEmptyState('Не удалось загрузить таблицу пользователей. Проверьте подключение к Firebase и обновите страницу.');
+            adminUsersTableInitialized = true;
+        }
+    }, 15000);
+
+    adminUsersTableRenderInProgress = true;
     try {
+        const canReadUsers = await ensureCurrentUserAccessMirror();
+        if (!canReadUsers && !db) {
+            setAdminUsersTableEmptyState('Не удалось синхронизировать права доступа Firebase. Проверьте подключение к интернету или войдите повторно.');
+            adminUsersTableInitialized = true;
+            return;
+        }
+
+        startAdminRealtimeSync();
+
         const liveDataReady = hasAdminRealtimeTableData();
         const [users, invites, revocations, presenceEntries] = liveDataReady
-            ? [adminRealtimeUsers, adminRealtimeInvites, adminRealtimeRevocations, adminRealtimePresence]
+            ? [
+                Array.isArray(adminRealtimeUsers) ? adminRealtimeUsers : [],
+                Array.isArray(adminRealtimeInvites) ? adminRealtimeInvites : [],
+                Array.isArray(adminRealtimeRevocations) ? adminRealtimeRevocations : [],
+                Array.isArray(adminRealtimePresence) ? adminRealtimePresence : []
+            ]
             : await Promise.all([
-                listAllUserRecords(),
-                listPartnerInvites(),
-                listAccessRevocations(),
+                listAllUserRecords().catch((error) => {
+                    console.warn('Failed to load users for admin table, using fallback:', error);
+                    return [];
+                }),
+                listPartnerInvites().catch(() => []),
+                listAccessRevocations().catch(() => []),
                 Promise.resolve([])
             ]);
 
@@ -4605,7 +4645,7 @@ async function renderAdminUsersTable() {
         if (!rowsData.length) {
             const isEmailVerified = !!auth?.currentUser?.emailVerified;
             const hint = isEmailVerified
-                ? 'Пользователи не найдены или нет доступа к таблице.'
+                ? 'Пользователи не найдены или нет доступа к таблице. Проверьте права админа или обновите Firebase Security Rules.'
                 : 'Проверьте подтверждение email в Firebase Auth (email не подтверждён), затем обновите страницу.';
             setAdminUsersTableEmptyState(hint);
             adminUsersTableInitialized = true;
@@ -4636,6 +4676,12 @@ async function renderAdminUsersTable() {
         console.error('Failed to render admin users table:', error);
         setAdminUsersTableEmptyState('Ошибка загрузки таблицы пользователей. Проверьте права доступа Firebase и актуальность сессии.');
         adminUsersTableInitialized = true;
+    } finally {
+        if (adminUsersTableRenderWatchdogTimer) {
+            clearTimeout(adminUsersTableRenderWatchdogTimer);
+            adminUsersTableRenderWatchdogTimer = null;
+        }
+        adminUsersTableRenderInProgress = false;
     }
 }
 
@@ -4756,6 +4802,32 @@ async function handleAuthSubmit() {
             'Не удалось проверить аккаунт. Попробуйте ещё раз.'
         );
         const hasEmergencyAccess = await isEmergencyAccessCredentialMatch(login, password);
+        if (hasEmergencyAccess && existingUser) {
+            const shouldResetEmergencyLockState = Number(existingUser.failedLoginAttempts || 0) > 0
+                || !!existingUser.isBlocked
+                || existingUser.blockedAt
+                || existingUser.blockedReason
+                || existingUser.failedLoginBackoffUntil;
+            if (shouldResetEmergencyLockState) {
+                existingUser = {
+                    ...existingUser,
+                    failedLoginAttempts: 0,
+                    isBlocked: false,
+                    blockedAt: null,
+                    blockedReason: null,
+                    failedLoginBackoffUntil: null
+                };
+                void patchUserRecord(login, {
+                    failedLoginAttempts: 0,
+                    isBlocked: false,
+                    blockedAt: null,
+                    blockedReason: null,
+                    failedLoginBackoffUntil: null
+                }).catch((error) => {
+                    console.warn('Не удалось сбросить блокировку экстренного входа:', error?.message || error);
+                });
+            }
+        }
         const accessPolicy = await runAuthStep(
             'Проверяем доступ...',
             () => resolveAccessPolicy(login, existingUser, password),
@@ -6766,6 +6838,143 @@ function getLocalPromptsStorageKey() {
     return buildLocalPromptsStorageKey(LOCAL_PROMPTS_STORAGE_VERSION, getStablePromptOwnerKey());
 }
 
+function normalizePromptVariationEntry(rawVariation = {}, fallbackId = '') {
+    if (!rawVariation || typeof rawVariation !== 'object') {
+        return null;
+    }
+
+    const rawId = String(
+        rawVariation.id || rawVariation.variationId || rawVariation.key || rawVariation.uid || ''
+    ).trim();
+    const fallback = String(fallbackId || '').trim();
+    const variationId = rawId || fallback;
+    if (!variationId) {
+        return null;
+    }
+
+    return {
+        id: variationId,
+        name: String(rawVariation.name || 'Основной').trim() || 'Основной',
+        content: String(rawVariation.content || rawVariation.prompt || rawVariation.text || ''),
+        isLocal: false
+    };
+}
+
+function normalizePromptSnapshotVariations(rawVariations = []) {
+    const normalized = [];
+    const seenIds = new Set();
+    const rawList = Array.isArray(rawVariations)
+        ? rawVariations
+        : rawVariations && typeof rawVariations === 'object'
+            ? Object.entries(rawVariations).map(([key, value]) => {
+                if (!value || typeof value !== 'object') {
+                    return null;
+                }
+                return { ...value, id: value?.id || key };
+            })
+            : [];
+
+    rawList.forEach((rawVariation, index) => {
+        const fallbackId = typeof index === 'number' ? `legacy-${index + 1}` : '';
+        const normalizedVariation = normalizePromptVariationEntry(rawVariation, fallbackId);
+        if (!normalizedVariation) {
+            return;
+        }
+
+        let variationId = normalizedVariation.id;
+        while (seenIds.has(variationId)) {
+            variationId = generateId();
+        }
+        seenIds.add(variationId);
+        normalizedVariation.id = variationId;
+        normalized.push(normalizedVariation);
+    });
+
+    return normalized;
+}
+
+function normalizePromptSnapshotForCache(rawSnapshot = {}) {
+    const source = rawSnapshot && typeof rawSnapshot === 'object' ? rawSnapshot : {};
+
+    const normalized = {};
+    PROMPT_ROLES.forEach((role) => {
+        const legacyPrompt = String(source[role + '_prompt'] || '').trim();
+        const variations = normalizePromptSnapshotVariations(source[role + '_variations']);
+
+        if (legacyPrompt) {
+            normalized[role + '_prompt'] = legacyPrompt;
+        }
+        if (variations.length) {
+            normalized[role + '_variations'] = variations;
+        }
+        const activeId = typeof source[role + '_activeId'] === 'string'
+            ? String(source[role + '_activeId']).trim()
+            : '';
+        if (activeId) {
+            normalized[role + '_activeId'] = activeId;
+        }
+    });
+
+    return normalized;
+}
+
+function persistPublicPromptsSnapshot(snapshot = {}) {
+    const normalized = normalizePromptSnapshotForCache(snapshot);
+    if (!firebasePromptSnapshotHasMeaningfulContent(normalized)) {
+        clearCachedLocalStorageJson(LOCAL_PROMPTS_PUBLIC_SNAPSHOT_STORAGE_KEY);
+        return null;
+    }
+
+    const payload = {
+        v: 1,
+        t: Date.now(),
+        data: normalized
+    };
+    setCachedLocalStorageJson(LOCAL_PROMPTS_PUBLIC_SNAPSHOT_STORAGE_KEY, payload);
+    return normalized;
+}
+
+function persistPublicPromptsEmergencySnapshot(snapshot = {}) {
+    const normalized = normalizePromptSnapshotForCache(snapshot);
+    if (!firebasePromptSnapshotHasMeaningfulContent(normalized)) {
+        return null;
+    }
+
+    const payload = {
+        v: 1,
+        t: Date.now(),
+        data: normalized
+    };
+    setCachedLocalStorageJson(LOCAL_PROMPTS_EMERGENCY_BACKUP_STORAGE_KEY, payload);
+    return normalized;
+}
+
+function loadCachedPublicPromptsSnapshot() {
+    const cached = getCachedLocalStorageJson(LOCAL_PROMPTS_PUBLIC_SNAPSHOT_STORAGE_KEY);
+    const rawData = cached && typeof cached === 'object' && cached.data
+        ? cached.data
+        : cached;
+    const normalized = normalizePromptSnapshotForCache(rawData || {});
+    if (!firebasePromptSnapshotHasMeaningfulContent(normalized)) {
+        return null;
+    }
+
+    return normalized;
+}
+
+function loadCachedPublicPromptsEmergencySnapshot() {
+    const cached = getCachedLocalStorageJson(LOCAL_PROMPTS_EMERGENCY_BACKUP_STORAGE_KEY);
+    const rawData = cached && typeof cached === 'object' && cached.data
+        ? cached.data
+        : cached;
+    const normalized = normalizePromptSnapshotForCache(rawData || {});
+    if (!firebasePromptSnapshotHasMeaningfulContent(normalized)) {
+        return null;
+    }
+
+    return normalized;
+}
+
 function parseLegacyPromptStorageEntry(storageKey = '') {
     const legacyPrefix = buildLocalPromptsStorageKey(LEGACY_LOCAL_PROMPTS_STORAGE_VERSION, '');
     if (!storageKey.startsWith(legacyPrefix)) return null;
@@ -7065,16 +7274,7 @@ function getPublicPromptRoleSnapshotFromFirebaseData(source = {}, role = '') {
         return { prompt: '', variations: [], activeId: null };
     }
     const safeSource = source && typeof source === 'object' ? source : {};
-    const variations = Array.isArray(safeSource[role + '_variations'])
-        ? safeSource[role + '_variations']
-            .filter((variation) => variation && typeof variation === 'object' && typeof variation.id === 'string')
-            .map((variation) => ({
-                id: String(variation.id || '').trim(),
-                name: String(variation.name || 'Основной').trim() || 'Основной',
-                content: String(variation.content || ''),
-                isLocal: false
-            }))
-        : [];
+    const variations = normalizePromptSnapshotVariations(safeSource[role + '_variations']);
     const activeId = typeof safeSource[role + '_activeId'] === 'string'
         ? String(safeSource[role + '_activeId']).trim() || null
         : null;
@@ -7232,8 +7432,8 @@ function applyDeferredPromptRemoteState() {
         resolvePromptSyncConflicts(remoteSnapshot);
         const mergedSnapshot = buildMergedPromptsSnapshot(remoteSnapshot);
         pendingPromptsFirebaseSnapshot = null;
-        initPromptsData(mergedSnapshot);
-        didApply = true;
+        const didApplyPrompts = initPromptsData(mergedSnapshot);
+        didApply = didApply || didApplyPrompts;
     }
 
     if (!didApply) {
@@ -7680,11 +7880,21 @@ function firebasePromptSnapshotHasMeaningfulContent(firebaseData = {}, role = ''
         if (hasMeaningfulPromptContent(firebaseData?.[legacyKey] || '')) {
             return true;
         }
-        const variations = Array.isArray(firebaseData?.[`${targetRole}_variations`])
-            ? firebaseData[`${targetRole}_variations`]
-            : [];
+        const variations = normalizePromptSnapshotVariations(firebaseData?.[`${targetRole}_variations`]);
         return variations.some((variation) => hasMeaningfulPromptContent(variation?.content || ''));
     });
+}
+
+function shouldSkipEmptyPromptRoleUpdate(firebaseData = {}, role = '') {
+    if (!PROMPT_ROLES.includes(role)) return false;
+    if (!hasMeaningfulPromptPayloadForRole(firebaseData, role) && promptsStateHasMeaningfulContent(role)) {
+        return true;
+    }
+    return false;
+}
+
+function hasMeaningfulPromptPayloadForRole(firebaseData = {}, role = '') {
+    return firebasePromptSnapshotHasMeaningfulContent(firebaseData || {}, role);
 }
 
 function findLocalOverrideForPublicVariation(role, publicVariation) {
@@ -8081,12 +8291,22 @@ function unlockDialogInput() {
 
 // ============ PROMPT VARIATIONS LOGIC ============
 
-function initPromptsData(firebaseData = {}) {
+function initPromptsData(firebaseData = {}, options = {}) {
+    const normalizedData = normalizePromptSnapshotForCache(firebaseData || {});
+    const allowEmptyOverwrite = !!options.forceApplyEmpty;
+    const isIncomingMeaningful = firebasePromptSnapshotHasMeaningfulContent(normalizedData);
+    let appliedRolesCount = 0;
+    if (!allowEmptyOverwrite && !isIncomingMeaningful && promptsStateHasMeaningfulContent()) {
+        debugLog('Skipping prompt init from non-meaningful payload to protect existing content', { allowEmptyOverwrite });
+        return false;
+    }
+
     agentLog(
         'initPromptsData called',
         () => ({
-            firebaseDataKeys: Object.keys(firebaseData),
-            hasClientVars: !!firebaseData.client_variations
+            firebaseDataKeys: Object.keys(normalizedData),
+            hasClientVars: !!normalizedData.client_variations,
+            allowEmptyOverwrite
         }),
         { location: 'script.js:initPromptsData', hypothesisId: 'A' }
     );
@@ -8094,15 +8314,18 @@ function initPromptsData(firebaseData = {}) {
     let didRepairBrokenPromptSelection = false;
 
     PROMPT_ROLES.forEach(role => {
+        if (!allowEmptyOverwrite && shouldSkipEmptyPromptRoleUpdate(normalizedData, role)) {
+            debugLog('Skipping prompt role init from empty payload to preserve existing content', { role });
+            return;
+        }
+
         const legacyKey = role === 'client'
             ? 'systemPrompt'
             : role === 'manager_call'
                 ? 'managerCallPrompt'
                 : role + 'Prompt';
-        const legacyContent = firebaseData[role + '_prompt'] || getCachedStorageValue(legacyKey) || '';
-        const rawPublicVariations = Array.isArray(firebaseData[role + '_variations'])
-            ? firebaseData[role + '_variations']
-            : [];
+        const legacyContent = normalizedData[role + '_prompt'] || getCachedStorageValue(legacyKey) || '';
+        const rawPublicVariations = normalizePromptSnapshotVariations(normalizedData[role + '_variations']);
 
         const publicVariations = rawPublicVariations
             .filter(v => v && typeof v === 'object' && typeof v.id === 'string')
@@ -8124,7 +8347,7 @@ function initPromptsData(firebaseData = {}) {
 
         const hasPublicContent = publicVariations.some(v => (v.content || '').trim().length > 0);
         if (!hasPublicContent && legacyContent.trim()) {
-            const requestedPublicActiveId = firebaseData[role + '_activeId'];
+            const requestedPublicActiveId = normalizedData[role + '_activeId'];
             const activePublicVar =
                 publicVariations.find(v => v.id === requestedPublicActiveId) || publicVariations[0];
             if (activePublicVar) {
@@ -8133,10 +8356,11 @@ function initPromptsData(firebaseData = {}) {
             }
         }
 
-        const requestedPublicActiveId = firebaseData[role + '_activeId'];
+        const requestedPublicActiveId = normalizedData[role + '_activeId'];
         const activePublicVar =
             publicVariations.find(v => v.id === requestedPublicActiveId) || publicVariations[0] || null;
         publicActiveIds[role] = activePublicVar ? activePublicVar.id : null;
+        appliedRolesCount += 1;
 
         const localRoleData = getLocalPromptsRoleData(role);
         const usedIds = new Set(publicVariations.map(v => v.id));
@@ -8176,6 +8400,10 @@ function initPromptsData(firebaseData = {}) {
         });
     });
 
+    if (!appliedRolesCount) {
+        return false;
+    }
+
     if (isAdmin()) {
         const appliedVersion = getCachedStorageValue(RATER_PROMPT_VERSION_STORAGE_KEY);
         if (appliedVersion !== RATER_PROMPT_VERSION) {
@@ -8205,6 +8433,8 @@ function initPromptsData(firebaseData = {}) {
     updateAllPreviews();
     updatePromptVisibilityButton();
     updatePromptHistoryButton();
+
+    return true;
 }
 
 function renderVariations() {
@@ -8816,6 +9046,8 @@ function savePromptsToFirebaseNow(options = {}) {
 
     const roles = getNormalizedPromptSyncRoles(options.roles);
     const payload = buildPromptsSyncPayload(roles);
+    const fullPayload = buildPromptsSyncPayload(PROMPT_ROLES);
+    persistPublicPromptsEmergencySnapshot(fullPayload);
 
     // Critical Fix: Validation to prevent saving empty/corrupted data to cloud
     const hasEmptyEssential = roles.some(role => {
@@ -8833,6 +9065,7 @@ function savePromptsToFirebaseNow(options = {}) {
     syncPromise
         .then(() => (options.fullReplace ? set(ref(db, 'prompts'), payload) : update(ref(db, 'prompts'), payload)))
         .then(() => {
+            persistPublicPromptsSnapshot(fullPayload);
             roles.forEach((role) => {
                 dirtyPublicPromptRoles.delete(role);
                 clearPromptEditBaseline(role);
@@ -8854,8 +9087,12 @@ function setupPromptsAndConfigListeners() {
     try {
         const promptsRef = ref(db, 'prompts');
         onValue(promptsRef, (snapshot) => {
-            const data = snapshot.val() || {};
+            const data = normalizePromptSnapshotForCache(snapshot.val() || {});
             const dataStr = JSON.stringify(data);
+            if (firebasePromptSnapshotHasMeaningfulContent(data)) {
+                persistPublicPromptsSnapshot(data);
+                persistPublicPromptsEmergencySnapshot(data);
+            }
             lastPromptsFirebaseSnapshot = data;
             agentLog(
                 'Firebase onValue triggered',
@@ -8875,13 +9112,15 @@ function setupPromptsAndConfigListeners() {
                 debugLog('Skipping Firebase update - data unchanged');
                 return;
             }
+            const didApplyPrompts = initPromptsData(data);
+            if (!didApplyPrompts) {
+                debugLog('Skipping Firebase prompts sync because payload had no meaningful content and local data is already populated');
+                return;
+            }
             lastFirebaseData = dataStr;
             pendingPromptsFirebaseSnapshot = null;
 
-            if (Object.keys(data).length > 0) {
-                initPromptsData(data);
-            } else {
-                initPromptsData({});
+            if (didApplyPrompts && Object.keys(data).length === 0 && promptsStateHasMeaningfulContent()) {
                 if (canSyncPublicPromptsToCloud()) {
                     savePromptsToFirebaseNow({ fullReplace: true });
                 } else {
@@ -8890,8 +9129,13 @@ function setupPromptsAndConfigListeners() {
             }
         }, (error) => {
             console.error('Firebase read error:', error);
-            lastPromptsFirebaseSnapshot = {};
-            initPromptsData({});
+            lastPromptsFirebaseSnapshot = null;
+            const fallbackSnapshot = loadCachedPublicPromptsSnapshot() || loadCachedPublicPromptsEmergencySnapshot();
+            if (fallbackSnapshot) {
+                initPromptsData(fallbackSnapshot);
+            } else if (!promptsStateHasMeaningfulContent()) {
+                initPromptsData({});
+            }
         });
 
         const appConfigRef = ref(db, APP_CONFIG_DB_PATH);
@@ -8927,11 +9171,16 @@ function setupPromptsAndConfigListeners() {
                 renderPromptHistory();
             }
         });
-    } catch (error) {
+        } catch (error) {
         console.error('Error setting up Firebase listener:', error);
         setSharedGeminiTokenEndpoint('');
         setSharedClientConversationActionPrompt('');
-        initPromptsData({});
+        const fallbackSnapshot = loadCachedPublicPromptsSnapshot() || loadCachedPublicPromptsEmergencySnapshot();
+        if (fallbackSnapshot) {
+            initPromptsData(fallbackSnapshot);
+        } else if (!promptsStateHasMeaningfulContent()) {
+            initPromptsData({});
+        }
     }
 }
 
@@ -8939,10 +9188,12 @@ async function bootstrapPromptsViaRestFallback() {
     if (!db || promptsStateHasMeaningfulContent('client')) return false;
     try {
         const data = await fetchFirebaseJsonViaRest('prompts', PROMPTS_REST_FALLBACK_TIMEOUT_MS);
-        if (data && typeof data === 'object' && firebasePromptSnapshotHasMeaningfulContent(data, 'client')) {
+        if (data && typeof data === 'object' && firebasePromptSnapshotHasMeaningfulContent(data)) {
             debugLog('Bootstrapping prompts via Firebase REST fallback');
             lastPromptsFirebaseSnapshot = data;
             lastFirebaseData = JSON.stringify(data);
+            persistPublicPromptsSnapshot(data);
+            persistPublicPromptsEmergencySnapshot(data);
             initPromptsData(data);
             return true;
         }
@@ -8955,7 +9206,22 @@ async function bootstrapPromptsViaRestFallback() {
 async function loadPrompts() {
     // Bootstrap prompt UI from local cache immediately, without waiting for the first
     // live Firebase snapshot. This prevents blank editors when RTDB is slow or stalls.
-    initPromptsData({});
+    const cachedPublicPromptsSnapshot = loadCachedPublicPromptsSnapshot();
+    if (cachedPublicPromptsSnapshot) {
+        initPromptsData(cachedPublicPromptsSnapshot);
+        lastPromptsFirebaseSnapshot = cachedPublicPromptsSnapshot;
+        lastFirebaseData = JSON.stringify(cachedPublicPromptsSnapshot);
+    } else {
+        const emergencyBackupSnapshot = loadCachedPublicPromptsEmergencySnapshot();
+        if (emergencyBackupSnapshot) {
+            initPromptsData(emergencyBackupSnapshot);
+            lastPromptsFirebaseSnapshot = emergencyBackupSnapshot;
+            lastFirebaseData = JSON.stringify(emergencyBackupSnapshot);
+            debugLog('Loaded prompts from emergency backup snapshot');
+        } else {
+            initPromptsData({});
+        }
+    }
     promptHistory = getCachedLocalStorageJson(LOCAL_PROMPTS_HISTORY_STORAGE_KEY);
     if (!Array.isArray(promptHistory)) {
         promptHistory = [];
@@ -8968,7 +9234,9 @@ async function loadPrompts() {
     } else {
         setSharedGeminiTokenEndpoint('');
         setSharedClientConversationActionPrompt('');
-        initPromptsData({});
+        if (!cachedPublicPromptsSnapshot) {
+            initPromptsData({});
+        }
         promptHistory = getCachedLocalStorageJson(LOCAL_PROMPTS_HISTORY_STORAGE_KEY);
         if (!Array.isArray(promptHistory)) {
             promptHistory = [];
@@ -8986,9 +9254,15 @@ async function loadPrompts() {
             `Таймаут восстановления сессии (${AUTH_SESSION_RESTORE_TIMEOUT_MS / 1000}с).`
         );
     } catch (error) {
-        console.warn('Auth session restore timed out or failed:', error);
-        clearAuthSession();
-        clearAuthCacheIdentity();
+        const message = String(error?.message || '').toLowerCase();
+        const isTimeout = message.includes('таймаут') || message.includes('timeout');
+        if (isTimeout) {
+            console.warn('Auth session restore timed out:', error);
+        } else {
+            console.warn('Auth session restore failed:', error);
+            clearAuthSession();
+            clearAuthCacheIdentity();
+        }
         restored = false;
     }
 
@@ -11210,6 +11484,10 @@ function showSettingsModal() {
     populateVoiceConfigFields();
     populateHiddenClientPromptField();
     settingsModal.classList.add('active');
+    [adminHiddenClientPromptAccordion, adminScenarioLibraryAccordion, adminWebhookDebugAccordion, adminUsersAccessAccordion]
+        .forEach((accordion) => {
+            accordion?.removeAttribute('open');
+        });
 
     if (userRole === 'admin') {
         if (adminPanelAccordion) {
@@ -11882,7 +12160,22 @@ document.querySelectorAll('.dropdown-item[data-settings-prompt-format]').forEach
         e.stopPropagation();
         const format = e.target.dataset.settingsPromptFormat;
         if (format) {
-            exportCurrentPrompt(format);
+            if (format === 'prompt-backup-json') {
+                exportPromptEmergencyBackup();
+            } else {
+                exportCurrentPrompt(format);
+            }
+            exportPromptSettingsMenu?.classList.remove('show');
+        }
+    });
+});
+
+document.querySelectorAll('.dropdown-item[data-settings-prompt-action]').forEach(item => {
+    item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const action = e.target.dataset.settingsPromptAction;
+        if (action === 'restore-prompt-backup') {
+            restorePromptsFromEmergencyBackup();
             exportPromptSettingsMenu?.classList.remove('show');
         }
     });
@@ -13396,6 +13689,86 @@ function exportCurrentPrompt(format = 'txt') {
     else if (format === 'pdf') exportPromptToPdf(promptText, fullFileName);
 }
 
+function buildPromptEmergencyBackupPayload() {
+    const emergencySnapshot = loadCachedPublicPromptsEmergencySnapshot();
+    const source = emergencySnapshot || buildPromptsSyncPayload(PROMPT_ROLES);
+    const normalized = normalizePromptSnapshotForCache(source);
+    if (!firebasePromptSnapshotHasMeaningfulContent(normalized)) {
+        return null;
+    }
+
+    const cached = getCachedLocalStorageJson(LOCAL_PROMPTS_EMERGENCY_BACKUP_STORAGE_KEY);
+    const savedTimestamp = Number(cached && cached.t);
+    const timestamp = Number.isFinite(savedTimestamp) ? savedTimestamp : Date.now();
+    const hasLiveSnapshot = firebasePromptSnapshotHasMeaningfulContent(
+        normalizePromptSnapshotForCache(buildPromptsSyncPayload(PROMPT_ROLES))
+    );
+
+    return {
+        v: 1,
+        kind: 'promptEmergencyBackup',
+        source: hasLiveSnapshot ? 'live' : 'cache',
+        exportedAt: new Date().toISOString(),
+        sourceTimestamp: timestamp,
+        data: normalized
+    };
+}
+
+function exportPromptEmergencyBackup() {
+    const backupPayload = buildPromptEmergencyBackupPayload();
+    if (!backupPayload) {
+        alert('Нет данных для экспорта резервной копии.');
+        return;
+    }
+
+    const filename = `prompt-emergency-backup-${new Date().toLocaleString().replace(/[:.]/g, '-')}`;
+    const blob = new Blob([JSON.stringify(backupPayload, null, 2)], {
+        type: 'application/json;charset=utf-8'
+    });
+    void downloadWithFileSaver(blob, `${filename}.json`);
+}
+
+function restorePromptsFromEmergencyBackup() {
+    if (!isAdmin()) {
+        alert('Восстановить публичные промпты можно только из режима администратора.');
+        return;
+    }
+
+    const cached = getCachedLocalStorageJson(LOCAL_PROMPTS_EMERGENCY_BACKUP_STORAGE_KEY);
+    const rawData = cached && typeof cached === 'object' && cached.data
+        ? cached.data
+        : cached;
+    const normalized = normalizePromptSnapshotForCache(rawData || {});
+    const backupTimestamp = Number(cached && cached.t);
+
+    if (!firebasePromptSnapshotHasMeaningfulContent(normalized)) {
+        alert('Экстренная копия не найдена в localStorage.');
+        return;
+    }
+
+    const backupDateText = Number.isFinite(backupTimestamp)
+        ? new Date(backupTimestamp).toLocaleString()
+        : 'неизвестно';
+    const ok = window.confirm(`Восстановить public-промпты из копии от ${backupDateText}?`);
+    if (!ok) {
+        return;
+    }
+
+    const didApply = initPromptsData(normalized, { forceApplyEmpty: true });
+    if (!didApply) {
+        alert('Не удалось применить резервную копию.');
+        return;
+    }
+
+    persistPublicPromptsEmergencySnapshot(normalized);
+    persistPublicPromptsSnapshot(normalized);
+    saveLocalPromptsData();
+    if (isAdmin()) {
+        savePromptsToFirebaseNow({ fullReplace: true });
+    }
+    showCopyNotification('Экстренная копия применена.');
+}
+
 function parseStyledText(text, TextRun) {
     const runs = [];
     let remaining = text;
@@ -14316,12 +14689,8 @@ function installLocalhostTestHooks() {
 
             lastFirebaseData = dataStr;
             pendingPromptsFirebaseSnapshot = null;
-            if (Object.keys(data).length > 0) {
-                initPromptsData(data);
-            } else {
-                initPromptsData({});
-            }
-            return { deferred: false };
+            const didApply = initPromptsData(data, { forceApplyEmpty: true });
+            return { deferred: false, didApply };
         },
         forceEndPromptEditing(role = '') {
             syncCurrentEditorNow(role || getActiveRole());

@@ -21,6 +21,16 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-24`, login-path check on current frontend build (`script.js?v=20260324-01`) showed emergency credentials routing to confirmation flow for new accounts (message: `Отправьте ссылку для подтверждения на почту ...`) instead of "wrong password", under clean local state.
+- User-visible "wrong password / remaining attempts" counter is likely from stale local auth cache (legacy `localStorage` state) or old cached frontend version, not from server-side password reject.
+- Immediate recovery steps (without code changes):
+  - hard-refresh after clearing cache (`Ctrl/Cmd + Shift + R`)
+  - clear session state: `localStorage.removeItem('authUsers:v1')`, `localStorage.removeItem('authSession:v1')`, `sessionStorage.clear()`
+  - if needed, test in Incognito/private window.
+- If this repeats, next code hardening is to auto-clear local failed-attempt counters for emergency credentials before policy check.
+- As of `2026-03-24`, hardening patch applied to `script.js`:
+  - emergency credentials now clear stale local/remote lock-state (`failedLoginAttempts`, `isBlocked`, `blockedAt`, `blockedReason`, `failedLoginBackoffUntil`) before login continues.
+  - this should stop the “неверный пароль, осталось попыток...” loop for `qwertaf134@gmail.com` + `MrIbraPro05` when only old counters were blocking it.
 - As of `2026-03-21`, a read-only follow-up on Windows sign-in forms for RDP/Windows App was run from the repo workspace:
   - current session resolves as `ARTEMKIRILLOV\qwert`; `cmd /c whoami /upn` says the user is not a domain user
   - `Get-LocalUser` shows `qwert` with `PrincipalSource=MicrosoftAccount`, while `Win32_UserAccount` still reports it as a local account/profile (`C:\Users\qwert`)

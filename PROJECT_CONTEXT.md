@@ -63,6 +63,54 @@
 - Сохранены только файлы, которые действительно участвуют в запуске сайта, auth-логике и админке; неотслеживаемые артефакты теперь не забивают корень проекта.
 - Удалён локальный `node_modules` после тестов/автозапусков; для запуска сервера нужно выполнять `npm install` при необходимости.
 
+## 2026-03-24 — Prompt bootstrap guard
+- Выявлен источник массового очищения: `setupPromptsAndConfigListeners()` при пустом снапшоте Firebase выполнял `fullReplace` в `prompts`, даже если локальное состояние не содержит осмысленного текста.
+- В `script.js` добавлена защита: `fullReplace` теперь запускается только при `Object.keys(data).length === 0` **и** наличии meaningful-содержимого `promptsStateHasMeaningfulContent()`.
+- Это убирает самовосстановление в виде перезаписи валидных промптов на пустые значения при пустом/битом `onValue`.
+- При пустом снепшоте без контента мы больше не будем форсировать запись пустых промптов обратно в Firebase.
+
+## 2026-03-24 — Prompt fallback cache
+- Причина продолжающейся «пустоты» после перезагрузки: при старте `loadPrompts()` и ошибках слушателя Firebase выполнялся `initPromptsData({})`, который инициализировал публичные промпты пустыми значениями при отсутствии/ошибке снапшота.
+- В `script.js` добавлены кэширующие функции:
+  - `normalizePromptSnapshotForCache`
+  - `persistPublicPromptsSnapshot`
+  - `loadCachedPublicPromptsSnapshot`
+- `loadPrompts()`, `setupPromptsAndConfigListeners()` и `bootstrapPromptsViaRestFallback()` теперь:
+  - пытаются сначала восстановить значимый снепшот `prompts` из `localStorage` (`promptPublicSnapshot:v1`);
+  - сохраняют в этот кэш только осмысленное содержимое;
+  - на ошибки чтения Firebase не затирают локальное состояние пустым объектом.
+- Дополнительно при успешной синхронизации публичных промптов в Firebase сохраняется их full snapshot в этот же кэш.
+- После фикса локально больше не должно теряться содержание после hard-refresh, если до этого был валидный снапшот из Firebase/локальной синхронизации.
+
+## 2026-03-24 — Prevent accidental empty override
+- До этого фикс-слоя оставался путь, когда `prompts` в Firebase приходил пустым, `onValue` применял `initPromptsData({})`, и UI терял уже загруженные тексты.
+- В `script.js` добавлена защита: `initPromptsData(data, options)` теперь нормализует входной payload и не применяет полностью пустой/несодержательный `prompts`-объект, если локально уже есть meaningful-промпты (кроме принудительного режима восстановления из `restore`).
+- В `setupPromptsAndConfigListeners()` этот режим теперь блокирует «пустое» переинициализирование при активной загрузке, а ошибка listener-а не сбрасывает `lastPromptsFirebaseSnapshot` в `{}`.
+- `applyDeferredPromptRemoteState()` теперь учитывает результат `initPromptsData`, чтобы пропущенный/пустой merge не инициировал лишние `savePromptsToFirebase`.
+
+## 2026-03-24 — Fix repeated login on hard reload
+- Пользователь сообщил, что после hard refresh всегда вываливает на экран входа.
+- Причина в инициализации: при `AUTH_SESSION_RESTORE_TIMEOUT_MS` (6 сек) промократ сессии, on timeout очищался `authSession` и показывался модал логина до повторного `lateSession`-процедуры.
+- Изменено:
+  - увеличен таймаут восстановления сессии до `10000` мс;
+  - при ошибке по таймауту больше не очищаем `authSession` и `identity`, давая повторную попытку восстановления.
+- Результат: сессия не должна сбрасываться из-за временной медленной инициализации Firebase и больше не должна теряться при жёстком перезагрузке в таких условиях.
+
+## 2026-03-24 — Admin users block now collapsible
+- Секция `Пользователи и доступ` в админ-панели переведена в одинаковый закрываемый формат, как `Скрытый prompt клиента`, `Сценарии тестирования`, `Диагностика webhook`:
+  - `index.html`: заменён статичный блок на `<details id="adminUsersAccessAccordion" class="admin-hidden-prompt-section">` с `summary`.
+  - `Пользователи и доступ` теперь всегда начинается закрытой и разворачивается по клику.
+  - Внутри теперь лежат `admin-users-access-toolbar` (кнопка `Обновить`) и таблица `adminUsersTableBody` как раньше, без изменения JS-идентификаторов.
+- `style.css`: добавлен базовый стиль `admin-users-access-toolbar` для выравнивания кнопки в правую сторону.
+
+## 2026-03-24 — Admin users list stuck loading
+- Пользователь сообщил, что в админке в разделе пользователей остаётся `Загрузка...` без данных.
+- В `script.js` усилил `renderAdminUsersTable()`:
+  - добавил короткий диалоговый отказ для не-админских путей (`isAdmin() === false`) с текстом «Нет прав администратора…», чтобы вкладка больше не показывала бесконечный загрузочный статус;
+  - добавил явный контроль потока для `ensureCurrentUserAccessMirror()` и `adminUsersTableInitialized`, чтобы путь с неуспешной синхронизацией Firebase показывал диагностическое сообщение;
+  - оставил существующий watchdog (15 сек), поэтому при зависании чтения таблица больше не остаётся в сыром `Загрузка...`.
+- Проверка: `node --check script.js` после правок проходит.
+
 ## Current Behavior Snapshot
 - Prompt system supports public variations plus local hidden overrides.
 - Real admin accounts sync hidden/local prompt overrides across devices through RTDB `prompt_overrides/<login>`.
@@ -72,6 +120,19 @@
   - structured `conversationAction.end_conversation`
 - After terminal close, rating is manual via button under `Диалог завершен`.
 - Recoverable silent state is forwarded into the next webhook request as `conversationActionState`.
+
+## 2026-03-24 — Restore prompt bootstrap from legacy payload shapes
+- Повторное сообщение «промпты пустые» диагностировано как проблема нормализации: `normalizePromptSnapshotForCache` и проверка meaningful-content ломались на `*_variations`, если Firebase/local cache хранил их как объект (`{ id: {..}, ... }`) вместо массива.
+- В `script.js` добавлены:
+  - `normalizePromptVariationEntry()` и `normalizePromptSnapshotVariations()`:
+    - принимают массив/объект/пустое значение;
+    - поддерживают `id` из `id/variationId/key/uid`;
+    - сохраняют `name/content` даже если формат нестандартный;
+    - дедуплицируют и подменяют id при конфликтах.
+  - `normalizePromptSnapshotForCache()` теперь строит `*_variations` через новый нормализатор вместо строгой фильтрации только массивов с `id`.
+  - `firebasePromptSnapshotHasMeaningfulContent()` и `getPublicPromptRoleSnapshotFromFirebaseData()` теперь тоже используют новый нормализатор при проверке содержимого.
+- Это защищает от того, чтобы валидный снапшот интерпретировался как пустой и очищал UI промптов при следующем старте.
+- Обновлён `index.html` query-string у скрипта до `script.js?v=20260324-02` для принудительного обновления скрипта в браузере.
 
 ## Major Work Already Landed
 - Security hardening:
@@ -243,6 +304,26 @@
   - `C:\projects\sites\client-simulator\crm_call_transcripts.csv`
   - caveat: noisy ASR / missing fragments / role confusion possible
   - treat as weak-supervision realism source, not exact ground truth
+
+## 2026-03-24 — Prompt emergency backup
+- Добавлена дополнительная аварийная защита для public prompts:
+  - новый локальный ключ: `promptPublicEmergencyBackup:v1`.
+  - при загрузке snapshot из Firebase/REST и при каждой успешной локальной правке в `savePromptsToFirebaseNow` выполняется сохранение в emergency-резерв (timestamp + версия + нормализованный payload).
+  - `loadPrompts()` теперь использует цепочку:
+    1) `promptPublicSnapshot:v1`,
+    2) `promptPublicEmergencyBackup:v1`,
+    3) пустой инициализационный state.
+  - добавлен ручной экспорт `Экстренная копия (JSON)` в меню экспорта инструкции.
+  - добавлено действие `Восстановить из копии` (только для режима администратора), которое применяет snapshot через `initPromptsData(..., { forceApplyEmpty: true })` и инициирует `savePromptsToFirebaseNow({ fullReplace: true })`.
+- В `showSettingsModal()` все свертывающиеся админские секции закрываются при каждом открытии модалки (в т.ч. `adminUsersAccessAccordion`), чтобы вкладка "Пользователи и доступ" визуально соответствовала другим разделам.
+
+## 2026-03-24 — Restore role-level prompt variations parsing
+- Пользователь снова сообщил, что промпты пустые после очередного релога.
+- Причина: `initPromptsData()` брал `*_variations` только как массив (`Array.isArray(...)`) и игнорировал нормализованные map-объекты вида `{id: { ... }}`, из-за чего роль могла инициализироваться пустой и затирать редактор.
+- В `script.js` в этой функции `rawPublicVariations` теперь создается через `normalizePromptSnapshotVariations(...)`, поэтому любые легитимные legacy/кэширующие формы корректно превращаются в массив вариаций.
+- Дополнительно валидация meaningful-content уже опиралась на нормализатор; теперь и инициализация использует тот же путь.
+- Рекомендуется сделать hard-refresh после деплоя и проверить вкладки `client/manager/...`, что значения больше не уходят в ноль после перезагрузки.
+- Для принудительного обновления в браузере поднят query-cache кода в `index.html` до `script.js?v=20260324-03`.
 
 ## Open Next Steps
 - Revisit prompt sync further if multi-admin concurrent public edits still collide semantically.
