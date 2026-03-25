@@ -3,32 +3,32 @@
     ".read": false,
     ".write": false,
     "users_by_uid": {
-      ".read": "auth != null && auth.token.email_verified == true && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'",
-      ".write": "auth != null && auth.token.email_verified == true && (root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin' || (!data.exists() && newData.child('uid').val() === auth.uid))",
+      ".read": "auth != null && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'",
+      ".write": "auth != null && (root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin' || (!data.exists() && newData.child('uid').val() === auth.uid))",
       "$uid": {
-        ".read": "auth != null && auth.token.email_verified == true && (auth.uid === $uid || root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin')",
-        ".write": "auth != null && auth.token.email_verified == true && auth.uid === $uid && newData.hasChildren(['uid','login','role','legacyKey','updatedAt']) && newData.child('uid').val() === auth.uid && newData.child('login').val() === auth.token.email && root.child('users').child(newData.child('legacyKey').val()).child('login').val() === auth.token.email && newData.child('role').val() === root.child('users').child(newData.child('legacyKey').val()).child('role').val()"
+        ".read": "auth != null && (auth.uid === $uid || root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin')",
+        ".write": "auth != null && auth.uid === $uid && newData.hasChildren(['uid','login','role','legacyKey','updatedAt']) && newData.child('uid').val() === auth.uid && newData.child('login').val() === auth.token.email && root.child('users').child(newData.child('legacyKey').val()).child('login').val() === auth.token.email && newData.child('role').val() === root.child('users').child(newData.child('legacyKey').val()).child('role').val()"
       }
     },
     "users": {
-      ".read": "auth != null && auth.token.email_verified == true && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'",
+      ".read": "auth != null && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'",
       "$key": {
-        ".read": "auth != null && auth.token.email_verified == true && (data.child('login').val() === auth.token.email || root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin')",
-        ".write": "auth != null && auth.token.email_verified == true && (root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin' || (((!data.exists() && newData.child('login').val() === auth.token.email && newData.child('role').val() === 'user') || (data.exists() && data.child('login').val() === auth.token.email && newData.child('login').val() === data.child('login').val() && newData.child('role').val() === data.child('role').val())) && (!newData.child('uid').exists() || newData.child('uid').val() === auth.uid)))"
+        ".read": "auth != null && (data.child('login').val() === auth.token.email || root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin')",
+        ".write": "auth != null && (root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin' || (((!data.exists() && newData.child('login').val() === auth.token.email && newData.child('role').val() === 'user') || (data.exists() && data.child('login').val() === auth.token.email && newData.child('login').val() === data.child('login').val() && newData.child('role').val() === data.child('role').val())) && (!newData.child('uid').exists() || newData.child('uid').val() === auth.uid)))"
       }
     },
     "partner_invites": {
-      ".read": "auth != null && auth.token.email_verified == true && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'",
+      ".read": "auth != null && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'",
       "$key": {
-        ".read": "auth != null && auth.token.email_verified == true && (data.child('login').val() === auth.token.email || root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin')",
-        ".write": "auth != null && auth.token.email_verified == true && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'"
+        ".read": "auth != null && (data.child('login').val() === auth.token.email || root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin')",
+        ".write": "auth != null && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'"
       }
     },
     "access_revocations": {
-      ".read": "auth != null && auth.token.email_verified == true && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'",
+      ".read": "auth != null && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'",
       "$key": {
-        ".read": "auth != null && auth.token.email_verified == true && (data.child('login').val() === auth.token.email || root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin')",
-        ".write": "auth != null && auth.token.email_verified == true && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'"
+        ".read": "auth != null && (data.child('login').val() === auth.token.email || root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin')",
+        ".write": "auth != null && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'"
       }
     },
     "prompts": {

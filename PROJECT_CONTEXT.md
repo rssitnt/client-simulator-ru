@@ -56,6 +56,13 @@
   - при ошибке realtime-listener для `prompts` сразу пробуется `bootstrapPromptsViaRestFallback()`;
   - CSP `connect-src` расширен под Firebase transport-хосты: `https://*.firebasedatabase.app`, `https://*.firebaseio.com`, `wss://*.firebaseio.com`, `https://firebasedatabase.googleapis.com`, `https://*.googleapis.com`;
   - кэш-версия обновлена до `script.js?v=20260325-06`.
+- 2026-03-25: пользователь попросил уйти от зависимости rules на `auth.token.email_verified` для `users`, `users_by_uid`, `partner_invites`, `access_revocations`.
+- Новая модель в репозитории:
+  - `database.rules.json` для этих веток больше требует `auth != null` + совпадение `auth.uid` / `auth.token.email` / роли через `users_by_uid`, без `email_verified`;
+  - в `handleAuthSubmit()` Firebase Auth-сессия теперь открывается **до** обязательных облачных записей пользователя;
+  - `saveUserRecord`, `patchUserRecord`, `savePartnerInvite`, `patchPartnerInvite`, `setAccessRevocation`, `ensureCurrentUserAccessMirror` получили режим `requireRemote`, при котором локальный cache больше не маскирует провал облака как “успешный вход”;
+  - кэш-версия обновлена до `script.js?v=20260325-07`.
+- Важно: чтобы это заработало в проде, новые rules из `database.rules.json` нужно именно **опубликовать в Firebase Console**, иначе live-база продолжит жить по старым правилам.
 
 ## 2026-03-25 — Пустые промпты: нет Firebase Auth при входе по паролю
 - Корень: логин проверялся по записи в RTDB `users`, но **Firebase Authentication** часто оставался без сессии (`auth.currentUser === null`). Правила RTDB для `prompts` требовали `auth != null` и раньше ещё `email_verified` — клиентский `onValue`/`get` получал **permission denied**, кэш пустой → «Промпт пустой».

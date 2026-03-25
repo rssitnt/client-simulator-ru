@@ -1393,12 +1393,23 @@ function canSyncCurrentUserAccessMirror(user = currentUser) {
     return !!(authUid && normalizedLogin && authEmail === normalizedLogin);
 }
 
-async function syncCurrentUserAccessMirror(user = currentUser) {
+async function syncCurrentUserAccessMirror(user = currentUser, options = {}) {
+    const requireRemote = !!options.requireRemote;
     const normalizedUser = normalizeUserRecord(user, user?.login);
-    if (!normalizedUser || !canSyncCurrentUserAccessMirror(normalizedUser)) return false;
+    if (!normalizedUser || !canSyncCurrentUserAccessMirror(normalizedUser)) {
+        if (requireRemote) {
+            throw new Error('Невозможно синхронизировать access mirror без активной Firebase Auth-сессии.');
+        }
+        return false;
+    }
 
     const uid = resolveAuthUidForLogin(normalizedUser.login, normalizedUser.uid);
-    if (!uid) return false;
+    if (!uid) {
+        if (requireRemote) {
+            throw new Error('Не удалось определить uid для синхронизации access mirror.');
+        }
+        return false;
+    }
 
     const payload = {
         uid,
@@ -1417,14 +1428,27 @@ async function syncCurrentUserAccessMirror(user = currentUser) {
         return true;
     } catch (error) {
         console.error('Failed to sync user access mirror:', error);
+        if (requireRemote) {
+            throw error;
+        }
         return false;
     }
 }
 
-async function ensureCurrentUserAccessMirror(user = currentUser) {
-    if (!canSyncCurrentUserAccessMirror(user)) return false;
+async function ensureCurrentUserAccessMirror(user = currentUser, options = {}) {
+    const requireRemote = !!options.requireRemote;
+    if (!canSyncCurrentUserAccessMirror(user)) {
+        if (requireRemote) {
+            throw new Error('Firebase Auth-сессия не готова для записи access mirror.');
+        }
+        return false;
+    }
     if (currentUserAccessMirrorSyncPromise) {
-        return currentUserAccessMirrorSyncPromise;
+        const result = await currentUserAccessMirrorSyncPromise;
+        if (requireRemote && !result) {
+            throw new Error('Не удалось синхронизировать access mirror.');
+        }
+        return result;
     }
 
     currentUserAccessMirrorSyncPromise = (async () => {
@@ -1438,7 +1462,7 @@ async function ensureCurrentUserAccessMirror(user = currentUser) {
         if (normalizedUser.uid !== resolvedUid) {
             const patched = await patchUserRecord(normalizedUser.login, {
                 uid: resolvedUid
-            });
+            }, requireRemote ? { requireRemote: true } : {});
             syncedUser = normalizeUserRecord({
                 ...normalizedUser,
                 ...(patched || {}),
@@ -1449,12 +1473,16 @@ async function ensureCurrentUserAccessMirror(user = currentUser) {
             }
         }
 
-        return syncCurrentUserAccessMirror(syncedUser);
+        return syncCurrentUserAccessMirror(syncedUser, { requireRemote });
     })().finally(() => {
         currentUserAccessMirrorSyncPromise = null;
     });
 
-    return currentUserAccessMirrorSyncPromise;
+    const result = await currentUserAccessMirrorSyncPromise;
+    if (requireRemote && !result) {
+        throw new Error('Не удалось синхронизировать access mirror.');
+    }
+    return result;
 }
 
 const LOCAL_JSON_STORAGE_FLUSH_MS = 160;
@@ -1985,7 +2013,8 @@ async function getAccessRevocation(login) {
     return normalizeAccessRevocation(localStore[key], normalizedLogin);
 }
 
-async function setAccessRevocation(login, isRevoked, meta = {}) {
+async function setAccessRevocation(login, isRevoked, meta = {}, options = {}) {
+    const requireRemote = !!options.requireRemote;
     const normalizedLogin = normalizeLogin(login);
     if (!isValidLogin(normalizedLogin)) return null;
     const key = loginToStorageKey(normalizedLogin);
@@ -1999,6 +2028,10 @@ async function setAccessRevocation(login, isRevoked, meta = {}) {
         updatedAt: nowIso
     };
 
+    if (requireRemote && !db) {
+        throw new Error('Firebase RTDB недоступна для обязательной записи отзыва доступа.');
+    }
+
     if (db) {
         try {
             await firebaseWriteWithTimeout(
@@ -2010,6 +2043,9 @@ async function setAccessRevocation(login, isRevoked, meta = {}) {
             );
         } catch (error) {
             console.error('Failed to save access revocation in Firebase:', error);
+            if (requireRemote) {
+                throw error;
+            }
         }
     }
 
@@ -2623,7 +2659,8 @@ async function getPartnerInviteByLogin(login) {
     return normalizePartnerInvite(localStore[key], normalizedLogin);
 }
 
-async function savePartnerInvite(invite) {
+async function savePartnerInvite(invite, options = {}) {
+    const requireRemote = !!options.requireRemote;
     const normalized = normalizePartnerInvite(invite, invite?.login);
     if (!normalized) throw new Error('Invalid partner invite');
     const key = loginToStorageKey(normalized.login);
@@ -2638,6 +2675,10 @@ async function savePartnerInvite(invite) {
         note: normalized.note
     };
 
+    if (requireRemote && !db) {
+        throw new Error('Firebase RTDB недоступна для обязательной записи инвайта.');
+    }
+
     if (db) {
         try {
             await firebaseWriteWithTimeout(
@@ -2647,6 +2688,9 @@ async function savePartnerInvite(invite) {
             );
         } catch (error) {
             console.error('Failed to save partner invite to Firebase:', error);
+            if (requireRemote) {
+                throw error;
+            }
         }
     }
 
@@ -2656,7 +2700,8 @@ async function savePartnerInvite(invite) {
     return payload;
 }
 
-async function patchPartnerInvite(login, patch = {}) {
+async function patchPartnerInvite(login, patch = {}, options = {}) {
+    const requireRemote = !!options.requireRemote;
     const normalizedLogin = normalizeLogin(login);
     if (!isValidLogin(normalizedLogin)) return null;
     const key = loginToStorageKey(normalizedLogin);
@@ -2675,6 +2720,10 @@ async function patchPartnerInvite(login, patch = {}) {
         sanitizedPatch.emailVerifiedAt = sanitizedPatch.emailVerifiedAt || null;
     }
 
+    if (requireRemote && !db) {
+        throw new Error('Firebase RTDB недоступна для обязательного обновления инвайта.');
+    }
+
     if (db) {
         try {
             await firebaseWriteWithTimeout(
@@ -2684,6 +2733,9 @@ async function patchPartnerInvite(login, patch = {}) {
             );
         } catch (error) {
             console.error('Failed to patch partner invite in Firebase:', error);
+            if (requireRemote) {
+                throw error;
+            }
         }
     }
 
@@ -3327,7 +3379,8 @@ function getLocalUserRecordByLogin(login) {
     return normalizeUserRecord(localStore[key], normalizedLogin);
 }
 
-async function saveUserRecord(record) {
+async function saveUserRecord(record, options = {}) {
+    const requireRemote = !!options.requireRemote;
     const normalized = normalizeUserRecord(record, record?.login);
     if (!normalized) throw new Error('Invalid user record');
     const key = loginToStorageKey(normalized.login);
@@ -3354,6 +3407,10 @@ async function saveUserRecord(record) {
         activeMs: normalized.activeMs
     };
 
+    if (requireRemote && !db) {
+        throw new Error('Firebase RTDB недоступна для обязательной записи пользователя.');
+    }
+
     if (db) {
         try {
             await firebaseWriteWithTimeout(
@@ -3363,6 +3420,9 @@ async function saveUserRecord(record) {
             );
         } catch (error) {
             console.error('Failed to save user to Firebase:', error);
+            if (requireRemote) {
+                throw error;
+            }
         }
     }
 
@@ -3373,6 +3433,7 @@ async function saveUserRecord(record) {
 }
 
 async function patchUserRecord(login, patch = {}, options = {}) {
+    const requireRemote = !!options.requireRemote;
     const normalizedLogin = normalizeLogin(login);
     if (!normalizedLogin) return null;
     const key = loginToStorageKey(normalizedLogin);
@@ -3431,6 +3492,10 @@ async function patchUserRecord(login, patch = {}, options = {}) {
         sanitizedPatch.sessionRevokedAt = sanitizedPatch.sessionRevokedAt || null;
     }
 
+    if (requireRemote && !db) {
+        throw new Error('Firebase RTDB недоступна для обязательного обновления пользователя.');
+    }
+
     if (db) {
         try {
             await firebaseWriteWithTimeout(
@@ -3440,6 +3505,9 @@ async function patchUserRecord(login, patch = {}, options = {}) {
             );
         } catch (error) {
             console.error('Failed to patch user in Firebase:', error);
+            if (requireRemote) {
+                throw error;
+            }
         }
     }
 
@@ -5153,18 +5221,25 @@ async function handleAuthSubmit() {
             };
         }
 
+        await runAuthStep(
+            'Открываем Firebase-сессию...',
+            () => ensureFirebaseAuthPasswordSession(login, password),
+            AUTH_FLOW_STEP_TIMEOUT_MS,
+            'Не удалось открыть Firebase-сессию. Проверьте Email/Password в Firebase Authentication и повторите вход.'
+        );
+
         let savedUser = await runAuthStep(
             'Сохраняем аккаунт...',
-            () => saveUserRecord(targetUser),
+            () => saveUserRecord(targetUser, { requireRemote: true }),
             AUTH_FLOW_STEP_TIMEOUT_MS,
-            'Не удалось сохранить аккаунт. Попробуйте ещё раз.'
+            'Не удалось сохранить аккаунт в Firebase. Проверьте RTDB Rules и повторите вход.'
         );
         if (shouldMarkInviteAsVerifiedFromHint && accessPolicy?.invite) {
             await runAuthStep(
                 'Обновляем приглашение...',
                 () => patchPartnerInvite(login, {
                     emailVerifiedAt: nowIso
-                }),
+                }, { requireRemote: true }),
                 AUTH_FLOW_STEP_TIMEOUT_MS,
                 'Не удалось обновить приглашение. Попробуйте ещё раз.'
             );
@@ -5182,9 +5257,9 @@ async function handleAuthSubmit() {
                 'Фиксируем письмо...',
                 () => patchUserRecord(login, {
                     emailVerificationSentAt: nowIso
-                }),
+                }, { requireRemote: true }),
                 AUTH_FLOW_STEP_TIMEOUT_MS,
-                'Письмо отправлено, но не удалось сохранить статус отправки. Попробуйте ещё раз.'
+                'Письмо отправлено, но не удалось сохранить статус отправки в Firebase. Проверьте RTDB Rules.'
             ) || savedUser;
             setAuthError('Мы отправили ссылку подтверждения на email. Откройте письмо и повторите вход.');
             setAuthMailHelpVisible(true);
@@ -5193,12 +5268,6 @@ async function handleAuthSubmit() {
 
         setAuthSubmitState(true, 'Входим...');
         await runAuthStep(
-            'Открываем Firebase-сессию...',
-            () => ensureFirebaseAuthPasswordSession(login, password),
-            AUTH_FLOW_STEP_TIMEOUT_MS,
-            'Не удалось открыть Firebase-сессию. Проверьте Email/Password в Firebase Authentication и повторите вход.'
-        );
-        await runAuthStep(
             'Подключаем промпты...',
             () => refreshProtectedFirebaseDataAfterAuth(),
             AUTH_FLOW_STEP_TIMEOUT_MS,
@@ -5206,6 +5275,12 @@ async function handleAuthSubmit() {
         );
         setAuthSession(savedUser.login);
         applyAuthenticatedUser(savedUser);
+        await runAuthStep(
+            'Синхронизируем доступ...',
+            () => ensureCurrentUserAccessMirror(savedUser, { requireRemote: true }),
+            AUTH_FLOW_STEP_TIMEOUT_MS,
+            'Firebase-сессия открыта, но не удалось записать access mirror. Проверьте RTDB Rules.'
+        );
         await replayActiveTimeCarryover();
         clearEmailLinkAuthReady();
         clearEmailLinkHint();
