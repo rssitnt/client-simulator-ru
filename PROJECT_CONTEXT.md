@@ -71,7 +71,8 @@
 - Новый подтверждённый root cause из live console: Firebase Realtime Database SDK использует **long-polling через script tag** на URL вида `https://<db>.firebasedatabase.app/.lp?...`, и именно это блокировалось CSP директивой `script-src`, а не `connect-src`.
 - Доп. правка:
   - в `index.html` `script-src` и `script-src-elem` расширены хостами `https://*.firebasedatabase.app` и `https://*.firebaseio.com`, чтобы RTDB long-polling transport вообще мог стартовать;
-  - версия фронта обновлена до `script.js?v=20260325-09`.
+  - `connect-src` дополнен `https://cdnjs.cloudflare.com`, `https://www.gstatic.com`, `https://unpkg.com`, `https://cdn.jsdelivr.net`, чтобы не шумели служебные sourcemap/CSP сообщения в консоли при отладке;
+  - версия фронта обновлена до `script.js?v=20260325-10`.
 
 ## 2026-03-25 — Пустые промпты: нет Firebase Auth при входе по паролю
 - Корень: логин проверялся по записи в RTDB `users`, но **Firebase Authentication** часто оставался без сессии (`auth.currentUser === null`). Правила RTDB для `prompts` требовали `auth != null` и раньше ещё `email_verified` — клиентский `onValue`/`get` получал **permission denied**, кэш пустой → «Промпт пустой».
