@@ -58,6 +58,12 @@
 - `attestation` пока остаётся на отдельном webhook-е; `prompt improvement`, chat, rating и manager assist теперь все идут через единый `client-simulator` webhook.
 - Локальный smoke (`scripts/smoke-e2e.mjs`) обновлён под единый endpoint и теперь маршрутизирует ответы по `payload.requestType`, а не по старым путям `rate-manager`/`manager-simulator`.
 - Отдельная локальная целевая проверка после правки подтвердила, что фронтенд действительно отправляет `chat_start`, `chat`, `manager_assist` и `rating` на один URL `https://n8n-api.tradicia-k.ru/webhook/client-simulator`.
+- Рекомендуемая серверная схема для n8n после webhook:
+  - `Webhook -> Code/Normalize Input -> AI Agent -> Respond to Webhook`
+  - в `Code` node вход нормализуется в единые поля `requestType`, `inputText`, `systemText`, `historyText`, `modeInstruction`
+  - `AI Agent` должен читать `Prompt (User Message)` из `inputText`, а `System Message` собирать из `modeInstruction + systemText + historyText`
+  - `Memory` для этой схемы лучше не подключать
+  - `Respond to Webhook` должен возвращать результат `AI Agent` без дополнительной ветвистой логики
 
 ## Core Invariants
 - Браузер не хранит long-lived API keys.
