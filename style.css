@@ -3875,6 +3875,37 @@ body.light-theme .more-colors-popup {
     overflow: auto;
     border-radius: 8px;
     background: #222;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: #444 transparent;
+}
+
+.admin-table-wrap::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.admin-table-wrap::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+}
+
+.admin-table-wrap::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.admin-table-wrap::-webkit-scrollbar-thumb {
+    background-color: #333;
+    border-radius: 3px;
+}
+
+.admin-table-wrap::-webkit-scrollbar-thumb:hover {
+    background-color: #555;
+}
+
+.admin-table-wrap::-webkit-scrollbar-corner {
+    background: transparent;
 }
 
 .admin-users-table {
@@ -4710,6 +4741,15 @@ body.light-theme .admin-panel-title {
 
 body.light-theme .admin-table-wrap {
     background: #f7f7f7;
+    scrollbar-color: #ccc transparent;
+}
+
+body.light-theme .admin-table-wrap::-webkit-scrollbar-thumb {
+    background-color: #ccc;
+}
+
+body.light-theme .admin-table-wrap::-webkit-scrollbar-thumb:hover {
+    background-color: #aaa;
 }
 
 body.light-theme .admin-users-table th {
