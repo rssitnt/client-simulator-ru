@@ -1,5 +1,11 @@
 # PROJECT_CONTEXT.md
 
+## 2026-03-25 — Меньше фоновых срабатываний: active time и админ-presence
+- `ACTIVE_TICK_MS` 5s→8s (реже `setInterval`, flush по-прежнему от `ACTIVE_FLUSH_MS` 15s).
+- Троттлинг `markUserActivity` для цикла активного времени и для `syncCurrentUserPresenceState`: 1.5s→3s.
+- Проверка отзыва сессии при фокусе (`SESSION_REVOCATION_CHECK_MS`): 10s→20s — запись пользователя и так подтягивается через `onValue`.
+- Таймер только для относительных подписей «N мин назад» в админ-таблице: 60s→90s (`ADMIN_PRESENCE_RELATIVE_LABEL_REFRESH_MS`). Версия `script.js` в `index.html`: `?v=20260325-25`.
+
 ## 2026-03-25 — Запушены отложенные репозиторные правки
 - В `main` (после `7990223`) закоммичены и отправлены на GitHub: `.github/workflows/smoke.yml`, обновления `README.md`, `database.rules.json`, `scripts/smoke-e2e.mjs`, `scripts/integration-smoke.mjs`. Локально перед коммитом прогнан `npm run test:smoke`.
 
