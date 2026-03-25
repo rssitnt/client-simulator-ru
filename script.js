@@ -11553,7 +11553,7 @@ function updateVoiceModeRateButtonState() {
         setVoiceModeStatus('Идёт диалог…', 'listening');
         return;
     }
-    setVoiceModeStatus('Нажмите кнопку звонка для старта', 'idle');
+    setVoiceModeStatus('скоро должна появиться окно звонка. Если не появилась, включите VPN', 'idle');
 }
 
 function resetElevenLabsVoiceSessionState() {
@@ -11796,7 +11796,7 @@ async function showVoiceModeModal() {
 
         if (widgetReady && networkReady) {
             ensureElevenLabsSocketBridge();
-            setVoiceModeStatus('Нажмите кнопку звонка для старта', 'idle');
+            setVoiceModeStatus('скоро должна появиться окно звонка. Если не появилась, включите VPN', 'idle');
             setElevenLabsWidgetHidden(false);
             dispatchElevenLabsExpandEvent('expand');
             return;
