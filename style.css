@@ -4134,7 +4134,7 @@ body.light-theme .more-colors-popup {
 .admin-hidden-prompt-textarea {
     width: 100%;
     min-height: 220px;
-    resize: vertical;
+    resize: none;
     overflow-y: auto;
     scrollbar-gutter: stable;
     scrollbar-width: thin;
