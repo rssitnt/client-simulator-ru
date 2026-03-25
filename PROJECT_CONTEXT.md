@@ -16,7 +16,7 @@
 - По запросу пользователя из настроек убрана не только разметка, но и вся логика: пресеты `TEST_SCENARIO_PRESETS`, админ-библиотека, плашка у чата, подмешивание `promptSuffix` в client webhook и описание сценария в контексте оценщика (остались пустые поля `activeScenarioPresetId` / `activeScenarioPresetName` в payload для совместимости). Стили `.admin-scenario-*` и `.active-scenario-*` вычищены из `style.css`. При загрузке по-прежнему чистится ключ `activeTestScenario:v1`. Версия скрипта в `index.html`: `script.js?v=20260325-24`. Проверка: `npm run test:smoke` зелёный.
 
 ## 2026-03-25 — Скрытый prompt оценщика в админке
-- В панели администратора добавлен второй блок (рядом со скрытым prompt клиента): текст сохраняется в `app_config/raterHiddenPrompt`, дублируется в localStorage ключ `raterHiddenPrompt:v1`, и при сборке webhook для оценки вставляется между видимым prompt роли «Оценщик» и константой `DEFAULT_RATING_RESULT_PROMPT_SUFFIX` + контекстом платформы (`buildRaterPromptForWebhook`).
+- В панели администратора добавлен второй блок (рядом со скрытым prompt клиента): текст сохраняется в `app_config/raterHiddenPrompt`, дублируется в localStorage ключ `raterHiddenPrompt:v1`, и при сборке webhook для оценки вставляется в prompt оценщика (`buildRaterPromptForWebhook`).
 
 ## Project
 - Name: `client-simulator-studio`

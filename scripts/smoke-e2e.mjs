@@ -885,7 +885,7 @@ async function runEndConversationFlow(browser, baseUrl) {
         expect(startRequest?.payload?.requestId, 'Start requestId was not captured');
         expect(ratingRequest?.payload?.requestId, 'Rating requestId was not captured');
         expect(ratingRequest?.payload?.conversationOutcome === 'end_conversation', 'Rating request must include conversation outcome');
-        expect(String(ratingRequest?.payload?.raterPrompt || '').includes('СЛУЖЕБНЫЙ КОНТРАКТ ФОРМАТА ОЦЕНКИ'), 'Rating prompt contract was not attached');
+        expect(!String(ratingRequest?.payload?.raterPrompt || '').includes('СЛУЖЕБНЫЙ КОНТРАКТ ФОРМАТА ОЦЕНКИ'), 'Fixed rating contract must not be attached');
     } catch (error) {
         await ensureOutputDir();
         await page.screenshot({ path: path.join(outputDir, 'smoke-end-conversation-failure.png'), fullPage: true });

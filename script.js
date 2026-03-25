@@ -5797,7 +5797,6 @@ function buildRaterPromptForWebhook(basePrompt) {
     return [
         normalizedPrompt,
         hiddenRater,
-        DEFAULT_RATING_RESULT_PROMPT_SUFFIX,
         platformContext
     ].filter(Boolean).join('\n\n');
 }
@@ -10241,7 +10240,7 @@ async function resetHiddenRaterPromptToDefault() {
         }
     }
     populateHiddenRaterPromptField();
-    showCopyNotification('Скрытый prompt оценщика сброшен (остаётся только встроенный контракт JSON)');
+    showCopyNotification('Скрытый prompt оценщика сброшен');
 }
 
 async function saveVoiceModeConfigFromInputs() {
