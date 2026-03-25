@@ -30,17 +30,132 @@ export function initializeApp(config = {}) {
 `.trim();
 
 const firebaseDatabaseStub = `
-export function getDatabase() { return null; }
-export function ref(...args) { return { args }; }
-export function onValue(...args) { return () => {}; }
-export async function set() { return null; }
-export async function get() {
+const dbState = globalThis.__codexFirebaseDbState || (globalThis.__codexFirebaseDbState = {
+  data: {},
+  listeners: []
+});
+
+function normalizePath(value = '') {
+  let normalized = String(value || '');
+  while (normalized.startsWith('/')) {
+    normalized = normalized.slice(1);
+  }
+  while (normalized.endsWith('/')) {
+    normalized = normalized.slice(0, -1);
+  }
+  return normalized;
+}
+
+function clone(value) {
+  if (value === undefined) return null;
+  return JSON.parse(JSON.stringify(value));
+}
+
+function getSegments(path = '') {
+  return normalizePath(path).split('/').filter(Boolean);
+}
+
+function readPath(path = '') {
+  const segments = getSegments(path);
+  let cursor = dbState.data;
+  for (const segment of segments) {
+    if (!cursor || typeof cursor !== 'object' || !(segment in cursor)) {
+      return null;
+    }
+    cursor = cursor[segment];
+  }
+  return clone(cursor);
+}
+
+function writePath(path = '', value) {
+  const segments = getSegments(path);
+  if (!segments.length) {
+    dbState.data = clone(value) || {};
+    notifyListeners();
+    return;
+  }
+
+  if (!dbState.data || typeof dbState.data !== 'object') {
+    dbState.data = {};
+  }
+
+  let cursor = dbState.data;
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    const segment = segments[index];
+    if (!cursor[segment] || typeof cursor[segment] !== 'object') {
+      cursor[segment] = {};
+    }
+    cursor = cursor[segment];
+  }
+
+  const lastSegment = segments[segments.length - 1];
+  const normalizedValue = clone(value);
+  if (normalizedValue === null) {
+    delete cursor[lastSegment];
+  } else {
+    cursor[lastSegment] = normalizedValue;
+  }
+  notifyListeners();
+}
+
+function updatePath(path = '', patch) {
+  const current = readPath(path);
+  const base = current && typeof current === 'object' ? current : {};
+  const normalizedPatch = patch && typeof patch === 'object' ? clone(patch) : {};
+  writePath(path, { ...base, ...normalizedPatch });
+}
+
+function createSnapshot(path = '') {
+  const value = readPath(path);
   return {
-    exists() { return false; },
-    val() { return null; }
+    exists() { return value !== null && value !== undefined; },
+    val() { return clone(value); }
   };
 }
-export async function update() { return null; }
+
+function notifyListeners() {
+  for (const listener of dbState.listeners) {
+    try {
+      listener.callback(createSnapshot(listener.path));
+    } catch {}
+  }
+}
+
+export function getDatabase() {
+  return { __codexStubDb: true };
+}
+
+export function ref(_db, path = '') {
+  return { path: normalizePath(path) };
+}
+
+export function onValue(reference, callback) {
+  const listener = {
+    path: normalizePath(reference?.path),
+    callback
+  };
+  dbState.listeners.push(listener);
+  queueMicrotask(() => {
+    callback(createSnapshot(listener.path));
+  });
+  return () => {
+    dbState.listeners = dbState.listeners.filter((item) => item !== listener);
+  };
+}
+
+export async function set(reference, value) {
+  writePath(reference?.path, value);
+  return null;
+}
+
+export async function get(reference) {
+  return createSnapshot(reference?.path);
+}
+
+export async function update(reference, value) {
+  updatePath(reference?.path, value);
+  return null;
+}
 export function onDisconnect() {
   return {
     async set() { return null; },

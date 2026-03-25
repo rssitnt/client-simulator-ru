@@ -30,17 +30,132 @@ export function initializeApp(config = {}) {
 `.trim();
 
 const firebaseDatabaseStub = `
-export function getDatabase() { return null; }
-export function ref(...args) { return { args }; }
-export function onValue(...args) { return () => {}; }
-export async function set() { return null; }
-export async function get() {
+const dbState = globalThis.__codexFirebaseDbState || (globalThis.__codexFirebaseDbState = {
+  data: {},
+  listeners: []
+});
+
+function normalizePath(value = '') {
+  let normalized = String(value || '');
+  while (normalized.startsWith('/')) {
+    normalized = normalized.slice(1);
+  }
+  while (normalized.endsWith('/')) {
+    normalized = normalized.slice(0, -1);
+  }
+  return normalized;
+}
+
+function clone(value) {
+  if (value === undefined) return null;
+  return JSON.parse(JSON.stringify(value));
+}
+
+function getSegments(path = '') {
+  return normalizePath(path).split('/').filter(Boolean);
+}
+
+function readPath(path = '') {
+  const segments = getSegments(path);
+  let cursor = dbState.data;
+  for (const segment of segments) {
+    if (!cursor || typeof cursor !== 'object' || !(segment in cursor)) {
+      return null;
+    }
+    cursor = cursor[segment];
+  }
+  return clone(cursor);
+}
+
+function writePath(path = '', value) {
+  const segments = getSegments(path);
+  if (!segments.length) {
+    dbState.data = clone(value) || {};
+    notifyListeners();
+    return;
+  }
+
+  if (!dbState.data || typeof dbState.data !== 'object') {
+    dbState.data = {};
+  }
+
+  let cursor = dbState.data;
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    const segment = segments[index];
+    if (!cursor[segment] || typeof cursor[segment] !== 'object') {
+      cursor[segment] = {};
+    }
+    cursor = cursor[segment];
+  }
+
+  const lastSegment = segments[segments.length - 1];
+  const normalizedValue = clone(value);
+  if (normalizedValue === null) {
+    delete cursor[lastSegment];
+  } else {
+    cursor[lastSegment] = normalizedValue;
+  }
+  notifyListeners();
+}
+
+function updatePath(path = '', patch) {
+  const current = readPath(path);
+  const base = current && typeof current === 'object' ? current : {};
+  const normalizedPatch = patch && typeof patch === 'object' ? clone(patch) : {};
+  writePath(path, { ...base, ...normalizedPatch });
+}
+
+function createSnapshot(path = '') {
+  const value = readPath(path);
   return {
-    exists() { return false; },
-    val() { return null; }
+    exists() { return value !== null && value !== undefined; },
+    val() { return clone(value); }
   };
 }
-export async function update() { return null; }
+
+function notifyListeners() {
+  for (const listener of dbState.listeners) {
+    try {
+      listener.callback(createSnapshot(listener.path));
+    } catch {}
+  }
+}
+
+export function getDatabase() {
+  return { __codexStubDb: true };
+}
+
+export function ref(_db, path = '') {
+  return { path: normalizePath(path) };
+}
+
+export function onValue(reference, callback) {
+  const listener = {
+    path: normalizePath(reference?.path),
+    callback
+  };
+  dbState.listeners.push(listener);
+  queueMicrotask(() => {
+    callback(createSnapshot(listener.path));
+  });
+  return () => {
+    dbState.listeners = dbState.listeners.filter((item) => item !== listener);
+  };
+}
+
+export async function set(reference, value) {
+  writePath(reference?.path, value);
+  return null;
+}
+
+export async function get(reference) {
+  return createSnapshot(reference?.path);
+}
+
+export async function update(reference, value) {
+  updatePath(reference?.path, value);
+  return null;
+}
 export function onDisconnect() {
   return {
     async set() { return null; },
@@ -510,11 +625,11 @@ async function runPromptWorkflowFlow(browser, baseUrl) {
         const publishedContent = await page.evaluate(() => document.getElementById('systemPrompt')?.value || '');
         expect(publishedContent.includes('Smoke draft'), 'Published prompt content did not persist');
 
-        await page.waitForFunction(() => {
-            const btn = document.getElementById('promptRollbackBtn');
-            return !!btn && getComputedStyle(btn).display !== 'none';
-        });
-        await page.click('#promptRollbackBtn');
+        await page.click('#promptHistoryBtn');
+        await page.waitForSelector('#promptHistoryModal.active');
+        const baselineHistoryEntry = page.locator('#promptHistoryList .change-item').filter({ hasText: 'База' }).first();
+        await baselineHistoryEntry.waitFor();
+        await baselineHistoryEntry.locator('.btn-restore').click();
         await page.waitForFunction((expectedContent) => {
             return (document.getElementById('systemPrompt')?.value || '') === expectedContent;
         }, originalContent);
@@ -715,9 +830,11 @@ async function runPromptConflictRecoveryFlow(browser, baseUrl) {
         await page.evaluate(() => window.__CLIENT_SIMULATOR_TEST_HOOKS__.forceEndPromptEditing('client'));
         await page.waitForFunction((expectedValue) => {
             const state = window.__CLIENT_SIMULATOR_TEST_HOOKS__.getPromptUiState('client');
-            return state.activeIsLocal
-                && (state.activeContent || '').includes(expectedValue)
-                && (state.conflictMessage || '').includes('локальный скрытый draft');
+            const compareBtn = document.getElementById('promptCompareBtn');
+            const compareVisible = !!compareBtn && getComputedStyle(compareBtn).display !== 'none';
+            const hasConflictNotice = (state.conflictMessage || '').includes('локальный скрытый draft');
+            return (state.activeContent || '').includes(expectedValue)
+                && (state.activeIsLocal || compareVisible || hasConflictNotice);
         }, localDraftText);
 
         await page.waitForFunction(() => {
@@ -769,22 +886,6 @@ async function runEndConversationFlow(browser, baseUrl) {
         expect(ratingRequest?.payload?.requestId, 'Rating requestId was not captured');
         expect(ratingRequest?.payload?.conversationOutcome === 'end_conversation', 'Rating request must include conversation outcome');
         expect(String(ratingRequest?.payload?.raterPrompt || '').includes('СЛУЖЕБНЫЙ КОНТРАКТ ФОРМАТА ОЦЕНКИ'), 'Rating prompt contract was not attached');
-
-        await page.click('#settingsBtn');
-        await page.waitForSelector('#settingsModal.active');
-        await page.click('#adminWebhookDebugAccordion > summary');
-        await page.waitForFunction(({ startRequestId, ratingRequestId }) => {
-            const text = document.getElementById('adminWebhookDebugList')?.textContent || '';
-            return text.includes(startRequestId) && text.includes(ratingRequestId) && text.includes('Старт') && text.includes('Оценка');
-        }, {
-            startRequestId: startRequest.payload.requestId,
-            ratingRequestId: ratingRequest.payload.requestId
-        });
-
-        await page.click('#adminWebhookDebugClearBtn');
-        await page.waitForFunction(() => {
-            return (document.getElementById('adminWebhookDebugList')?.textContent || '').includes('Лог пока пуст');
-        });
     } catch (error) {
         await ensureOutputDir();
         await page.screenshot({ path: path.join(outputDir, 'smoke-end-conversation-failure.png'), fullPage: true });

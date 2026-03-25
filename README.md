@@ -1,122 +1,197 @@
-# Kirillov Client Simulator
+# Client Simulator Studio
 
-Симулятор клиента для тестирования AI-агентов с интеграцией n8n webhook.
+Тренажёр для проверки AI-агентов через чат, оценку диалога, подсказки менеджеру, аттестацию и голосовой режим.
 
-## Возможности
+Сейчас это уже не просто "страница с одним webhook", а полноценный фронт с:
+- Firebase Auth + Realtime Database;
+- единым `n8n` webhook для основных сценариев симулятора;
+- отдельным webhook для аттестации;
+- редактором инструкций с вариациями, историей, compare/publish/rollback;
+- админкой, инвайтами, скрытым prompt клиента и presence-статусами;
+- опциональным token server для безопасного voice flow.
 
-- **Разделенный интерфейс**: Чат для тестирования слева, редактор промпта справа
-- **Системный промпт**: Настройка поведения AI-агента с счетчиком символов
-- **Интеграция с n8n**: Все запросы отправляются на ваш webhook
-- **Markdown поддержка**: Автоматическое форматирование ответов с поддержкой кода
-- **Подсветка синтаксиса**: Highlight.js для красивого отображения кода
-- **Копирование сообщений**: Кнопка для быстрого копирования любого сообщения
-- **Экспорт диалога**: Сохранение беседы в JSON формате
-- **Анимации**: Плавные переходы и анимированный индикатор печати
-- **Временные метки**: Время отправки каждого сообщения
-- **Автосохранение**: Автоматическое сохранение промпта в localStorage
-- **История диалога**: Отправка контекста предыдущих сообщений
-- **Горячие клавиши**: Enter для отправки, Shift+Enter для новой строки
-- **Минималистичный дизайн**: Современный темный интерфейс
+## Что умеет сайт
 
-## Запуск
+- Разделённый интерфейс: чат слева, инструкции справа.
+- Роли инструкций: клиент, менеджер, клиент в звонке, оценщик.
+- Вариации промптов: public/draft, compare, publish, rollback, история.
+- Единый `n8n` flow для `chat`, `chat_start`, `rating`, `manager_assist`, `improve`.
+- Отдельный flow для аттестации.
+- Markdown-ответы, подсветка кода, экспорт диалога и инструкций.
+- Голосовой режим через безопасный token endpoint.
+- Админский режим с пользователями, доступами, скрытым prompt и realtime presence.
 
-Просто откройте `index.html` в браузере. Никаких дополнительных зависимостей не требуется.
+## Основные файлы
 
-Или запустите локальный сервер:
+- Фронтенд: `index.html`
+- Основная логика: `script.js`
+- Стили: `style.css`
+- Firebase rules: `database.rules.json`
+- Token server: `server/gemini-token-server.mjs`
+- Локальный smoke: `scripts/smoke-e2e.mjs`
+- Live integration smoke: `scripts/integration-smoke.mjs`
+
+## Локальный запуск
+
+Установка зависимостей:
+
+```bash
+npm install
+```
+
+Запуск статического фронта:
+
 ```bash
 npx http-server -p 3001
 ```
 
-Smoke e2e для основных dialog-flow:
+После этого открой:
+
+```text
+http://127.0.0.1:3001/index.html
+```
+
+На localhost доступен dev-вход без боевой авторизации, чтобы быстро открыть интерфейс и тестировать UI.
+
+## Проверка после изменений
+
+Быстрый локальный smoke:
+
 ```bash
 npm run test:smoke
 ```
 
-## Безопасный голосовой режим (без API key в браузере)
+Проверка с живым `n8n` webhook:
 
-Чтобы сотрудники не вводили API key вручную:
+```bash
+npm run test:smoke:integration
+```
 
-1. Поднимите сервер выдачи ephemeral токенов из `server/gemini-token-server.mjs`.
-2. Держите `OPENAI_API_KEY` только на сервере (env/secret manager).
-3. Фронт по умолчанию дергает `POST /api/openai-realtime-session` и отправляет Firebase ID token в `Authorization`.
-4. Небезопасный fallback по `login`/`email` в body отключён по умолчанию и должен включаться только временно для миграции.
+Важно:
+- `test:smoke` использует локальные заглушки Firebase и не проверяет реальные боевые rules.
+- `test:smoke:integration` зависит от сети и живого `n8n`, поэтому может падать из-за внешней недоступности.
 
-Подробно: `server/README.md`.
+## Текущая архитектура webhook
 
-### Быстрый сценарий для новичка (Render, 10-15 минут)
+### Основной webhook симулятора
 
-1. Зайдите в Render и создайте `New +` -> `Blueprint`.
-2. Подключите этот GitHub-репозиторий.
-3. Render сам увидит `render.yaml` и предложит сервис `client-simulator-gemini-token`.
-4. Вставьте env:
-`OPENAI_API_KEY`, `FIREBASE_WEB_API_KEY`, `FIREBASE_DATABASE_URL`, `ALLOWED_ORIGINS`, `ALLOWED_EMAIL_DOMAINS`, `OPENAI_REALTIME_MODEL`.
-5. Нажмите `Apply`.
-6. Скопируйте URL сервиса, например `https://client-simulator-gemini-token.onrender.com`.
-7. В приложении откройте настройки под админом и в `OpenAI Voice -> Token endpoint` вставьте:
-`https://client-simulator-gemini-token.onrender.com/api/openai-realtime-session`, нажмите `Сохранить`.
+Фронт по умолчанию отправляет основные сценарии на:
 
-После этого сотрудники могут использовать голосовой режим без ввода токена.
+```text
+https://n8n-api.tradicia-k.ru/webhook/client-simulator
+```
 
-## Использование
+Через него идут:
+- `chat`
+- `chat_start`
+- `rating`
+- `manager_assist`
+- `improve`
 
-1. **Настройте системный промпт** в правой панели (с отображением количества символов)
-2. **Начните диалог** в левой панели - вводите сообщения и тестируйте агента
-3. **Нажмите "Сохранить"** для явного сохранения промпта (автосохранение работает автоматически)
-4. **Используйте "Очистить"** для начала нового диалога
-5. **Экспортируйте диалог** через кнопку экспорта для сохранения беседы
-6. **Копируйте сообщения** наведя на них курсор и нажав "Копировать"
+### Отдельный webhook аттестации
 
-### Горячие клавиши
-- **Enter** - отправить сообщение
-- **Shift + Enter** - новая строка в сообщении
+Для аттестации используется отдельный endpoint:
 
-## Формат запроса к webhook
+```text
+https://n8n-api.tradicia-k.ru/webhook/certification
+```
+
+## Рекомендуемый контракт для n8n
+
+Фронт отправляет `requestType` и несколько канонических полей:
 
 ```json
 {
-  "chatInput": "Сообщение пользователя из чата",
-  "systemPrompt": "Системный промпт из правого окна",
-  "history": [
-    {
-      "role": "user",
-      "content": "Предыдущее сообщение"
-    },
-    {
-      "role": "assistant",
-      "content": "Предыдущий ответ"
-    }
-  ]
+  "requestType": "chat",
+  "inputText": "Сообщение пользователя",
+  "historyText": "История диалога в текстовом виде",
+  "systemText": "Активная инструкция",
+  "sessionId": "session-id",
+  "requestId": "request-id"
 }
 ```
 
-**Примечание:** Поле `chatInput` является обязательным для n8n Chat Trigger node.
+Для обратной совместимости фронт также добавляет alias-поля вроде:
+- `chatInput`
+- `userMessage`
+- `dialogHistory`
+- `systemPrompt`
+- `prompt`
+- `guardrailsInput`
+
+Поэтому лучший паттерн на стороне `n8n` сейчас такой:
+
+```text
+Webhook -> Normalize Input -> AI Agent -> Respond to Webhook
+```
+
+Где `Normalize Input` приводит всё к одной схеме:
+- `requestType`
+- `inputText`
+- `historyText`
+- `systemText`
+- `modeInstruction`
 
 ## Формат ответа от webhook
 
-Поддерживаются следующие форматы ответа:
-- Простая строка
-- `{ "response": "текст" }`
-- `{ "message": "текст" }`
-- `{ "output": "текст" }`
-- `{ "text": "текст" }`
-- `{ "message": "текст", "conversationAction": { "type": "go_silent", "reason": "lost_interest" } }`
-- `{ "message": "текст", "conversationAction": { "type": "end_conversation", "reason": "manager_failed", "shouldEvaluate": true } }`
+Поддерживаются:
+- простая строка;
+- `{ "message": "..." }`
+- `{ "response": "..." }`
+- `{ "output": "..." }`
+- `{ "text": "..." }`
+- объект с `conversationAction`.
 
-`conversationAction.type` поддерживает:
-- `go_silent` — клиент замолчал, но его ещё можно вернуть
-- `end_conversation` — диалог завершён
+Пример:
 
-## Технологии
-
-- HTML5
-- CSS3 (Flexbox, Animations)
-- Vanilla JavaScript (ES6+)
-- n8n Webhook Integration
-- Marked.js (Markdown rendering)
-- Highlight.js (Syntax highlighting)
-
-## Webhook URL
-
+```json
+{
+  "message": "Понял, давайте уточним детали.",
+  "conversationAction": {
+    "type": "go_silent",
+    "reason": "lost_interest"
+  }
+}
 ```
-https://n8n-api.tradicia-k.ru/webhook/1f0629dc-22be-496b-bf2b-2d7090578a3c
+
+Поддерживаемые platform actions:
+- `go_silent` — клиент временно замолчал, но его ещё можно вернуть;
+- `end_conversation` — диалог завершён;
+- для `end_conversation` фронт умеет запускать последующую оценку.
+
+## Firebase и rules
+
+Фронт использует не только базовые ветки `users`, `prompts`, `prompt_history`, но и:
+- `prompt_overrides`
+- `user_presence`
+
+Поэтому после изменения `database.rules.json` правила нужно не просто закоммитить, а реально опубликовать в Firebase Realtime Database.
+
+Если в Firebase Console остались старые rules, локальные изменения в репозитории сами по себе ничего не поменяют.
+
+## Голосовой режим без API key в браузере
+
+Чтобы сотрудники не вставляли API key вручную:
+
+1. Поднимите token server из `server/gemini-token-server.mjs`.
+2. Храните `OPENAI_API_KEY` только на сервере.
+3. Фронт по умолчанию обращается к `POST /api/openai-realtime-session`.
+4. Браузер отправляет Firebase ID token в `Authorization`.
+
+Подробности и env-переменные: `server/README.md`.
+
+### Быстрый запуск token server
+
+```bash
+cp server/.env.example server/.env.local
+# заполните server/.env.local
+npm run start:token-server
 ```
+
+## Что важно помнить при доработках
+
+- Не хранить long-lived API keys в браузере.
+- `localhost` preview может менять только вид и локальный dev-flow, но не должен обходить реальные cloud-права.
+- Реальные права админа определяются не UI-переключателем, а данными в Firebase.
+- После фронтовых правок удобно сразу прогонять `npm run test:smoke`.
+- После правок в auth / webhook / prompt sync лучше прогонять и `npm run test:smoke:integration`.

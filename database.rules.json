@@ -39,6 +39,19 @@
       ".read": "auth != null",
       ".write": "auth != null && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'"
     },
+    "prompt_overrides": {
+      "$key": {
+        ".read": "auth != null && root.child('users').child($key).child('login').val() === auth.token.email && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'",
+        ".write": "auth != null && root.child('users').child($key).child('login').val() === auth.token.email && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'"
+      }
+    },
+    "user_presence": {
+      ".read": "auth != null && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'",
+      "$key": {
+        ".read": "auth != null && (data.child('login').val() === auth.token.email || root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin')",
+        ".write": "auth != null && (root.child('users').child($key).child('login').val() === auth.token.email || root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin')"
+      }
+    },
     "app_config": {
       ".read": "auth != null",
       ".write": "auth != null && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'"
