@@ -1,5 +1,8 @@
 # PROJECT_CONTEXT.md
 
+## 2026-03-25 — Запушены отложенные репозиторные правки
+- В `main` (после `7990223`) закоммичены и отправлены на GitHub: `.github/workflows/smoke.yml`, обновления `README.md`, `database.rules.json`, `scripts/smoke-e2e.mjs`, `scripts/integration-smoke.mjs`. Локально перед коммитом прогнан `npm run test:smoke`.
+
 ## 2026-03-25 — «Сценарии тестирования» удалены из кода
 - По запросу пользователя из настроек убрана не только разметка, но и вся логика: пресеты `TEST_SCENARIO_PRESETS`, админ-библиотека, плашка у чата, подмешивание `promptSuffix` в client webhook и описание сценария в контексте оценщика (остались пустые поля `activeScenarioPresetId` / `activeScenarioPresetName` в payload для совместимости). Стили `.admin-scenario-*` и `.active-scenario-*` вычищены из `style.css`. При загрузке по-прежнему чистится ключ `activeTestScenario:v1`. Версия скрипта в `index.html`: `script.js?v=20260325-24`. Проверка: `npm run test:smoke` зелёный.
 
