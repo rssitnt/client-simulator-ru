@@ -1410,7 +1410,8 @@ function getActiveTestScenarioPreset(options = {}) {
     return preset;
 }
 
-activeTestScenarioPresetId = getStoredActiveTestScenarioPresetId();
+activeTestScenarioPresetId = '';
+removeCachedStorageValue(ACTIVE_TEST_SCENARIO_STORAGE_KEY);
 
 function isLocalhostAdminPreviewHost() {
     const hostname = String(window?.location?.hostname || '').trim().toLowerCase();
@@ -11984,7 +11985,7 @@ function showSettingsModal() {
     populateVoiceConfigFields();
     populateHiddenClientPromptField();
     settingsModal.classList.add('active');
-    [adminHiddenClientPromptAccordion, adminScenarioLibraryAccordion, adminWebhookDebugAccordion, adminUsersAccessAccordion]
+    [adminHiddenClientPromptAccordion, adminUsersAccessAccordion]
         .forEach((accordion) => {
             accordion?.removeAttribute('open');
         });
@@ -11994,8 +11995,6 @@ function showSettingsModal() {
             adminPanelAccordion.style.display = '';
             adminPanelAccordion.setAttribute('open', '');
         }
-        renderAdminScenarioLibrary();
-        renderWebhookDebugPanel();
         startAdminRealtimeSync();
         renderAdminUsersTable();
     } else if (adminPanelAccordion) {
