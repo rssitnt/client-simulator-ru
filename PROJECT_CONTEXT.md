@@ -1,5 +1,9 @@
 # PROJECT_CONTEXT.md
 
+## 2026-03-25 — Integration smoke: проверка rater payload в live-контуре
+- В `scripts/integration-smoke.mjs` добавлен прозрачный перехват запросов к `n8n` через `route.continue()` (без моков ответа) для аудита отправляемого payload.
+- Перед запуском rating сценарий задаёт `adminHiddenRaterPromptInput`, затем проверяет, что в реальном `rating`-payload поле `raterPrompt` содержит скрытый prompt оценщика и не содержит старый фиксированный блок `СЛУЖЕБНЫЙ КОНТРАКТ ФОРМАТА ОЦЕНКИ`.
+
 ## 2026-03-25 — Smoke: проверка скрытого prompt оценщика
 - В `scripts/smoke-e2e.mjs` добавлен отдельный сценарий `runHiddenRaterPromptFlow`: он сохраняет `adminHiddenRaterPromptInput`, запускает оценку после `end_conversation` и проверяет payload `rating` — скрытый prompt оценщика должен подмешиваться в `raterPrompt`, а фиксированный блок `СЛУЖЕБНЫЙ КОНТРАКТ ФОРМАТА ОЦЕНКИ` больше не должен присутствовать.
 

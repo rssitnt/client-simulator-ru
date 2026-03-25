@@ -345,6 +345,24 @@ async function installIntegrationRoutes(context) {
     });
 }
 
+async function openSettings(page) {
+    await page.click('#settingsBtn');
+    await page.waitForSelector('#settingsModal.active');
+}
+
+async function closeSettings(page) {
+    await page.click('#settingsBtn');
+    await page.waitForFunction(() => !document.getElementById('settingsModal')?.classList.contains('active'));
+}
+
+async function ensureDetailsOpen(page, selector) {
+    await page.$eval(selector, (details) => {
+        if (!details.hasAttribute('open')) {
+            details.setAttribute('open', '');
+        }
+    });
+}
+
 async function seedLocalState(context) {
     const seed = buildSeedPayload();
     await context.addInitScript((payload) => {
@@ -406,14 +424,39 @@ async function requestRatingThroughCurrentUi(page) {
 
 async function runIntegrationFlow(browser, baseUrl) {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
+    const capturedWebhookRequests = [];
     await installIntegrationRoutes(context);
+    await context.route('https://n8n-api.tradicia-k.ru/webhook*/**', async (route) => {
+        try {
+            const bodyText = route.request().postData() || '{}';
+            const payload = JSON.parse(bodyText);
+            capturedWebhookRequests.push({
+                url: route.request().url(),
+                payload
+            });
+        } catch {
+            // Ignore malformed payloads in smoke capture, let request pass through.
+        }
+        await route.continue();
+    });
     await seedLocalState(context);
     const page = await context.newPage();
+    const hiddenRaterPrompt = `Integration hidden rater suffix ${Date.now()}`;
 
     try {
         logStep('open page');
         await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
         await waitForChatReady(page);
+
+        logStep('configure hidden rater prompt');
+        await openSettings(page);
+        await ensureDetailsOpen(page, '#adminHiddenRaterPromptAccordion');
+        await page.fill('#adminHiddenRaterPromptInput', hiddenRaterPrompt);
+        await page.click('#adminHiddenRaterPromptSaveBtn');
+        await page.waitForFunction((expectedValue) => {
+            return (localStorage.getItem('raterHiddenPrompt:v1') || '').includes(expectedValue);
+        }, hiddenRaterPrompt);
+        await closeSettings(page);
 
         logStep('start conversation through live webhook');
         await page.click('#startBtn');
@@ -472,6 +515,11 @@ async function runIntegrationFlow(browser, baseUrl) {
         }
 
         expect(ratingSucceeded, 'Rating message was not rendered');
+        const ratingRequest = capturedWebhookRequests.find((item) => item?.payload?.requestType === 'rating');
+        expect(!!ratingRequest, 'Rating webhook payload was not captured');
+        const effectiveRaterPrompt = String(ratingRequest?.payload?.raterPrompt || '');
+        expect(effectiveRaterPrompt.includes(hiddenRaterPrompt), 'Hidden rater prompt was not attached in integration rating payload');
+        expect(!effectiveRaterPrompt.includes('СЛУЖЕБНЫЙ КОНТРАКТ ФОРМАТА ОЦЕНКИ'), 'Fixed rating contract must not be attached in integration rating payload');
     } catch (error) {
         await ensureOutputDir();
         await page.screenshot({ path: path.join(outputDir, 'integration-smoke-failure.png'), fullPage: true });
