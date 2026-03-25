@@ -1,5 +1,8 @@
 # PROJECT_CONTEXT.md
 
+## 2026-03-25 — Проверка: продовые RTDB rules = репозиторные rules
+- Выполнена живая сверка через Firebase CLI (`firebase database:get /.settings/rules --project client-simulator --instance client-simulator-default-rtdb`): текущие rules в Firebase Realtime Database совпадают с `database.rules.json` из репозитория (diff пустой).
+
 ## 2026-03-25 — Debounce перерисовки админ-таблицы пользователей
 - `scheduleAdminUsersTableRender()` больше не ставит отдельный `queueMicrotask` на каждый `onValue` из четырёх веток realtime; вместо этого отложенный вызов `renderAdminUsersTable` сливается в окне **80 ms** (`ADMIN_USERS_TABLE_RENDER_DEBOUNCE_MS`), чтобы пачка почти одновременных снапшотов не запускала несколько тяжёлых проходов подряд. Таймер сбрасывается в `stopAdminRealtimeSync`. Версия скрипта в `index.html`: `?v=20260325-26`.
 
