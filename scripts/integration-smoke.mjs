@@ -52,15 +52,28 @@ export function serverTimestamp() { return Date.now(); }
 `.trim();
 
 const firebaseAuthStub = `
+const authInstance = {
+  currentUser: null
+};
 export function getAuth() {
-  return {
-    currentUser: null
-  };
+  return authInstance;
 }
 export async function sendSignInLinkToEmail() { return null; }
 export function isSignInWithEmailLink() { return false; }
 export async function signInWithEmailLink() {
   return { user: null };
+}
+export async function signInWithEmailAndPassword(_auth, email) {
+  authInstance.currentUser = { email };
+  return { user: authInstance.currentUser };
+}
+export async function createUserWithEmailAndPassword(_auth, email) {
+  authInstance.currentUser = { email };
+  return { user: authInstance.currentUser };
+}
+export async function signOut() {
+  authInstance.currentUser = null;
+  return null;
 }
 `.trim();
 
@@ -94,34 +107,37 @@ function loginToStorageKey(value) {
 function buildSeedPayload() {
     const nowIso = new Date().toISOString();
     const userKey = loginToStorageKey(login);
+    const localhostDevAuthUser = {
+        uid: null,
+        login,
+        fio,
+        role: 'admin',
+        passwordHash: '',
+        passwordNeedsSetup: false,
+        emailVerifiedAt: nowIso,
+        emailVerificationSentAt: null,
+        failedLoginAttempts: 0,
+        isBlocked: false,
+        blockedReason: null,
+        failedLoginBackoffUntil: null,
+        blockedAt: null,
+        sessionRevokedAt: null,
+        passwordHashScheme: null,
+        createdAt: nowIso,
+        lastLoginAt: nowIso,
+        lastSeenAt: nowIso,
+        activeMs: 0
+    };
     return {
         authSession: JSON.stringify({
             login,
-            signedAt: nowIso
+            signedAt: nowIso,
+            devBypass: true
         }),
         authUsers: JSON.stringify({
-            [userKey]: {
-                uid: null,
-                login,
-                fio,
-                role: 'admin',
-                passwordHash: '',
-                passwordNeedsSetup: false,
-                emailVerifiedAt: nowIso,
-                emailVerificationSentAt: null,
-                failedLoginAttempts: 0,
-                isBlocked: false,
-                blockedReason: null,
-                failedLoginBackoffUntil: null,
-                blockedAt: null,
-                sessionRevokedAt: null,
-                passwordHashScheme: null,
-                createdAt: nowIso,
-                lastLoginAt: nowIso,
-                lastSeenAt: nowIso,
-                activeMs: 0
-            }
+            [userKey]: localhostDevAuthUser
         }),
+        localhostDevAuthUser: JSON.stringify(localhostDevAuthUser),
         prompts: {
             systemPrompt: 'Ты клиент. Отвечай реалистично и по делу.',
             managerPrompt: 'Подсказывай менеджеру коротко.',
@@ -219,6 +235,7 @@ async function seedLocalState(context) {
     await context.addInitScript((payload) => {
         localStorage.setItem('authSession:v1', payload.authSession);
         localStorage.setItem('authUsers:v1', payload.authUsers);
+        localStorage.setItem('localhostDevAuthUser:v1', payload.localhostDevAuthUser);
         localStorage.setItem('managerName', 'Integration Smoke');
         localStorage.setItem('managerLogin', 'smoke.admin@7271155.ru');
         localStorage.setItem('userRole', 'admin');
@@ -233,6 +250,13 @@ async function seedLocalState(context) {
 
 async function waitForChatReady(page) {
     await page.waitForSelector('#startBtn');
+    const localhostDevAuthBtn = page.locator('#localhostDevAuthBtn');
+    if (await localhostDevAuthBtn.count()) {
+        const isModalOpen = await page.evaluate(() => document.getElementById('nameModal')?.classList.contains('active'));
+        if (isModalOpen && await localhostDevAuthBtn.isVisible()) {
+            await localhostDevAuthBtn.click();
+        }
+    }
     await page.waitForFunction(() => {
         const modal = document.getElementById('nameModal');
         return !modal || !modal.classList.contains('active');

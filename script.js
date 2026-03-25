@@ -81,6 +81,7 @@ const ACTIVE_TEST_SCENARIO_STORAGE_KEY = 'activeTestScenario:v1';
 const WEBHOOK_DEBUG_CONFIG_STORAGE_KEY = 'webhookDebugConfig:v1';
 const WEBHOOK_DEBUG_LOG_STORAGE_KEY = 'webhookDebugLog:v1';
 const WEBHOOK_DEBUG_LOG_MAX_ENTRIES = 40;
+const ENABLE_LOCAL_WEBHOOK_DEBUG = false;
 const FIREBASE_FRONTEND_GET_TIMEOUT_MS = 4000;
 const EMAIL_LINK_PROCESSED_TTL_MS = 24 * 60 * 60 * 1000;
 const SESSION_ID_STORAGE_KEY = 'sessionId';
@@ -302,6 +303,8 @@ const MAX_FAILED_PASSWORD_ATTEMPTS = 15;
 const ACTIVE_IDLE_TIMEOUT_MS = 60000;
 const ACTIVE_TICK_MS = 5000;
 const ACTIVE_FLUSH_MS = 15000;
+const USER_ACTIVITY_PRESENCE_SYNC_THROTTLE_MS = 1500;
+const USER_ACTIVITY_TRACKING_LOOP_THROTTLE_MS = 1500;
 const ACTIVE_TIME_CARRYOVER_TTL_MS = 24 * 60 * 60 * 1000;
 const SESSION_REVOCATION_CHECK_MS = 10000;
 const WEBHOOK_DEFAULT_TIMEOUT_MS = 45000;
@@ -888,6 +891,8 @@ function buildUnifiedSimulatorWebhookPayload(requestType, payload = {}) {
     const normalizedPayload = payload && typeof payload === 'object'
         ? { ...payload }
         : {};
+    // Call sites provide the canonical fields; this helper backfills
+    // compatibility aliases so the n8n workflow can migrate safely.
     const ensureStringAlias = (targetKey, sourceValue) => {
         const targetValue = String(normalizedPayload[targetKey] || '').trim();
         const nextValue = String(sourceValue || '').trim();
@@ -895,32 +900,62 @@ function buildUnifiedSimulatorWebhookPayload(requestType, payload = {}) {
             normalizedPayload[targetKey] = nextValue;
         }
     };
+    const ensureCanonicalString = (targetKey, fallbackKeys = []) => {
+        const currentValue = String(normalizedPayload[targetKey] || '').trim();
+        if (currentValue) return currentValue;
+        for (const fallbackKey of fallbackKeys) {
+            const fallbackValue = String(normalizedPayload[fallbackKey] || '').trim();
+            if (!fallbackValue) continue;
+            normalizedPayload[targetKey] = fallbackValue;
+            return fallbackValue;
+        }
+        return '';
+    };
 
     if (normalizedRequestType === 'chat' || normalizedRequestType === 'chat_start') {
-        ensureStringAlias('userMessage', normalizedPayload.chatInput);
-        ensureStringAlias('prompt', normalizedPayload.chatInput);
-        ensureStringAlias('guardrailsInput', normalizedPayload.chatInput);
+        const userMessage = ensureCanonicalString('userMessage', ['chatInput', 'prompt', 'guardrailsInput', 'inputText']);
+        const dialogHistory = ensureCanonicalString('dialogHistory', ['historyText']);
+        const systemPrompt = ensureCanonicalString('systemPrompt', ['systemText']);
+        ensureStringAlias('chatInput', userMessage);
+        ensureStringAlias('prompt', userMessage);
+        ensureStringAlias('guardrailsInput', userMessage);
+        ensureStringAlias('inputText', userMessage);
+        ensureStringAlias('historyText', dialogHistory);
+        ensureStringAlias('systemText', systemPrompt);
     }
 
     if (normalizedRequestType === 'manager_assist') {
-        ensureStringAlias('chatInput', normalizedPayload.userMessage);
-        ensureStringAlias('prompt', normalizedPayload.userMessage);
-        ensureStringAlias('guardrailsInput', normalizedPayload.userMessage);
+        const userMessage = ensureCanonicalString('userMessage', ['chatInput', 'prompt', 'guardrailsInput', 'inputText']);
+        const dialogHistory = ensureCanonicalString('dialogHistory', ['historyText']);
+        const systemPrompt = ensureCanonicalString('systemPrompt', ['systemText']);
+        ensureStringAlias('chatInput', userMessage);
+        ensureStringAlias('prompt', userMessage);
+        ensureStringAlias('guardrailsInput', userMessage);
+        ensureStringAlias('inputText', userMessage);
+        ensureStringAlias('historyText', dialogHistory);
+        ensureStringAlias('systemText', systemPrompt);
     }
 
     if (normalizedRequestType === 'improve') {
-        ensureStringAlias('chatInput', normalizedPayload.userMessage);
-        ensureStringAlias('prompt', normalizedPayload.userMessage);
-        ensureStringAlias('guardrailsInput', normalizedPayload.userMessage);
+        const userMessage = ensureCanonicalString('userMessage', ['chatInput', 'prompt', 'guardrailsInput', 'inputText']);
+        ensureStringAlias('chatInput', userMessage);
+        ensureStringAlias('prompt', userMessage);
+        ensureStringAlias('guardrailsInput', userMessage);
+        ensureStringAlias('inputText', userMessage);
     }
 
     if (normalizedRequestType === 'rating') {
-        ensureStringAlias('chatInput', normalizedPayload.dialog);
-        ensureStringAlias('systemPrompt', normalizedPayload.raterPrompt);
-        ensureStringAlias('dialogHistory', normalizedPayload.dialog);
-        ensureStringAlias('userMessage', normalizedPayload.dialog);
-        ensureStringAlias('prompt', normalizedPayload.dialog);
-        ensureStringAlias('guardrailsInput', normalizedPayload.dialog);
+        const dialog = ensureCanonicalString('dialog', ['dialogHistory', 'chatInput', 'userMessage', 'prompt', 'guardrailsInput', 'inputText', 'historyText']);
+        const systemPrompt = ensureCanonicalString('systemPrompt', ['raterPrompt', 'systemText']);
+        ensureStringAlias('raterPrompt', systemPrompt);
+        ensureStringAlias('dialogHistory', dialog);
+        ensureStringAlias('chatInput', dialog);
+        ensureStringAlias('userMessage', dialog);
+        ensureStringAlias('prompt', dialog);
+        ensureStringAlias('guardrailsInput', dialog);
+        ensureStringAlias('inputText', dialog);
+        ensureStringAlias('historyText', dialog);
+        ensureStringAlias('systemText', systemPrompt);
     }
 
     return {
@@ -936,9 +971,6 @@ async function requestAiImproveResponseText(requestId, userMessage, timeoutMs = 
         headers: buildJsonRequestHeaders(requestId, 'improve', 'improve'),
         body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('improve', {
             userMessage,
-            chatInput: userMessage,
-            prompt: userMessage,
-            guardrailsInput: userMessage,
             requestId
         }))
     }, timeoutMs);
@@ -1166,7 +1198,7 @@ let pendingVariationId = null;
 let activePromptCompareContext = null;
 let pendingRatingImproveContext = null;
 let aiImproveMode = 'default';
-let webhookDebugEntries = loadWebhookDebugEntries();
+let webhookDebugEntries = ENABLE_LOCAL_WEBHOOK_DEBUG ? loadWebhookDebugEntries() : [];
 let webhookDebugRenderQueued = false;
 const LOCAL_PROMPTS_STORAGE_VERSION = 'v3';
 const LEGACY_LOCAL_PROMPTS_STORAGE_VERSION = 'v2';
@@ -1279,6 +1311,9 @@ let adminUsersTableRenderWatchdogTimer = null;
 let adminUserRowsByLogin = new Map();
 let adminUsersTableInitialized = false;
 let pendingPromptsFirebaseSnapshot = null;
+let lastPublicPromptsSnapshotHash = '';
+let lastEmergencyPromptsSnapshotHash = '';
+let lastPromptHistorySnapshotHash = '';
 const dirtyPromptOverrideRoles = new Set();
 let currentEditingPromptRole = '';
 let activeTickTimerId = null;
@@ -1286,11 +1321,14 @@ let activeTimeFlushInFlight = false;
 let pendingActiveMs = 0;
 let lastActiveTickAt = Date.now();
 let lastUserActivityAt = Date.now();
+let lastPresenceSyncTriggerAt = 0;
+let lastActiveLoopEnsureAt = 0;
 let hasActivityListeners = false;
 let lastSessionRevocationCheckAt = 0;
 let sessionRevocationCheckInFlight = false;
 let sessionRevocationListenersInitialized = false;
 let fioSaveTimeout = null;
+let didClearLegacyLocalPromptsStorageKeys = false;
 let sharedAppConfig = {
     geminiTokenEndpoint: '',
     clientConversationActionPrompt: ''
@@ -1412,6 +1450,9 @@ function getActiveTestScenarioPreset(options = {}) {
 
 activeTestScenarioPresetId = '';
 removeCachedStorageValue(ACTIVE_TEST_SCENARIO_STORAGE_KEY);
+removeSafeLocalStorageValue(WEBHOOK_DEBUG_CONFIG_STORAGE_KEY);
+removeSafeLocalStorageValue(WEBHOOK_DEBUG_LOG_STORAGE_KEY);
+webhookDebugEntries = [];
 
 function isLocalhostAdminPreviewHost() {
     const hostname = String(window?.location?.hostname || '').trim().toLowerCase();
@@ -1425,6 +1466,7 @@ function normalizeDebugPositiveInt(value, fallback, min = 1, max = Number.MAX_SA
 }
 
 function getLocalWebhookDebugConfig() {
+    if (!ENABLE_LOCAL_WEBHOOK_DEBUG) return {};
     if (!isLocalhostAdminPreviewHost()) return {};
     try {
         const parsed = getCachedLocalStorageJson(WEBHOOK_DEBUG_CONFIG_STORAGE_KEY);
@@ -3934,10 +3976,18 @@ function setAuthMailHelpVisible(isVisible) {
     }
 }
 
-function markUserActivity() {
-    lastUserActivityAt = Date.now();
-    ensureActiveTimeTrackingLoop();
-    syncCurrentUserPresenceState();
+function markUserActivity(optionsOrEvent = null) {
+    const force = !!optionsOrEvent?.force;
+    const now = Date.now();
+    lastUserActivityAt = now;
+    if (force || (now - lastActiveLoopEnsureAt) >= USER_ACTIVITY_TRACKING_LOOP_THROTTLE_MS) {
+        lastActiveLoopEnsureAt = now;
+        ensureActiveTimeTrackingLoop();
+    }
+    if (force || (now - lastPresenceSyncTriggerAt) >= USER_ACTIVITY_PRESENCE_SYNC_THROTTLE_MS) {
+        lastPresenceSyncTriggerAt = now;
+        syncCurrentUserPresenceState(force);
+    }
 }
 
 function initUserActivityTrackingListeners() {
@@ -3948,13 +3998,13 @@ function initUserActivityTrackingListeners() {
     activityEvents.forEach((eventName) => {
         window.addEventListener(eventName, markUserActivity, { passive: true });
     });
-    window.addEventListener('focus', markUserActivity);
+    window.addEventListener('focus', () => markUserActivity({ force: true }));
     window.addEventListener('blur', () => {
         pauseActiveTimeTracking({ ignoreVisibility: true, ignoreFocus: true });
     });
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
-            markUserActivity();
+            markUserActivity({ force: true });
             return;
         }
         pauseActiveTimeTracking({ ignoreVisibility: true, ignoreFocus: true, flushCarryoverNow: true });
@@ -4155,6 +4205,7 @@ function syncCurrentUserPresenceState(force = false) {
 
     currentUserPresenceState = nextState;
     currentUserPresencePath = presencePath;
+    lastPresenceSyncTriggerAt = Date.now();
     void update(ref(db, presencePath), buildCurrentUserPresencePayload(nextState)).catch((error) => {
         console.error('Failed to sync current user presence:', error);
     });
@@ -4215,14 +4266,11 @@ function syncCurrentUserSettingsState() {
         adminPanelAccordion.style.display = '';
         adminPanelAccordion.setAttribute('open', '');
         startAdminRealtimeSync();
-        renderAdminScenarioLibrary();
-        renderWebhookDebugPanel();
     } else {
         adminPanelAccordion.style.display = 'none';
         adminPanelAccordion.removeAttribute('open');
         stopAdminRealtimeSync();
     }
-    renderActiveScenarioStrip();
 }
 
 function applyCurrentUserRealtimeRecord(freshUser) {
@@ -4692,6 +4740,18 @@ function scheduleAdminUsersTableRender() {
     });
 }
 
+function refreshAdminUsersPresenceLabels() {
+    if (!isSettingsModalOpen() || !isAdmin() || !adminUserRowsByLogin.size) return;
+    adminUserRowsByLogin.forEach((row) => {
+        const rowData = row?._adminData;
+        const presenceText = row?._adminCells?.presenceText;
+        if (!rowData || !presenceText) return;
+        const presenceMeta = getAdminPresenceMeta(rowData.login, rowData.user, rowData.presence);
+        presenceText.className = `admin-presence ${presenceMeta.className}`.trim();
+        presenceText.textContent = presenceMeta.label;
+    });
+}
+
 function refreshAdminUsersTableAfterMutation() {
     if (!isSettingsModalOpen() || !isAdmin()) return;
     if (db && adminRealtimeUnsubscribes.length > 0) {
@@ -4746,7 +4806,7 @@ function startAdminRealtimeSync() {
             stopAdminRealtimeSync();
             return;
         }
-        scheduleAdminUsersTableRender();
+        refreshAdminUsersPresenceLabels();
     }, 60 * 1000);
     return true;
 }
@@ -6491,6 +6551,7 @@ async function readWebhookResponse(response, timeoutMs = WEBHOOK_DEFAULT_TIMEOUT
 }
 
 function loadWebhookDebugEntries() {
+    if (!ENABLE_LOCAL_WEBHOOK_DEBUG) return [];
     try {
         const raw = localStorage.getItem(WEBHOOK_DEBUG_LOG_STORAGE_KEY);
         if (!raw) return [];
@@ -6506,6 +6567,7 @@ function loadWebhookDebugEntries() {
 }
 
 function saveWebhookDebugEntries() {
+    if (!ENABLE_LOCAL_WEBHOOK_DEBUG) return;
     try {
         localStorage.setItem(
             WEBHOOK_DEBUG_LOG_STORAGE_KEY,
@@ -6677,6 +6739,7 @@ function updateWebhookDebugEntry(entryId, updater) {
 }
 
 function startWebhookDebugRequest({ type, endpoint, requestId, attempt = null, timeoutMs = null, method = 'POST' } = {}) {
+    if (!ENABLE_LOCAL_WEBHOOK_DEBUG) return '';
     const startedAtMs = Date.now();
     const entryId = buildRequestId('webhook_dbg');
     webhookDebugEntries = [
@@ -6737,6 +6800,7 @@ function failWebhookDebugRequest(entryId, error, fallbackStatus = null) {
 
 function clearWebhookDebugEntries() {
     webhookDebugEntries = [];
+    removeSafeLocalStorageValue(WEBHOOK_DEBUG_LOG_STORAGE_KEY);
     saveWebhookDebugEntries();
     renderWebhookDebugPanel();
 }
@@ -7354,9 +7418,15 @@ function normalizePromptSnapshotForCache(rawSnapshot = {}) {
 function persistPublicPromptsSnapshot(snapshot = {}) {
     const normalized = normalizePromptSnapshotForCache(snapshot);
     if (!firebasePromptSnapshotHasMeaningfulContent(normalized)) {
+        lastPublicPromptsSnapshotHash = '';
         clearCachedLocalStorageJson(LOCAL_PROMPTS_PUBLIC_SNAPSHOT_STORAGE_KEY);
         return null;
     }
+    const normalizedHash = JSON.stringify(normalized);
+    if (normalizedHash === lastPublicPromptsSnapshotHash) {
+        return normalized;
+    }
+    lastPublicPromptsSnapshotHash = normalizedHash;
 
     const payload = {
         v: 1,
@@ -7370,8 +7440,14 @@ function persistPublicPromptsSnapshot(snapshot = {}) {
 function persistPublicPromptsEmergencySnapshot(snapshot = {}) {
     const normalized = normalizePromptSnapshotForCache(snapshot);
     if (!firebasePromptSnapshotHasMeaningfulContent(normalized)) {
+        lastEmergencyPromptsSnapshotHash = '';
         return null;
     }
+    const normalizedHash = JSON.stringify(normalized);
+    if (normalizedHash === lastEmergencyPromptsSnapshotHash) {
+        return normalized;
+    }
+    lastEmergencyPromptsSnapshotHash = normalizedHash;
 
     const payload = {
         v: 1,
@@ -7391,7 +7467,7 @@ function loadCachedPublicPromptsSnapshot() {
     if (!firebasePromptSnapshotHasMeaningfulContent(normalized)) {
         return null;
     }
-
+    lastPublicPromptsSnapshotHash = JSON.stringify(normalized);
     return normalized;
 }
 
@@ -7404,7 +7480,7 @@ function loadCachedPublicPromptsEmergencySnapshot() {
     if (!firebasePromptSnapshotHasMeaningfulContent(normalized)) {
         return null;
     }
-
+    lastEmergencyPromptsSnapshotHash = JSON.stringify(normalized);
     return normalized;
 }
 
@@ -7523,6 +7599,8 @@ function mergeLegacyPromptOverridesStores(entries = []) {
 }
 
 function clearLegacyLocalPromptsStorageKeys() {
+    if (didClearLegacyLocalPromptsStorageKeys) return;
+    didClearLegacyLocalPromptsStorageKeys = true;
     getLegacyLocalPromptsStorageEntries().forEach((entry) => {
         clearCachedLocalStorageJson(entry.storageKey);
     });
@@ -9169,6 +9247,7 @@ function savePromptHistory() {
         trimmedHistory.push(entry);
     });
     promptHistory = trimmedHistory;
+    lastPromptHistorySnapshotHash = JSON.stringify(promptHistory);
 
     if (!promptHistory.length) {
         clearCachedLocalStorageJson(LOCAL_PROMPTS_HISTORY_STORAGE_KEY, []);
@@ -9620,13 +9699,16 @@ function setupPromptsAndConfigListeners() {
         const historyRef = ref(db, 'prompt_history');
         const unsubscribeHistory = onValue(historyRef, (snapshot) => {
             const historyData = snapshot.val();
+            let nextPromptHistory = [];
             if (Array.isArray(historyData)) {
-                promptHistory = historyData;
+                nextPromptHistory = historyData;
             } else if (historyData && typeof historyData === 'object') {
-                promptHistory = Object.values(historyData);
-            } else {
-                promptHistory = [];
+                nextPromptHistory = Object.values(historyData);
             }
+            const historyHash = JSON.stringify(nextPromptHistory);
+            if (historyHash === lastPromptHistorySnapshotHash) return;
+            promptHistory = nextPromptHistory;
+            lastPromptHistorySnapshotHash = historyHash;
             if (promptHistoryModal?.classList.contains('active')) {
                 renderPromptHistory();
             }
@@ -9694,6 +9776,7 @@ async function loadPrompts() {
     if (!Array.isArray(promptHistory)) {
         promptHistory = [];
     }
+    lastPromptHistorySnapshotHash = JSON.stringify(promptHistory);
     renderPromptHistory();
 
     if (db) {
@@ -9716,6 +9799,7 @@ async function loadPrompts() {
         if (!Array.isArray(promptHistory)) {
             promptHistory = [];
         }
+        lastPromptHistorySnapshotHash = JSON.stringify(promptHistory);
         renderPromptHistory();
     }
 
@@ -12351,12 +12435,12 @@ bindEvent(settingsNameInput, 'input', () => {
     const newName = normalizeFio(settingsNameInput.value);
     if (!newName || !currentUser) return;
     managerNameInput.value = newName;
-    setCachedStorageValue(USER_NAME_KEY, newName);
     currentUser.fio = newName;
     updateUserNameDisplay();
 
     if (fioSaveTimeout) clearTimeout(fioSaveTimeout);
     fioSaveTimeout = setTimeout(() => {
+        setCachedStorageValue(USER_NAME_KEY, newName);
         patchUserRecord(currentUser.login, {
             fio: newName,
             lastSeenAt: new Date().toISOString()
@@ -13107,10 +13191,7 @@ async function sendMessage() {
             method: 'POST',
             headers: buildJsonRequestHeaders(requestId, 'chat', 'chat'),
             body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('chat', {
-                chatInput: userMessage,
                 userMessage,
-                prompt: userMessage,
-                guardrailsInput: userMessage,
                 systemPrompt,
                 dialogHistory,
                 conversationActionState,
@@ -13206,10 +13287,7 @@ async function startConversationHandler() {
             method: 'POST',
             headers: buildJsonRequestHeaders(requestId, 'chat_start', 'chat_start'),
             body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('chat_start', {
-                chatInput: '/start',
                 userMessage: '/start',
-                prompt: '/start',
-                guardrailsInput: '/start',
                 systemPrompt,
                 dialogHistory: '',
                 conversationActionState,
@@ -13640,13 +13718,7 @@ async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RAT
                 headers: buildJsonRequestHeaders(requestId, 'rating', 'rating'),
                 body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('rating', {
                     dialog: dialogText,
-                    chatInput: dialogText,
-                    userMessage: dialogText,
-                    prompt: dialogText,
-                    guardrailsInput: dialogText,
-                    dialogHistory: dialogText,
                     systemPrompt: effectiveRaterPrompt,
-                    raterPrompt: effectiveRaterPrompt,
                     sessionId: raterSessionId,
                     requestId,
                     attempt,
@@ -13968,9 +14040,6 @@ async function generateAIResponse() {
             body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('manager_assist', {
                 systemPrompt: fullPrompt,
                 userMessage: lastMessage,
-                chatInput: lastMessage,
-                prompt: lastMessage,
-                guardrailsInput: lastMessage,
                 dialogHistory,
                 sessionId: managerSessionId,
                 requestId

@@ -2011,6 +2011,22 @@ body.user-mode .prompt-preview {
     display: none;
 }
 
+@media (max-width: 1024px) {
+    .toolbar-btn {
+        min-width: 40px;
+        height: 40px;
+        padding: 6px 10px;
+        font-size: 13px;
+    }
+
+    .prompt-panel.compact-toolbar .toolbar-btn {
+        min-width: 38px;
+        height: 38px;
+        padding: 5px 8px;
+        font-size: 12px;
+    }
+}
+
 .toolbar-btn {
     background: transparent;
     border: none;
@@ -2667,7 +2683,7 @@ body.light-theme .ai-improve-modal textarea::-webkit-scrollbar-thumb:hover {
     }
     
     #userInput {
-        min-height: 24px;
+        min-height: 44px;
         font-size: 14px;
     }
     
@@ -2736,7 +2752,11 @@ body.light-theme .ai-improve-modal textarea::-webkit-scrollbar-thumb:hover {
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.3s, visibility 0.3s;
-    padding: 20px; /* Добавил отступы */
+    padding:
+        max(20px, env(safe-area-inset-top, 0px) + 12px)
+        max(20px, env(safe-area-inset-right, 0px) + 12px)
+        max(20px, env(safe-area-inset-bottom, 0px) + 12px)
+        max(20px, env(safe-area-inset-left, 0px) + 12px);
 }
 
 .modal-overlay.active {
@@ -2826,7 +2846,11 @@ body.light-theme .ai-improve-modal textarea::-webkit-scrollbar-thumb:hover {
     height: 100%;
     border-radius: 0 !important;
     margin: 0;
-    padding: clamp(20px, 4vw, 44px);
+    padding:
+        max(clamp(20px, 4vw, 44px), env(safe-area-inset-top, 0px) + 20px)
+        max(clamp(20px, 4vw, 44px), env(safe-area-inset-right, 0px) + 20px)
+        max(clamp(20px, 4vw, 44px), env(safe-area-inset-bottom, 0px) + 20px)
+        max(clamp(20px, 4vw, 44px), env(safe-area-inset-left, 0px) + 20px);
     transform: none;
     transition: none;
     overflow-y: auto;
@@ -3104,8 +3128,8 @@ body.light-theme .ai-improve-modal textarea::-webkit-scrollbar-thumb:hover {
 /* Плавающая кнопка очистки чата (слева) */
 .btn-clear-floating {
     position: fixed;
-    top: 12px;
-    left: 12px;
+    top: max(12px, env(safe-area-inset-top, 0px) + 6px);
+    left: max(12px, env(safe-area-inset-left, 0px) + 6px);
     z-index: 2000;
     background: transparent;
     border: none !important;
@@ -3132,8 +3156,8 @@ body.light-theme .btn-clear-floating:hover {
 /* Плавающая кнопка настроек (справа) */
 .btn-settings-floating {
     position: fixed;
-    top: 12px;
-    right: 12px;
+    top: max(12px, env(safe-area-inset-top, 0px) + 6px);
+    right: max(12px, env(safe-area-inset-right, 0px) + 6px);
     z-index: 2000;
     background: transparent;
     border: none !important;
@@ -3171,8 +3195,8 @@ body.light-theme .btn-settings-floating:hover {
 /* Мобильная версия - кнопки в одной линии с табами */
 @media (max-width: 768px) {
     .btn-clear-floating {
-        top: 8px;
-        left: 8px;
+        top: max(8px, env(safe-area-inset-top, 0px) + 4px);
+        left: max(8px, env(safe-area-inset-left, 0px) + 4px);
         width: 56px;
         height: 56px;
         padding: 0;
@@ -3182,8 +3206,8 @@ body.light-theme .btn-settings-floating:hover {
         justify-content: center;
     }
     .btn-settings-floating {
-        top: 8px;
-        right: 8px;
+        top: max(8px, env(safe-area-inset-top, 0px) + 4px);
+        right: max(8px, env(safe-area-inset-right, 0px) + 4px);
         width: 56px;
         height: 56px;
         padding: 0;
@@ -5098,16 +5122,16 @@ body.voice-mode-active > :not(#voiceModeScreen):not(#voiceModeActions):not(#elev
 
 .modal-close {
     position: absolute;
-    top: 12px;
-    right: 16px;
+    top: 8px;
+    right: 10px;
     background: none;
     border: none;
     color: #666;
     font-size: 24px;
     cursor: pointer;
     padding: 0;
-    width: 32px;
-    height: 32px;
+    width: 44px;
+    height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;

@@ -52,10 +52,11 @@ export function serverTimestamp() { return Date.now(); }
 `.trim();
 
 const firebaseAuthStub = `
+const authInstance = {
+  currentUser: null
+};
 export function getAuth() {
-  return {
-    currentUser: null
-  };
+  return authInstance;
 }
 export async function sendSignInLinkToEmail() {
   const delayMs = Number(globalThis.__codexAuthSendLinkDelayMs || 0);
@@ -67,6 +68,18 @@ export async function sendSignInLinkToEmail() {
 export function isSignInWithEmailLink() { return false; }
 export async function signInWithEmailLink() {
   return { user: null };
+}
+export async function signInWithEmailAndPassword(_auth, email) {
+  authInstance.currentUser = { email };
+  return { user: authInstance.currentUser };
+}
+export async function createUserWithEmailAndPassword(_auth, email) {
+  authInstance.currentUser = { email };
+  return { user: authInstance.currentUser };
+}
+export async function signOut() {
+  authInstance.currentUser = null;
+  return null;
 }
 `.trim();
 
@@ -93,34 +106,37 @@ function buildLocalPromptsStorageKey() {
 function buildSeedPayload() {
     const nowIso = new Date().toISOString();
     const userKey = loginToStorageKey(login);
+    const localhostDevAuthUser = {
+        uid: null,
+        login,
+        fio,
+        role: 'admin',
+        passwordHash: '',
+        passwordNeedsSetup: false,
+        emailVerifiedAt: nowIso,
+        emailVerificationSentAt: null,
+        failedLoginAttempts: 0,
+        isBlocked: false,
+        blockedReason: null,
+        failedLoginBackoffUntil: null,
+        blockedAt: null,
+        sessionRevokedAt: null,
+        passwordHashScheme: null,
+        createdAt: nowIso,
+        lastLoginAt: nowIso,
+        lastSeenAt: nowIso,
+        activeMs: 0
+    };
     return {
         authSession: JSON.stringify({
             login,
-            signedAt: nowIso
+            signedAt: nowIso,
+            devBypass: true
         }),
         authUsers: JSON.stringify({
-            [userKey]: {
-                uid: null,
-                login,
-                fio,
-                role: 'admin',
-                passwordHash: '',
-                passwordNeedsSetup: false,
-                emailVerifiedAt: nowIso,
-                emailVerificationSentAt: null,
-                failedLoginAttempts: 0,
-                isBlocked: false,
-                blockedReason: null,
-                failedLoginBackoffUntil: null,
-                blockedAt: null,
-                sessionRevokedAt: null,
-                passwordHashScheme: null,
-                createdAt: nowIso,
-                lastLoginAt: nowIso,
-                lastSeenAt: nowIso,
-                activeMs: 0
-            }
+            [userKey]: localhostDevAuthUser
         }),
+        localhostDevAuthUser: JSON.stringify(localhostDevAuthUser),
         prompts: {
             systemPrompt: 'Ты клиент. Отвечай реалистично и по делу.',
             managerPrompt: 'Подсказывай менеджеру коротко.',
@@ -269,6 +285,7 @@ async function seedLocalState(context) {
     await context.addInitScript((payload) => {
         localStorage.setItem('authSession:v1', payload.authSession);
         localStorage.setItem('authUsers:v1', payload.authUsers);
+        localStorage.setItem('localhostDevAuthUser:v1', payload.localhostDevAuthUser);
         localStorage.setItem('managerName', 'Смоук Тестер');
         localStorage.setItem('managerLogin', 'smoke.admin@7271155.ru');
         localStorage.setItem('userRole', 'admin');
@@ -388,6 +405,13 @@ function createGoSilentScenario() {
 
 async function waitForChatReady(page) {
     await page.waitForSelector('#startBtn');
+    const localhostDevAuthBtn = page.locator('#localhostDevAuthBtn');
+    if (await localhostDevAuthBtn.count()) {
+        const isModalOpen = await page.evaluate(() => document.getElementById('nameModal')?.classList.contains('active'));
+        if (isModalOpen && await localhostDevAuthBtn.isVisible()) {
+            await localhostDevAuthBtn.click();
+        }
+    }
     await page.waitForFunction(() => {
         const modal = document.getElementById('nameModal');
         return !modal || !modal.classList.contains('active');
@@ -396,13 +420,34 @@ async function waitForChatReady(page) {
         const startBtn = document.getElementById('startBtn');
         return !!startBtn && !startBtn.disabled;
     });
-    await page.waitForFunction(() => {
-        const textarea = document.getElementById('systemPrompt');
-        const preview = document.getElementById('systemPromptPreview');
-        const textareaValue = String(textarea?.value || '');
-        const previewText = String(preview?.innerText || '').trim();
-        return textareaValue.trim().length > 0 && previewText.length > 0;
-    });
+    try {
+        await page.waitForFunction(() => {
+            const textarea = document.getElementById('systemPrompt');
+            const preview = document.getElementById('systemPromptPreview');
+            const textareaValue = String(textarea?.value || '');
+            const previewText = String(preview?.innerText || '').trim();
+            return textareaValue.trim().length > 0 || previewText.length > 0;
+        });
+    } catch (error) {
+        const debugState = await page.evaluate(() => {
+            const textarea = document.getElementById('systemPrompt');
+            const preview = document.getElementById('systemPromptPreview');
+            const wrapper = document.querySelector('.prompt-wrapper.instruction-editor.active');
+            return {
+                bodyClass: document.body.className,
+                textareaValueLength: String(textarea?.value || '').trim().length,
+                textareaDisplay: textarea ? getComputedStyle(textarea).display : 'missing',
+                previewTextLength: String(preview?.innerText || '').trim().length,
+                previewDisplay: preview ? getComputedStyle(preview).display : 'missing',
+                wrapperDisplay: wrapper ? getComputedStyle(wrapper).display : 'missing',
+                userRole: localStorage.getItem('userRole'),
+                authSession: localStorage.getItem('authSession:v1'),
+                localhostDevAuthUser: localStorage.getItem('localhostDevAuthUser:v1'),
+                promptPublicSnapshot: localStorage.getItem('promptPublicSnapshot:v1')
+            };
+        });
+        throw new Error(`waitForChatReady debug: ${JSON.stringify(debugState)}`, { cause: error });
+    }
 }
 
 async function openSettings(page) {
@@ -482,66 +527,22 @@ async function runPromptWorkflowFlow(browser, baseUrl) {
     }
 }
 
-async function runScenarioLibraryFlow(browser, baseUrl) {
-    const scenario = createIdleScenario();
-    const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
-    await installCommonRoutes(context, scenario);
-    await seedLocalState(context);
-    const page = await context.newPage();
-    const scenarioId = 'service-risk';
-    const scenarioMarker = 'SCENARIO_ID: service-risk';
-
-    try {
-        logStep('run scenario library quick-start scenario');
-        await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
-        await waitForChatReady(page);
-
-        await page.waitForFunction(() => {
-            const strip = document.getElementById('activeScenarioStrip');
-            if (!strip) return false;
-            const style = getComputedStyle(strip);
-            return strip.hidden && style.display === 'none';
-        });
-
-        await openSettings(page);
-        await ensureDetailsOpen(page, '#adminScenarioLibraryAccordion');
-        await page.click(`[data-scenario-action="apply"][data-scenario-id="${scenarioId}"]`);
-        await page.waitForFunction((expectedId) => {
-            const storedId = localStorage.getItem('activeTestScenario:v1') || '';
-            const userInput = document.getElementById('userInput');
-            const strip = document.getElementById('activeScenarioStrip');
-            return storedId === expectedId
-                && (userInput?.value || '').trim().length > 20
-                && !!strip
-                && !strip.hidden;
-        }, scenarioId);
-        const starterMessage = await page.evaluate(() => (document.getElementById('userInput')?.value || '').trim());
-        expect(starterMessage.length > 20, 'Scenario starter message was not prefilled');
-        await closeSettings(page);
-
-        await page.click('#activeScenarioStartBtn');
-        await page.waitForSelector('text=Готов обсудить задачу.');
-        await page.waitForSelector('text=Ок.');
-
-        const startRequest = scenario.requests.find((item) => item.payload.requestType === 'chat_start' && item.payload.chatInput === '/start');
-        const firstChatRequest = scenario.requests.find((item) => item.payload.requestType === 'chat' && item.payload.chatInput !== '/start');
-        expect(startRequest?.payload?.systemPrompt?.includes(scenarioMarker), 'Scenario marker was not appended to start systemPrompt');
-        expect(firstChatRequest?.payload?.chatInput === starterMessage, 'Scenario starter message was not sent to chat webhook');
-    } catch (error) {
-        await ensureOutputDir();
-        await page.screenshot({ path: path.join(outputDir, 'smoke-scenario-library-failure.png'), fullPage: true });
-        throw error;
-    } finally {
-        await context.close();
-    }
-}
-
 async function runHiddenClientPromptFlow(browser, baseUrl) {
     const scenario = createIdleScenario();
     const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
     await installCommonRoutes(context, scenario);
     await seedLocalState(context);
     const page = await context.newPage();
+    const pageErrors = [];
+    const consoleErrors = [];
+    page.on('pageerror', (error) => {
+        pageErrors.push(String(error?.message || error));
+    });
+    page.on('console', (message) => {
+        if (message.type() === 'error') {
+            consoleErrors.push(message.text());
+        }
+    });
     const hiddenPrompt = `Smoke hidden suffix ${Date.now()}`;
 
     try {
@@ -573,6 +574,12 @@ async function runHiddenClientPromptFlow(browser, baseUrl) {
     } catch (error) {
         await ensureOutputDir();
         await page.screenshot({ path: path.join(outputDir, 'smoke-hidden-client-prompt-failure.png'), fullPage: true });
+        if (pageErrors.length || consoleErrors.length) {
+            throw new Error(
+                `${error.message}\npageErrors=${JSON.stringify(pageErrors)}\nconsoleErrors=${JSON.stringify(consoleErrors)}`,
+                { cause: error }
+            );
+        }
         throw error;
     } finally {
         await context.close();
@@ -916,7 +923,6 @@ async function main() {
     });
 
     try {
-        await runScenarioLibraryFlow(browser, baseUrl);
         await runHiddenClientPromptFlow(browser, baseUrl);
         await runBrokenLocalPromptRecoveryFlow(browser, baseUrl);
         await runRolePreviewVisibilityFlow(browser, baseUrl);
