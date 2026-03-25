@@ -29,8 +29,8 @@ try {
 }
 
 // n8n Webhook Configuration
-// n8n test webhooks work only while the workflow is armed in "Execute workflow".
-const UNIFIED_SIMULATOR_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook-test/client-simulator';
+// Unified simulator flows must use the production webhook; `webhook-test` only works while the workflow is armed in n8n.
+const UNIFIED_SIMULATOR_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/client-simulator';
 const WEBHOOK_URL = UNIFIED_SIMULATOR_WEBHOOK_URL;
 const RATE_WEBHOOK_URL = UNIFIED_SIMULATOR_WEBHOOK_URL;
 const ATTESTATION_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/certification';

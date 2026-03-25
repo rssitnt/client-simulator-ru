@@ -16,8 +16,16 @@
 - Теперь это объяснение показывается только при наведении на кнопку `Менеджер`, через тот же custom-tooltip механизм, что уже используется у кнопки `Отправить`.
 - Подсказка инициализируется сразу на созданном DOM-узле через `prepareCustomTooltips(buttonContainer)`, чтобы поведение было стабильным и в динамически добавленном сообщении.
 
+## 2026-03-25 — `Failed to fetch` после перевода на единый n8n flow
+- Причина оказалась не в самом объединении сценариев, а в адресе: фронтенд был переведён на `https://n8n-api.tradicia-k.ru/webhook-test/client-simulator`.
+- Прямой probe подтвердил:
+  - `webhook-test/client-simulator` сейчас отвечает `404 The requested webhook "client-simulator" is not registered`, то есть это обычное поведение test-webhook без `Execute workflow` в n8n;
+  - `https://n8n-api.tradicia-k.ru/webhook/client-simulator` отвечает `200` на `chat_start` и `chat`, поэтому фронтенд нужно держать именно на production webhook.
+- Фронтенд переведён обратно на единый, но уже production endpoint: `https://n8n-api.tradicia-k.ru/webhook/client-simulator`.
+- Отдельное наблюдение по текущему общему workflow: direct probe на `requestType=rating` и `requestType=manager_assist` вернул `200`, но с пустым body. Это уже не `Failed to fetch`, а признак того, что в самом n8n-сценарии эти ветки пока не формируют явный ответ `Respond to Webhook`.
+
 ## 2026-03-25 — Единый n8n webhook для chat/rating/manager assist
-- По запросу пользователя фронтенд переведён на один общий webhook: `https://n8n-api.tradicia-k.ru/webhook-test/client-simulator`.
+- По запросу пользователя фронтенд переведён на один общий webhook: `https://n8n-api.tradicia-k.ru/webhook/client-simulator`.
 - На этот общий URL теперь идут:
   - клиентский чат (`sendMessage`, `startConversationHandler`);
   - оценка диалога (`requestRatingWithRetry`);
@@ -30,8 +38,7 @@
   - `manager_assist`
 - `attestation` и `prompt improvement` пока оставлены на своих отдельных webhook-ах, потому что пользователь просил объединить только три одинаковых сценария.
 - Локальный smoke (`scripts/smoke-e2e.mjs`) обновлён под единый endpoint и теперь маршрутизирует ответы по `payload.requestType`, а не по старым путям `rate-manager`/`manager-simulator`.
-- Отдельная локальная целевая проверка после правки подтвердила, что фронтенд действительно отправляет `chat_start`, `chat`, `manager_assist` и `rating` на один URL `https://n8n-api.tradicia-k.ru/webhook-test/client-simulator`.
-- Важная оговорка по live-поведению: прямой POST на `https://n8n-api.tradicia-k.ru/webhook-test/client-simulator` вернул `404` с текстом `The requested webhook "client-simulator" is not registered` и стандартной подсказкой n8n про `Execute workflow`. Значит это именно test webhook: без активного ожидания в n8n он не будет работать как постоянный production endpoint.
+- Отдельная локальная целевая проверка после правки подтвердила, что фронтенд действительно отправляет `chat_start`, `chat`, `manager_assist` и `rating` на один URL `https://n8n-api.tradicia-k.ru/webhook/client-simulator`.
 
 ## Core Invariants
 - Браузер не хранит long-lived API keys.
