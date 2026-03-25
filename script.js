@@ -1027,6 +1027,10 @@ const adminHiddenClientPromptAccordion = document.getElementById('adminHiddenCli
 const adminHiddenClientPromptInput = document.getElementById('adminHiddenClientPromptInput');
 const adminHiddenClientPromptSaveBtn = document.getElementById('adminHiddenClientPromptSaveBtn');
 const adminHiddenClientPromptResetBtn = document.getElementById('adminHiddenClientPromptResetBtn');
+const adminHiddenRaterPromptAccordion = document.getElementById('adminHiddenRaterPromptAccordion');
+const adminHiddenRaterPromptInput = document.getElementById('adminHiddenRaterPromptInput');
+const adminHiddenRaterPromptSaveBtn = document.getElementById('adminHiddenRaterPromptSaveBtn');
+const adminHiddenRaterPromptResetBtn = document.getElementById('adminHiddenRaterPromptResetBtn');
 const adminWebhookDebugAccordion = document.getElementById('adminWebhookDebugAccordion');
 const adminWebhookDebugMeta = document.getElementById('adminWebhookDebugMeta');
 const adminWebhookDebugList = document.getElementById('adminWebhookDebugList');
@@ -1047,6 +1051,12 @@ const instructionEditors = Array.from(document.querySelectorAll('.instruction-ed
 const instructionOptions = Array.from(document.querySelectorAll('.dropdown-option'));
 const selectedInstructionText = document.getElementById('selectedInstructionText');
 const instructionDropdown = document.getElementById('instructionDropdown');
+const activeScenarioStrip = document.getElementById('activeScenarioStrip');
+const activeScenarioTitle = document.getElementById('activeScenarioTitle');
+const activeScenarioSummary = document.getElementById('activeScenarioSummary');
+const activeScenarioPrefillBtn = document.getElementById('activeScenarioPrefillBtn');
+const activeScenarioStartBtn = document.getElementById('activeScenarioStartBtn');
+const activeScenarioClearBtn = document.getElementById('activeScenarioClearBtn');
 
 const promptInputsByRole = {
     client: systemPromptInput,
@@ -1238,7 +1248,8 @@ let fioSaveTimeout = null;
 let didClearLegacyLocalPromptsStorageKeys = false;
 let sharedAppConfig = {
     geminiTokenEndpoint: '',
-    clientConversationActionPrompt: ''
+    clientConversationActionPrompt: '',
+    raterHiddenPrompt: ''
 };
 let publicActiveIds = {
     client: null,
@@ -11855,8 +11866,9 @@ function showSettingsModal() {
     roleChangeError.style.display = 'none';
     populateVoiceConfigFields();
     populateHiddenClientPromptField();
+    populateHiddenRaterPromptField();
     settingsModal.classList.add('active');
-    [adminHiddenClientPromptAccordion, adminUsersAccessAccordion]
+    [adminHiddenClientPromptAccordion, adminHiddenRaterPromptAccordion, adminUsersAccessAccordion]
         .forEach((accordion) => {
             accordion?.removeAttribute('open');
         });

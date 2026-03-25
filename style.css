@@ -281,19 +281,6 @@ body.light-theme .btn-start:hover {
     background: #e0e0e0;
 }
 
-body.light-theme .active-scenario-strip {
-    background: #fbfbfb;
-    border-color: #dddddd;
-}
-
-body.light-theme .active-scenario-title {
-    color: #1f1f1f;
-}
-
-body.light-theme .active-scenario-summary {
-    color: #6f6f6f;
-}
-
 body.light-theme .resizer {
     background: #ddd; /* Цвет разделителя */
 }
@@ -896,49 +883,6 @@ body.attestation-mode .btn-attestation-exit {
 
 .btn-start-attestation {
     margin-top: 8px;
-}
-
-.active-scenario-strip {
-    margin: 0 20px 12px;
-    border: 1px solid #2f2f2f;
-    border-radius: 12px;
-    background: #1a1a1a;
-    padding: 12px 14px;
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 14px;
-}
-
-.active-scenario-strip[hidden] {
-    display: none !important;
-}
-
-.active-scenario-copy {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.active-scenario-title {
-    color: #f0f0f0;
-    font-size: 14px;
-    font-weight: 700;
-}
-
-.active-scenario-summary {
-    color: #9b9b9b;
-    font-size: 12px;
-    line-height: 1.45;
-}
-
-.active-scenario-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-    justify-content: flex-end;
 }
 
 .message {
@@ -2593,16 +2537,6 @@ body.light-theme .ai-improve-modal textarea::-webkit-scrollbar-thumb:hover {
         background: #0F0F0F;
         z-index: 100;
     }
-
-    .active-scenario-strip {
-        margin: 0 16px 12px;
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .active-scenario-actions {
-        justify-content: flex-start;
-    }
 }
 
 @media (max-width: 768px) {
@@ -2653,20 +2587,6 @@ body.light-theme .ai-improve-modal textarea::-webkit-scrollbar-thumb:hover {
         position: sticky;
         bottom: 8px;
         background: #0F0F0F;
-    }
-
-    .active-scenario-strip {
-        margin: 0 12px 10px;
-        padding: 11px 12px;
-    }
-
-    .active-scenario-actions {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .active-scenario-actions .btn-change {
-        width: 100%;
     }
     
     .chat-messages {
@@ -4039,121 +3959,9 @@ body.light-theme .more-colors-popup {
     gap: 10px;
 }
 
-.admin-scenario-library-body {
-    padding: 0 14px 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.admin-scenario-library-current {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.admin-scenario-current-card {
-    border: 1px solid #343434;
-    border-radius: 10px;
-    background: #1b1b1b;
-    padding: 12px 13px;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
-}
-
-.admin-scenario-current-copy {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-}
-
-.admin-scenario-current-copy strong {
-    color: #f1f1f1;
-    font-size: 13px;
-}
-
-.admin-scenario-current-copy span {
-    color: #9a9a9a;
-    font-size: 12px;
-    line-height: 1.45;
-}
-
-.admin-scenario-library-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 10px;
-}
-
 .admin-users-access-toolbar {
     display: flex;
     justify-content: flex-end;
-}
-
-.admin-scenario-card {
-    border: 1px solid #313131;
-    border-radius: 10px;
-    background: #1e1e1e;
-    padding: 12px 13px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.admin-scenario-card.is-active {
-    border-color: rgba(127, 150, 255, 0.45);
-    box-shadow: 0 0 0 1px rgba(127, 150, 255, 0.18) inset;
-}
-
-.admin-scenario-card-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 10px;
-}
-
-.admin-scenario-card-title {
-    color: #f0f0f0;
-    font-size: 13px;
-    font-weight: 700;
-    line-height: 1.35;
-}
-
-.admin-scenario-card-tag {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 22px;
-    padding: 0 8px;
-    border-radius: 999px;
-    background: #2d2d2d;
-    color: #c8c8c8;
-    font-size: 11px;
-    white-space: nowrap;
-}
-
-.admin-scenario-card-summary {
-    color: #9a9a9a;
-    font-size: 12px;
-    line-height: 1.45;
-}
-
-.admin-scenario-card-note {
-    color: #b9b9b9;
-    font-size: 12px;
-    line-height: 1.45;
-}
-
-.admin-scenario-card-note strong {
-    color: #f1f1f1;
-}
-
-.admin-scenario-card-actions {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
 }
 
 .admin-hidden-prompt-hint {
@@ -4593,34 +4401,6 @@ body.light-theme .admin-webhook-debug-value {
 body.light-theme .admin-webhook-debug-value code {
     background: #efefef;
     color: #242424;
-}
-
-body.light-theme .admin-scenario-current-card,
-body.light-theme .admin-scenario-card {
-    background: #fbfbfb;
-    border-color: #dddddd;
-}
-
-body.light-theme .admin-scenario-card.is-active {
-    border-color: rgba(88, 114, 232, 0.38);
-    box-shadow: 0 0 0 1px rgba(88, 114, 232, 0.12) inset;
-}
-
-body.light-theme .admin-scenario-current-copy strong,
-body.light-theme .admin-scenario-card-title,
-body.light-theme .admin-scenario-card-note strong {
-    color: #1f1f1f;
-}
-
-body.light-theme .admin-scenario-current-copy span,
-body.light-theme .admin-scenario-card-summary,
-body.light-theme .admin-scenario-card-note {
-    color: #6f6f6f;
-}
-
-body.light-theme .admin-scenario-card-tag {
-    background: #efefef;
-    color: #595959;
 }
 
 body.light-theme .toggle-slider:before {
