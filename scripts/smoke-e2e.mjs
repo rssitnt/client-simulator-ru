@@ -701,6 +701,53 @@ async function runHiddenClientPromptFlow(browser, baseUrl) {
     }
 }
 
+async function runHiddenRaterPromptFlow(browser, baseUrl) {
+    const scenario = createEndConversationScenario();
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
+    await installCommonRoutes(context, scenario);
+    await seedLocalState(context);
+    const page = await context.newPage();
+    const hiddenRaterPrompt = `Smoke hidden rater suffix ${Date.now()}`;
+
+    try {
+        logStep('run hidden rater prompt persistence scenario');
+        await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+        await waitForChatReady(page);
+
+        await openSettings(page);
+        await ensureDetailsOpen(page, '#adminHiddenRaterPromptAccordion');
+        await page.fill('#adminHiddenRaterPromptInput', hiddenRaterPrompt);
+        await page.click('#adminHiddenRaterPromptSaveBtn');
+        await page.waitForFunction((expectedValue) => {
+            return (localStorage.getItem('raterHiddenPrompt:v1') || '').includes(expectedValue);
+        }, hiddenRaterPrompt);
+        await closeSettings(page);
+
+        await page.click('#startBtn');
+        await page.waitForSelector('text=Здравствуйте. Что у вас за задача?');
+        await page.fill('#userInput', 'уходи');
+        await page.click('#sendBtn');
+        await page.waitForSelector('.conversation-action-note .btn-conversation-rate');
+        await page.click('.conversation-action-note .btn-conversation-rate');
+        await page.waitForFunction(() => {
+            const ratingText = document.querySelector('.message.rating')?.textContent || '';
+            return ratingText.includes('Smoke rating done');
+        });
+
+        const ratingRequest = scenario.requests.find((item) => item.payload.requestType === 'rating');
+        const ratingPrompt = String(ratingRequest?.payload?.raterPrompt || '');
+        expect(ratingRequest, 'Rating webhook was not called for hidden rater prompt flow');
+        expect(ratingPrompt.includes(hiddenRaterPrompt), 'Hidden rater prompt was not appended to webhook raterPrompt');
+        expect(!ratingPrompt.includes('СЛУЖЕБНЫЙ КОНТРАКТ ФОРМАТА ОЦЕНКИ'), 'Fixed rating contract must not be attached');
+    } catch (error) {
+        await ensureOutputDir();
+        await page.screenshot({ path: path.join(outputDir, 'smoke-hidden-rater-prompt-failure.png'), fullPage: true });
+        throw error;
+    } finally {
+        await context.close();
+    }
+}
+
 async function runBrokenLocalPromptRecoveryFlow(browser, baseUrl) {
     const scenario = createIdleScenario();
     const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
@@ -1025,6 +1072,7 @@ async function main() {
 
     try {
         await runHiddenClientPromptFlow(browser, baseUrl);
+        await runHiddenRaterPromptFlow(browser, baseUrl);
         await runBrokenLocalPromptRecoveryFlow(browser, baseUrl);
         await runRolePreviewVisibilityFlow(browser, baseUrl);
         await runPromptConflictRecoveryFlow(browser, baseUrl);

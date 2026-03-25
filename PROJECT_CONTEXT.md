@@ -1,5 +1,8 @@
 # PROJECT_CONTEXT.md
 
+## 2026-03-25 — Smoke: проверка скрытого prompt оценщика
+- В `scripts/smoke-e2e.mjs` добавлен отдельный сценарий `runHiddenRaterPromptFlow`: он сохраняет `adminHiddenRaterPromptInput`, запускает оценку после `end_conversation` и проверяет payload `rating` — скрытый prompt оценщика должен подмешиваться в `raterPrompt`, а фиксированный блок `СЛУЖЕБНЫЙ КОНТРАКТ ФОРМАТА ОЦЕНКИ` больше не должен присутствовать.
+
 ## 2026-03-25 — Проверка: продовые RTDB rules = репозиторные rules
 - Выполнена живая сверка через Firebase CLI (`firebase database:get /.settings/rules --project client-simulator --instance client-simulator-default-rtdb`): текущие rules в Firebase Realtime Database совпадают с `database.rules.json` из репозитория (diff пустой).
 
