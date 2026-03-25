@@ -23,6 +23,13 @@
   - `https://n8n-api.tradicia-k.ru/webhook/client-simulator` отвечает `200` на `chat_start` и `chat`, поэтому фронтенд нужно держать именно на production webhook.
 - Фронтенд переведён обратно на единый, но уже production endpoint: `https://n8n-api.tradicia-k.ru/webhook/client-simulator`.
 - Отдельное наблюдение по текущему общему workflow: direct probe на `requestType=rating` и `requestType=manager_assist` вернул `200`, но с пустым body. Это уже не `Failed to fetch`, а признак того, что в самом n8n-сценарии эти ветки пока не формируют явный ответ `Respond to Webhook`.
+- Следующий подтверждённый слой: единый n8n-сценарий в некоторых нодах всё ещё ждал старые поля `chatInput`, `systemPrompt`, `dialogHistory`, тогда как unified frontend для части веток слал `dialog`, `raterPrompt`, `userMessage`.
+- Во фронтенде добавлен совместимый payload shim:
+  - `manager_assist` теперь дублирует `userMessage` в `chatInput`;
+  - `rating` теперь дублирует `dialog` -> `chatInput` и `dialogHistory`, а `raterPrompt` -> `systemPrompt`;
+  - `chat`/`chat_start` дополнительно дублируют `chatInput` в `userMessage`.
+- Прямые probes на production webhook с этими совместимыми alias-полями вернули уже непустые ответы и для `manager_assist`, и для `rating`, что подтверждает сам root cause.
+- Версия фронта обновлена до `script.js?v=20260325-11`.
 
 ## 2026-03-25 — Единый n8n webhook для chat/rating/manager assist
 - По запросу пользователя фронтенд переведён на один общий webhook: `https://n8n-api.tradicia-k.ru/webhook/client-simulator`.

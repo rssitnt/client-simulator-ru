@@ -884,10 +884,37 @@ function buildJsonRequestHeaders(requestId, scope = 'request', requestType = '')
 }
 
 function buildUnifiedSimulatorWebhookPayload(requestType, payload = {}) {
+    const normalizedRequestType = String(requestType || '').trim() || 'chat';
+    const normalizedPayload = payload && typeof payload === 'object'
+        ? { ...payload }
+        : {};
+    const ensureStringAlias = (targetKey, sourceValue) => {
+        const targetValue = String(normalizedPayload[targetKey] || '').trim();
+        const nextValue = String(sourceValue || '').trim();
+        if (!targetValue && nextValue) {
+            normalizedPayload[targetKey] = nextValue;
+        }
+    };
+
+    if (normalizedRequestType === 'chat' || normalizedRequestType === 'chat_start') {
+        ensureStringAlias('userMessage', normalizedPayload.chatInput);
+    }
+
+    if (normalizedRequestType === 'manager_assist') {
+        ensureStringAlias('chatInput', normalizedPayload.userMessage);
+    }
+
+    if (normalizedRequestType === 'rating') {
+        ensureStringAlias('chatInput', normalizedPayload.dialog);
+        ensureStringAlias('systemPrompt', normalizedPayload.raterPrompt);
+        ensureStringAlias('dialogHistory', normalizedPayload.dialog);
+        ensureStringAlias('userMessage', normalizedPayload.dialog);
+    }
+
     return {
-        requestType: String(requestType || '').trim() || 'chat',
+        requestType: normalizedRequestType,
         source: 'client-simulator-web',
-        ...payload
+        ...normalizedPayload
     };
 }
 
