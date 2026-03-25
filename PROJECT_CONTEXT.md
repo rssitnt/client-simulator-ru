@@ -11,6 +11,23 @@
 - Производительность UI под realtime Firebase
 - Реалистичность клиента и качество оценки
 
+## 2026-03-25 — Единый n8n webhook для chat/rating/manager assist
+- По запросу пользователя фронтенд переведён на один общий webhook: `https://n8n-api.tradicia-k.ru/webhook-test/client-simulator`.
+- На этот общий URL теперь идут:
+  - клиентский чат (`sendMessage`, `startConversationHandler`);
+  - оценка диалога (`requestRatingWithRetry`);
+  - подсказка для менеджера (`generateAIResponse`).
+- Чтобы единый workflow в `n8n` мог безопасно различать ветки без анализа URL, фронтенд теперь передаёт явный `requestType` и дублирует его в header `X-Client-Simulator-Request-Type`.
+- Значения `requestType`:
+  - `chat`
+  - `chat_start`
+  - `rating`
+  - `manager_assist`
+- `attestation` и `prompt improvement` пока оставлены на своих отдельных webhook-ах, потому что пользователь просил объединить только три одинаковых сценария.
+- Локальный smoke (`scripts/smoke-e2e.mjs`) обновлён под единый endpoint и теперь маршрутизирует ответы по `payload.requestType`, а не по старым путям `rate-manager`/`manager-simulator`.
+- Отдельная локальная целевая проверка после правки подтвердила, что фронтенд действительно отправляет `chat_start`, `chat`, `manager_assist` и `rating` на один URL `https://n8n-api.tradicia-k.ru/webhook-test/client-simulator`.
+- Важная оговорка по live-поведению: прямой POST на `https://n8n-api.tradicia-k.ru/webhook-test/client-simulator` вернул `404` с текстом `The requested webhook "client-simulator" is not registered` и стандартной подсказкой n8n про `Execute workflow`. Значит это именно test webhook: без активного ожидания в n8n он не будет работать как постоянный production endpoint.
+
 ## Core Invariants
 - Браузер не хранит long-lived API keys.
 - Voice flow остаётся через server-issued ephemeral session.

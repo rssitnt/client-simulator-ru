@@ -126,7 +126,17 @@ function buildSeedPayload() {
             managerPrompt: 'Подсказывай менеджеру коротко.',
             managerCallPrompt: 'Симулируй клиента в звонке.',
             raterPrompt: 'Оцени диалог кратко и структурированно.'
-        }
+        },
+        publicPromptSnapshot: JSON.stringify({
+            v: 1,
+            t: Date.now(),
+            data: {
+                client_prompt: 'Ты клиент. Отвечай реалистично и по делу.',
+                manager_prompt: 'Подсказывай менеджеру коротко.',
+                manager_call_prompt: 'Симулируй клиента в звонке.',
+                rater_prompt: 'Оцени диалог кратко и структурированно.'
+            }
+        })
     };
 }
 
@@ -196,23 +206,14 @@ async function installCommonRoutes(context, scenario) {
     await context.route('http://127.0.0.1:7243/**', async (route) => {
         await route.fulfill({ status: 204, body: '' });
     });
-    await context.route('https://n8n-api.tradicia-k.ru/webhook/**', async (route) => {
+    await context.route('https://n8n-api.tradicia-k.ru/webhook*/**', async (route) => {
         const url = route.request().url();
         const bodyText = route.request().postData() || '{}';
         const payload = JSON.parse(bodyText);
         scenario.requests.push({ url, payload });
+        const requestType = String(payload.requestType || '').trim();
 
-        if (url.endsWith('/client-simulator')) {
-            const responsePayload = scenario.handleChat(payload);
-            await route.fulfill({
-                status: 200,
-                contentType: 'application/json',
-                body: JSON.stringify(responsePayload)
-            });
-            return;
-        }
-
-        if (url.endsWith('/rate-manager')) {
+        if (requestType === 'rating') {
             await route.fulfill({
                 status: 200,
                 contentType: 'application/json; charset=utf-8',
@@ -232,6 +233,25 @@ async function installCommonRoutes(context, scenario) {
                         'Зафиксировать потерю по причине слабой обработки'
                     ]
                 })
+            });
+            return;
+        }
+
+        if (requestType === 'manager_assist') {
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({ message: 'Сначала уточню задачу и ограничения по срокам.' })
+            });
+            return;
+        }
+
+        if (requestType === 'chat' || requestType === 'chat_start' || Object.prototype.hasOwnProperty.call(payload, 'chatInput')) {
+            const responsePayload = scenario.handleChat(payload);
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify(responsePayload)
             });
             return;
         }
@@ -256,6 +276,7 @@ async function seedLocalState(context) {
         localStorage.setItem('managerPrompt', payload.prompts.managerPrompt);
         localStorage.setItem('managerCallPrompt', payload.prompts.managerCallPrompt);
         localStorage.setItem('raterPrompt', payload.prompts.raterPrompt);
+        localStorage.setItem('promptPublicSnapshot:v1', payload.publicPromptSnapshot);
     }, seed);
 }
 
@@ -502,8 +523,8 @@ async function runScenarioLibraryFlow(browser, baseUrl) {
         await page.waitForSelector('text=Готов обсудить задачу.');
         await page.waitForSelector('text=Ок.');
 
-        const startRequest = scenario.requests.find((item) => item.url.endsWith('/client-simulator') && item.payload.chatInput === '/start');
-        const firstChatRequest = scenario.requests.find((item) => item.url.endsWith('/client-simulator') && item.payload.chatInput !== '/start');
+        const startRequest = scenario.requests.find((item) => item.payload.requestType === 'chat_start' && item.payload.chatInput === '/start');
+        const firstChatRequest = scenario.requests.find((item) => item.payload.requestType === 'chat' && item.payload.chatInput !== '/start');
         expect(startRequest?.payload?.systemPrompt?.includes(scenarioMarker), 'Scenario marker was not appended to start systemPrompt');
         expect(firstChatRequest?.payload?.chatInput === starterMessage, 'Scenario starter message was not sent to chat webhook');
     } catch (error) {
@@ -547,7 +568,7 @@ async function runHiddenClientPromptFlow(browser, baseUrl) {
 
         await page.click('#startBtn');
         await page.waitForSelector('text=Готов обсудить задачу.');
-        const startRequest = scenario.requests.find((item) => item.url.endsWith('/client-simulator') && item.payload.chatInput === '/start');
+        const startRequest = scenario.requests.find((item) => item.payload.requestType === 'chat_start' && item.payload.chatInput === '/start');
         expect(startRequest?.payload?.systemPrompt?.includes(hiddenPrompt), 'Hidden client prompt was not appended to webhook systemPrompt');
     } catch (error) {
         await ensureOutputDir();
@@ -733,10 +754,10 @@ async function runEndConversationFlow(browser, baseUrl) {
             return ratingText.includes('Smoke rating done') && ratingText.includes('Что убило диалог');
         });
         await page.waitForSelector('text=Диалог завершен');
-        expect(scenario.requests.some((item) => item.url.endsWith('/rate-manager')), 'Rating webhook was not called');
+        expect(scenario.requests.some((item) => item.payload.requestType === 'rating'), 'Rating webhook was not called');
 
-        const startRequest = scenario.requests.find((item) => item.url.endsWith('/client-simulator') && item.payload.chatInput === '/start');
-        const ratingRequest = scenario.requests.find((item) => item.url.endsWith('/rate-manager'));
+        const startRequest = scenario.requests.find((item) => item.payload.requestType === 'chat_start' && item.payload.chatInput === '/start');
+        const ratingRequest = scenario.requests.find((item) => item.payload.requestType === 'rating');
         expect(startRequest?.payload?.requestId, 'Start requestId was not captured');
         expect(ratingRequest?.payload?.requestId, 'Rating requestId was not captured');
         expect(ratingRequest?.payload?.conversationOutcome === 'end_conversation', 'Rating request must include conversation outcome');
@@ -792,7 +813,7 @@ async function runGoSilentFlow(browser, baseUrl) {
         await page.waitForSelector('text=Диалог завершен');
 
         const secondChatRequest = scenario.requests
-            .filter((item) => item.url.endsWith('/client-simulator') && item.payload.chatInput !== '/start')[1];
+            .filter((item) => item.payload.requestType === 'chat' && item.payload.chatInput !== '/start')[1];
         expect(secondChatRequest?.payload?.conversationActionState?.type === 'go_silent', 'go_silent state was not forwarded to the next chat request');
     } catch (error) {
         await ensureOutputDir();

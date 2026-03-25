@@ -29,10 +29,12 @@ try {
 }
 
 // n8n Webhook Configuration
-const WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/client-simulator';
-const RATE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/rate-manager';
+// n8n test webhooks work only while the workflow is armed in "Execute workflow".
+const UNIFIED_SIMULATOR_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook-test/client-simulator';
+const WEBHOOK_URL = UNIFIED_SIMULATOR_WEBHOOK_URL;
+const RATE_WEBHOOK_URL = UNIFIED_SIMULATOR_WEBHOOK_URL;
 const ATTESTATION_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/certification';
-const MANAGER_ASSISTANT_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/manager-simulator';
+const MANAGER_ASSISTANT_WEBHOOK_URL = UNIFIED_SIMULATOR_WEBHOOK_URL;
 const AI_IMPROVE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/prompt-enchancement';
 const GEMINI_LIVE_MODEL = 'gpt-4o-realtime-preview-2025-06-03';
 const GEMINI_LIVE_API_KEY_STORAGE_KEY = 'geminiLiveApiKey';
@@ -869,13 +871,24 @@ function buildRequestId(prefix = 'req') {
     return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function buildJsonRequestHeaders(requestId, scope = 'request') {
+function buildJsonRequestHeaders(requestId, scope = 'request', requestType = '') {
     const headers = { 'Content-Type': 'application/json' };
     if (requestId) {
         headers['X-Request-Id'] = requestId;
         headers['X-Idempotency-Key'] = `${scope}:${requestId}`;
     }
+    if (requestType) {
+        headers['X-Client-Simulator-Request-Type'] = String(requestType).trim();
+    }
     return headers;
+}
+
+function buildUnifiedSimulatorWebhookPayload(requestType, payload = {}) {
+    return {
+        requestType: String(requestType || '').trim() || 'chat',
+        source: 'client-simulator-web',
+        ...payload
+    };
 }
 
 // DOM Elements
@@ -13032,15 +13045,15 @@ async function sendMessage() {
 
         response = await fetchWithTimeout(WEBHOOK_URL, {
             method: 'POST',
-            headers: buildJsonRequestHeaders(requestId, 'chat'),
-            body: JSON.stringify({
+            headers: buildJsonRequestHeaders(requestId, 'chat', 'chat'),
+            body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('chat', {
                 chatInput: userMessage,
                 systemPrompt,
                 dialogHistory,
                 conversationActionState,
                 sessionId: clientSessionId,
                 requestId
-            })
+            }))
         }, CHAT_WEBHOOK_TIMEOUT_MS);
         
         if (!response.ok) {
@@ -13128,15 +13141,15 @@ async function startConversationHandler() {
         });
         response = await fetchWithTimeout(WEBHOOK_URL, {
             method: 'POST',
-            headers: buildJsonRequestHeaders(requestId, 'chat_start'),
-            body: JSON.stringify({
+            headers: buildJsonRequestHeaders(requestId, 'chat_start', 'chat_start'),
+            body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('chat_start', {
                 chatInput: '/start',
                 systemPrompt,
                 dialogHistory: '',
                 conversationActionState,
                 sessionId: clientSessionId,
                 requestId
-            })
+            }))
         }, CHAT_WEBHOOK_TIMEOUT_MS);
         
         if (!response.ok) {
@@ -13558,8 +13571,8 @@ async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RAT
             });
             response = await fetchWithTimeout(RATE_WEBHOOK_URL, {
                 method: 'POST',
-                headers: buildJsonRequestHeaders(requestId, 'rating'),
-                body: JSON.stringify({
+                headers: buildJsonRequestHeaders(requestId, 'rating', 'rating'),
+                body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('rating', {
                     dialog: dialogText,
                     raterPrompt: effectiveRaterPrompt,
                     sessionId: raterSessionId,
@@ -13571,7 +13584,7 @@ async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RAT
                     conversationOutcomeRecoverable: !!conversationOutcomeState?.recoverable,
                     activeScenarioPresetId: activeScenarioPreset?.id || '',
                     activeScenarioPresetName: activeScenarioPreset?.name || ''
-                })
+                }))
             }, runtimeRatingConfig.timeoutMs);
 
             if (!response.ok) {
@@ -13876,14 +13889,14 @@ async function generateAIResponse() {
         });
         response = await fetchWithTimeout(MANAGER_ASSISTANT_WEBHOOK_URL, {
             method: 'POST',
-            headers: buildJsonRequestHeaders(requestId, 'manager_assist'),
-            body: JSON.stringify({
+            headers: buildJsonRequestHeaders(requestId, 'manager_assist', 'manager_assist'),
+            body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('manager_assist', {
                 systemPrompt: fullPrompt,
                 userMessage: lastMessage,
                 dialogHistory,
                 sessionId: managerSessionId,
                 requestId
-            })
+            }))
         }, AI_HELPER_WEBHOOK_TIMEOUT_MS);
         
         if (!response.ok) {

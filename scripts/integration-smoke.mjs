@@ -128,6 +128,16 @@ function buildSeedPayload() {
             managerCallPrompt: 'Симулируй клиента в звонке.',
             raterPrompt: 'Оцени диалог кратко и структурированно.'
         },
+        publicPromptSnapshot: JSON.stringify({
+            v: 1,
+            t: Date.now(),
+            data: {
+                client_prompt: 'Ты клиент. Отвечай реалистично и по делу.',
+                manager_prompt: 'Подсказывай менеджеру коротко.',
+                manager_call_prompt: 'Симулируй клиента в звонке.',
+                rater_prompt: 'Оцени диалог кратко и структурированно.'
+            }
+        }),
         webhookDebugConfig: JSON.stringify({
             ratingAttempts: 1,
             ratingTimeoutMs: 45000,
@@ -216,6 +226,7 @@ async function seedLocalState(context) {
         localStorage.setItem('managerPrompt', payload.prompts.managerPrompt);
         localStorage.setItem('managerCallPrompt', payload.prompts.managerCallPrompt);
         localStorage.setItem('raterPrompt', payload.prompts.raterPrompt);
+        localStorage.setItem('promptPublicSnapshot:v1', payload.publicPromptSnapshot);
         localStorage.setItem('webhookDebugConfig:v1', payload.webhookDebugConfig);
     }, seed);
 }
