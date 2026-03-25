@@ -13723,16 +13723,18 @@ function addImproveFromRatingButton(dialogText, ratingText) {
     buttonContainer.style.border = 'none';
     
     buttonContainer.innerHTML = `
-        <div style="font-size: 13px; color: #cfcfcf; text-align: center; margin-bottom: 8px;">
-            Улучшение ИИ-менеджера (автоответ клиенту) использовать только в полностью сгенерированных диалогах
-        </div>
         <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
-            <button class="btn-improve-from-rating" data-role="manager">Менеджер</button>
+            <button
+                class="btn-improve-from-rating"
+                data-role="manager"
+                title="Улучшение ИИ-менеджера (автоответ клиенту) использовать только в полностью сгенерированных диалогах"
+            >Менеджер</button>
             <button class="btn-improve-from-rating" data-role="manager_call">Клиент звонок</button>
             <button class="btn-improve-from-rating" data-role="client">Клиент</button>
             <button class="btn-improve-from-rating" data-role="rater">Оценщик</button>
         </div>
     `;
+    prepareCustomTooltips(buttonContainer);
     
     const roleButtons = buttonContainer.querySelectorAll('.btn-improve-from-rating');
     roleButtons.forEach((btn) => {
