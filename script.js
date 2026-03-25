@@ -574,10 +574,51 @@ async function runAuthStep(label, promiseFactory, timeoutMs = AUTH_FLOW_STEP_TIM
     );
 }
 
+function createFirebaseSnapshotShim(value) {
+    return {
+        exists() {
+            return value !== null && value !== undefined;
+        },
+        val() {
+            return value;
+        }
+    };
+}
+
+function firstSuccessfulPromise(promises = []) {
+    const items = Array.isArray(promises) ? promises.filter(Boolean) : [];
+    if (!items.length) {
+        return Promise.reject(new Error('No promises to resolve.'));
+    }
+
+    return new Promise((resolve, reject) => {
+        const errors = [];
+        let pending = items.length;
+
+        items.forEach((promise, index) => {
+            Promise.resolve(promise)
+                .then((value) => {
+                    resolve(value);
+                })
+                .catch((error) => {
+                    errors[index] = error;
+                    pending -= 1;
+                    if (pending <= 0) {
+                        reject(errors.find(Boolean) || new Error('All strategies failed.'));
+                    }
+                });
+        });
+    });
+}
+
 async function firebaseGetWithTimeout(dbPath, timeoutMs = FIREBASE_FRONTEND_GET_TIMEOUT_MS) {
     if (!db) return null;
-    return withPromiseTimeout(
+    const readStrategies = [
         get(ref(db, dbPath)),
+        fetchFirebaseJsonViaRest(dbPath, timeoutMs).then((value) => createFirebaseSnapshotShim(value))
+    ];
+    return withPromiseTimeout(
+        firstSuccessfulPromise(readStrategies),
         timeoutMs,
         `Firebase read timeout for ${dbPath}`
     );
@@ -9312,6 +9353,9 @@ function setupPromptsAndConfigListeners() {
             const fallbackSnapshot = loadCachedPublicPromptsSnapshot() || loadCachedPublicPromptsEmergencySnapshot();
             if (fallbackSnapshot) {
                 initPromptsData(fallbackSnapshot);
+            }
+            if (auth?.currentUser && !promptsStateHasMeaningfulContent('client')) {
+                void bootstrapPromptsViaRestFallback();
             }
         });
         protectedRealtimeUnsubscribes.push(unsubscribePrompts);

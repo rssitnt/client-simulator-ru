@@ -50,6 +50,12 @@
   - введён `activeAuthRestoreAttemptId`, чтобы устаревшие попытки восстановления не могли поздно вызвать `applyAuthenticatedUser`;
   - при timeout/ошибке восстановления локальная сессия теперь сразу очищается, protected listeners останавливаются и в модалке показывается явное сообщение о повторном входе;
   - кэш-версия обновлена до `script.js?v=20260325-05`.
+- По свежей консоли после ручного входа видно, что проблема шире prompt-listeners: timeout получают и `users`, и `partner_invites`, и `access_revocations`. Это похоже на сетевой/transport-срыв именно браузерного RTDB SDK, а не на отсутствие самих промптов в базе.
+- Доп. правка:
+  - `firebaseGetWithTimeout()` теперь делает параллельно 2 стратегии чтения: обычный SDK `get(ref(...))` и REST `fetchFirebaseJsonViaRest(...)`; выигрывает первый успешный ответ;
+  - при ошибке realtime-listener для `prompts` сразу пробуется `bootstrapPromptsViaRestFallback()`;
+  - CSP `connect-src` расширен под Firebase transport-хосты: `https://*.firebasedatabase.app`, `https://*.firebaseio.com`, `wss://*.firebaseio.com`, `https://firebasedatabase.googleapis.com`, `https://*.googleapis.com`;
+  - кэш-версия обновлена до `script.js?v=20260325-06`.
 
 ## 2026-03-25 — Пустые промпты: нет Firebase Auth при входе по паролю
 - Корень: логин проверялся по записи в RTDB `users`, но **Firebase Authentication** часто оставался без сессии (`auth.currentUser === null`). Правила RTDB для `prompts` требовали `auth != null` и раньше ещё `email_verified` — клиентский `onValue`/`get` получал **permission denied**, кэш пустой → «Промпт пустой».
