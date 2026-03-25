@@ -1339,11 +1339,12 @@ body.light-theme .message.user a {
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
-    transition: transform 0.2s, opacity 0.2s;
+    transform-origin: center center;
+    transition: transform 0.22s ease, opacity 0.2s;
 }
 
 .btn-improve-from-rating:hover {
-    transform: scale(1.02);
+    transform: rotate(-1.5deg);
 }
 
 .btn-improve-from-rating:disabled {
