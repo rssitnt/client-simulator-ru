@@ -9951,7 +9951,7 @@ function setAiImproveModalContent(mode = 'default') {
     if (mode === 'rating') {
         aiImproveModalTitle.textContent = 'Улучшить инструкцию на основе представленного диалога и оценки';
         aiImproveModalDescription.textContent = 'Опишите, что конкретно нужно улучшить на основе диалога и оценки.';
-        aiImproveInput.placeholder = 'Например: усилий контроль по этапу выявления потребности и добавь конкретные анти-паттерны.';
+        aiImproveInput.placeholder = 'Например: усиль контроль по этапу выявления потребности и добавь конкретные анти-паттерны.';
     } else {
         aiImproveModalTitle.textContent = 'Улучшить инструкцию с ИИ';
         aiImproveModalDescription.textContent = 'Опишите, как бы вы хотели улучшить инструкцию?';

@@ -32,7 +32,8 @@
 - После следующего live-скрина стало ясно, что для manager-ветки в ноде AI Agent до сих пор читался именно `body.chatInput`, поэтому совместимость усилена ещё жёстче:
   - алиасы `chatInput`, `prompt`, `guardrailsInput` теперь проставляются явно прямо в теле `manager_assist`, `rating`, `chat`, `chat_start`;
   - общий helper `buildUnifiedSimulatorWebhookPayload()` тоже умеет достраивать эти поля как запасной слой.
-- Версия фронта обновлена до `script.js?v=20260325-12`.
+- Доп. мелкая UI-правка: исправлена опечатка в placeholder модалки улучшения инструкции (`усилий` -> `усиль`).
+- Версия фронта обновлена до `script.js?v=20260325-13`.
 
 ## 2026-03-25 — Единый n8n webhook для chat/rating/manager assist
 - По запросу пользователя фронтенд переведён на один общий webhook: `https://n8n-api.tradicia-k.ru/webhook/client-simulator`.
