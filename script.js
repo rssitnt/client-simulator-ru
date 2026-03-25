@@ -1013,6 +1013,8 @@ let lastFirebaseData = null;
 let lastPromptsFirebaseSnapshot = null;
 let selectedRole = 'user';
 let currentUser = null;
+let activeAuthRestoreAttemptId = 0;
+let pendingAuthRestoreMessage = '';
 let isAppBootstrapped = false;
 let isWindowLoaded = document.readyState !== 'loading';
 let isChatReady = false;
@@ -5178,6 +5180,8 @@ async function handleAuthSubmit() {
 }
 
 async function restoreAuthSession() {
+    const restoreAttemptId = ++activeAuthRestoreAttemptId;
+    const isStaleRestoreAttempt = () => restoreAttemptId !== activeAuthRestoreAttemptId;
     const session = getAuthSession();
     if (!session?.login) return false;
     if (isLocalhostDevBypassSession(session)) {
@@ -5187,6 +5191,7 @@ async function restoreAuthSession() {
             clearAuthCacheIdentity();
             return false;
         }
+        if (isStaleRestoreAttempt()) return false;
         applyAuthenticatedUser(localUser);
         hideNameModal();
         startActiveTimeTracking();
@@ -5194,15 +5199,17 @@ async function restoreAuthSession() {
     }
 
     await waitForFirebaseAuthReady();
+    if (isStaleRestoreAttempt()) return false;
     if (!hasFirebaseAuthSessionForLogin(session.login)) {
         stopProtectedRealtimeListeners();
         clearAuthSession();
         clearAuthCacheIdentity();
-        setAuthError('Сессия устарела после обновления. Войдите ещё раз, чтобы заново открыть доступ к промптам.');
+        pendingAuthRestoreMessage = 'Сессия устарела после обновления. Войдите ещё раз, чтобы заново открыть доступ к промптам.';
         return false;
     }
 
     const user = await getUserRecordByLogin(session.login);
+    if (isStaleRestoreAttempt()) return false;
     if (!user) {
         clearAuthSession();
         return false;
@@ -5233,6 +5240,7 @@ async function restoreAuthSession() {
         user.role = normalizeRole(accessDecision.role || user.role);
     }
     user.emailVerifiedAt = verifiedAt;
+    if (isStaleRestoreAttempt()) return false;
     applyAuthenticatedUser(user);
     await replayActiveTimeCarryover();
     startActiveTimeTracking();
@@ -9382,6 +9390,7 @@ async function bootstrapPromptsViaRestFallback() {
 }
 
 async function loadPrompts() {
+    pendingAuthRestoreMessage = '';
     // Bootstrap prompt UI from local cache immediately, without waiting for the first
     // live Firebase snapshot. This prevents blank editors when RTDB is slow or stalls.
     const cachedPublicPromptsSnapshot = loadCachedPublicPromptsSnapshot();
@@ -9444,12 +9453,16 @@ async function loadPrompts() {
     } catch (error) {
         const message = String(error?.message || '').toLowerCase();
         const isTimeout = message.includes('таймаут') || message.includes('timeout');
+        activeAuthRestoreAttemptId += 1;
+        stopProtectedRealtimeListeners();
+        clearAuthSession();
+        clearAuthCacheIdentity();
         if (isTimeout) {
             console.warn('Auth session restore timed out:', error);
+            pendingAuthRestoreMessage = 'Не удалось восстановить прошлую сессию вовремя. Войдите ещё раз, чтобы заново открыть доступ к промптам.';
         } else {
             console.warn('Auth session restore failed:', error);
-            clearAuthSession();
-            clearAuthCacheIdentity();
+            pendingAuthRestoreMessage = getReadableFirebaseAuthError(error, 'login');
         }
         restored = false;
     }
@@ -9466,10 +9479,16 @@ async function loadPrompts() {
             } catch (error) {
                 const message = String(error?.message || '').toLowerCase();
                 const isTimeout = message.includes('таймаут') || message.includes('timeout');
+                activeAuthRestoreAttemptId += 1;
+                stopProtectedRealtimeListeners();
+                clearAuthSession();
+                clearAuthCacheIdentity();
                 if (isTimeout) {
                     console.warn('Late auth session restore timed out:', error);
+                    pendingAuthRestoreMessage = 'Не удалось восстановить прошлую сессию вовремя. Войдите ещё раз, чтобы заново открыть доступ к промптам.';
                 } else {
                     console.warn('Late auth session restore failed:', error);
+                    pendingAuthRestoreMessage = getReadableFirebaseAuthError(error, 'login');
                 }
                 restored = false;
             }
@@ -9480,6 +9499,9 @@ async function loadPrompts() {
         selectedRole = 'user';
         setCachedStorageValue(USER_ROLE_KEY, 'user');
         showNameModal();
+        if (pendingAuthRestoreMessage) {
+            setAuthError(pendingAuthRestoreMessage);
+        }
     } else {
         hideNameModal();
         debugLog(`Welcome back, ${currentUser?.fio || 'user'} (${selectedRole})`);

@@ -45,6 +45,11 @@
   - до появления `auth.currentUser` они вообще не поднимаются;
   - после успешного входа вызывается `refreshProtectedFirebaseDataAfterAuth()` и заново подтягиваются `prompts`, `prompt_history`, `app_config`;
   - кэш-версия обновлена до `script.js?v=20260325-04`.
+- Ещё один сценарий из живой консоли: `restoreAuthSession()` уходил в timeout на `users/...` и `access_revocations/...`, но фоновый promise продолжал жить и мог позже снова применить старую сессию, из-за чего модалка входа не показывалась стабильно.
+- Доп. правка:
+  - введён `activeAuthRestoreAttemptId`, чтобы устаревшие попытки восстановления не могли поздно вызвать `applyAuthenticatedUser`;
+  - при timeout/ошибке восстановления локальная сессия теперь сразу очищается, protected listeners останавливаются и в модалке показывается явное сообщение о повторном входе;
+  - кэш-версия обновлена до `script.js?v=20260325-05`.
 
 ## 2026-03-25 — Пустые промпты: нет Firebase Auth при входе по паролю
 - Корень: логин проверялся по записи в RTDB `users`, но **Firebase Authentication** часто оставался без сессии (`auth.currentUser === null`). Правила RTDB для `prompts` требовали `auth != null` и раньше ещё `email_verified` — клиентский `onValue`/`get` получал **permission denied**, кэш пустой → «Промпт пустой».
