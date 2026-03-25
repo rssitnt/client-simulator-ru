@@ -318,6 +318,24 @@
                             </div>
                         </div>
                     </details>
+                    <details id="adminHiddenRaterPromptAccordion" class="admin-hidden-prompt-section">
+                        <summary class="admin-hidden-prompt-summary">Скрытый prompt оценщика</summary>
+                        <div class="admin-hidden-prompt-body">
+                            <div class="admin-hidden-prompt-hint">
+                                Этот текст дописывается к prompt оценщика перед встроенным контрактом JSON (после видимого промпта роли «Оценщик», перед фиксированными правилами формата).
+                            </div>
+                            <textarea
+                                id="adminHiddenRaterPromptInput"
+                                class="admin-hidden-prompt-textarea"
+                                placeholder="Дополнительные инструкции для оценщика (необязательно)..."
+                                rows="10"
+                            ></textarea>
+                            <div class="admin-hidden-prompt-actions">
+                                <button id="adminHiddenRaterPromptSaveBtn" class="btn-change">Сохранить</button>
+                                <button id="adminHiddenRaterPromptResetBtn" class="btn-change btn-danger-subtle">Сбросить</button>
+                            </div>
+                        </div>
+                    </details>
                     <details id="adminUsersAccessAccordion" class="admin-hidden-prompt-section">
                         <summary class="admin-hidden-prompt-summary">Пользователи и доступ</summary>
                         <div class="admin-users-access-body admin-hidden-prompt-body">
@@ -583,7 +601,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js" integrity="sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3" crossorigin="anonymous" defer></script>
     <!-- Turndown for HTML to Markdown conversion (WYSIWYG editing) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js" integrity="sha384-m6AyXEhyWRg2s2wrkDV64LGkaManYgMSAjn2U+zymzSJ42WthRSjCu1AqZJhoQV0" crossorigin="anonymous" defer></script>
-    <script type="module" src="script.js?v=20260325-21"></script>
+    <script type="module" src="script.js?v=20260325-23"></script>
     <!-- Last deployment trigger: 2026-03-24 15:00 -->
 </body>
 </html>

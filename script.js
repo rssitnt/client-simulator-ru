@@ -77,7 +77,7 @@ const EMAIL_LINK_VERIFIED_HINT_STORAGE_KEY = 'emailLinkVerifiedHint:v1';
 const EMAIL_LINK_AUTH_READY_STORAGE_KEY = 'emailLinkAuthReady:v1';
 const EMAIL_LINK_PROCESSED_STORAGE_KEY = 'emailLinkProcessed:v1';
 const CLIENT_CONVERSATION_ACTION_PROMPT_STORAGE_KEY = 'clientConversationActionPrompt:v1';
-const ACTIVE_TEST_SCENARIO_STORAGE_KEY = 'activeTestScenario:v1';
+const RATER_HIDDEN_PROMPT_STORAGE_KEY = 'raterHiddenPrompt:v1';
 const WEBHOOK_DEBUG_CONFIG_STORAGE_KEY = 'webhookDebugConfig:v1';
 const WEBHOOK_DEBUG_LOG_STORAGE_KEY = 'webhookDebugLog:v1';
 const WEBHOOK_DEBUG_LOG_MAX_ENTRIES = 40;
@@ -179,90 +179,6 @@ const DEFAULT_RATING_RESULT_PROMPT_SUFFIX = `
 - whatKilledDialogue, whatWasSalvageable и whyClientLeft делай простым человеческим языком
 - если JSON неудобен, верни обычный текст, но по возможности придерживайся этой структуры
 `.trim();
-const TEST_SCENARIO_PRESETS = [
-    {
-        id: 'urgent-foreman',
-        name: 'Срочный прораб',
-        badge: 'Сроки горят',
-        summary: 'Нужен комплект под задачу быстро. Общие слова и долгие паузы раздражают.',
-        outcomeHint: 'Слабая конкретика быстро ведёт к потере интереса; явный слив — к разрыву.',
-        starterMessage: 'Нужен гидробур на CASE CX260C. Задача: 900 лунок в суглинках под буронабивные сваи, размерность 600 мм на 4500 мм. Дайте конкретное решение по комплекту, сроки горят — через неделю оборудование должно быть на объекте.',
-        promptSuffix: `
-SCENARIO_ID: urgent-foreman
-ТЕСТОВЫЙ СЦЕНАРИЙ
-Ты не случайный интересующийся, а срочный клиент с реальным объектом и жёсткими сроками.
-- ждёшь конкретное решение под технику и задачу, а не общие слова
-- быстро теряешь терпение, если менеджер тянет время, уходит в абстракции или не может подтвердить сроки
-- если ответ слабый, но без хамства, реалистично можешь просто замолчать и уйти искать дальше
-- если менеджер явно сливает разговор, даёт только общий прайс или посылает разбираться самому, разговор для тебя закрывается окончательно
-        `.trim()
-    },
-    {
-        id: 'price-sensitive',
-        name: 'Цена выше рынка',
-        badge: 'Цена',
-        summary: 'Сравнивает поставщиков. Высокую цену готов слушать только с сильным обоснованием.',
-        outcomeHint: 'Часто просто уходит молча, если цена выше ожиданий и аргументация слабая.',
-        starterMessage: 'Смотрю гидробур под тот же CASE, но сразу предупреждаю: рынок уже посмотрел. Если у вас цена выше средней, мне нужна очень понятная причина — сроки, сервис, наличие, гарантия. Иначе не вижу смысла переплачивать.',
-        promptSuffix: `
-SCENARIO_ID: price-sensitive
-ТЕСТОВЫЙ СЦЕНАРИЙ
-Ты прагматичный клиент, который уже сравнил рынок и болезненно реагирует на слабую ценовую аргументацию.
-- без сильного обоснования высокой цены не задерживаешься в разговоре
-- если цена выше ожиданий, а менеджер отвечает посредственно, реалистичнее просто уйти без ответа
-- окончательно завершаешь разговор, если менеджер обесценивает сравнение рынка, давит или грубит
-        `.trim()
-    },
-    {
-        id: 'service-risk',
-        name: 'Риск поломки на объекте',
-        badge: 'Сервис',
-        summary: 'Главный страх — встать посреди объекта без запчастей и выездного сервиса.',
-        outcomeHint: 'Если сервис и запчасти не подтверждены убедительно, охотно уходит к конкурентам.',
-        starterMessage: 'Меня больше всего волнует не сама железка, а что будет, если встанем посреди объекта. Сразу скажите, как у вас с сервисом, запчастями и выездом по поломке. Без этого даже цену обсуждать рано.',
-        promptSuffix: `
-SCENARIO_ID: service-risk
-ТЕСТОВЫЙ СЦЕНАРИЙ
-Ты клиент, для которого сервисный риск важнее красивой презентации.
-- сначала оцениваешь уверенность менеджера в сервисе, запчастях и выезде, а не только цену
-- если менеджер уходит от этих вопросов или отвечает расплывчато, доверие быстро падает
-- при слабой, но не токсичной отработке чаще просто уходишь без ответа
-- при откровенном сливе или ложной уверенности без фактов можешь закрыть разговор окончательно
-        `.trim()
-    },
-    {
-        id: 'soft-market-scout',
-        name: 'Смотрит рынок без привязки',
-        badge: 'Мягкий уход',
-        summary: 'Не конфликтный, но не готов терпеть слабую квалификацию. Часто просто пропадает.',
-        outcomeHint: 'Хороший сценарий для проверки `go_silent`: молчаливый уход реалистичнее явного разрыва.',
-        starterMessage: 'Пока смотрю варианты по гидробуру на CASE и хочу быстро понять, кто вообще умеет разговаривать по делу. Если есть внятный комплект и понятные условия — обсудим дальше.',
-        promptSuffix: `
-SCENARIO_ID: soft-market-scout
-ТЕСТОВЫЙ СЦЕНАРИЙ
-Ты вежливый, но холодный клиент, который ещё не привязан к поставщику.
-- если менеджер не впечатлил, чаще просто пропадаешь без финальной сцены
-- не обязан спорить, воспитывать менеджера или закрывать разговор словами
-- end_conversation оставляй для грубости, явного слива или окончательного конфликта
-        `.trim()
-    },
-    {
-        id: 'offended-owner',
-        name: 'Жёсткий собственник',
-        badge: 'Низкий порог',
-        summary: 'Не любит, когда его поучают или перекидывают на сайт. Рвёт разговор быстрее других.',
-        outcomeHint: 'При слабом тоне и высокомерии скорее завершит разговор, чем просто исчезнет.',
-        starterMessage: 'Мне не нужен ликбез и ссылки по кругу. Нужен взрослый разговор: что предложите под CASE CX260C, когда поставите и кто отвечает за сервис. Если будете водить вокруг да около — сразу разойдёмся.',
-        promptSuffix: `
-SCENARIO_ID: offended-owner
-ТЕСТОВЫЙ СЦЕНАРИЙ
-Ты жёсткий собственник с низкой терпимостью к высокомерию и пустым советам.
-- любые фразы уровня «смотрите сайт», «разберитесь сами», «возвращайтесь потом» воспринимаешь как слив
-- на слабую, но спокойную коммерческую работу ещё можешь отреагировать go_silent
-- на хамство, поучения, обесценивание запроса и явный слив чаще отвечаешь окончательным завершением разговора
-        `.trim()
-    }
-];
 const CORPORATE_EMAIL_DOMAINS = new Set([
     '7271155.ru',
     '7274069.ru',
@@ -1111,9 +1027,6 @@ const adminHiddenClientPromptAccordion = document.getElementById('adminHiddenCli
 const adminHiddenClientPromptInput = document.getElementById('adminHiddenClientPromptInput');
 const adminHiddenClientPromptSaveBtn = document.getElementById('adminHiddenClientPromptSaveBtn');
 const adminHiddenClientPromptResetBtn = document.getElementById('adminHiddenClientPromptResetBtn');
-const adminScenarioLibraryAccordion = document.getElementById('adminScenarioLibraryAccordion');
-const adminScenarioLibraryCurrent = document.getElementById('adminScenarioLibraryCurrent');
-const adminScenarioLibraryList = document.getElementById('adminScenarioLibraryList');
 const adminWebhookDebugAccordion = document.getElementById('adminWebhookDebugAccordion');
 const adminWebhookDebugMeta = document.getElementById('adminWebhookDebugMeta');
 const adminWebhookDebugList = document.getElementById('adminWebhookDebugList');
@@ -1134,12 +1047,6 @@ const instructionEditors = Array.from(document.querySelectorAll('.instruction-ed
 const instructionOptions = Array.from(document.querySelectorAll('.dropdown-option'));
 const selectedInstructionText = document.getElementById('selectedInstructionText');
 const instructionDropdown = document.getElementById('instructionDropdown');
-const activeScenarioStrip = document.getElementById('activeScenarioStrip');
-const activeScenarioTitle = document.getElementById('activeScenarioTitle');
-const activeScenarioSummary = document.getElementById('activeScenarioSummary');
-const activeScenarioPrefillBtn = document.getElementById('activeScenarioPrefillBtn');
-const activeScenarioStartBtn = document.getElementById('activeScenarioStartBtn');
-const activeScenarioClearBtn = document.getElementById('activeScenarioClearBtn');
 
 const promptInputsByRole = {
     client: systemPromptInput,
@@ -1352,7 +1259,6 @@ let promptsData = {
 };
 const promptEditRemoteBaselineHashes = {};
 const promptSyncConflictMessages = {};
-let activeTestScenarioPresetId = '';
 
 function normalizeFio(value) {
     return String(value || '').trim().replace(/\s+/g, ' ');
@@ -1414,42 +1320,7 @@ function hasAdminAccount(user = currentUser) {
     return normalizeRole(user?.role || 'user') === 'admin';
 }
 
-function normalizeTestScenarioPresetId(value) {
-    const normalized = String(value || '').trim().toLowerCase();
-    return TEST_SCENARIO_PRESETS.some((preset) => preset.id === normalized) ? normalized : '';
-}
-
-function getTestScenarioPresetById(presetId) {
-    const normalized = normalizeTestScenarioPresetId(presetId);
-    return TEST_SCENARIO_PRESETS.find((preset) => preset.id === normalized) || null;
-}
-
-function getStoredActiveTestScenarioPresetId() {
-    return normalizeTestScenarioPresetId(getCachedStorageValue(ACTIVE_TEST_SCENARIO_STORAGE_KEY, ''));
-}
-
-function persistActiveTestScenarioPresetId(presetId) {
-    const normalized = normalizeTestScenarioPresetId(presetId);
-    activeTestScenarioPresetId = normalized;
-    if (normalized) {
-        setCachedStorageValue(ACTIVE_TEST_SCENARIO_STORAGE_KEY, normalized);
-    } else {
-        removeCachedStorageValue(ACTIVE_TEST_SCENARIO_STORAGE_KEY);
-    }
-    return normalized;
-}
-
-function getActiveTestScenarioPreset(options = {}) {
-    const { requireAdminView = true } = options;
-    const preset = getTestScenarioPresetById(activeTestScenarioPresetId);
-    if (!preset) return null;
-    if (isAttestationMode) return null;
-    if (requireAdminView && !isAdmin()) return null;
-    return preset;
-}
-
-activeTestScenarioPresetId = '';
-removeCachedStorageValue(ACTIVE_TEST_SCENARIO_STORAGE_KEY);
+removeCachedStorageValue('activeTestScenario:v1');
 removeSafeLocalStorageValue(WEBHOOK_DEBUG_CONFIG_STORAGE_KEY);
 removeSafeLocalStorageValue(WEBHOOK_DEBUG_LOG_STORAGE_KEY);
 webhookDebugEntries = [];
@@ -5748,7 +5619,6 @@ function applyRoleRestrictions() {
     updateAllPreviews();
     updatePromptVisibilityButton();
     updatePromptHistoryButton();
-    refreshScenarioLibraryUi();
     if (isAdminUser && isSettingsModalOpen()) {
         renderAdminUsersTable();
     } else if (adminPanelAccordion) {
@@ -5877,37 +5747,26 @@ function buildClientSystemPromptForWebhook(basePrompt, actionState = null) {
     if (!normalizedPrompt) return '';
     const actionStateInstruction = buildClientConversationActionStateInstruction(actionState);
     const hiddenClientPrompt = getConfiguredClientConversationActionPrompt();
-    const activeScenarioPrompt = getActiveTestScenarioPromptSuffix();
     return [
         normalizedPrompt,
         hiddenClientPrompt,
-        activeScenarioPrompt,
         actionStateInstruction
     ].filter(Boolean).join('\n\n');
 }
 
 function buildRatingPlatformContextInstruction() {
     const actionState = getConversationActionStatePayload();
-    const activeScenario = getActiveTestScenarioPreset();
-    const lines = [];
-
-    if (!actionState && !activeScenario) {
+    if (!actionState) {
         return '';
     }
 
-    lines.push('СЛУЖЕБНЫЙ КОНТЕКСТ ПЛАТФОРМЫ');
-    if (actionState) {
-        lines.push(`Платформа уже зафиксировала исход диалога: ${actionState.type}`);
-        if (actionState.reason) {
-            lines.push(`Причина исхода по данным платформы: ${actionState.reason}`);
-        }
-        if (actionState.recoverable) {
-            lines.push('Этот исход recoverable: клиента ещё можно было вернуть.');
-        }
+    const lines = ['СЛУЖЕБНЫЙ КОНТЕКСТ ПЛАТФОРМЫ'];
+    lines.push(`Платформа уже зафиксировала исход диалога: ${actionState.type}`);
+    if (actionState.reason) {
+        lines.push(`Причина исхода по данным платформы: ${actionState.reason}`);
     }
-    if (activeScenario) {
-        lines.push(`Активный тестовый сценарий: ${activeScenario.name} (${activeScenario.id})`);
-        lines.push(`Суть сценария: ${activeScenario.summary}`);
+    if (actionState.recoverable) {
+        lines.push('Этот исход recoverable: клиента ещё можно было вернуть.');
     }
     return lines.join('\n');
 }
@@ -5916,157 +5775,13 @@ function buildRaterPromptForWebhook(basePrompt) {
     const normalizedPrompt = String(basePrompt || '').trim();
     if (!normalizedPrompt) return '';
     const platformContext = buildRatingPlatformContextInstruction();
+    const hiddenRater = getConfiguredRaterHiddenPrompt();
     return [
         normalizedPrompt,
+        hiddenRater,
         DEFAULT_RATING_RESULT_PROMPT_SUFFIX,
         platformContext
     ].filter(Boolean).join('\n\n');
-}
-
-function getActiveTestScenarioPromptSuffix() {
-    return String(getActiveTestScenarioPreset()?.promptSuffix || '').trim();
-}
-
-function fillActiveScenarioStarterMessage(options = {}) {
-    const preset = getActiveTestScenarioPreset();
-    if (!preset || !userInput) return false;
-    const { quiet = false } = options;
-    userInput.value = String(preset.starterMessage || '').trim();
-    autoResizeTextarea(userInput);
-    updateSendBtnState();
-    if (!quiet) {
-        showCopyNotification(`Подставлено первое сообщение: ${preset.name}`);
-    }
-    return true;
-}
-
-function renderActiveScenarioStrip() {
-    if (!activeScenarioStrip || !activeScenarioTitle || !activeScenarioSummary) return;
-    const preset = getActiveTestScenarioPreset();
-    if (!preset) {
-        activeScenarioStrip.hidden = true;
-        activeScenarioTitle.textContent = '';
-        activeScenarioSummary.textContent = '';
-        return;
-    }
-
-    activeScenarioTitle.textContent = `Сценарий: ${preset.name}`;
-    activeScenarioSummary.textContent = `${preset.summary} ${preset.outcomeHint}`;
-    activeScenarioStrip.hidden = false;
-    if (activeScenarioStartBtn) {
-        activeScenarioStartBtn.disabled = !isChatReady || isProcessing;
-    }
-}
-
-function renderAdminScenarioLibrary() {
-    if (!adminScenarioLibraryCurrent || !adminScenarioLibraryList) return;
-
-    if (!isAdmin()) {
-        adminScenarioLibraryCurrent.innerHTML = '';
-        adminScenarioLibraryList.innerHTML = '';
-        return;
-    }
-
-    const activePreset = getTestScenarioPresetById(activeTestScenarioPresetId);
-    if (activePreset) {
-        adminScenarioLibraryCurrent.innerHTML = `
-            <div class="admin-scenario-current-card">
-                <div class="admin-scenario-current-copy">
-                    <strong>Сейчас выбран: ${escapeHtml(activePreset.name)}</strong>
-                    <span>${escapeHtml(activePreset.summary)}</span>
-                    <span>Первое сообщение уже можно отправлять или запускать из плашки возле чата.</span>
-                </div>
-                <div class="admin-scenario-card-actions">
-                    <button type="button" class="btn-change" data-scenario-current-action="prefill">Подставить сообщение</button>
-                    <button type="button" class="btn-change btn-danger-subtle" data-scenario-current-action="clear">Сбросить</button>
-                </div>
-            </div>
-        `;
-    } else {
-        adminScenarioLibraryCurrent.innerHTML = `
-            <div class="admin-scenario-current-card">
-                <div class="admin-scenario-current-copy">
-                    <strong>Сценарий не выбран</strong>
-                    <span>Выбери пресет ниже, чтобы быстро задать тип клиента и стартовое сообщение для теста.</span>
-                </div>
-            </div>
-        `;
-    }
-
-    adminScenarioLibraryList.innerHTML = TEST_SCENARIO_PRESETS.map((preset) => {
-        const isActive = preset.id === activeTestScenarioPresetId;
-        return `
-            <div class="admin-scenario-card${isActive ? ' is-active' : ''}" data-scenario-id="${preset.id}">
-                <div class="admin-scenario-card-head">
-                    <div class="admin-scenario-card-title">${escapeHtml(preset.name)}</div>
-                    <span class="admin-scenario-card-tag">${escapeHtml(preset.badge)}</span>
-                </div>
-                <div class="admin-scenario-card-summary">${escapeHtml(preset.summary)}</div>
-                <div class="admin-scenario-card-note"><strong>Поведение:</strong> ${escapeHtml(preset.outcomeHint)}</div>
-                <div class="admin-scenario-card-actions">
-                    <button type="button" class="btn-change" data-scenario-action="apply" data-scenario-id="${preset.id}">
-                        ${isActive ? 'Выбран' : 'Выбрать'}
-                    </button>
-                    <button type="button" class="btn-change" data-scenario-action="launch" data-scenario-id="${preset.id}">Запустить</button>
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-function refreshScenarioLibraryUi() {
-    renderAdminScenarioLibrary();
-    renderActiveScenarioStrip();
-}
-
-function setActiveTestScenarioPreset(presetId, options = {}) {
-    const { quiet = false, prefillStarter = true } = options;
-    const preset = getTestScenarioPresetById(presetId);
-    if (!preset) {
-        clearActiveTestScenarioPreset({ quiet });
-        return false;
-    }
-
-    persistActiveTestScenarioPresetId(preset.id);
-    refreshScenarioLibraryUi();
-    if (prefillStarter) {
-        fillActiveScenarioStarterMessage({ quiet: true });
-    } else {
-        updateSendBtnState();
-    }
-    if (!quiet) {
-        showCopyNotification(`Сценарий "${preset.name}" выбран`);
-    }
-    return true;
-}
-
-function clearActiveTestScenarioPreset(options = {}) {
-    const { quiet = false } = options;
-    persistActiveTestScenarioPresetId('');
-    refreshScenarioLibraryUi();
-    if (!quiet) {
-        showCopyNotification('Тестовый сценарий сброшен');
-    }
-}
-
-async function launchActiveTestScenarioPreset(presetId = activeTestScenarioPresetId) {
-    const preset = getTestScenarioPresetById(presetId);
-    if (!preset || !isChatReady || isProcessing || isAttestationMode) return false;
-
-    const hasExistingDialog = conversationHistory.length > 0 || document.querySelector('.message');
-    if (hasExistingDialog) {
-        const confirmed = confirm('Текущий чат будет очищен и сценарий начнется заново. Продолжить?');
-        if (!confirmed) return false;
-        clearChat();
-    }
-
-    setActiveTestScenarioPreset(preset.id, { quiet: true, prefillStarter: true });
-    await startConversationHandler();
-    if (preset.starterMessage && !isConversationClosed()) {
-        await sendMessage();
-    }
-    showCopyNotification(`Сценарий "${preset.name}" запущен`);
-    return true;
 }
 
 function extractConversationAction(data) {
@@ -8660,7 +8375,6 @@ function setAttestationMode(enabled) {
         if (startAttestationBtn) {
             startAttestationBtn.style.display = 'none';
         }
-        renderActiveScenarioStrip();
         showCopyNotification('Режим аттестации включен');
     } else {
         if (attestationPrevState) {
@@ -8676,7 +8390,6 @@ function setAttestationMode(enabled) {
         if (startAttestationBtn) {
             startAttestationBtn.style.display = '';
         }
-        renderActiveScenarioStrip();
         showCopyNotification('Режим аттестации выключен');
     }
 }
@@ -8709,7 +8422,6 @@ function setChatLoadingState(isLoading) {
         toggleInputState(false);
         setStartButtonsEnabled(false);
         userInput.placeholder = 'Загрузка...';
-        renderActiveScenarioStrip();
         return;
     }
     toggleInputState(true);
@@ -8717,7 +8429,6 @@ function setChatLoadingState(isLoading) {
     if (!isDialogRated) {
         userInput.placeholder = '';
     }
-    renderActiveScenarioStrip();
 }
 
 function updateChatReadyState() {
@@ -9615,6 +9326,7 @@ function setupPromptsAndConfigListeners() {
     if (!db) {
         setSharedGeminiTokenEndpoint('');
         setSharedClientConversationActionPrompt('');
+        setSharedRaterHiddenPrompt('');
         return;
     }
 
@@ -9681,18 +9393,24 @@ function setupPromptsAndConfigListeners() {
             const data = snapshot.val() || {};
             const sharedEndpoint = normalizeGeminiTokenEndpoint(data?.geminiTokenEndpoint || '');
             const sharedClientActionPrompt = normalizeClientConversationActionPrompt(data?.clientConversationActionPrompt || '');
+            const sharedRaterHidden = normalizeRaterHiddenPrompt(data?.raterHiddenPrompt || '');
             setSharedGeminiTokenEndpoint(sharedEndpoint);
             setSharedClientConversationActionPrompt(sharedClientActionPrompt);
+            setSharedRaterHiddenPrompt(sharedRaterHidden);
             if (geminiTokenEndpointInput && settingsModal?.classList?.contains('active')) {
                 geminiTokenEndpointInput.value = getConfiguredGeminiTokenEndpoint();
             }
             if (adminHiddenClientPromptInput && settingsModal?.classList?.contains('active')) {
                 adminHiddenClientPromptInput.value = getConfiguredClientConversationActionPrompt();
             }
+            if (adminHiddenRaterPromptInput && settingsModal?.classList?.contains('active')) {
+                adminHiddenRaterPromptInput.value = getConfiguredRaterHiddenPrompt();
+            }
         }, (error) => {
             console.error('App config read error:', error);
             setSharedGeminiTokenEndpoint('');
             setSharedClientConversationActionPrompt('');
+            setSharedRaterHiddenPrompt('');
         });
         protectedRealtimeUnsubscribes.push(unsubscribeAppConfig);
 
@@ -9718,6 +9436,7 @@ function setupPromptsAndConfigListeners() {
         console.error('Error setting up Firebase listener:', error);
         setSharedGeminiTokenEndpoint('');
         setSharedClientConversationActionPrompt('');
+        setSharedRaterHiddenPrompt('');
         const fallbackSnapshot = loadCachedPublicPromptsSnapshot() || loadCachedPublicPromptsEmergencySnapshot();
         if (fallbackSnapshot) {
             initPromptsData(fallbackSnapshot);
@@ -9787,11 +9506,13 @@ async function loadPrompts() {
         } else {
             setSharedGeminiTokenEndpoint('');
             setSharedClientConversationActionPrompt('');
+            setSharedRaterHiddenPrompt('');
             debugLog('Skipping protected Firebase listeners until Firebase Auth session is ready');
         }
     } else {
         setSharedGeminiTokenEndpoint('');
         setSharedClientConversationActionPrompt('');
+        setSharedRaterHiddenPrompt('');
         if (!cachedPublicPromptsSnapshot) {
             debugLog('Firebase unavailable and no cached prompt snapshot');
         }
@@ -10347,6 +10068,31 @@ function getConfiguredClientConversationActionPrompt() {
     return cachedPrompt || DEFAULT_CLIENT_CONVERSATION_ACTION_PROMPT_SUFFIX;
 }
 
+function normalizeRaterHiddenPrompt(value) {
+    return normalizeClientConversationActionPrompt(value);
+}
+
+function getSharedRaterHiddenPrompt() {
+    return normalizeRaterHiddenPrompt(sharedAppConfig?.raterHiddenPrompt || '');
+}
+
+function setSharedRaterHiddenPrompt(value, options = {}) {
+    const { clearCache = false } = options;
+    const normalized = normalizeRaterHiddenPrompt(value);
+    sharedAppConfig.raterHiddenPrompt = normalized;
+    if (normalized) {
+        setCachedStorageValue(RATER_HIDDEN_PROMPT_STORAGE_KEY, normalized);
+    } else if (clearCache) {
+        removeCachedStorageValue(RATER_HIDDEN_PROMPT_STORAGE_KEY);
+    }
+}
+
+function getConfiguredRaterHiddenPrompt() {
+    const shared = getSharedRaterHiddenPrompt();
+    if (shared) return shared;
+    return normalizeRaterHiddenPrompt(getCachedStorageValue(RATER_HIDDEN_PROMPT_STORAGE_KEY) || '');
+}
+
 function getDefaultGeminiTokenEndpoint() {
     return String(
         (
@@ -10394,6 +10140,11 @@ function populateHiddenClientPromptField() {
     adminHiddenClientPromptInput.value = getConfiguredClientConversationActionPrompt();
 }
 
+function populateHiddenRaterPromptField() {
+    if (!adminHiddenRaterPromptInput) return;
+    adminHiddenRaterPromptInput.value = getConfiguredRaterHiddenPrompt();
+}
+
 async function saveSharedGeminiTokenEndpointConfig(value) {
     if (!(db && selectedRole === 'admin')) return false;
     await ensureCurrentUserAccessMirror();
@@ -10409,6 +10160,15 @@ async function saveSharedClientConversationActionPromptConfig(value) {
     const normalized = normalizeClientConversationActionPrompt(value);
     await set(ref(db, `${APP_CONFIG_DB_PATH}/clientConversationActionPrompt`), normalized || null);
     setSharedClientConversationActionPrompt(normalized);
+    return true;
+}
+
+async function saveSharedRaterHiddenPromptConfig(value) {
+    if (!(db && selectedRole === 'admin')) return false;
+    await ensureCurrentUserAccessMirror();
+    const normalized = normalizeRaterHiddenPrompt(value);
+    await set(ref(db, `${APP_CONFIG_DB_PATH}/raterHiddenPrompt`), normalized || null);
+    setSharedRaterHiddenPrompt(normalized);
     return true;
 }
 
@@ -10437,6 +10197,33 @@ async function resetHiddenClientPromptToDefault() {
     }
     populateHiddenClientPromptField();
     showCopyNotification('Скрытый prompt клиента сброшен к умолчанию');
+}
+
+async function saveHiddenRaterPromptFromInput() {
+    const normalized = normalizeRaterHiddenPrompt(adminHiddenRaterPromptInput?.value || '');
+    setSharedRaterHiddenPrompt(normalized, { clearCache: !normalized });
+    let sharedSaved = false;
+    try {
+        sharedSaved = await saveSharedRaterHiddenPromptConfig(normalized);
+    } catch (error) {
+        console.warn('Failed to save shared hidden rater prompt:', error);
+    }
+    populateHiddenRaterPromptField();
+    showCopyNotification(sharedSaved ? 'Скрытый prompt оценщика сохранён' : 'Скрытый prompt оценщика сохранён локально');
+}
+
+async function resetHiddenRaterPromptToDefault() {
+    setSharedRaterHiddenPrompt('', { clearCache: true });
+    if (db && selectedRole === 'admin') {
+        try {
+            await ensureCurrentUserAccessMirror();
+            await set(ref(db, `${APP_CONFIG_DB_PATH}/raterHiddenPrompt`), null);
+        } catch (error) {
+            console.warn('Failed to reset shared hidden rater prompt:', error);
+        }
+    }
+    populateHiddenRaterPromptField();
+    showCopyNotification('Скрытый prompt оценщика сброшен (остаётся только встроенный контракт JSON)');
 }
 
 async function saveVoiceModeConfigFromInputs() {
@@ -12086,7 +11873,6 @@ function showSettingsModal() {
         adminPanelAccordion.removeAttribute('open');
         stopAdminRealtimeSync();
     }
-    renderActiveScenarioStrip();
 }
 
 const nameInputMeasureCanvas = document.createElement('canvas');
@@ -12485,41 +12271,32 @@ bindEvent(adminHiddenClientPromptInput, 'keydown', (e) => {
     });
 });
 
+bindEvent(adminHiddenRaterPromptSaveBtn, 'click', () => {
+    saveHiddenRaterPromptFromInput().catch((error) => {
+        console.error('Failed to save hidden rater prompt:', error);
+        showCopyNotification('Ошибка сохранения скрытого prompt оценщика');
+    });
+});
+
+bindEvent(adminHiddenRaterPromptResetBtn, 'click', () => {
+    resetHiddenRaterPromptToDefault().catch((error) => {
+        console.error('Failed to reset hidden rater prompt:', error);
+        showCopyNotification('Ошибка сброса скрытого prompt оценщика');
+    });
+});
+
+bindEvent(adminHiddenRaterPromptInput, 'keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.key !== 'Enter') return;
+    e.preventDefault();
+    saveHiddenRaterPromptFromInput().catch((error) => {
+        console.error('Failed to save hidden rater prompt:', error);
+        showCopyNotification('Ошибка сохранения скрытого prompt оценщика');
+    });
+});
+
 bindEvent(adminWebhookDebugClearBtn, 'click', () => {
     clearWebhookDebugEntries();
     showCopyNotification('Лог webhook очищен');
-});
-
-bindEvent(adminScenarioLibraryList, 'click', (event) => {
-    const actionBtn = event.target.closest('[data-scenario-action]');
-    if (!actionBtn) return;
-    const presetId = actionBtn.dataset.scenarioId || '';
-    const action = actionBtn.dataset.scenarioAction || '';
-    if (action === 'apply') {
-        setActiveTestScenarioPreset(presetId);
-        return;
-    }
-    if (action === 'launch') {
-        launchActiveTestScenarioPreset(presetId).catch((error) => {
-            console.error('Failed to launch test scenario:', error);
-            showCopyNotification('Ошибка запуска сценария');
-        });
-    }
-});
-
-bindEvent(adminScenarioLibraryCurrent, 'click', (event) => {
-    const actionBtn = event.target.closest('[data-scenario-current-action]');
-    if (!actionBtn) return;
-    const action = actionBtn.dataset.scenarioCurrentAction || '';
-    if (action === 'prefill') {
-        if (!fillActiveScenarioStarterMessage()) {
-            showCopyNotification('Сначала выбери сценарий');
-        }
-        return;
-    }
-    if (action === 'clear') {
-        clearActiveTestScenarioPreset();
-    }
 });
 
 [geminiApiKeyInput, geminiTokenEndpointInput, geminiVoiceNameInput].forEach((input) => {
@@ -12989,7 +12766,6 @@ function clearChat() {
         });
     }
     setStartButtonsEnabled(isChatReady);
-    renderActiveScenarioStrip();
 }
 
 function escapeHtml(value) {
@@ -13695,7 +13471,6 @@ async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RAT
     let lastError = null;
     const runtimeRatingConfig = getRuntimeRatingRequestConfig();
     const conversationOutcomeState = getConversationActionStatePayload();
-    const activeScenarioPreset = getActiveTestScenarioPreset();
     const effectiveRaterPrompt = buildRaterPromptForWebhook(raterPrompt);
     const effectiveMaxAttempts = Math.min(
         normalizeDebugPositiveInt(maxAttempts, runtimeRatingConfig.attempts, 1, RATING_SEND_ATTEMPTS),
@@ -13726,8 +13501,8 @@ async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RAT
                     conversationOutcome: conversationOutcomeState?.type || '',
                     conversationOutcomeReason: conversationOutcomeState?.reason || '',
                     conversationOutcomeRecoverable: !!conversationOutcomeState?.recoverable,
-                    activeScenarioPresetId: activeScenarioPreset?.id || '',
-                    activeScenarioPresetName: activeScenarioPreset?.name || ''
+                    activeScenarioPresetId: '',
+                    activeScenarioPresetName: ''
                 }))
             }, runtimeRatingConfig.timeoutMs);
 
@@ -14816,20 +14591,6 @@ bindEvent(userInput, 'input', () => {
     autoResizeTextarea(userInput);
     updateSendBtnState();
     });
-bindEvent(activeScenarioPrefillBtn, 'click', () => {
-    if (!fillActiveScenarioStarterMessage()) {
-        showCopyNotification('Сначала выбери сценарий');
-    }
-});
-bindEvent(activeScenarioStartBtn, 'click', () => {
-    launchActiveTestScenarioPreset().catch((error) => {
-        console.error('Failed to launch active test scenario:', error);
-        showCopyNotification('Ошибка запуска сценария');
-    });
-});
-bindEvent(activeScenarioClearBtn, 'click', () => {
-    clearActiveTestScenarioPreset();
-});
 bindEvent(clearChatBtn, 'click', () => { if (confirm('Очистить чат?')) clearChat(); });
 bindEvent(startBtn, 'click', startConversationHandler);
 bindEvent(rateChatBtn, 'click', rateChat);
@@ -15290,9 +15051,7 @@ function installLocalhostTestHooks() {
                 activeContent: getActiveContent(role),
                 visibleVariations,
                 conflictMessage: String(promptSyncConflictMessages[role] || ''),
-                hiddenClientPrompt: getConfiguredClientConversationActionPrompt(),
-                activeScenarioPresetId: activeTestScenarioPresetId,
-                activeScenarioPresetName: getTestScenarioPresetById(activeTestScenarioPresetId)?.name || ''
+                hiddenClientPrompt: getConfiguredClientConversationActionPrompt()
             };
         }
     };
