@@ -407,6 +407,10 @@ body.light-theme .btn-improve-from-rating:hover {
     background: #e0e0e0 !important;
 }
 
+body.light-theme .improve-from-rating-title {
+    color: #1a1a1a;
+}
+
 /* Иконки действий в чате (копировать и т.д.) */
 body.light-theme .message-actions .btn-icon {
     color: #888 !important;
@@ -1300,10 +1304,27 @@ body.light-theme .message.user a {
 /* Improve from rating button */
 .improve-from-rating-container {
     display: flex;
+    flex-direction: column;
+    align-items: center;
     justify-content: center;
+    gap: 12px;
     padding: 16px 0;
     margin-top: 16px;
     border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+.improve-from-rating-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #e8e8e8;
+    text-align: center;
+}
+
+.improve-from-rating-buttons {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
 }
 
 .btn-improve-from-rating {

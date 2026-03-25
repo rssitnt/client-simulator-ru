@@ -13768,7 +13768,8 @@ function addImproveFromRatingButton(dialogText, ratingText) {
     buttonContainer.style.border = 'none';
     
     buttonContainer.innerHTML = `
-        <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+        <div class="improve-from-rating-title">Улучшить инструкцию:</div>
+        <div class="improve-from-rating-buttons">
             <button
                 class="btn-improve-from-rating"
                 data-role="manager"
