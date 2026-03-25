@@ -224,6 +224,7 @@ const USER_ACTIVITY_TRACKING_LOOP_THROTTLE_MS = 3000;
 const ACTIVE_TIME_CARRYOVER_TTL_MS = 24 * 60 * 60 * 1000;
 const SESSION_REVOCATION_CHECK_MS = 20000;
 const ADMIN_PRESENCE_RELATIVE_LABEL_REFRESH_MS = 90 * 1000;
+const ADMIN_USERS_TABLE_RENDER_DEBOUNCE_MS = 80;
 const WEBHOOK_DEFAULT_TIMEOUT_MS = 45000;
 const CHAT_WEBHOOK_TIMEOUT_MS = 45000;
 const AI_HELPER_WEBHOOK_TIMEOUT_MS = 30000;
@@ -1222,7 +1223,7 @@ let adminRealtimeUsers = null;
 let adminRealtimeInvites = null;
 let adminRealtimeRevocations = null;
 let adminRealtimePresence = null;
-let adminUsersRenderQueued = false;
+let adminUsersTableRenderDebounceTimerId = null;
 let adminStatusRefreshTimerId = null;
 let adminUsersTableRenderInProgress = false;
 let adminUsersTableRenderWatchdogTimer = null;
@@ -4609,18 +4610,23 @@ function stopAdminRealtimeSync() {
         });
     }
     adminRealtimeUnsubscribes = [];
-    adminUsersRenderQueued = false;
+    if (adminUsersTableRenderDebounceTimerId) {
+        clearTimeout(adminUsersTableRenderDebounceTimerId);
+        adminUsersTableRenderDebounceTimerId = null;
+    }
     resetAdminRealtimeTableData();
     resetAdminUsersTableDomState();
 }
 
 function scheduleAdminUsersTableRender() {
-    if (adminUsersRenderQueued || !isSettingsModalOpen() || !isAdmin()) return;
-    adminUsersRenderQueued = true;
-    queueMicrotask(() => {
-        adminUsersRenderQueued = false;
+    if (!isSettingsModalOpen() || !isAdmin()) return;
+    if (adminUsersTableRenderDebounceTimerId) {
+        clearTimeout(adminUsersTableRenderDebounceTimerId);
+    }
+    adminUsersTableRenderDebounceTimerId = setTimeout(() => {
+        adminUsersTableRenderDebounceTimerId = null;
         void renderAdminUsersTable();
-    });
+    }, ADMIN_USERS_TABLE_RENDER_DEBOUNCE_MS);
 }
 
 function refreshAdminUsersPresenceLabels() {

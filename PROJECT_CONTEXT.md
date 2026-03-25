@@ -1,5 +1,8 @@
 # PROJECT_CONTEXT.md
 
+## 2026-03-25 — Debounce перерисовки админ-таблицы пользователей
+- `scheduleAdminUsersTableRender()` больше не ставит отдельный `queueMicrotask` на каждый `onValue` из четырёх веток realtime; вместо этого отложенный вызов `renderAdminUsersTable` сливается в окне **80 ms** (`ADMIN_USERS_TABLE_RENDER_DEBOUNCE_MS`), чтобы пачка почти одновременных снапшотов не запускала несколько тяжёлых проходов подряд. Таймер сбрасывается в `stopAdminRealtimeSync`. Версия скрипта в `index.html`: `?v=20260325-26`.
+
 ## 2026-03-25 — Меньше фоновых срабатываний: active time и админ-presence
 - `ACTIVE_TICK_MS` 5s→8s (реже `setInterval`, flush по-прежнему от `ACTIVE_FLUSH_MS` 15s).
 - Троттлинг `markUserActivity` для цикла активного времени и для `syncCurrentUserPresenceState`: 1.5s→3s.
