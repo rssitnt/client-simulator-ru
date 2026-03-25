@@ -1930,7 +1930,7 @@ body.light-theme .dropdown-option.active {
     align-self: center;
     position: static;
     margin-left: 4px;
-    margin-right: -8px;
+    margin-right: -6px;
     opacity: 0.7;
     transform: none;
     cursor: pointer;
