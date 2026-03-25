@@ -35,7 +35,8 @@ const WEBHOOK_URL = UNIFIED_SIMULATOR_WEBHOOK_URL;
 const RATE_WEBHOOK_URL = UNIFIED_SIMULATOR_WEBHOOK_URL;
 const ATTESTATION_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/certification';
 const MANAGER_ASSISTANT_WEBHOOK_URL = UNIFIED_SIMULATOR_WEBHOOK_URL;
-const AI_IMPROVE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/prompt-enchancement';
+const AI_IMPROVE_WEBHOOK_URL = UNIFIED_SIMULATOR_WEBHOOK_URL;
+const LEGACY_AI_IMPROVE_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/prompt-enchancement';
 const GEMINI_LIVE_MODEL = 'gpt-4o-realtime-preview-2025-06-03';
 const GEMINI_LIVE_API_KEY_STORAGE_KEY = 'geminiLiveApiKey';
 const GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY = 'geminiLiveTokenEndpoint';
@@ -908,6 +909,12 @@ function buildUnifiedSimulatorWebhookPayload(requestType, payload = {}) {
         ensureStringAlias('guardrailsInput', normalizedPayload.userMessage);
     }
 
+    if (normalizedRequestType === 'improve') {
+        ensureStringAlias('chatInput', normalizedPayload.userMessage);
+        ensureStringAlias('prompt', normalizedPayload.userMessage);
+        ensureStringAlias('guardrailsInput', normalizedPayload.userMessage);
+    }
+
     if (normalizedRequestType === 'rating') {
         ensureStringAlias('chatInput', normalizedPayload.dialog);
         ensureStringAlias('systemPrompt', normalizedPayload.raterPrompt);
@@ -922,6 +929,77 @@ function buildUnifiedSimulatorWebhookPayload(requestType, payload = {}) {
         source: 'client-simulator-web',
         ...normalizedPayload
     };
+}
+
+async function requestAiImproveResponseText(requestId, userMessage, timeoutMs = AI_HELPER_WEBHOOK_TIMEOUT_MS) {
+    const attempts = [
+        {
+            endpoint: AI_IMPROVE_WEBHOOK_URL,
+            headers: buildJsonRequestHeaders(requestId, 'improve', 'improve'),
+            body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('improve', {
+                userMessage,
+                chatInput: userMessage,
+                prompt: userMessage,
+                guardrailsInput: userMessage,
+                requestId
+            })),
+            usedLegacyFallback: false
+        },
+        {
+            endpoint: LEGACY_AI_IMPROVE_WEBHOOK_URL,
+            headers: buildJsonRequestHeaders(requestId, 'improve_legacy', 'improve'),
+            body: JSON.stringify({
+                userMessage,
+                requestId
+            }),
+            usedLegacyFallback: true
+        }
+    ];
+
+    let lastError = null;
+
+    for (let index = 0; index < attempts.length; index += 1) {
+        const attempt = attempts[index];
+        let response = null;
+        try {
+            response = await fetchWithTimeout(attempt.endpoint, {
+                method: 'POST',
+                headers: attempt.headers,
+                body: attempt.body
+            }, timeoutMs);
+
+            if (!response.ok) {
+                const httpError = new Error(`HTTP ${response.status}`);
+                httpError.httpStatus = response.status;
+                throw httpError;
+            }
+
+            const responseText = await readResponseTextWithTimeout(
+                response,
+                timeoutMs,
+                `Таймаут чтения ответа AI helper (${timeoutMs/1000}с). Проверьте n8n workflow.`
+            );
+
+            if (!responseText || !responseText.trim()) {
+                throw new Error('Пустой ответ от сервера');
+            }
+
+            return {
+                response,
+                responseText,
+                endpoint: attempt.endpoint,
+                usedLegacyFallback: attempt.usedLegacyFallback
+            };
+        } catch (error) {
+            lastError = error;
+            if (index < attempts.length - 1) {
+                console.warn('AI improve unified webhook returned no usable response, falling back to legacy improve webhook.', error);
+                continue;
+            }
+        }
+    }
+
+    throw lastError || new Error('Не удалось получить ответ от AI helper.');
 }
 
 // DOM Elements
@@ -12081,31 +12159,17 @@ async function improvePromptWithAI() {
         const requestId = buildRequestId('improve');
         debugEntryId = startWebhookDebugRequest({
             type: 'improve',
-            endpoint: AI_IMPROVE_WEBHOOK_URL,
+            endpoint: `${AI_IMPROVE_WEBHOOK_URL} (fallback: ${LEGACY_AI_IMPROVE_WEBHOOK_URL})`,
             requestId,
             timeoutMs: AI_HELPER_WEBHOOK_TIMEOUT_MS
         });
-        response = await fetchWithTimeout(AI_IMPROVE_WEBHOOK_URL, {
-            method: 'POST',
-            headers: buildJsonRequestHeaders(requestId, 'improve'),
-            body: JSON.stringify({
-                userMessage,
-                requestId
-            })
-        }, AI_HELPER_WEBHOOK_TIMEOUT_MS);
-        
-        if (!response.ok) {
-            const httpError = new Error(`HTTP ${response.status}`);
-            httpError.httpStatus = response.status;
-            throw httpError;
-        }
-        
-        const responseText = await readResponseTextWithTimeout(
-            response,
-            AI_HELPER_WEBHOOK_TIMEOUT_MS,
-            `Таймаут чтения ответа AI helper (${AI_HELPER_WEBHOOK_TIMEOUT_MS/1000}с). Проверьте n8n workflow.`
+        const improveResponse = await requestAiImproveResponseText(
+            requestId,
+            userMessage,
+            AI_HELPER_WEBHOOK_TIMEOUT_MS
         );
-        if (!responseText) throw new Error('Пустой ответ от сервера');
+        response = improveResponse.response;
+        const responseText = improveResponse.responseText;
 
         let data;
         try {
@@ -12121,7 +12185,7 @@ async function improvePromptWithAI() {
         if (!rawResponse) throw new Error('Не удалось получить текст из ответа');
         finishWebhookDebugRequest(debugEntryId, {
             httpStatus: response.status,
-            resultMessage: `Ответ ${rawResponse.trim().length} симв.`
+            resultMessage: `${improveResponse.usedLegacyFallback ? 'Legacy fallback · ' : ''}Ответ ${rawResponse.trim().length} симв.`
         });
         
         // Clean the text for saving (remove ~~deleted~~ and unwrap ++added++)
