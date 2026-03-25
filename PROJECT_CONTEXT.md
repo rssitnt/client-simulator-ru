@@ -68,6 +68,10 @@
   - добавлены `writeFirebaseJsonViaRest()` и `firebaseWritePathWithFallback()` — критичные записи теперь идут и через обычный RTDB REST с Firebase idToken, а не только через подвисающий SDK transport;
   - на fallback переведены `saveUserRecord`, `patchUserRecord`, `syncCurrentUserAccessMirror`, `savePartnerInvite`, `patchPartnerInvite`, `setAccessRevocation`;
   - кэш-версия обновлена до `script.js?v=20260325-08`.
+- Новый подтверждённый root cause из live console: Firebase Realtime Database SDK использует **long-polling через script tag** на URL вида `https://<db>.firebasedatabase.app/.lp?...`, и именно это блокировалось CSP директивой `script-src`, а не `connect-src`.
+- Доп. правка:
+  - в `index.html` `script-src` и `script-src-elem` расширены хостами `https://*.firebasedatabase.app` и `https://*.firebaseio.com`, чтобы RTDB long-polling transport вообще мог стартовать;
+  - версия фронта обновлена до `script.js?v=20260325-09`.
 
 ## 2026-03-25 — Пустые промпты: нет Firebase Auth при входе по паролю
 - Корень: логин проверялся по записи в RTDB `users`, но **Firebase Authentication** часто оставался без сессии (`auth.currentUser === null`). Правила RTDB для `prompts` требовали `auth != null` и раньше ещё `email_verified` — клиентский `onValue`/`get` получал **permission denied**, кэш пустой → «Промпт пустой».
