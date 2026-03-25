@@ -63,6 +63,11 @@
   - `saveUserRecord`, `patchUserRecord`, `savePartnerInvite`, `patchPartnerInvite`, `setAccessRevocation`, `ensureCurrentUserAccessMirror` получили режим `requireRemote`, при котором локальный cache больше не маскирует провал облака как “успешный вход”;
   - кэш-версия обновлена до `script.js?v=20260325-07`.
 - Важно: чтобы это заработало в проде, новые rules из `database.rules.json` нужно именно **опубликовать в Firebase Console**, иначе live-база продолжит жить по старым правилам.
+- После удаления битого Firebase Auth-пользователя и публикации rules следующий блокер оказался уже не в claims/rules, а в transport записи: сайт открывал Firebase Auth, но `set/update` через браузерный RTDB SDK зависали по 8с на `users`, `users_by_uid`, `partner_invites`, `access_revocations`.
+- Доп. правка:
+  - добавлены `writeFirebaseJsonViaRest()` и `firebaseWritePathWithFallback()` — критичные записи теперь идут и через обычный RTDB REST с Firebase idToken, а не только через подвисающий SDK transport;
+  - на fallback переведены `saveUserRecord`, `patchUserRecord`, `syncCurrentUserAccessMirror`, `savePartnerInvite`, `patchPartnerInvite`, `setAccessRevocation`;
+  - кэш-версия обновлена до `script.js?v=20260325-08`.
 
 ## 2026-03-25 — Пустые промпты: нет Firebase Auth при входе по паролю
 - Корень: логин проверялся по записи в RTDB `users`, но **Firebase Authentication** часто оставался без сессии (`auth.currentUser === null`). Правила RTDB для `prompts` требовали `auth != null` и раньше ещё `email_verified` — клиентский `onValue`/`get` получал **permission denied**, кэш пустой → «Промпт пустой».

@@ -720,6 +720,61 @@ async function fetchFirebaseJsonViaRest(path, timeoutMs = PROMPTS_REST_FALLBACK_
     );
 }
 
+async function writeFirebaseJsonViaRest(path, value, method = 'PUT', timeoutMs = FIREBASE_FRONTEND_WRITE_TIMEOUT_MS, options = {}) {
+    const includeAuth = options?.includeAuth !== false;
+    const url = buildFirebaseRestUrl(path);
+    if (!url) return null;
+
+    let requestUrl = url;
+    if (includeAuth) {
+        const token = await getFirebaseAuthIdToken().catch(() => '');
+        if (token) {
+            requestUrl += (requestUrl.includes('?') ? '&' : '?') + `auth=${encodeURIComponent(token)}`;
+        }
+    }
+
+    const normalizedMethod = String(method || 'PUT').trim().toUpperCase();
+    const requestOptions = {
+        method: normalizedMethod,
+        credentials: 'omit',
+        cache: 'no-store',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    };
+
+    if (normalizedMethod !== 'DELETE') {
+        requestOptions.body = JSON.stringify(value);
+    }
+
+    const response = await fetchWithTimeout(requestUrl, requestOptions, timeoutMs);
+    if (!response.ok) {
+        const errorText = await readResponseTextWithTimeout(
+            response,
+            timeoutMs,
+            `Таймаут чтения ошибки Firebase REST ${normalizedMethod} ${path} (${timeoutMs / 1000}с).`,
+            ''
+        ).catch(() => '');
+        throw new Error(`Firebase REST ${normalizedMethod} ${path} failed with HTTP ${response.status}${errorText ? `: ${errorText}` : ''}`);
+    }
+
+    return true;
+}
+
+async function firebaseWritePathWithFallback(dbPath, sdkWriteOperation, restPayload, restMethod = 'PUT', timeoutMs = FIREBASE_FRONTEND_WRITE_TIMEOUT_MS, label = 'Firebase write') {
+    const strategies = [];
+    if (db && typeof sdkWriteOperation === 'function') {
+        strategies.push(Promise.resolve().then(() => sdkWriteOperation()));
+    }
+    strategies.push(writeFirebaseJsonViaRest(dbPath, restPayload, restMethod, timeoutMs));
+
+    return withPromiseTimeout(
+        firstSuccessfulPromise(strategies),
+        timeoutMs,
+        `${label} timeout (${timeoutMs / 1000}с).`
+    );
+}
+
 async function waitForFirebaseAuthReady() {
     if (!auth) return;
     try {
@@ -1420,8 +1475,11 @@ async function syncCurrentUserAccessMirror(user = currentUser, options = {}) {
     };
 
     try {
-        await firebaseWriteWithTimeout(
+        await firebaseWritePathWithFallback(
+            `${AUTH_USERS_BY_UID_DB_PATH}/${uid}`,
             () => set(ref(db, `${AUTH_USERS_BY_UID_DB_PATH}/${uid}`), payload),
+            payload,
+            'PUT',
             FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
             `Синхронизация access mirror превысила лимит (${FIREBASE_FRONTEND_WRITE_TIMEOUT_MS / 1000}с)`
         );
@@ -2034,10 +2092,13 @@ async function setAccessRevocation(login, isRevoked, meta = {}, options = {}) {
 
     if (db) {
         try {
-            await firebaseWriteWithTimeout(
+            await firebaseWritePathWithFallback(
+                `${ACCESS_REVOKE_DB_PATH}/${key}`,
                 () => isRevoked
                     ? set(ref(db, `${ACCESS_REVOKE_DB_PATH}/${key}`), payload)
                     : set(ref(db, `${ACCESS_REVOKE_DB_PATH}/${key}`), null),
+                isRevoked ? payload : null,
+                'PUT',
                 FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
                 `Firebase write for ${ACCESS_REVOKE_DB_PATH}/${key}`
             );
@@ -2681,8 +2742,11 @@ async function savePartnerInvite(invite, options = {}) {
 
     if (db) {
         try {
-            await firebaseWriteWithTimeout(
+            await firebaseWritePathWithFallback(
+                `${PARTNER_INVITES_DB_PATH}/${key}`,
                 () => set(ref(db, `${PARTNER_INVITES_DB_PATH}/${key}`), payload),
+                payload,
+                'PUT',
                 FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
                 `Firebase write for ${PARTNER_INVITES_DB_PATH}/${key}`
             );
@@ -2726,8 +2790,11 @@ async function patchPartnerInvite(login, patch = {}, options = {}) {
 
     if (db) {
         try {
-            await firebaseWriteWithTimeout(
+            await firebaseWritePathWithFallback(
+                `${PARTNER_INVITES_DB_PATH}/${key}`,
                 () => update(ref(db, `${PARTNER_INVITES_DB_PATH}/${key}`), sanitizedPatch),
+                sanitizedPatch,
+                'PATCH',
                 FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
                 `Firebase patch for ${PARTNER_INVITES_DB_PATH}/${key}`
             );
@@ -3413,8 +3480,11 @@ async function saveUserRecord(record, options = {}) {
 
     if (db) {
         try {
-            await firebaseWriteWithTimeout(
+            await firebaseWritePathWithFallback(
+                `${AUTH_USERS_DB_PATH}/${key}`,
                 () => set(ref(db, `${AUTH_USERS_DB_PATH}/${key}`), payload),
+                payload,
+                'PUT',
                 FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
                 `Firebase write for ${AUTH_USERS_DB_PATH}/${key}`
             );
@@ -3498,8 +3568,11 @@ async function patchUserRecord(login, patch = {}, options = {}) {
 
     if (db) {
         try {
-            await firebaseWriteWithTimeout(
+            await firebaseWritePathWithFallback(
+                `${AUTH_USERS_DB_PATH}/${key}`,
                 () => update(ref(db, `${AUTH_USERS_DB_PATH}/${key}`), sanitizedPatch),
+                sanitizedPatch,
+                'PATCH',
                 FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
                 `Firebase patch for ${AUTH_USERS_DB_PATH}/${key}`
             );
