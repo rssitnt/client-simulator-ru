@@ -898,10 +898,14 @@ function buildUnifiedSimulatorWebhookPayload(requestType, payload = {}) {
 
     if (normalizedRequestType === 'chat' || normalizedRequestType === 'chat_start') {
         ensureStringAlias('userMessage', normalizedPayload.chatInput);
+        ensureStringAlias('prompt', normalizedPayload.chatInput);
+        ensureStringAlias('guardrailsInput', normalizedPayload.chatInput);
     }
 
     if (normalizedRequestType === 'manager_assist') {
         ensureStringAlias('chatInput', normalizedPayload.userMessage);
+        ensureStringAlias('prompt', normalizedPayload.userMessage);
+        ensureStringAlias('guardrailsInput', normalizedPayload.userMessage);
     }
 
     if (normalizedRequestType === 'rating') {
@@ -909,6 +913,8 @@ function buildUnifiedSimulatorWebhookPayload(requestType, payload = {}) {
         ensureStringAlias('systemPrompt', normalizedPayload.raterPrompt);
         ensureStringAlias('dialogHistory', normalizedPayload.dialog);
         ensureStringAlias('userMessage', normalizedPayload.dialog);
+        ensureStringAlias('prompt', normalizedPayload.dialog);
+        ensureStringAlias('guardrailsInput', normalizedPayload.dialog);
     }
 
     return {
@@ -13075,6 +13081,9 @@ async function sendMessage() {
             headers: buildJsonRequestHeaders(requestId, 'chat', 'chat'),
             body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('chat', {
                 chatInput: userMessage,
+                userMessage,
+                prompt: userMessage,
+                guardrailsInput: userMessage,
                 systemPrompt,
                 dialogHistory,
                 conversationActionState,
@@ -13171,6 +13180,9 @@ async function startConversationHandler() {
             headers: buildJsonRequestHeaders(requestId, 'chat_start', 'chat_start'),
             body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('chat_start', {
                 chatInput: '/start',
+                userMessage: '/start',
+                prompt: '/start',
+                guardrailsInput: '/start',
                 systemPrompt,
                 dialogHistory: '',
                 conversationActionState,
@@ -13601,6 +13613,12 @@ async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RAT
                 headers: buildJsonRequestHeaders(requestId, 'rating', 'rating'),
                 body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('rating', {
                     dialog: dialogText,
+                    chatInput: dialogText,
+                    userMessage: dialogText,
+                    prompt: dialogText,
+                    guardrailsInput: dialogText,
+                    dialogHistory: dialogText,
+                    systemPrompt: effectiveRaterPrompt,
                     raterPrompt: effectiveRaterPrompt,
                     sessionId: raterSessionId,
                     requestId,
@@ -13922,6 +13940,9 @@ async function generateAIResponse() {
             body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('manager_assist', {
                 systemPrompt: fullPrompt,
                 userMessage: lastMessage,
+                chatInput: lastMessage,
+                prompt: lastMessage,
+                guardrailsInput: lastMessage,
                 dialogHistory,
                 sessionId: managerSessionId,
                 requestId
