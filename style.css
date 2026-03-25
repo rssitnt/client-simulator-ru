@@ -5106,9 +5106,18 @@ body.voice-mode-active > :not(#voiceModeScreen):not(#voiceModeActions):not(#elev
     font-family: inherit;
     margin-bottom: 20px;
     box-sizing: border-box;
-    resize: vertical;
+    resize: none;
     min-height: 100px;
     transition: border-color 0.2s;
+}
+
+.ai-improve-modal textarea::-webkit-scrollbar-button,
+.ai-improve-modal textarea::-webkit-resizer,
+.ai-improve-modal textarea::-webkit-scrollbar-corner {
+    display: none;
+    width: 0;
+    height: 0;
+    background: transparent;
 }
 
 .ai-improve-modal textarea:focus {
