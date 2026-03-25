@@ -4138,7 +4138,7 @@ body.light-theme .more-colors-popup {
     overflow-y: auto;
     scrollbar-gutter: stable;
     scrollbar-width: thin;
-    scrollbar-color: rgba(138, 149, 191, 0.7) transparent;
+    scrollbar-color: #444 transparent;
     background: #2c2c2c;
     border: none;
     border-radius: 8px;
@@ -4152,27 +4152,27 @@ body.light-theme .more-colors-popup {
 }
 
 .admin-hidden-prompt-textarea::-webkit-scrollbar {
-    width: 12px;
+    width: 6px;
+    height: 6px;
+}
+
+.admin-hidden-prompt-textarea::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
 }
 
 .admin-hidden-prompt-textarea::-webkit-scrollbar-track {
     background: transparent;
-    border-radius: 999px;
-    margin: 8px 0;
 }
 
 .admin-hidden-prompt-textarea::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, rgba(148, 160, 211, 0.88), rgba(115, 126, 170, 0.88));
-    border: 3px solid transparent;
-    background-clip: padding-box;
-    border-radius: 999px;
-    min-height: 42px;
+    background-color: #333;
+    border-radius: 3px;
 }
 
 .admin-hidden-prompt-textarea::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(180deg, rgba(170, 182, 232, 0.95), rgba(128, 141, 194, 0.95));
-    border: 3px solid transparent;
-    background-clip: padding-box;
+    background-color: #555;
 }
 
 .admin-hidden-prompt-textarea::-webkit-scrollbar-corner {
@@ -4180,20 +4180,16 @@ body.light-theme .more-colors-popup {
 }
 
 body.light-theme .admin-hidden-prompt-textarea {
-    scrollbar-color: rgba(125, 138, 186, 0.8) transparent;
+    scrollbar-color: #ccc transparent;
     box-shadow: inset 0 0 0 1px rgba(38, 50, 99, 0.08);
 }
 
 body.light-theme .admin-hidden-prompt-textarea::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, rgba(160, 175, 222, 0.95), rgba(129, 145, 202, 0.95));
-    border: 3px solid transparent;
-    background-clip: padding-box;
+    background-color: #ccc;
 }
 
 body.light-theme .admin-hidden-prompt-textarea::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(180deg, rgba(143, 160, 214, 0.98), rgba(113, 129, 189, 0.98));
-    border: 3px solid transparent;
-    background-clip: padding-box;
+    background-color: #aaa;
 }
 
 .admin-hidden-prompt-actions {

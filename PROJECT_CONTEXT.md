@@ -5,11 +5,69 @@
 - Type: static site + optional token server
 - Purpose: тренажёр, где ИИ-клиент ведёт диалог с менеджером, а отдельный ИИ оценивает результат.
 
+## 2026-03-25 — UI: скроллбар «Скрытый prompt клиента»
+- В `style.css` для `.admin-hidden-prompt-textarea` убран широкий сине-серый «pill»-ползунок с градиентом; стиль приведён к тому же тонкому нейтральному виду, что у `.prompt-editor` (6px, `#333` / hover `#555`, прозрачный track). В `index.html` обновлён query `style.css?v=...` для сброса кэша.
+
 ## Current Priorities
 - Надёжность сценариев `chat -> conversationAction -> rating`
 - Безопасный и предсказуемый prompt sync
 - Производительность UI под realtime Firebase
 - Реалистичность клиента и качество оценки
+
+## 2026-03-25 — Добавлен базовый CI для smoke
+- После синхронизации rules и README добавлен первый GitHub Actions workflow: `C:\projects\sites\client-simulator\.github\workflows\smoke.yml`.
+- Что делает workflow:
+  - запускается на `push`, `pull_request` и вручную через `workflow_dispatch`;
+  - поднимает Node.js 20;
+  - ставит зависимости через `npm ci`;
+  - ставит Playwright Chromium;
+  - запускает `npm run test:smoke`;
+  - при падении прикладывает артефакт `output/playwright`.
+- Это не заменяет live integration smoke и не проверяет боевые Firebase rules/n8n, но закрывает самый полезный автоматический регрессионный контур для фронта.
+
+## 2026-03-25 — Репозиторные Firebase rules и README синхронизированы с текущим сайтом
+- После обзорного прохода закрыт практический разрыв между кодом фронта и репозиторными артефактами:
+  - в `database.rules.json` добавлены ветки `prompt_overrides` и `user_presence`, потому что `script.js` реально использует их для облачного sync локальных draft-override и для presence-статусов;
+  - для `prompt_overrides` доступ оставлен только админу-владельцу своей записи;
+  - для `user_presence` админ может читать коллекцию целиком, а запись разрешена владельцу своей записи и администратору.
+- Важно: это меняет только репозиторий. Чтобы реальное поведение Firebase совпало с кодом, эти rules всё ещё нужно опубликовать в Firebase Console.
+- `README.md` полностью обновлён под текущее состояние продукта:
+  - теперь там описан unified webhook `client-simulator`, отдельный webhook аттестации, реальные команды `test:smoke` / `test:smoke:integration`, token server и текущая архитектура;
+  - удалены вводящие в заблуждение старые описания про один простой webhook и устаревший request shape.
+- Проверка после этих правок:
+  - `database.rules.json` валиден как JSON;
+  - `npm run test:smoke` проходит;
+  - lints по изменённым файлам чистые.
+
+## 2026-03-25 — Обзор сайта и что логичнее делать дальше
+- После обзорного прохода по сайту как по продукту и по техслою картина такая:
+  - ядро у проекта уже сильное: чат, prompt-редактор, rating, manager assist, аттестация, voice/token-server, админка, история/compare/rollback промптов;
+  - самый крупный источник будущей боли — не отсутствие фич, а разросшийся единый `script.js` и расхождение между тем, что фронт реально пишет в Firebase, и тем, что описано в репозиторных rules;
+  - README уже частично устарел: описывает более простой ранний продукт и старый webhook-формат, тогда как реальный фронт живёт на unified `client-simulator` flow и намного более сложной auth/prompt архитектуре.
+- Подтверждённый техриск:
+  - в `script.js` используются ветки `user_presence` и `prompt_overrides`;
+  - в текущем `database.rules.json` их нет вообще;
+  - это значит, что либо продовые rules уже правились вручную и репозиторий отстал от реальности, либо часть sync/presence поведения сейчас хрупкая и зависит от локальных fallback-веток.
+- Практический приоритет следующих шагов после текущего cleanup:
+  1. сверить и привести в порядок `database.rules.json` под реальные используемые пути (`user_presence`, `prompt_overrides`) и затем опубликовать их;
+  2. обновить `README.md`, чтобы он описывал нынешний продукт, реальные команды проверки и текущий unified webhook-контракт;
+  3. начать аккуратную декомпозицию `script.js` хотя бы на крупные модули (`auth`, `webhook/chat`, `prompts`, `admin`, `voice`);
+  4. добавить базовый CI на `npm run test:smoke`, потому что `.github/workflows` в репозитории сейчас нет.
+
+## 2026-03-25 — Smoke harness снова зелёный после cleanup-прохода
+- После cleanup-правок код приложения в целом был рабочим, но локальный mocked smoke начал падать не из-за реальной поломки UI, а из-за рассинхрона самого test-harness с текущим приложением.
+- Подтверждённый root cause в боевом коде был один: при удалении локальной `webhook debug`-секции очистка `WEBHOOK_DEBUG_CONFIG_STORAGE_KEY` была вызвана слишком рано, ещё до инициализации `localJsonStorageCache`; это давало runtime-ошибку `Cannot access 'localJsonStorageCache' before initialization` и роняло bootstrap. Исправлено: на старте теперь выполняется прямое `removeSafeLocalStorageValue(...)`, без раннего обращения к JSON-кэшу.
+- Дальше обновлён сам smoke harness:
+  - `scripts/smoke-e2e.mjs` и `scripts/integration-smoke.mjs` больше не используют слишком бедные Firebase stubs; для тестов поднята лёгкая in-memory RTDB-заглушка, чтобы auth-flow мог реально сохранять обязательную запись пользователя, а не падать на `Firebase RTDB недоступна для обязательной записи пользователя.`;
+  - auth-stub дополнен экспортами `signInWithEmailAndPassword`, `createUserWithEmailAndPassword`, `signOut`, потому что фронтенд теперь импортирует их на старте;
+  - localhost smoke-seed переведён на текущий dev-bypass путь: тест кладёт `localhostDevAuthUser:v1` и `authSession:v1` с `devBypass: true`, вместо старой псевдо-сессии без localhost-preview semantics;
+  - `waitForChatReady()` теперь умеет подхватить localhost dev auth, если модалка всё же открыта;
+  - сценарий prompt workflow обновлён под текущий UI: rollback теперь проверяется через `Историю` и `Восстановить`, а не через старую несуществующую кнопку `promptRollbackBtn`;
+  - сценарий `end_conversation` больше не ищет удалённый блок `Диагностика webhook`;
+  - сценарий prompt-conflict теперь проверяет главное поведение (`локальные правки сохранились`, `compare доступен`), а не жёстко завязан на старую форму notice-текста.
+- Итоговая проверка после правок:
+  - `npm run test:smoke` проходит полностью;
+  - `npm run test:smoke:integration` тоже проходит.
 
 ## 2026-03-25 — Укрепление основы: меньше фона, чище webhook, аккуратнее mobile
 - По ранее согласованным направлениям выполнен безопасный проход по трём зонам: снижена фоновая нагрузка, упорядочен unified webhook payload и подтянуты мобильные UX-мелочи.
