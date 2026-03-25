@@ -44,19 +44,18 @@
   - клиентский чат (`sendMessage`, `startConversationHandler`);
   - оценка диалога (`requestRatingWithRetry`);
   - подсказка для менеджера (`generateAIResponse`).
-- `prompt improvement` пока не переведён полностью на единый серверный workflow: direct probe на `requestType=improve` в общем webhook вернул `200` с пустым body, тогда как старый `prompt-enchancement` вернул нормальный `output`.
-- Поэтому во фронтенде включён безопасный переходный режим:
-  - улучшение промпта теперь сначала стучится в общий `client-simulator` с `requestType=improve` и совместимыми полями `chatInput/prompt/guardrailsInput`;
-  - если общий workflow снова отдаёт пустой или непригодный ответ, фронтенд автоматически уходит в legacy webhook `prompt-enchancement`;
-  - в debug-логе такой ответ помечается как `Legacy fallback`.
-- Версия фронта обновлена до `script.js?v=20260325-16`.
+- `prompt improvement` теперь тоже жёстко идёт только через единый webhook `https://n8n-api.tradicia-k.ru/webhook/client-simulator` с `requestType=improve`.
+- Legacy fallback на `prompt-enchancement` полностью убран по явному требованию пользователя.
+- Для improve-ветки фронтенд по-прежнему шлёт совместимые поля `userMessage`, `chatInput`, `prompt`, `guardrailsInput`, чтобы единый workflow мог читать старые и новые имена.
+- Если общий n8n workflow для `requestType=improve` не вернёт текст, сайт теперь честно покажет ошибку `Единый n8n workflow не вернул ответ для requestType=improve.` вместо тихого ухода в старый сценарий.
+- Версия фронта обновлена до `script.js?v=20260325-17`.
 - Чтобы единый workflow в `n8n` мог безопасно различать ветки без анализа URL, фронтенд теперь передаёт явный `requestType` и дублирует его в header `X-Client-Simulator-Request-Type`.
 - Значения `requestType`:
   - `chat`
   - `chat_start`
   - `rating`
   - `manager_assist`
-- `attestation` пока остаётся на отдельном webhook-е; `prompt improvement` переведён на переходный режим `unified first -> legacy fallback`, потому что общий server-side workflow для `requestType=improve` ещё не отдаёт полноценный ответ.
+- `attestation` пока остаётся на отдельном webhook-е; `prompt improvement`, chat, rating и manager assist теперь все идут через единый `client-simulator` webhook.
 - Локальный smoke (`scripts/smoke-e2e.mjs`) обновлён под единый endpoint и теперь маршрутизирует ответы по `payload.requestType`, а не по старым путям `rate-manager`/`manager-simulator`.
 - Отдельная локальная целевая проверка после правки подтвердила, что фронтенд действительно отправляет `chat_start`, `chat`, `manager_assist` и `rating` на один URL `https://n8n-api.tradicia-k.ru/webhook/client-simulator`.
 
