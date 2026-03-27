@@ -1587,6 +1587,10 @@
 - `resolveNormalizedLogin()` теперь принимает `loginKey` как прямого кандидата (на случай, если ключи в RTDB — это email, а не hex).
 - В админской таблице добавлен fallback: если realtime-список пользователей подозрительно мал (`< 6`), дополнительно подтягивается список через `listAllUserRecords()` и используется, если он больше.
 
+## 2026-03-27 — Settings: single scroll for users table
+- Убрана отдельная прокрутка у `admin-table-wrap`; теперь длинная таблица скроллится вместе с панелью настроек.
+- Перекрывающий скролл у `#settingsModal` отключен, чтобы не было двух полос прокрутки.
+
 ## Open Next Steps
 - Revisit prompt sync further if multi-admin concurrent public edits still collide semantically.
 - Consider diff-based Firebase prompt writes instead of full role payloads where practical.

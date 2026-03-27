@@ -21,6 +21,9 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-27`, settings modal scroll behavior adjusted:
+  - removed inner scrollbar on the admin users table so it scrolls with the settings panel.
+  - disabled overlay scroll on `#settingsModal` to avoid dual scrollbars.
 - As of `2026-03-27`, reviewed admin users table logic in `script.js` for missing users in RTDB:
   - Table rendering prefers realtime `users` path snapshots when available and does not merge `users_by_uid` mirror, so extra users stored only in the mirror can be hidden.
   - User normalization drops records without a valid email login; if RTDB keys are raw emails (not hex) and the value lacks `login`/`email`, `resolveNormalizedLogin` returns empty and the record is filtered out.

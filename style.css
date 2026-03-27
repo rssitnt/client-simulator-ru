@@ -2686,9 +2686,8 @@ body.light-theme .ai-improve-modal textarea::-webkit-scrollbar-thumb:hover {
 
 #settingsModal {
     align-items: flex-start;
-    overflow-y: auto;
+    overflow-y: hidden;
     overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
 }
 
 #settingsModal .settings-panel {
@@ -3810,13 +3809,10 @@ body.light-theme .more-colors-popup {
 }
 
 .admin-table-wrap {
-    max-height: 220px;
-    overflow: auto;
+    max-height: none;
+    overflow: visible;
     border-radius: 8px;
     background: #222;
-    scrollbar-gutter: stable;
-    scrollbar-width: thin;
-    scrollbar-color: #444 transparent;
 }
 
 .admin-table-wrap::-webkit-scrollbar {
