@@ -90,6 +90,8 @@ const WEBHOOK_DEBUG_LOG_STORAGE_KEY = 'webhookDebugLog:v1';
 const WEBHOOK_DEBUG_LOG_MAX_ENTRIES = 40;
 const ENABLE_LOCAL_WEBHOOK_DEBUG = false;
 const FIREBASE_FRONTEND_GET_TIMEOUT_MS = 4000;
+const FIREBASE_REST_FALLBACK_BASE_DELAY_MS = 2000;
+const FIREBASE_REST_FALLBACK_MAX_DELAY_MS = 30000;
 const EMAIL_LINK_PROCESSED_TTL_MS = 24 * 60 * 60 * 1000;
 const SESSION_ID_STORAGE_KEY = 'sessionId';
 const EMAIL_LINK_HINT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -733,10 +735,55 @@ function buildFirebaseRestUrl(path = '') {
     return `${baseUrl}/${normalizedPath}.json`;
 }
 
+const restFallbackBackoffByPath = new Map();
+
+function normalizeFirebaseRestPathKey(path = '') {
+    return String(path || '').trim().replace(/^\/+/, '');
+}
+
+function getRestFallbackBackoffState(pathKey = '') {
+    return restFallbackBackoffByPath.get(pathKey) || null;
+}
+
+function resetRestFallbackBackoff(pathKey = '') {
+    if (!pathKey) return;
+    restFallbackBackoffByPath.delete(pathKey);
+}
+
+function markRestFallbackFailure(pathKey = '') {
+    if (!pathKey) return null;
+    const now = Date.now();
+    const previous = getRestFallbackBackoffState(pathKey);
+    const previousDelay = Math.max(0, Number(previous?.delayMs) || 0);
+    const nextDelay = Math.min(
+        FIREBASE_REST_FALLBACK_MAX_DELAY_MS,
+        Math.max(FIREBASE_REST_FALLBACK_BASE_DELAY_MS, previousDelay * 2 || FIREBASE_REST_FALLBACK_BASE_DELAY_MS)
+    );
+    const nextState = {
+        delayMs: nextDelay,
+        nextAt: now + nextDelay,
+        failures: Math.max(0, Number(previous?.failures) || 0) + 1
+    };
+    restFallbackBackoffByPath.set(pathKey, nextState);
+    return nextState;
+}
+
+function buildRestFallbackCooldownError(pathKey = '', retryAfterMs = 0) {
+    const error = new Error(`Firebase REST fallback cooldown for ${pathKey || 'root'}.`);
+    error.code = 'rest-fallback-cooldown';
+    error.retryAfterMs = retryAfterMs;
+    return error;
+}
+
 async function fetchFirebaseJsonViaRest(path, timeoutMs = PROMPTS_REST_FALLBACK_TIMEOUT_MS, options = {}) {
     const includeAuth = options?.includeAuth !== false;
-    const url = buildFirebaseRestUrl(path);
+    const pathKey = normalizeFirebaseRestPathKey(path);
+    const url = buildFirebaseRestUrl(pathKey);
     if (!url) return null;
+    const cooldownState = getRestFallbackBackoffState(pathKey);
+    if (cooldownState && Date.now() < Number(cooldownState.nextAt) && pathKey) {
+        throw buildRestFallbackCooldownError(pathKey, Number(cooldownState.nextAt) - Date.now());
+    }
     let requestUrl = url;
     if (includeAuth) {
         const token = await getFirebaseAuthIdToken().catch(() => '');
@@ -744,20 +791,30 @@ async function fetchFirebaseJsonViaRest(path, timeoutMs = PROMPTS_REST_FALLBACK_
             requestUrl += (requestUrl.includes('?') ? '&' : '?') + `auth=${encodeURIComponent(token)}`;
         }
     }
-    const response = await fetchWithTimeout(requestUrl, {
-        method: 'GET',
-        credentials: 'omit',
-        cache: 'no-store'
-    }, timeoutMs);
-    if (!response.ok) {
-        throw new Error(`Firebase REST ${path} failed with HTTP ${response.status}`);
+    try {
+        const response = await fetchWithTimeout(requestUrl, {
+            method: 'GET',
+            credentials: 'omit',
+            cache: 'no-store'
+        }, timeoutMs);
+        if (!response.ok) {
+            throw new Error(`Firebase REST ${pathKey || path} failed with HTTP ${response.status}`);
+        }
+        const payload = await readResponseJsonWithTimeout(
+            response,
+            timeoutMs,
+            `Таймаут чтения Firebase REST ${pathKey || path} (${timeoutMs / 1000}с).`,
+            null
+        );
+        resetRestFallbackBackoff(pathKey);
+        return payload;
+    } catch (error) {
+        if (error?.code === 'rest-fallback-cooldown') {
+            throw error;
+        }
+        markRestFallbackFailure(pathKey);
+        throw error;
     }
-    return readResponseJsonWithTimeout(
-        response,
-        timeoutMs,
-        `Таймаут чтения Firebase REST ${path} (${timeoutMs / 1000}с).`,
-        null
-    );
 }
 
 async function writeFirebaseJsonViaRest(path, value, method = 'PUT', timeoutMs = FIREBASE_FRONTEND_WRITE_TIMEOUT_MS, options = {}) {
