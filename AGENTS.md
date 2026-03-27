@@ -21,6 +21,8 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-28`, rater prompt assembly verified in `script.js`:
+  - rating webhook uses `buildRaterPromptForWebhook()` which concatenates base rater prompt + hidden rater prompt + platform context (if any), and sends it as `systemPrompt` without extra text injection.
 - As of `2026-03-27`, settings modal scroll behavior adjusted:
   - removed inner scrollbar on the admin users table so it scrolls with the settings panel.
   - disabled overlay scroll on `#settingsModal` to avoid dual scrollbars.

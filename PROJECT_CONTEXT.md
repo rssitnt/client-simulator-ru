@@ -1595,6 +1595,10 @@
 - В таблицу пользователей добавлена сортировка по ролям, доступу (по сроку приглашения) и активному времени.
 - Заголовки колонок сделали кликабельными с переключением направления сортировки.
 
+## 2026-03-28 — Rater prompt assembly
+- Для вебхука оценки используется `buildRaterPromptForWebhook()` — в него попадает базовый prompt оценщика + скрытый prompt оценщика + служебный контекст платформы (если есть outcome).
+- Дополнительных скрытых добавок к `systemPrompt` в payload нет; `buildUnifiedSimulatorWebhookPayload()` только добавляет алиасы полей.
+
 ## Open Next Steps
 - Revisit prompt sync further if multi-admin concurrent public edits still collide semantically.
 - Consider diff-based Firebase prompt writes instead of full role payloads where practical.
