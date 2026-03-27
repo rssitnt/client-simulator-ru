@@ -1575,6 +1575,10 @@
 - В `script.js` `fetchFirebaseJsonViaRest()` теперь по умолчанию пытается добавить `?auth=<Firebase idToken>` к URL, если пользователь уже авторизован, и только после этого делает запрос.
 - Это добавляет дополнительный путь восстановления на случай коротких сбоев/пустых SDK-снимков без потери локальных данных.
 
+## 2026-03-27 — Access policy: allow existing users
+- В `script.js` `resolveAccessPolicy()` теперь разрешает вход любому пользователю, который уже есть в базе (`userRecord`), даже если email не корпоративный и нет активного инвайта.
+- Блокировки (`isBlocked`) и ревокации (`access_revocations`) остаются приоритетными и продолжают закрывать доступ.
+
 ## Open Next Steps
 - Revisit prompt sync further if multi-admin concurrent public edits still collide semantically.
 - Consider diff-based Firebase prompt writes instead of full role payloads where practical.

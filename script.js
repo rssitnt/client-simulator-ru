@@ -97,6 +97,7 @@ const EMAIL_LINK_VERIFIED_HINT_MAX_AGE_MS = 30 * 60 * 1000;
 const EMAIL_LINK_AUTH_READY_MAX_AGE_MS = 30 * 60 * 1000;
 const ACCESS_CONTROL_DECISION_REASON = {
     ADMIN: 'admin',
+    EXISTING: 'existing',
     CORPORATE: 'corporate',
     INVITE: 'invite',
     REVOKED: 'revoked',
@@ -3097,6 +3098,15 @@ async function resolveAccessPolicy(login, userRecord = null) {
             invite: null,
             accessRevocation: null,
             role: 'admin'
+        });
+    }
+
+    if (userRecord) {
+        return buildAccessPolicyAllow(ACCESS_CONTROL_DECISION_REASON.EXISTING, {
+            user: userRecord,
+            invite: null,
+            accessRevocation,
+            role: userRecord.role || 'user'
         });
     }
 
