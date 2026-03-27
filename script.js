@@ -239,6 +239,8 @@ const AUTH_FLOW_STEP_TIMEOUT_MS = 12000;
 const AUTH_MAGIC_LINK_SEND_TIMEOUT_MS = 20000;
 const PROMPTS_REST_FALLBACK_TIMEOUT_MS = 5000;
 const PROTECTED_REALTIME_RECOVERY_DELAY_MS = 2000;
+const REALTIME_RECOVERY_BACKOFF_BASE_MS = PROTECTED_REALTIME_RECOVERY_DELAY_MS;
+const REALTIME_RECOVERY_BACKOFF_MAX_MS = 30000;
 const PROMPT_REMOTE_SYNC_RETRY_DELAY_MS = 2000;
 const FIREBASE_FRONTEND_WRITE_TIMEOUT_MS = 8000;
 const ELEVENLABS_WIDGET_ELEMENT_NAME = 'elevenlabs-convai';
@@ -282,6 +284,38 @@ const PASSWORD_HASH_FALLBACK_PREFIX = 'sha256:v1';
 const LEGACY_PASSWORD_HASH_HEX_RE = /^[a-fA-F0-9]{64}$/;
 const FAILED_LOGIN_BACKOFF_BASE_MS = 1200;
 const FAILED_LOGIN_BACKOFF_MAX_MS = 60 * 1000;
+const REALTIME_RECOVERY_BACKOFF_STATE = new Map([
+    ['current-user-presence', { attempts: 0 }],
+    ['admin-realtime', { attempts: 0 }],
+    ['prompt-overrides', { attempts: 0 }],
+    ['protected-realtime', { attempts: 0 }]
+]);
+
+function getRealtimeRecoveryState(key) {
+    if (!REALTIME_RECOVERY_BACKOFF_STATE.has(key)) {
+        REALTIME_RECOVERY_BACKOFF_STATE.set(key, { attempts: 0 });
+    }
+    return REALTIME_RECOVERY_BACKOFF_STATE.get(key);
+}
+
+function getNextRealtimeRecoveryDelay(key, baseDelay = REALTIME_RECOVERY_BACKOFF_BASE_MS) {
+    const normalizedBase = Math.max(250, Number(baseDelay) || REALTIME_RECOVERY_BACKOFF_BASE_MS);
+    const state = getRealtimeRecoveryState(key);
+    state.attempts = Math.min(Number(state.attempts || 0) + 1, 6);
+    const delay = Math.min(
+        REALTIME_RECOVERY_BACKOFF_MAX_MS,
+        normalizedBase * Math.pow(2, state.attempts - 1)
+    );
+    REALTIME_RECOVERY_BACKOFF_STATE.set(key, state);
+    return delay;
+}
+
+function resetRealtimeRecoveryBackoff(key) {
+    const state = getRealtimeRecoveryState(key);
+    state.attempts = 0;
+    REALTIME_RECOVERY_BACKOFF_STATE.set(key, state);
+}
+
 const DEFAULT_RATER_PROMPT = `РОЛЬ
 Ты — строгий аудитор звонков компании. Твоя задача: автоматически классифицировать звонок (Сервисный центр или Сбыт навесного оборудования и запчастей) и оценить его по соответствующему регламенту. Работай только по правилам ниже, без домыслов, с прозрачными доказательствами из транскрипта.
 
@@ -4383,9 +4417,11 @@ function stopCurrentUserPresenceSync(options = {}) {
 }
 
 function clearCurrentUserPresenceRecovery() {
-    if (!currentUserPresenceRecoveryTimerId) return;
-    clearTimeout(currentUserPresenceRecoveryTimerId);
-    currentUserPresenceRecoveryTimerId = null;
+    if (currentUserPresenceRecoveryTimerId) {
+        clearTimeout(currentUserPresenceRecoveryTimerId);
+        currentUserPresenceRecoveryTimerId = null;
+    }
+    resetRealtimeRecoveryBackoff('current-user-presence');
 }
 
 function hasHealthyCurrentUserPresenceSync() {
@@ -4411,12 +4447,13 @@ function scheduleCurrentUserPresenceRecovery(login = currentUser?.login || '', r
     if (!normalizedLogin || currentUserPresenceRecoveryTimerId) {
         return false;
     }
+    const effectiveDelayMs = getNextRealtimeRecoveryDelay('current-user-presence', delayMs);
     currentUserPresenceRecoveryTimerId = setTimeout(() => {
         currentUserPresenceRecoveryTimerId = null;
         if (!currentUser || normalizeLogin(currentUser.login) !== normalizedLogin) return;
         debugLog('Recovering current user presence live listener', { reason, login: normalizedLogin });
         startCurrentUserPresenceSync(normalizedLogin);
-    }, Math.max(250, Number(delayMs) || PROTECTED_REALTIME_RECOVERY_DELAY_MS));
+    }, effectiveDelayMs);
     return true;
 }
 
@@ -5117,9 +5154,11 @@ function stopAdminRealtimeSync() {
 }
 
 function clearAdminRealtimeSyncRecovery() {
-    if (!adminRealtimeRecoveryTimerId) return;
-    clearTimeout(adminRealtimeRecoveryTimerId);
-    adminRealtimeRecoveryTimerId = null;
+    if (adminRealtimeRecoveryTimerId) {
+        clearTimeout(adminRealtimeRecoveryTimerId);
+        adminRealtimeRecoveryTimerId = null;
+    }
+    resetRealtimeRecoveryBackoff('admin-realtime');
 }
 
 function stopAdminRealtimeSyncTransport(options = {}) {
@@ -5153,13 +5192,14 @@ function scheduleAdminRealtimeSyncRecovery(reason = '', delayMs = PROTECTED_REAL
     if (adminRealtimeRecoveryTimerId) {
         return false;
     }
+    const effectiveDelayMs = getNextRealtimeRecoveryDelay('admin-realtime', delayMs);
     adminRealtimeRecoveryTimerId = setTimeout(() => {
         adminRealtimeRecoveryTimerId = null;
         if (!db || !isSettingsModalOpen() || !isAdmin()) return;
         debugLog('Recovering admin realtime sync', { reason });
         startAdminRealtimeSync();
         void renderAdminUsersTable();
-    }, Math.max(250, Number(delayMs) || PROTECTED_REALTIME_RECOVERY_DELAY_MS));
+    }, effectiveDelayMs);
     return true;
 }
 
@@ -8944,9 +8984,11 @@ function stopCurrentUserPromptOverridesSubscription() {
 }
 
 function clearCurrentUserPromptOverridesRecovery() {
-    if (!currentUserPromptOverridesRecoveryTimerId) return;
-    clearTimeout(currentUserPromptOverridesRecoveryTimerId);
-    currentUserPromptOverridesRecoveryTimerId = null;
+    if (currentUserPromptOverridesRecoveryTimerId) {
+        clearTimeout(currentUserPromptOverridesRecoveryTimerId);
+        currentUserPromptOverridesRecoveryTimerId = null;
+    }
+    resetRealtimeRecoveryBackoff('prompt-overrides');
 }
 
 function hasHealthyCurrentUserPromptOverridesSubscription() {
@@ -8972,6 +9014,7 @@ function scheduleCurrentUserPromptOverridesRecovery(login = currentUserPromptOve
     if (!normalizedLogin || currentUserPromptOverridesRecoveryTimerId) {
         return false;
     }
+    const effectiveDelayMs = getNextRealtimeRecoveryDelay('prompt-overrides', delayMs);
     currentUserPromptOverridesRecoveryTimerId = setTimeout(() => {
         currentUserPromptOverridesRecoveryTimerId = null;
         if (!currentUser || normalizeLogin(currentUser.login) !== normalizedLogin) return;
@@ -8979,7 +9022,7 @@ function scheduleCurrentUserPromptOverridesRecovery(login = currentUserPromptOve
         if (!canSyncPromptOverrides(syncCandidateUser)) return;
         debugLog('Recovering prompt overrides live listener', { reason, login: normalizedLogin });
         startCurrentUserPromptOverridesSubscription(normalizedLogin);
-    }, Math.max(250, Number(delayMs) || PROTECTED_REALTIME_RECOVERY_DELAY_MS));
+    }, effectiveDelayMs);
     return true;
 }
 
@@ -10725,15 +10768,18 @@ function stopProtectedRealtimeListeners() {
 }
 
 function clearProtectedRealtimeListenersRecovery() {
-    if (!protectedRealtimeRecoveryTimerId) return;
-    clearTimeout(protectedRealtimeRecoveryTimerId);
-    protectedRealtimeRecoveryTimerId = null;
+    if (protectedRealtimeRecoveryTimerId) {
+        clearTimeout(protectedRealtimeRecoveryTimerId);
+        protectedRealtimeRecoveryTimerId = null;
+    }
+    resetRealtimeRecoveryBackoff('protected-realtime');
 }
 
 function scheduleProtectedRealtimeListenersRecovery(reason = '', delayMs = PROTECTED_REALTIME_RECOVERY_DELAY_MS) {
     if (protectedRealtimeRecoveryTimerId) {
         return false;
     }
+    const effectiveDelayMs = getNextRealtimeRecoveryDelay('protected-realtime', delayMs);
     protectedRealtimeRecoveryTimerId = setTimeout(() => {
         protectedRealtimeRecoveryTimerId = null;
         if (!db || !auth?.currentUser) return;
@@ -10745,7 +10791,7 @@ function scheduleProtectedRealtimeListenersRecovery(reason = '', delayMs = PROTE
             console.error('Protected realtime listeners recovery failed:', error);
             scheduleProtectedRealtimeListenersRecovery('retry-after-recovery-failure');
         }
-    }, Math.max(250, Number(delayMs) || PROTECTED_REALTIME_RECOVERY_DELAY_MS));
+    }, effectiveDelayMs);
     return true;
 }
 

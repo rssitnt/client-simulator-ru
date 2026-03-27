@@ -21,6 +21,10 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-28`, realtime listener recovery hardened:
+  - exponential backoff (2s → 4s → 8s → … capped at 30s) added for presence/admin/prompt overrides/protected listeners.
+  - backoff resets on successful recovery to avoid long delays after a stable reconnect.
+  - goal: stability + speed under flaky network, no UX changes.
 - As of `2026-03-28`, rater prompt assembly verified in `script.js`:
   - rating webhook uses `buildRaterPromptForWebhook()` which concatenates base rater prompt + hidden rater prompt + platform context (if any), and sends it as `systemPrompt` without extra text injection.
 - As of `2026-03-27`, settings modal scroll behavior adjusted:
