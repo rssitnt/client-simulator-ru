@@ -95,6 +95,7 @@ const SESSION_ID_STORAGE_KEY = 'sessionId';
 const EMAIL_LINK_HINT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const EMAIL_LINK_VERIFIED_HINT_MAX_AGE_MS = 30 * 60 * 1000;
 const EMAIL_LINK_AUTH_READY_MAX_AGE_MS = 30 * 60 * 1000;
+const ADMIN_USERS_TABLE_MIN_REALTIME_ROWS_FOR_TRUST = 6;
 const ACCESS_CONTROL_DECISION_REASON = {
     ADMIN: 'admin',
     EXISTING: 'existing',
@@ -1649,6 +1650,7 @@ function resolveNormalizedLogin(raw, loginFallback = '', loginKey = '') {
         raw?.legacyLogin,
         raw?.legacyKey,
         loginFallback,
+        loginKey,
         decodeStorageKeyToLogin(loginKey)
     ];
     for (const candidate of candidates) {
@@ -5875,6 +5877,25 @@ async function renderAdminUsersTable() {
                 adminRealtimeSortedLogins
             )
             : buildAdminUsersTableRows(users, invites, revocations, presenceEntries);
+
+        if (liveDataReady) {
+            const realtimeUsersCount = (adminRealtimeUsersByLogin && adminRealtimeUsersByLogin.size) || 0;
+            if (realtimeUsersCount > 0 && realtimeUsersCount < ADMIN_USERS_TABLE_MIN_REALTIME_ROWS_FOR_TRUST) {
+                const fallbackUsers = await listAllUserRecords().catch((error) => {
+                    console.warn('Failed to load users for admin table fallback:', error);
+                    return [];
+                });
+                if (fallbackUsers.length > realtimeUsersCount) {
+                    rowsData = buildAdminUsersTableRowsFromMaps(
+                        buildLoginIndexedMap(fallbackUsers),
+                        adminRealtimeInvitesByLogin || buildLoginIndexedMap(Array.isArray(adminRealtimeInvites) ? adminRealtimeInvites : []),
+                        adminRealtimeRevocationsByLogin || buildLoginIndexedMap(Array.isArray(adminRealtimeRevocations) ? adminRealtimeRevocations : []),
+                        adminRealtimePresenceByLogin || buildLoginIndexedMap(Array.isArray(adminRealtimePresence) ? adminRealtimePresence : []),
+                        null
+                    );
+                }
+            }
+        }
         if (!rowsData.length) {
             rowsData = getAdminUsersTableFallbackRows();
         }

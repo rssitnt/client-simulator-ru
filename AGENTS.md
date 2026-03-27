@@ -21,6 +21,10 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-27`, reviewed admin users table logic in `script.js` for missing users in RTDB:
+  - Table rendering prefers realtime `users` path snapshots when available and does not merge `users_by_uid` mirror, so extra users stored only in the mirror can be hidden.
+  - User normalization drops records without a valid email login; if RTDB keys are raw emails (not hex) and the value lacks `login`/`email`, `resolveNormalizedLogin` returns empty and the record is filtered out.
+  - If Firebase Security Rules or auth context only allow partial reads, the UI will show that subset without clear diagnostics.
 - As of `2026-03-24`, login-path check on current frontend build (`script.js?v=20260324-01`) showed emergency credentials routing to confirmation flow for new accounts (message: `Отправьте ссылку для подтверждения на почту ...`) instead of "wrong password", under clean local state.
 - User-visible "wrong password / remaining attempts" counter is likely from stale local auth cache (legacy `localStorage` state) or old cached frontend version, not from server-side password reject.
 - Immediate recovery steps (without code changes):
