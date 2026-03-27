@@ -28,6 +28,7 @@
 - As of `2026-03-28`, prompt_history sync was optimized without UX change:
   - heavy `JSON.stringify` comparisons replaced with compact hash from `id/ts/role/variationId/kind`.
   - reduces CPU/memory on every history update while keeping behavior identical.
+  - prompt_history realtime listener now runs only for admins to avoid unnecessary reads for non-admin users.
 - As of `2026-03-28`, rater prompt assembly verified in `script.js`:
   - rating webhook uses `buildRaterPromptForWebhook()` which concatenates base rater prompt + hidden rater prompt + platform context (if any), and sends it as `systemPrompt` without extra text injection.
 - As of `2026-03-27`, settings modal scroll behavior adjusted:

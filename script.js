@@ -10913,22 +10913,24 @@ function setupPromptsAndConfigListeners() {
         });
         protectedRealtimeUnsubscribes.push(unsubscribeAppConfig);
 
-        const historyRef = ref(db, 'prompt_history');
-        const unsubscribeHistory = onValue(historyRef, (snapshot) => {
-            const nextPromptHistory = normalizePromptHistoryEntries(snapshot.val());
-            syncedPromptHistoryEntryIds = new Set(nextPromptHistory.map((entry) => entry.id).filter(Boolean));
-            const historyHash = buildPromptHistorySnapshotHash(nextPromptHistory);
-            if (historyHash === lastPromptHistorySnapshotHash) return;
-            promptHistory = nextPromptHistory;
-            lastPromptHistorySnapshotHash = historyHash;
-            if (promptHistoryModal?.classList.contains('active')) {
-                renderPromptHistory();
-            }
-        }, (error) => {
-            console.error('Prompt history read error:', error);
-            scheduleProtectedRealtimeListenersRecovery('prompt-history-read-error');
-        });
-        protectedRealtimeUnsubscribes.push(unsubscribeHistory);
+        if (isAdmin()) {
+            const historyRef = ref(db, 'prompt_history');
+            const unsubscribeHistory = onValue(historyRef, (snapshot) => {
+                const nextPromptHistory = normalizePromptHistoryEntries(snapshot.val());
+                syncedPromptHistoryEntryIds = new Set(nextPromptHistory.map((entry) => entry.id).filter(Boolean));
+                const historyHash = buildPromptHistorySnapshotHash(nextPromptHistory);
+                if (historyHash === lastPromptHistorySnapshotHash) return;
+                promptHistory = nextPromptHistory;
+                lastPromptHistorySnapshotHash = historyHash;
+                if (promptHistoryModal?.classList.contains('active')) {
+                    renderPromptHistory();
+                }
+            }, (error) => {
+                console.error('Prompt history read error:', error);
+                scheduleProtectedRealtimeListenersRecovery('prompt-history-read-error');
+            });
+            protectedRealtimeUnsubscribes.push(unsubscribeHistory);
+        }
     } catch (error) {
         console.error('Error setting up Firebase listener:', error);
         const fallbackSnapshot = loadCachedPublicPromptsSnapshot() || loadCachedPublicPromptsEmergencySnapshot();
