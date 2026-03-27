@@ -38,6 +38,7 @@ const MANAGER_ASSISTANT_WEBHOOK_URL = UNIFIED_SIMULATOR_WEBHOOK_URL;
 const AI_IMPROVE_WEBHOOK_URL = UNIFIED_SIMULATOR_WEBHOOK_URL;
 const GEMINI_SDK_CDN_URL = 'https://cdn.jsdelivr.net/npm/@google/genai@1.40.0/+esm';
 const GEMINI_LIVE_MODEL = 'gemini-3.1-flash-live-preview';
+const GEMINI_LIVE_REMOTE_TOKEN_ENDPOINT = 'https://ti-client-simulator-studio.vercel.app/api/gemini-live-token';
 const GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY = 'geminiLiveTokenEndpoint';
 const GEMINI_LIVE_VOICE_NAME_STORAGE_KEY = 'geminiLiveVoiceName';
 const LEGACY_GEMINI_LIVE_API_KEY_STORAGE_KEY = 'geminiLiveApiKey';
@@ -45,7 +46,8 @@ const GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT = '/api/gemini-live-token';
 const GEMINI_LIVE_ALLOWED_TOKEN_ENDPOINT_PATH = '/api/gemini-live-token';
 const TRUSTED_VOICE_TOKEN_ENDPOINT_ORIGINS = new Set([
     'https://client-simulator.ru',
-    'https://www.client-simulator.ru'
+    'https://www.client-simulator.ru',
+    'https://ti-client-simulator-studio.vercel.app'
 ]);
 const GEMINI_FIRST_REPLY_HINT_DELAY_MS = 1800;
 const GEMINI_LIVE_DEFAULT_VOICE = 'Enceladus';
@@ -11634,7 +11636,7 @@ function getDefaultGeminiTokenEndpoint() {
         return `${protocol}//${window.location.hostname}:8787${GEMINI_LIVE_ALLOWED_TOKEN_ENDPOINT_PATH}`;
     }
 
-    return String(GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT || '').trim();
+    return String(GEMINI_LIVE_REMOTE_TOKEN_ENDPOINT || GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT || '').trim();
 }
 
 function getConfiguredGeminiTokenEndpoint() {

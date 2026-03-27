@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { pathToFileURL } from 'node:url';
 import { GoogleGenAI } from '@google/genai';
 
 const PORT = Number.parseInt(process.env.PORT || '8787', 10);
@@ -42,15 +43,15 @@ const MAX_JSON_BODY_BYTES = (() => {
 const rateLimitBuckets = new Map();
 let nextRateLimitCleanupAt = 0;
 
-if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
-    console.error('[gemini-token-server] Set at least one API key: GEMINI_API_KEY or OPENAI_API_KEY');
-    process.exit(1);
-}
-
-if (!FIREBASE_WEB_API_KEY) {
-    console.error('[gemini-token-server] FIREBASE_WEB_API_KEY is required');
-    process.exit(1);
-}
+const isDirectRun = (() => {
+    const entryPath = String(process.argv[1] || '').trim();
+    if (!entryPath) return false;
+    try {
+        return import.meta.url === pathToFileURL(entryPath).href;
+    } catch (error) {
+        return false;
+    }
+})();
 
 const ai = GEMINI_API_KEY
     ? new GoogleGenAI({
@@ -60,6 +61,16 @@ const ai = GEMINI_API_KEY
     : null;
 
 const OPENAI_ALLOWED_VOICES = new Set(['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse']);
+
+function getMissingServerConfigMessage() {
+    if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
+        return 'Token server is not configured: set GEMINI_API_KEY or OPENAI_API_KEY.';
+    }
+    if (!FIREBASE_WEB_API_KEY) {
+        return 'Token server is not configured: FIREBASE_WEB_API_KEY is required.';
+    }
+    return '';
+}
 
 function getCorsOrigin(requestOrigin) {
     if (!requestOrigin) return '';
@@ -543,7 +554,7 @@ async function createOpenAiRealtimeSession(requestBody = {}) {
     };
 }
 
-const server = createServer(async (req, res) => {
+export async function handleTokenServerRequest(req, res) {
     const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
     const requestOrigin = String(req.headers.origin || '');
     const isGeminiTokenRequest = url.pathname === TOKEN_PATH;
@@ -569,6 +580,12 @@ const server = createServer(async (req, res) => {
 
     if (req.method !== 'POST') {
         sendJson(res, 405, { error: 'Method not allowed' }, requestOrigin);
+        return;
+    }
+
+    const missingConfigMessage = getMissingServerConfigMessage();
+    if (missingConfigMessage) {
+        sendJson(res, 500, { error: missingConfigMessage }, requestOrigin);
         return;
     }
 
@@ -659,8 +676,17 @@ const server = createServer(async (req, res) => {
                 : 500;
         sendJson(res, status, { error: message }, requestOrigin);
     }
-});
+}
 
-server.listen(PORT, () => {
-    console.log(`[gemini-token-server] listening on http://localhost:${PORT} (paths: ${TOKEN_PATH}, ${OPENAI_TOKEN_PATH})`);
-});
+if (isDirectRun) {
+    const missingConfigMessage = getMissingServerConfigMessage();
+    if (missingConfigMessage) {
+        console.error(`[gemini-token-server] ${missingConfigMessage}`);
+        process.exit(1);
+    }
+
+    const server = createServer(handleTokenServerRequest);
+    server.listen(PORT, () => {
+        console.log(`[gemini-token-server] listening on http://localhost:${PORT} (paths: ${TOKEN_PATH}, ${OPENAI_TOKEN_PATH})`);
+    });
+}

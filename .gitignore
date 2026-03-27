@@ -5,3 +5,5 @@ server/.env.local
 .DS_Store
 output/playwright/
 output/runtime/
+
+.vercel
