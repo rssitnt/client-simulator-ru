@@ -33,6 +33,9 @@
   - exponential cooldown per path (2s → 4s → 8s → … capped at 30s).
   - avoids network storms when SDK reads fail or REST is flaky.
   - cooldown resets after a successful REST read.
+- As of `2026-03-28`, `prompt_history` rules were tightened:
+  - read/write now admin-only to reduce exposure of internal history data.
+  - requires publishing updated `database.rules.json` in Firebase Console.
 - As of `2026-03-28`, rater prompt assembly verified in `script.js`:
   - rating webhook uses `buildRaterPromptForWebhook()` which concatenates base rater prompt + hidden rater prompt + platform context (if any), and sends it as `systemPrompt` without extra text injection.
 - As of `2026-03-27`, settings modal scroll behavior adjusted:

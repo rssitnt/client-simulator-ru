@@ -60,7 +60,7 @@
       ".write": "auth != null && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'"
     },
     "prompt_history": {
-      ".read": "auth != null",
+      ".read": "auth != null && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'",
       ".write": "auth != null && root.child('users_by_uid').child(auth.uid).child('role').val() === 'admin'"
     },
     "prompt_overrides": {
