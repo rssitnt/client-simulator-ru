@@ -3206,6 +3206,25 @@ body.light-theme .btn-icon:hover {
     width: 100%;
 }
 
+.account-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.btn-logout {
+    background: #2a1b1b;
+    color: #f2b2b2;
+    border: 1px solid rgba(242, 178, 178, 0.25);
+    padding: 8px 12px;
+    border-radius: 8px;
+}
+
+.btn-logout:hover {
+    background: #3a2020;
+    border-color: rgba(242, 178, 178, 0.45);
+}
+
 .account-line {
     color: #8f8f8f;
     font-size: 13px;

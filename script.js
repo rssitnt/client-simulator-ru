@@ -1175,6 +1175,7 @@ const settingsModal = document.getElementById('settingsModal');
 const currentUserName = document.getElementById('currentUserName');
 const settingsNameInput = document.getElementById('settingsNameInput');
 const accountLoginValue = document.getElementById('accountLoginValue');
+const settingsLogoutBtn = document.getElementById('settingsLogoutBtn');
 const themeToggle = document.getElementById('themeToggle');
 const currentRoleDisplay = document.getElementById('currentRoleDisplay');
 const changeRoleBtn = document.getElementById('changeRoleBtn');
@@ -13462,6 +13463,9 @@ function showSettingsModal() {
     if (accountLoginValue) {
         accountLoginValue.textContent = loginValue || '-';
     }
+    if (settingsLogoutBtn) {
+        settingsLogoutBtn.disabled = !loginValue || loginValue === '-';
+    }
     autoResizeNameInput();
     ensureRoleChangeButtonVisible(userRole);
     
@@ -13687,6 +13691,23 @@ async function improvePromptWithAI() {
     }
 }
 
+async function handleSettingsLogoutClick() {
+    hideSettingsModal();
+    const hadDevBypass = isLocalhostDevBypassSession();
+    try {
+        if (auth?.currentUser) {
+            await signOut(auth);
+        }
+    } catch (error) {
+        console.warn('Failed to sign out from Firebase:', error);
+    }
+    if (hadDevBypass) {
+        removeCachedStorageValue(LOCALHOST_DEV_AUTH_STORAGE_KEY);
+    }
+    resetCurrentSessionToAuth();
+    showCopyNotification('Вы вышли из аккаунта');
+}
+
 function showSemanticDiff(textWithMarkers) {
     // Replace markers with HTML tags BEFORE renderMarkdown.
     // If the content is multiline or looks like a block element (header, list), use <div> wrapper with newlines
@@ -13869,6 +13890,15 @@ bindEvent(settingsNameInput, 'input', () => {
             lastSeenAt: new Date().toISOString()
         });
     }, 450);
+});
+
+bindEvent(settingsLogoutBtn, 'click', (e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    handleSettingsLogoutClick().catch((error) => {
+        console.warn('Logout failed:', error);
+        showCopyNotification('Не удалось выйти из аккаунта');
+    });
 });
 
 bindEvent(saveVoiceConfigBtn, 'click', () => {

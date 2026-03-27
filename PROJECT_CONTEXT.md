@@ -1,5 +1,23 @@
 # PROJECT_CONTEXT.md
 
+## 2026-03-27 — Добавлена кнопка выхода из аккаунта в настройках
+- В модалку настроек добавлена кнопка `Выйти из аккаунта`.
+- При выходе:
+  - выполняется `signOut` из Firebase (если есть),
+  - очищается dev-bypass сессия на localhost,
+  - сбрасывается локальная auth-сессия и открывается окно входа.
+- Smoke прошёл после правки.
+
+## 2026-03-27 — Token server выведен в Vercel API, но voice требует Firebase ID token
+- В репозитории добавлены Vercel API endpoints:
+  - `api/gemini-live-token.mjs`
+  - `api/openai-realtime-session.mjs`
+  - общий handler вынесен из `server/gemini-token-server.mjs` для reuse в Vercel.
+- Vercel проект: `ti-client-simulator-studio` (production).
+- Env переменные проставлены в Vercel (GEMINI_API_KEY, FIREBASE_WEB_API_KEY, FIREBASE_DATABASE_URL, ALLOWED_ORIGINS, ALLOWED_EMAIL_DOMAINS, GEMINI_LIVE_MODEL, GEMINI_LIVE_VOICE, ALLOW_LEGACY_LOGIN_FALLBACK=false).
+- Боевой API endpoint отвечает `401` при отсутствии Firebase ID token — это ожидаемо и означает, что SSO-защита снята, а дальше нужен нормальный email login в Firebase.
+- На текущий момент `client-simulator.ru` всё ещё отдаётся статикой (GitHub Pages), поэтому token endpoint используется как внешний `https://ti-client-simulator-studio.vercel.app/api/gemini-live-token`.
+
 ## 2026-03-27 — Живая локальная проверка Gemini Live доведена до первой реплики ИИ-клиента
 - Выполнен живой local pass поверх недавней миграции voice mode на Gemini Live.
 - Что было найдено:
