@@ -1,5 +1,26 @@
 # PROJECT_CONTEXT.md
 
+## 2026-03-27 — Живая локальная проверка Gemini Live доведена до первой реплики ИИ-клиента
+- Выполнен живой local pass поверх недавней миграции voice mode на Gemini Live.
+- Что было найдено:
+  - local-only voice token flow уже был частично подготовлен на фронте для `localhost devBypass` сессии;
+  - токен-сервер в `server/.env.local` уже работал с `ALLOW_LEGACY_LOGIN_FALLBACK=true`, поэтому `POST /api/gemini-live-token` без Firebase ID token успешно выдавал Gemini token для `smoke@tradicia-k.ru`;
+  - при реальном headless browser запуске с fake microphone токен запрашивался успешно и Live session открывалась, но затем Gemini закрывал соединение с `1007 Request contains an invalid argument`.
+- Причина:
+  - в `script.js` первый ход для `gemini-3.1-flash-live-preview` отправлялся через `sendClientContent(...)`;
+  - для этого live-моделя такой путь не подходит для обычного стартового текста; из-за этого соединение падало уже после открытия.
+- Исправление:
+  - стартовый первый ход переведён на `geminiLiveSession.sendRealtimeInput({ text: ... })`;
+  - лишний дублирующий helper вокруг localhost voice fallback убран, оставлен один рабочий local-only path;
+  - прод-поведение не ослаблялось: Firebase ID token всё ещё обязателен вне localhost dev bypass сценария.
+- Практический результат:
+  - локальная живая проверка через Playwright + fake microphone теперь доходит до первой реплики клиента;
+  - итоговый статус voice modal в проверке: `ИИ-клиент: Здравствуйте! Подскажите,`
+  - это подтверждает, что связка frontend -> local token server -> Gemini Live теперь реально работает в браузерном сценарии.
+- Остаточный локальный шум:
+  - в localhost dev-bypass проверке всё ещё виден `user_presence ... permission_denied`;
+  - это не блокирует голосовой режим, но отдельным проходом можно приглушить этот локальный warning-path.
+
 ## 2026-03-27 — Голосовой режим переведён с ElevenLabs на Gemini Live с фиксированными настройками
 - Выполнен крупный pass по voice-mode пути в `script.js`, `index.html`, `style.css`, `server/gemini-token-server.mjs`, `README.md` и `server/README.md`.
 - Что было найдено до правки:

@@ -11620,13 +11620,21 @@ function getConfiguredRaterHiddenPrompt() {
 }
 
 function getDefaultGeminiTokenEndpoint() {
-    return String(
+    const explicitEndpoint = String(
         (
             typeof window !== 'undefined' &&
             (window.GEMINI_LIVE_TOKEN_ENDPOINT || window.GEMINI_TOKEN_ENDPOINT || window.OPENAI_REALTIME_TOKEN_ENDPOINT || window.OPENAI_TOKEN_ENDPOINT)
         ) ||
-        GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT
+        ''
     ).trim();
+    if (explicitEndpoint) return explicitEndpoint;
+
+    if (typeof window !== 'undefined' && isLoopbackHostname(window.location.hostname || '')) {
+        const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+        return `${protocol}//${window.location.hostname}:8787${GEMINI_LIVE_ALLOWED_TOKEN_ENDPOINT_PATH}`;
+    }
+
+    return String(GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT || '').trim();
 }
 
 function getConfiguredGeminiTokenEndpoint() {
@@ -11845,6 +11853,16 @@ function isGeminiVoiceStartCancelledError(error) {
     return error?.code === 'VOICE_START_CANCELLED' || error?.name === 'AbortError';
 }
 
+function canUseLocalhostDevVoiceTokenFallback(tokenEndpoint = '') {
+    if (!isLocalhostDevBypassSession()) return false;
+    try {
+        const parsed = new URL(tokenEndpoint, window.location.origin);
+        return isLoopbackHostname(parsed.hostname);
+    } catch (error) {
+        return false;
+    }
+}
+
 function beginGeminiVoiceStartAttempt() {
     if (geminiVoiceStartAbortController) {
         try {
@@ -11905,11 +11923,14 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
     }
 
     const idToken = await getFirebaseAuthIdToken();
-    if (!idToken) {
+    const canUseLocalFallback = !idToken && canUseLocalhostDevVoiceTokenFallback(tokenEndpoint);
+    if (!idToken && !canUseLocalFallback) {
         throw new Error('Для голосового режима нужен подтвержденный вход через email.');
     }
     const headers = { 'Content-Type': 'application/json' };
-    headers.Authorization = `Bearer ${idToken}`;
+    if (idToken) {
+        headers.Authorization = `Bearer ${idToken}`;
+    }
 
     const tokenResponse = await fetchWithTimeout(tokenEndpoint, {
         method: 'POST',
@@ -12783,10 +12804,12 @@ async function initGeminiVoiceCapture() {
             const downsampled = downsampleAudioBuffer(inputChannel, event.inputBuffer.sampleRate, 16000);
             if (!downsampled.length) return;
             const pcm = float32ToInt16Pcm(downsampled);
+            const pcmBytes = new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength);
             geminiLiveSession.sendRealtimeInput({
-                audio: new Blob([pcm], {
-                    type: 'audio/pcm;rate=16000'
-                })
+                audio: {
+                    data: uint8ToBase64(pcmBytes),
+                    mimeType: 'audio/pcm;rate=16000'
+                }
             });
         } catch (error) {
             console.warn('Failed to stream Gemini microphone chunk:', error);
@@ -12966,9 +12989,8 @@ async function startGeminiVoiceMode() {
         setVoiceModeStatus('Запрашиваю первое сообщение от ИИ-клиента…', 'waiting');
         scheduleGeminiFirstReplyHint();
         geminiVoiceFirstTurnRequested = true;
-        geminiLiveSession.sendClientContent({
-            turns: sdk.createUserContent(buildVoiceFirstTurnInstructions(sessionConfig.instructions)),
-            turnComplete: true
+        geminiLiveSession.sendRealtimeInput({
+            text: buildVoiceFirstTurnInstructions(sessionConfig.instructions)
         });
     } catch (error) {
         console.error('Failed to start voice mode:', error);
