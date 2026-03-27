@@ -350,9 +350,24 @@
                                     <thead>
                                         <tr>
                                             <th>Логин</th>
-                                            <th>Роль</th>
-                                            <th>Доступ</th>
-                                            <th>Активное время</th>
+                                            <th>
+                                                <button id="adminSortRoleBtn" class="admin-sort-btn" type="button" data-sort-key="role">
+                                                    <span class="admin-sort-label">Роль</span>
+                                                    <span class="admin-sort-icon" aria-hidden="true">↕</span>
+                                                </button>
+                                            </th>
+                                            <th>
+                                                <button id="adminSortAccessBtn" class="admin-sort-btn" type="button" data-sort-key="access">
+                                                    <span class="admin-sort-label">Доступ</span>
+                                                    <span class="admin-sort-icon" aria-hidden="true">↕</span>
+                                                </button>
+                                            </th>
+                                            <th>
+                                                <button id="adminSortActiveBtn" class="admin-sort-btn" type="button" data-sort-key="active">
+                                                    <span class="admin-sort-label">Активное время</span>
+                                                    <span class="admin-sort-icon" aria-hidden="true">↕</span>
+                                                </button>
+                                            </th>
                                             <th>Статус</th>
                                             <th></th>
                                         </tr>
@@ -604,7 +619,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js" integrity="sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3" crossorigin="anonymous" defer></script>
     <!-- Turndown for HTML to Markdown conversion (WYSIWYG editing) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js" integrity="sha384-m6AyXEhyWRg2s2wrkDV64LGkaManYgMSAjn2U+zymzSJ42WthRSjCu1AqZJhoQV0" crossorigin="anonymous" defer></script>
-    <script type="module" src="script.js?v=20260327-03"></script>
+    <script type="module" src="script.js?v=20260327-04"></script>
     <!-- Last deployment trigger: 2026-03-24 15:00 -->
 </body>
 </html>

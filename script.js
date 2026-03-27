@@ -1213,6 +1213,9 @@ const adminUsersAccessAccordion = document.getElementById('adminUsersAccessAccor
 const adminPanelAccordion = document.getElementById('adminPanelAccordion');
 const adminPanel = document.getElementById('adminPanel');
 const adminRefreshBtn = document.getElementById('adminRefreshBtn');
+const adminSortRoleBtn = document.getElementById('adminSortRoleBtn');
+const adminSortAccessBtn = document.getElementById('adminSortAccessBtn');
+const adminSortActiveBtn = document.getElementById('adminSortActiveBtn');
 const adminUsersTableBody = document.getElementById('adminUsersTableBody');
 const partnerInviteEmailInput = document.getElementById('partnerInviteEmailInput');
 const partnerInviteDaysInput = document.getElementById('partnerInviteDaysInput');
@@ -1429,6 +1432,15 @@ let adminUsersTableRenderInProgress = false;
 let adminUsersTableRenderWatchdogTimer = null;
 let adminUserRowsByLogin = new Map();
 let adminUsersTableInitialized = false;
+const ADMIN_USERS_SORT_KEYS = {
+    ROLE: 'role',
+    ACCESS: 'access',
+    ACTIVE: 'active'
+};
+let adminUsersTableSort = {
+    key: '',
+    direction: 'asc'
+};
 let pendingPromptsFirebaseSnapshot = null;
 let pendingPromptsFirebaseSnapshotState = null;
 let publicPromptSyncRetryTimerId = null;
@@ -5088,6 +5100,8 @@ function renderAdminUsersTableFromRealtimeState() {
         rowsData = getAdminUsersTableFallbackRows();
     }
 
+    rowsData = sortAdminUsersTableRows(rowsData);
+
     if (!rowsData.length) {
         setAdminUsersTableEmptyState('Пользователи пока не добавлены.');
         adminUsersTableInitialized = true;
@@ -5644,6 +5658,91 @@ function buildAdminUsersTableRowsFromMaps(
     });
 }
 
+function getAdminUsersAccessExpiryMs(rowData) {
+    const expiresAt = rowData?.invite?.expiresAt || '';
+    if (!expiresAt) return Number.POSITIVE_INFINITY;
+    const parsed = parseIsoMs(expiresAt);
+    return parsed || Number.POSITIVE_INFINITY;
+}
+
+function getAdminUsersSortValue(rowData, sortKey) {
+    if (!rowData) return 0;
+    switch (sortKey) {
+        case ADMIN_USERS_SORT_KEYS.ROLE: {
+            const role = normalizeRole(rowData?.user?.role || (rowData?.accessState?.isAdminUser ? 'admin' : 'user'));
+            return role === 'admin' ? 0 : 1;
+        }
+        case ADMIN_USERS_SORT_KEYS.ACCESS:
+            return getAdminUsersAccessExpiryMs(rowData);
+        case ADMIN_USERS_SORT_KEYS.ACTIVE:
+            return Math.max(0, Number(rowData?.user?.activeMs) || 0);
+        default:
+            return String(rowData?.login || '').toLowerCase();
+    }
+}
+
+function sortAdminUsersTableRows(rowsData = []) {
+    const sortKey = adminUsersTableSort?.key || '';
+    if (!sortKey) return rowsData;
+    const direction = adminUsersTableSort?.direction === 'desc' ? -1 : 1;
+    return [...rowsData].sort((a, b) => {
+        const aValue = getAdminUsersSortValue(a, sortKey);
+        const bValue = getAdminUsersSortValue(b, sortKey);
+        if (aValue === bValue) {
+            return String(a?.login || '').localeCompare(String(b?.login || '')) * direction;
+        }
+        if (typeof aValue === 'string' || typeof bValue === 'string') {
+            return String(aValue).localeCompare(String(bValue)) * direction;
+        }
+        return (aValue - bValue) * direction;
+    });
+}
+
+function getAdminUsersSortDefaultDirection(sortKey) {
+    if (sortKey === ADMIN_USERS_SORT_KEYS.ACTIVE) return 'desc';
+    return 'asc';
+}
+
+function syncAdminUsersSortButtons() {
+    const buttons = [
+        adminSortRoleBtn,
+        adminSortAccessBtn,
+        adminSortActiveBtn
+    ];
+    buttons.forEach((button) => {
+        if (!button) return;
+        const key = String(button.dataset.sortKey || '');
+        const isActive = adminUsersTableSort?.key === key;
+        const icon = button.querySelector('.admin-sort-icon');
+        button.classList.toggle('is-active', isActive);
+        if (icon) {
+            if (!isActive) {
+                icon.textContent = '↕';
+            } else {
+                icon.textContent = adminUsersTableSort.direction === 'desc' ? '▼' : '▲';
+            }
+        }
+    });
+}
+
+function setAdminUsersTableSort(nextKey) {
+    const normalizedKey = String(nextKey || '').trim();
+    if (!normalizedKey) return;
+    if (adminUsersTableSort.key === normalizedKey) {
+        adminUsersTableSort = {
+            key: normalizedKey,
+            direction: adminUsersTableSort.direction === 'desc' ? 'asc' : 'desc'
+        };
+    } else {
+        adminUsersTableSort = {
+            key: normalizedKey,
+            direction: getAdminUsersSortDefaultDirection(normalizedKey)
+        };
+    }
+    syncAdminUsersSortButtons();
+    renderAdminUsersTable();
+}
+
 function setAdminUsersTableEmptyState(text) {
     resetAdminUsersTableDomState();
     if (!adminUsersTableBody) return;
@@ -5899,6 +5998,8 @@ async function renderAdminUsersTable() {
         if (!rowsData.length) {
             rowsData = getAdminUsersTableFallbackRows();
         }
+
+        rowsData = sortAdminUsersTableRows(rowsData);
 
         if (!rowsData.length) {
             const isEmailVerified = !!auth?.currentUser?.emailVerified;
@@ -14172,6 +14273,13 @@ if (adminRefreshBtn) {
         renderAdminUsersTable();
     });
 }
+
+[adminSortRoleBtn, adminSortAccessBtn, adminSortActiveBtn].forEach((button) => {
+    if (!button) return;
+    button.addEventListener('click', () => {
+        setAdminUsersTableSort(button.dataset.sortKey || '');
+    });
+});
 
 if (partnerInviteAddBtn) {
     partnerInviteAddBtn.addEventListener('click', () => {

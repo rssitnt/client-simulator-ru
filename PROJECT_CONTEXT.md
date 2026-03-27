@@ -1591,6 +1591,10 @@
 - Убрана отдельная прокрутка у `admin-table-wrap`; теперь длинная таблица скроллится вместе с панелью настроек.
 - Перекрывающий скролл у `#settingsModal` отключен, чтобы не было двух полос прокрутки.
 
+## 2026-03-27 — Admin users table sorting
+- В таблицу пользователей добавлена сортировка по ролям, доступу (по сроку приглашения) и активному времени.
+- Заголовки колонок сделали кликабельными с переключением направления сортировки.
+
 ## Open Next Steps
 - Revisit prompt sync further if multi-admin concurrent public edits still collide semantically.
 - Consider diff-based Firebase prompt writes instead of full role payloads where practical.

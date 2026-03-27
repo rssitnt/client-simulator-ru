@@ -3869,6 +3869,37 @@ body.light-theme .more-colors-popup {
     letter-spacing: 0.03em;
 }
 
+.admin-sort-btn {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 0;
+    background: none;
+    border: none;
+    color: inherit;
+    font: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+    cursor: pointer;
+}
+
+.admin-sort-btn:focus-visible {
+    outline: 1px solid #4a4a4a;
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+.admin-sort-icon {
+    font-size: 12px;
+    color: #5f5f5f;
+}
+
+.admin-sort-btn.is-active .admin-sort-icon {
+    color: #d0d0d0;
+}
+
 .admin-users-table tr:last-child td {
     border-bottom: none;
 }
