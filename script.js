@@ -10082,6 +10082,22 @@ function clonePromptHistoryEntry(entry = {}) {
     };
 }
 
+function buildPromptHistoryEntryHash(entry = null) {
+    if (!entry || typeof entry !== 'object') return '';
+    return [
+        String(entry.id || ''),
+        String(entry.ts || ''),
+        String(entry.role || ''),
+        String(entry.variationId || ''),
+        String(entry.kind || '')
+    ].join('|');
+}
+
+function buildPromptHistorySnapshotHash(entries = []) {
+    if (!Array.isArray(entries) || !entries.length) return '';
+    return entries.map((entry) => buildPromptHistoryEntryHash(entry)).join('||');
+}
+
 function normalizePromptHistoryEntries(rawHistory = []) {
     const entries = Array.isArray(rawHistory)
         ? rawHistory
@@ -10128,7 +10144,7 @@ function queuePromptHistoryRemoteSync(entries = []) {
             return;
         }
         const previous = queuedPromptHistoryRemoteEntries.get(entry.id);
-        if (previous && JSON.stringify(previous) === JSON.stringify(entry)) {
+        if (previous && buildPromptHistoryEntryHash(previous) === buildPromptHistoryEntryHash(entry)) {
             return;
         }
         queuedPromptHistoryRemoteEntries.set(entry.id, entry);
@@ -10362,7 +10378,7 @@ function savePromptHistory(options = {}) {
     if (!promptHistory) return;
 
     promptHistory = normalizePromptHistoryEntries(promptHistory);
-    lastPromptHistorySnapshotHash = JSON.stringify(promptHistory);
+    lastPromptHistorySnapshotHash = buildPromptHistorySnapshotHash(promptHistory);
 
     if (!promptHistory.length) {
         clearCachedLocalStorageJson(LOCAL_PROMPTS_HISTORY_STORAGE_KEY, []);
@@ -10901,7 +10917,7 @@ function setupPromptsAndConfigListeners() {
         const unsubscribeHistory = onValue(historyRef, (snapshot) => {
             const nextPromptHistory = normalizePromptHistoryEntries(snapshot.val());
             syncedPromptHistoryEntryIds = new Set(nextPromptHistory.map((entry) => entry.id).filter(Boolean));
-            const historyHash = JSON.stringify(nextPromptHistory);
+            const historyHash = buildPromptHistorySnapshotHash(nextPromptHistory);
             if (historyHash === lastPromptHistorySnapshotHash) return;
             promptHistory = nextPromptHistory;
             lastPromptHistorySnapshotHash = historyHash;
@@ -10982,7 +10998,7 @@ async function loadPrompts() {
         }
     }
     promptHistory = normalizePromptHistoryEntries(getCachedLocalStorageJson(LOCAL_PROMPTS_HISTORY_STORAGE_KEY));
-    lastPromptHistorySnapshotHash = JSON.stringify(promptHistory);
+    lastPromptHistorySnapshotHash = buildPromptHistorySnapshotHash(promptHistory);
     clearPromptHistoryRemoteSyncState();
     renderPromptHistory();
 
@@ -11005,7 +11021,7 @@ async function loadPrompts() {
             debugLog('Firebase unavailable and no cached prompt snapshot');
         }
         promptHistory = normalizePromptHistoryEntries(getCachedLocalStorageJson(LOCAL_PROMPTS_HISTORY_STORAGE_KEY));
-        lastPromptHistorySnapshotHash = JSON.stringify(promptHistory);
+        lastPromptHistorySnapshotHash = buildPromptHistorySnapshotHash(promptHistory);
         clearPromptHistoryRemoteSyncState();
         renderPromptHistory();
     }
