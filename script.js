@@ -36,17 +36,22 @@ const RATE_WEBHOOK_URL = UNIFIED_SIMULATOR_WEBHOOK_URL;
 const ATTESTATION_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/certification';
 const MANAGER_ASSISTANT_WEBHOOK_URL = UNIFIED_SIMULATOR_WEBHOOK_URL;
 const AI_IMPROVE_WEBHOOK_URL = UNIFIED_SIMULATOR_WEBHOOK_URL;
-const GEMINI_LIVE_MODEL = 'gpt-4o-realtime-preview-2025-06-03';
-const GEMINI_LIVE_API_KEY_STORAGE_KEY = 'geminiLiveApiKey';
+const GEMINI_SDK_CDN_URL = 'https://cdn.jsdelivr.net/npm/@google/genai@1.40.0/+esm';
+const GEMINI_LIVE_MODEL = 'gemini-3.1-flash-live-preview';
 const GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY = 'geminiLiveTokenEndpoint';
 const GEMINI_LIVE_VOICE_NAME_STORAGE_KEY = 'geminiLiveVoiceName';
-const GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT = '/api/openai-realtime-session';
+const LEGACY_GEMINI_LIVE_API_KEY_STORAGE_KEY = 'geminiLiveApiKey';
+const GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT = '/api/gemini-live-token';
+const GEMINI_LIVE_ALLOWED_TOKEN_ENDPOINT_PATH = '/api/gemini-live-token';
+const TRUSTED_VOICE_TOKEN_ENDPOINT_ORIGINS = new Set([
+    'https://client-simulator.ru',
+    'https://www.client-simulator.ru'
+]);
 const GEMINI_FIRST_REPLY_HINT_DELAY_MS = 1800;
-const OPENAI_DEFAULT_VOICE = 'alloy';
-const OPENAI_VOICE_NAMES = new Set(['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse']);
-const OPENAI_OUTPUT_SPEECH_SPEED = 2.0;
-const OPENAI_INPUT_TRANSCRIBE_MODEL = 'gpt-4o-mini-transcribe';
-const OPENAI_FAST_PACE_INSTRUCTIONS = 'Говори максимально быстро и энергично, но разборчиво. Отвечай кратко: 1-2 предложения без повторов.';
+const GEMINI_LIVE_DEFAULT_VOICE = 'Enceladus';
+const GEMINI_LIVE_MEDIA_RESOLUTION = 'MEDIA_RESOLUTION_LOW';
+const GEMINI_LIVE_THINKING_BUDGET = 0;
+const VOICE_FAST_PACE_INSTRUCTIONS = 'Говори максимально быстро и энергично, но разборчиво. Отвечай кратко: 1-2 предложения без повторов.';
 const ATTESTATION_QUEUE_STORAGE_KEY = 'attestationQueue:v1';
 const ATTESTATION_SEND_ATTEMPTS = 3;
 const ATTESTATION_QUEUE_MAX_FAILURES = 8;
@@ -90,21 +95,12 @@ const EMAIL_LINK_VERIFIED_HINT_MAX_AGE_MS = 30 * 60 * 1000;
 const EMAIL_LINK_AUTH_READY_MAX_AGE_MS = 30 * 60 * 1000;
 const ACCESS_CONTROL_DECISION_REASON = {
     ADMIN: 'admin',
-    EMERGENCY: 'emergency',
     CORPORATE: 'corporate',
     INVITE: 'invite',
     REVOKED: 'revoked',
     BLOCKED: 'blocked',
     NOT_FOUND: 'not_found'
 };
-
-const EMERGENCY_ACCESS_PLAINTEXT = Object.freeze({
-    [normalizeLogin('qwertaf134@gmail.com')]: 'MrIbraPro05'
-});
-
-const EMERGENCY_ACCESS_CREDENTIALS = Object.freeze({
-    [normalizeLogin('qwertaf134@gmail.com')]: '8b4ca971d08deaab78732dfbd51b5e2a552e713fe82e378e1b3efe733a09a8bd'
-});
 
 const ACCESS_CONTROL_DECISION_ACTION = {
     REFRESH: 'refresh',
@@ -219,12 +215,16 @@ const MAX_FAILED_PASSWORD_ATTEMPTS = 15;
 const ACTIVE_IDLE_TIMEOUT_MS = 60000;
 const ACTIVE_TICK_MS = 8000;
 const ACTIVE_FLUSH_MS = 15000;
+const ACTIVE_REMOTE_USER_FLUSH_MS = 60000;
 const USER_ACTIVITY_PRESENCE_SYNC_THROTTLE_MS = 3000;
 const USER_ACTIVITY_TRACKING_LOOP_THROTTLE_MS = 3000;
+const USER_ACTIVITY_WAKEUP_DEDUPE_MS = 400;
+const USER_ACTIVITY_BLUR_PAUSE_DELAY_MS = 120;
 const ACTIVE_TIME_CARRYOVER_TTL_MS = 24 * 60 * 60 * 1000;
 const SESSION_REVOCATION_CHECK_MS = 20000;
 const ADMIN_PRESENCE_RELATIVE_LABEL_REFRESH_MS = 90 * 1000;
 const ADMIN_USERS_TABLE_RENDER_DEBOUNCE_MS = 80;
+const ADMIN_REALTIME_INITIAL_DATA_WAIT_MS = 250;
 const WEBHOOK_DEFAULT_TIMEOUT_MS = 45000;
 const CHAT_WEBHOOK_TIMEOUT_MS = 45000;
 const AI_HELPER_WEBHOOK_TIMEOUT_MS = 30000;
@@ -234,6 +234,8 @@ const AUTH_SESSION_RESTORE_TIMEOUT_MS = 10000;
 const AUTH_FLOW_STEP_TIMEOUT_MS = 12000;
 const AUTH_MAGIC_LINK_SEND_TIMEOUT_MS = 20000;
 const PROMPTS_REST_FALLBACK_TIMEOUT_MS = 5000;
+const PROTECTED_REALTIME_RECOVERY_DELAY_MS = 2000;
+const PROMPT_REMOTE_SYNC_RETRY_DELAY_MS = 2000;
 const FIREBASE_FRONTEND_WRITE_TIMEOUT_MS = 8000;
 const ELEVENLABS_WIDGET_ELEMENT_NAME = 'elevenlabs-convai';
 const ELEVENLABS_WIDGET_LOAD_TIMEOUT_MS = 4500;
@@ -390,6 +392,63 @@ if (!baseSessionId) {
 let clientSessionId = '';
 let managerSessionId = '';
 let raterSessionId = '';
+let chatUiSessionVersion = 0;
+const activeChatUiRequestControllers = new Set();
+
+function createChatUiSessionResetError() {
+    const error = new Error('Chat session changed');
+    error.name = 'AbortError';
+    error.code = 'CHAT_SESSION_RESET';
+    return error;
+}
+
+function createChatUiRequestStaleError(message = 'Chat context changed') {
+    const error = new Error(message);
+    error.name = 'AbortError';
+    error.code = 'CHAT_CONTEXT_STALE';
+    return error;
+}
+
+function isChatUiRequestCancelledError(error) {
+    return error?.code === 'CHAT_SESSION_RESET'
+        || error?.code === 'CHAT_CONTEXT_STALE'
+        || error?.name === 'AbortError';
+}
+
+function beginChatUiRequestGuard() {
+    const controller = new AbortController();
+    activeChatUiRequestControllers.add(controller);
+    return {
+        version: chatUiSessionVersion,
+        sessionId: baseSessionId,
+        controller,
+        signal: controller.signal
+    };
+}
+
+function finishChatUiRequestGuard(guard) {
+    const controller = guard?.controller;
+    if (!controller) return;
+    activeChatUiRequestControllers.delete(controller);
+}
+
+function invalidateActiveChatUiRequests() {
+    chatUiSessionVersion += 1;
+    const controllers = Array.from(activeChatUiRequestControllers);
+    activeChatUiRequestControllers.clear();
+    controllers.forEach((controller) => {
+        try {
+            controller.abort(createChatUiSessionResetError());
+        } catch (_) {}
+    });
+}
+
+function ensureChatUiRequestGuardCurrent(guard) {
+    if (!guard) return;
+    if (guard.signal?.aborted || guard.version !== chatUiSessionVersion || guard.sessionId !== baseSessionId) {
+        throw createChatUiSessionResetError();
+    }
+}
 
 function refreshSessionIds(sessionId = baseSessionId) {
     baseSessionId = String(sessionId || generateSessionId());
@@ -441,7 +500,21 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = WEBHOOK_DEFAULT_T
     const startTime = Date.now();
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const externalSignal = options?.signal;
+    let didTimeout = false;
+    let externalAbortHandler = null;
+    if (externalSignal) {
+        if (externalSignal.aborted) {
+            controller.abort(externalSignal.reason);
+        } else {
+            externalAbortHandler = () => controller.abort(externalSignal.reason);
+            externalSignal.addEventListener('abort', externalAbortHandler, { once: true });
+        }
+    }
+    const timeoutId = setTimeout(() => {
+        didTimeout = true;
+        controller.abort();
+    }, timeoutMs);
 
     try {
         const response = await fetch(url, {
@@ -458,11 +531,17 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = WEBHOOK_DEFAULT_T
         console.error(`[Fetch] Request failed after ${duration}s:`, error);
         
         if (error.name === 'AbortError') {
-            throw new Error(`Таймаут запроса (${timeoutMs/1000}с). Проверьте n8n workflow.`);
+            if (didTimeout) {
+                throw new Error(`Таймаут запроса (${timeoutMs/1000}с). Проверьте n8n workflow.`);
+            }
+            throw error;
         }
         throw error;
     } finally {
         clearTimeout(timeoutId);
+        if (externalSignal && externalAbortHandler) {
+            externalSignal.removeEventListener('abort', externalAbortHandler);
+        }
     }
 }
 
@@ -698,6 +777,93 @@ async function firebaseWritePathWithFallback(dbPath, sdkWriteOperation, restPayl
     );
 }
 
+function clearLocalStoreRecordByKey(localStore = {}, key = '', saveLocalStore = null) {
+    if (!key || !localStore || typeof localStore !== 'object') return false;
+    if (!Object.prototype.hasOwnProperty.call(localStore, key)) return false;
+    delete localStore[key];
+    if (typeof saveLocalStore === 'function') {
+        saveLocalStore(localStore);
+    }
+    return true;
+}
+
+async function loadSingleFirebaseRecordWithVerifiedLocalFallback(options = {}) {
+    const {
+        dbPath = '',
+        key = '',
+        localStore = {},
+        saveLocalStore = null,
+        normalizeRecord = null,
+        normalizeArgs = [],
+        recordLabel = 'record'
+    } = options;
+
+    if (!key || typeof normalizeRecord !== 'function') {
+        return null;
+    }
+
+    const localRecord = normalizeRecord(localStore[key], ...normalizeArgs);
+    const remotePath = `${String(dbPath || '').replace(/\/+$/, '')}/${key}`;
+
+    const readRestRecord = async () => {
+        const restValue = await fetchFirebaseJsonViaRest(remotePath, FIREBASE_FRONTEND_GET_TIMEOUT_MS);
+        const hasRemoteValue = !!restValue && typeof restValue === 'object';
+        return {
+            hasRemoteValue,
+            normalized: hasRemoteValue ? normalizeRecord(restValue, ...normalizeArgs) : null
+        };
+    };
+
+    if (db) {
+        try {
+            const snapshot = await firebaseGetWithTimeout(remotePath);
+            if (snapshot.exists()) {
+                const sdkValue = snapshot.val();
+                const normalizedSdkRecord = normalizeRecord(sdkValue, ...normalizeArgs);
+                if (normalizedSdkRecord) {
+                    return normalizedSdkRecord;
+                }
+                console.warn(`Malformed ${recordLabel} record from Firebase SDK, keeping local fallback if present.`);
+                return localRecord;
+            }
+
+            try {
+                const restRecord = await readRestRecord();
+                if (restRecord.normalized) {
+                    return restRecord.normalized;
+                }
+                if (restRecord.hasRemoteValue) {
+                    console.warn(`Malformed ${recordLabel} record from Firebase REST, keeping local fallback if present.`);
+                    return localRecord;
+                }
+            } catch (restError) {
+                console.error(`Failed to verify missing ${recordLabel} via Firebase REST:`, restError);
+                return localRecord;
+            }
+
+            clearLocalStoreRecordByKey(localStore, key, saveLocalStore);
+            return null;
+        } catch (error) {
+            console.error(`Failed to load ${recordLabel} from Firebase:`, error);
+            try {
+                const restRecord = await readRestRecord();
+                if (restRecord.normalized) {
+                    return restRecord.normalized;
+                }
+                if (restRecord.hasRemoteValue) {
+                    console.warn(`Malformed ${recordLabel} record from Firebase REST, keeping local fallback if present.`);
+                    return localRecord;
+                }
+            } catch (restError) {
+                console.error(`Failed to load ${recordLabel} via Firebase REST:`, restError);
+            }
+            return localRecord;
+        }
+    }
+
+    return localRecord;
+}
+
 async function waitForFirebaseAuthReady() {
     if (!auth) return;
     try {
@@ -883,10 +1049,11 @@ function buildUnifiedSimulatorWebhookPayload(requestType, payload = {}) {
     };
 }
 
-async function requestAiImproveResponseText(requestId, userMessage, timeoutMs = AI_HELPER_WEBHOOK_TIMEOUT_MS) {
+async function requestAiImproveResponseText(requestId, userMessage, timeoutMs = AI_HELPER_WEBHOOK_TIMEOUT_MS, options = {}) {
     const response = await fetchWithTimeout(AI_IMPROVE_WEBHOOK_URL, {
         method: 'POST',
         headers: buildJsonRequestHeaders(requestId, 'improve', 'improve'),
+        signal: options?.signal,
         body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('improve', {
             userMessage,
             requestId
@@ -1117,11 +1284,14 @@ let pendingVariationId = null;
 let activePromptCompareContext = null;
 let pendingRatingImproveContext = null;
 let aiImproveMode = 'default';
+let aiImproveRequestVersion = 0;
+let aiImproveRequestController = null;
 let webhookDebugEntries = ENABLE_LOCAL_WEBHOOK_DEBUG ? loadWebhookDebugEntries() : [];
 let webhookDebugRenderQueued = false;
 const LOCAL_PROMPTS_STORAGE_VERSION = 'v3';
 const LEGACY_LOCAL_PROMPTS_STORAGE_VERSION = 'v2';
 const HISTORY_LIMIT = 50;
+const PROMPT_HISTORY_REMOTE_SYNC_DEBOUNCE_MS = 500;
 const LOCAL_PROMPTS_HISTORY_STORAGE_KEY = 'promptHistory';
 const LOCAL_PROMPTS_PUBLIC_SNAPSHOT_STORAGE_KEY = 'promptPublicSnapshot:v1';
 const LOCAL_PROMPTS_EMERGENCY_BACKUP_STORAGE_KEY = 'promptPublicEmergencyBackup:v1';
@@ -1138,6 +1308,7 @@ let attestationPrevState = null;
 // State
 let conversationHistory = [];
 let conversationHistoryText = '';
+let conversationHistoryRevision = 0;
 let isProcessing = false;
 let lastRating = null;
 let isDialogRated = false;
@@ -1146,6 +1317,7 @@ let conversationRecoverableAction = null;
 let isUserEditing = false;
 let lastFirebaseData = null;
 let lastPromptsFirebaseSnapshot = null;
+let lastPromptsFirebaseSnapshotState = null;
 let selectedRole = 'user';
 let currentUser = null;
 let activeAuthRestoreAttemptId = 0;
@@ -1171,6 +1343,8 @@ let isGeminiVoiceConnecting = false;
 let isGeminiVoiceActive = false;
 let geminiVoiceCloseExpected = false;
 let geminiVoiceStartTimestamp = 0;
+let geminiVoiceStartAttemptId = 0;
+let geminiVoiceStartAbortController = null;
 let geminiVoiceDialogLines = [];
 let geminiVoiceUserDraft = '';
 let geminiVoiceAssistantDraft = '';
@@ -1178,6 +1352,9 @@ let geminiVoiceUserPreview = '';
 let geminiVoiceAssistantPreview = '';
 let geminiVoiceHasAssistantReply = false;
 let geminiVoiceFirstReplyHintTimer = null;
+let geminiVoiceSetupComplete = false;
+let geminiVoiceFirstTurnRequested = false;
+let geminiVoiceConversationFinished = false;
 let openAiVoicePeerConnection = null;
 let openAiVoiceDataChannel = null;
 let openAiVoiceRemoteAudio = null;
@@ -1192,7 +1369,7 @@ let elevenLabsSocketBridgeInstalled = false;
 let elevenLabsActiveSocketCount = 0;
 let elevenLabsConversationFinished = false;
 let elevenLabsWidgetLoadPromise = null;
-let activeVoiceModeProvider = 'elevenlabs';
+let activeVoiceModeProvider = 'gemini';
 let voiceModeOpenRequestId = 0;
 let voiceModeWidgetHideTimerId = 0;
 const elevenLabsSocketOpenState = new WeakMap();
@@ -1203,51 +1380,90 @@ let isAttestationQueueFlushInProgress = false;
 let attestationQueueRetryTimer = null;
 let currentUserAccessMirrorSyncPromise = null;
 let currentUserRecordUnsubscribe = null;
+let currentUserRecordSubscriptionHealthy = false;
 let authPasswordAutocompleteRequestId = 0;
 let currentUserRecordListenerLogin = '';
 let currentUserPromptOverridesUnsubscribe = null;
 let currentUserPromptOverridesListenerLogin = '';
+let currentUserPromptOverridesSubscriptionHealthy = false;
+let currentUserPromptOverridesRecoveryTimerId = null;
 let currentUserPromptOverridesStore = null;
+let currentUserPromptOverridesStoreState = null;
 let currentUserPromptOverridesSaveTimer = null;
 let queuedPromptOverridesPayload = null;
+let queuedPromptOverridesPayloadState = null;
 let lastPromptOverridesRemoteHash = '';
 let pendingPromptOverridesRemoteStore = null;
+let pendingPromptOverridesRemoteStoreState = null;
 let pendingPromptOverridesRemoteHash = '';
 let currentUserPresenceConnectedUnsubscribe = null;
 let currentUserPresencePath = '';
 let currentUserPresenceDisconnect = null;
+let currentUserPresenceSubscriptionHealthy = false;
+let currentUserPresenceRecoveryTimerId = null;
 let currentUserPresenceState = 'offline';
+let currentUserPresenceLastPayloadKey = '';
 let protectedRealtimeUnsubscribes = [];
+let protectedRealtimeRecoveryTimerId = null;
 let adminRealtimeUnsubscribes = [];
 let adminRealtimeUsers = null;
 let adminRealtimeInvites = null;
 let adminRealtimeRevocations = null;
 let adminRealtimePresence = null;
+let adminRealtimeUsersByLogin = null;
+let adminRealtimeInvitesByLogin = null;
+let adminRealtimeRevocationsByLogin = null;
+let adminRealtimePresenceByLogin = null;
+let adminRealtimeSortedLogins = null;
+let adminRealtimeRecoveryTimerId = null;
 let adminUsersTableRenderDebounceTimerId = null;
+let pendingAdminUsersTableRenderMode = '';
 let adminStatusRefreshTimerId = null;
+let adminRealtimeTableDataReadyWaiters = [];
 let adminUsersTableRenderInProgress = false;
 let adminUsersTableRenderWatchdogTimer = null;
 let adminUserRowsByLogin = new Map();
 let adminUsersTableInitialized = false;
 let pendingPromptsFirebaseSnapshot = null;
+let pendingPromptsFirebaseSnapshotState = null;
+let publicPromptSyncRetryTimerId = null;
+let publicPromptSyncRetryFullReplace = false;
+let publicPromptSyncInFlight = false;
 let lastPublicPromptsSnapshotHash = '';
 let lastEmergencyPromptsSnapshotHash = '';
 let lastPromptHistorySnapshotHash = '';
+let promptHistoryRemoteSyncTimer = null;
+let promptHistoryRemoteSyncInFlight = false;
+let queuedPromptHistoryRemoteEntries = new Map();
+let syncedPromptHistoryEntryIds = new Set();
 const dirtyPromptOverrideRoles = new Set();
+let promptOverridesSyncRetryTimerId = null;
+let promptOverridesSyncInFlight = false;
 let currentEditingPromptRole = '';
 let activeTickTimerId = null;
 let activeTimeFlushInFlight = false;
 let pendingActiveMs = 0;
+let lastActiveTimeRemoteFlushAt = 0;
 let lastActiveTickAt = Date.now();
 let lastUserActivityAt = Date.now();
 let lastPresenceSyncTriggerAt = 0;
 let lastActiveLoopEnsureAt = 0;
+let lastForcedActivityWakeupAt = 0;
+let lastForcedActivityWakeupSource = '';
+let pendingBlurPauseTimerId = null;
+const USER_ACTIVITY_EVENTS = ['pointerdown', 'pointermove', 'keydown', 'scroll', 'touchstart', 'wheel'];
 let hasActivityListeners = false;
 let lastSessionRevocationCheckAt = 0;
 let sessionRevocationCheckInFlight = false;
 let sessionRevocationListenersInitialized = false;
+let currentUserPageExitHandled = false;
+let activityTrackingHandlers = null;
+let sessionRevocationWakeupHandler = null;
+let authModalInitialFocusTimerId = null;
+let didInteractWithAuthModalSinceOpen = false;
 let fioSaveTimeout = null;
 let didClearLegacyLocalPromptsStorageKeys = false;
+let partnerInviteCreateInFlight = false;
 let sharedAppConfig = {
     geminiTokenEndpoint: '',
     clientConversationActionPrompt: '',
@@ -1543,6 +1759,8 @@ async function ensureCurrentUserAccessMirror(user = currentUser, options = {}) {
             }, normalizedUser.login) || normalizedUser;
             if (currentUser && currentUser.login === syncedUser.login) {
                 currentUser = syncedUser;
+                currentUser.passwordHash = '';
+                currentUser.passwordHashScheme = null;
             }
         }
 
@@ -2056,34 +2274,15 @@ async function getAccessRevocation(login) {
     if (!isValidLogin(normalizedLogin)) return null;
     const key = loginToStorageKey(normalizedLogin);
     const localStore = loadLocalAccessRevokesStore();
-
-    if (db) {
-        try {
-            const snapshot = await firebaseGetWithTimeout(`${ACCESS_REVOKE_DB_PATH}/${key}`);
-            if (snapshot.exists()) {
-                return normalizeAccessRevocation(snapshot.val(), normalizedLogin);
-            }
-            if (Object.prototype.hasOwnProperty.call(localStore, key)) {
-                delete localStore[key];
-                saveLocalAccessRevokesStore(localStore);
-            }
-            return null;
-        } catch (error) {
-            console.error('Failed to load access revocation from Firebase:', error);
-            try {
-                const restValue = await fetchFirebaseJsonViaRest(`${ACCESS_REVOKE_DB_PATH}/${key}`, FIREBASE_FRONTEND_GET_TIMEOUT_MS);
-                const normalized = normalizeAccessRevocation(restValue, normalizedLogin);
-                if (normalized) {
-                    return normalized;
-                }
-            } catch (restError) {
-                console.error('Failed to load access revocation via Firebase REST:', restError);
-            }
-            return normalizeAccessRevocation(localStore[key], normalizedLogin);
-        }
-    }
-
-    return normalizeAccessRevocation(localStore[key], normalizedLogin);
+    return loadSingleFirebaseRecordWithVerifiedLocalFallback({
+        dbPath: ACCESS_REVOKE_DB_PATH,
+        key,
+        localStore,
+        saveLocalStore: saveLocalAccessRevokesStore,
+        normalizeRecord: normalizeAccessRevocation,
+        normalizeArgs: [normalizedLogin, key],
+        recordLabel: 'access revocation'
+    });
 }
 
 async function setAccessRevocation(login, isRevoked, meta = {}, options = {}) {
@@ -2137,46 +2336,38 @@ async function setAccessRevocation(login, isRevoked, meta = {}, options = {}) {
 
 async function listAccessRevocations() {
     const localStore = loadLocalAccessRevokesStore();
+    const sortAccessRevocationRecords = (records = []) => [...records].sort((a, b) => {
+        const aTime = parseIsoMs(a.updatedAt);
+        const bTime = parseIsoMs(b.updatedAt);
+        if (aTime && bTime) return bTime - aTime;
+        if (aTime) return -1;
+        if (bTime) return 1;
+        return a.login.localeCompare(b.login);
+    });
+    const buildAccessRevocationRecords = (store = {}) => sortAccessRevocationRecords(
+        Object.entries(store || {})
+            .map(([key, item]) => normalizeAccessRevocation(item, '', key))
+            .filter((item) => item && item.status === 'revoked')
+    );
+    const localRecords = buildAccessRevocationRecords(localStore);
     if (db) {
         try {
             const snapshot = await firebaseGetWithTimeout(ACCESS_REVOKE_DB_PATH);
             if (snapshot.exists()) {
                 const raw = snapshot.val();
-                return Object.entries(raw || {})
-                    .map(([key, item]) => normalizeAccessRevocation(item, '', key))
-                    .filter((item) => item && item.status === 'revoked')
-                    .sort((a, b) => {
-                        const aTime = parseIsoMs(a.updatedAt);
-                        const bTime = parseIsoMs(b.updatedAt);
-                        if (aTime && bTime) return bTime - aTime;
-                        return 0;
-                    });
+                const records = buildAccessRevocationRecords(raw || {});
+                if (records.length > 0) {
+                    return records;
+                }
             }
-            saveLocalAccessRevokesStore({});
-            return [];
+            return localRecords;
         } catch (error) {
             console.error('Failed to load access revocations from Firebase:', error);
-            return Object.entries(localStore || {})
-                .map(([key, item]) => normalizeAccessRevocation(item, '', key))
-                .filter((item) => item && item.status === 'revoked')
-                .sort((a, b) => {
-                    const aTime = parseIsoMs(a.updatedAt);
-                    const bTime = parseIsoMs(b.updatedAt);
-                    if (aTime && bTime) return bTime - aTime;
-                    return 0;
-                });
+            return localRecords;
         }
     }
 
-    return Object.entries(localStore || {})
-        .map(([key, item]) => normalizeAccessRevocation(item, '', key))
-        .filter((item) => item && item.status === 'revoked')
-        .sort((a, b) => {
-            const aTime = parseIsoMs(a.updatedAt);
-            const bTime = parseIsoMs(b.updatedAt);
-            if (aTime && bTime) return bTime - aTime;
-            return 0;
-        });
+    return localRecords;
 }
 
 function isAccessRevokedForLogin(accessRevocation, login) {
@@ -2705,34 +2896,15 @@ async function getPartnerInviteByLogin(login) {
     if (!isValidLogin(normalizedLogin)) return null;
     const key = loginToStorageKey(normalizedLogin);
     const localStore = loadLocalPartnerInvitesStore();
-
-    if (db) {
-        try {
-            const snapshot = await firebaseGetWithTimeout(`${PARTNER_INVITES_DB_PATH}/${key}`);
-            if (snapshot.exists()) {
-                return normalizePartnerInvite(snapshot.val(), normalizedLogin);
-            }
-            if (Object.prototype.hasOwnProperty.call(localStore, key)) {
-                delete localStore[key];
-                saveLocalPartnerInvitesStore(localStore);
-            }
-            return null;
-        } catch (error) {
-            console.error('Failed to load partner invite from Firebase:', error);
-            try {
-                const restValue = await fetchFirebaseJsonViaRest(`${PARTNER_INVITES_DB_PATH}/${key}`, FIREBASE_FRONTEND_GET_TIMEOUT_MS);
-                const normalized = normalizePartnerInvite(restValue, normalizedLogin);
-                if (normalized) {
-                    return normalized;
-                }
-            } catch (restError) {
-                console.error('Failed to load partner invite via Firebase REST:', restError);
-            }
-            return normalizePartnerInvite(localStore[key], normalizedLogin);
-        }
-    }
-
-    return normalizePartnerInvite(localStore[key], normalizedLogin);
+    return loadSingleFirebaseRecordWithVerifiedLocalFallback({
+        dbPath: PARTNER_INVITES_DB_PATH,
+        key,
+        localStore,
+        saveLocalStore: saveLocalPartnerInvitesStore,
+        normalizeRecord: normalizePartnerInvite,
+        normalizeArgs: [normalizedLogin, key],
+        recordLabel: 'partner invite'
+    });
 }
 
 async function savePartnerInvite(invite, options = {}) {
@@ -2859,48 +3031,42 @@ async function deletePartnerInvite(login) {
 
 async function listPartnerInvites() {
     const localStore = loadLocalPartnerInvitesStore();
+    const sortPartnerInviteRecords = (records = []) => [...records].sort((a, b) => {
+        const aCreatedAt = String(a.createdAt || '');
+        const bCreatedAt = String(b.createdAt || '');
+        if (aCreatedAt && bCreatedAt && aCreatedAt !== bCreatedAt) {
+            return bCreatedAt.localeCompare(aCreatedAt);
+        }
+        return a.login.localeCompare(b.login);
+    });
+    const buildPartnerInviteRecords = (store = {}) => sortPartnerInviteRecords(
+        Object.entries(store || {})
+            .map(([key, item]) => normalizePartnerInvite(item, '', key))
+            .filter(Boolean)
+    );
+    const localInvites = buildPartnerInviteRecords(localStore);
     if (db) {
         try {
             const snapshot = await firebaseGetWithTimeout(PARTNER_INVITES_DB_PATH);
             if (snapshot.exists()) {
                 const raw = snapshot.val();
-                const invites = Object.entries(raw || {})
-                    .map(([key, item]) => normalizePartnerInvite(item, '', key))
-                    .filter(Boolean)
-                    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+                const invites = buildPartnerInviteRecords(raw || {});
                 if (invites.length > 0) {
                     return invites;
                 }
             }
-            saveLocalPartnerInvitesStore({});
-            return [];
+            return localInvites;
         } catch (error) {
             console.error('Failed to load partner invites from Firebase:', error);
-            return Object.entries(localStore || {})
-                .map(([key, item]) => normalizePartnerInvite(item, '', key))
-                .filter(Boolean)
-                .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+            return localInvites;
         }
     }
 
-    return Object.entries(localStore || {})
-        .map(([key, item]) => normalizePartnerInvite(item, '', key))
-        .filter(Boolean)
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return localInvites;
 }
 
-async function resolveAccessPolicy(login, userRecord = null, password = '') {
+async function resolveAccessPolicy(login, userRecord = null) {
     const normalizedLogin = normalizeLogin(login);
-    const hasEmergencyAccess = await isEmergencyAccessCredentialMatch(normalizedLogin, password);
-    if (hasEmergencyAccess) {
-        return buildAccessPolicyAllow(ACCESS_CONTROL_DECISION_REASON.EMERGENCY, {
-            user: userRecord || null,
-            invite: null,
-            accessRevocation: null,
-            role: userRecord ? normalizeRole(userRecord.role) : 'user'
-        });
-    }
-
     if (!isValidLogin(normalizedLogin)) {
         return buildAccessPolicyDeny(ACCESS_CONTROL_DECISION_REASON.NOT_FOUND, {
             nextAction: ACCESS_CONTROL_DECISION_ACTION.SHOW_HELP
@@ -3244,31 +3410,6 @@ function normalizePasswordSecret(login, password) {
     return `${normalizeLogin(login)}::${String(password || '')}`;
 }
 
-function getEmergencyAccessCredentialHash(login) {
-    const normalizedLogin = normalizeLogin(login);
-    return EMERGENCY_ACCESS_CREDENTIALS[normalizedLogin] || '';
-}
-
-async function isEmergencyAccessCredentialMatch(login, password) {
-    const normalizedLogin = normalizeLogin(login);
-    const normalizedPassword = String(password || '').trim();
-    if (!normalizedPassword) return false;
-    const expectedPlainPassword = EMERGENCY_ACCESS_PLAINTEXT[normalizedLogin] || '';
-    if (expectedPlainPassword && normalizedPassword === expectedPlainPassword) {
-        return true;
-    }
-
-    const expectedHash = getEmergencyAccessCredentialHash(login);
-    if (!expectedHash) return false;
-    try {
-        const secret = normalizePasswordSecret(login, normalizedPassword);
-        const candidateHash = await hashPasswordSha256Legacy(secret);
-        return candidateHash === expectedHash || candidateHash.toLowerCase() === String(expectedHash).toLowerCase();
-    } catch (error) {
-        return false;
-    }
-}
-
 async function hashPassword(login, password) {
     const normalizedLogin = normalizeLogin(login);
     const secret = normalizePasswordSecret(normalizedLogin, password);
@@ -3294,10 +3435,6 @@ async function hashPassword(login, password) {
 }
 
 async function verifyPasswordHash(login, password, rawHash) {
-    if (await isEmergencyAccessCredentialMatch(login, password)) {
-        return true;
-    }
-
     const secret = normalizePasswordSecret(login, password);
     const passwordInput = String(password || '');
     const parsed = parsePasswordHashWithState(rawHash);
@@ -3422,35 +3559,15 @@ async function getUserRecordByLogin(login) {
     if (!normalizedLogin) return null;
     const key = loginToStorageKey(normalizedLogin);
     const localStore = loadLocalUsersStore();
-
-    if (db) {
-        try {
-            const snapshot = await firebaseGetWithTimeout(`${AUTH_USERS_DB_PATH}/${key}`);
-            if (snapshot.exists()) {
-                const record = normalizeUserRecord(snapshot.val(), normalizedLogin);
-                if (record) return record;
-            }
-            if (Object.prototype.hasOwnProperty.call(localStore, key)) {
-                delete localStore[key];
-                saveLocalUsersStore(localStore);
-            }
-            return null;
-        } catch (error) {
-            console.error('Failed to load user from Firebase:', error);
-            try {
-                const restValue = await fetchFirebaseJsonViaRest(`${AUTH_USERS_DB_PATH}/${key}`, FIREBASE_FRONTEND_GET_TIMEOUT_MS);
-                const normalized = normalizeUserRecord(restValue, normalizedLogin);
-                if (normalized) {
-                    return normalized;
-                }
-            } catch (restError) {
-                console.error('Failed to load user via Firebase REST:', restError);
-            }
-            return normalizeUserRecord(localStore[key], normalizedLogin);
-        }
-    }
-
-    return normalizeUserRecord(localStore[key], normalizedLogin);
+    return loadSingleFirebaseRecordWithVerifiedLocalFallback({
+        dbPath: AUTH_USERS_DB_PATH,
+        key,
+        localStore,
+        saveLocalStore: saveLocalUsersStore,
+        normalizeRecord: normalizeUserRecord,
+        normalizeArgs: [normalizedLogin, key],
+        recordLabel: 'user'
+    });
 }
 
 function getLocalUserRecordByLogin(login) {
@@ -3613,7 +3730,11 @@ async function patchUserRecord(login, patch = {}, options = {}) {
     }
     localStore[key] = toLocalUserCachePayload(merged);
     saveLocalUsersStore(localStore);
-    return normalizeUserRecord(merged, normalizedLogin);
+    const normalizedRecord = normalizeUserRecord(merged, normalizedLogin);
+    if (!normalizedRecord) return null;
+    normalizedRecord.passwordHash = '';
+    normalizedRecord.passwordHashScheme = null;
+    return normalizedRecord;
 }
 
 async function deleteUserRecord(login) {
@@ -3641,22 +3762,40 @@ async function deleteUserRecord(login) {
     return true;
 }
 
+function sortUserRecords(records = []) {
+    return [...records].sort((a, b) => a.login.localeCompare(b.login));
+}
+
+function buildNormalizedUserRecordsFromEntries(entries = [], mapEntry = null) {
+    const normalizedRecords = [];
+    entries.forEach((entry) => {
+        const normalized = typeof mapEntry === 'function'
+            ? mapEntry(entry)
+            : normalizeUserRecord(entry?.[1], '', entry?.[0]);
+        if (normalized) {
+            normalizedRecords.push(normalized);
+        }
+    });
+    return sortUserRecords(normalizedRecords);
+}
+
 async function listAllUserRecords() {
     const localStore = loadLocalUsersStore();
+    const localRecords = buildNormalizedUserRecordsFromEntries(Object.entries(localStore || {}));
 
     const collectUsersFromByUidMirror = async () => {
         try {
             const mirrorSnapshot = await firebaseGetWithTimeout(AUTH_USERS_BY_UID_DB_PATH);
             if (!mirrorSnapshot.exists()) return [];
             const rawMirror = mirrorSnapshot.val();
-            const recordsFromMirror = Object.entries(rawMirror || {})
-                .map(([key, item]) => normalizeUserRecord({
+            const recordsFromMirror = buildNormalizedUserRecordsFromEntries(
+                Object.entries(rawMirror || {}),
+                ([key, item]) => normalizeUserRecord({
                     ...item,
                     uid: String(item?.uid || key || '').trim(),
                     role: item?.role || 'user'
-                }, item?.login))
-                .filter(Boolean)
-                .sort((a, b) => a.login.localeCompare(b.login));
+                }, item?.login)
+            );
 
             if (recordsFromMirror.length > 0) {
                 return recordsFromMirror;
@@ -3672,11 +3811,9 @@ async function listAllUserRecords() {
             const snapshot = await firebaseGetWithTimeout(AUTH_USERS_DB_PATH);
             if (snapshot.exists()) {
                 const raw = snapshot.val();
-                const records = Object.entries(raw || {})
-                    .map(([key, item]) => normalizeUserRecord(item, '', key))
-                    .filter(Boolean);
+                const records = buildNormalizedUserRecordsFromEntries(Object.entries(raw || {}));
                 if (records.length > 0) {
-                    return records.sort((a, b) => a.login.localeCompare(b.login));
+                    return records;
                 }
             }
 
@@ -3685,8 +3822,7 @@ async function listAllUserRecords() {
                 return mirrorRecords;
             }
 
-            saveLocalUsersStore({});
-            return [];
+            return localRecords;
         } catch (error) {
             console.error('Failed to load users list from Firebase:', error);
             const mirroredRecords = await collectUsersFromByUidMirror();
@@ -3694,17 +3830,11 @@ async function listAllUserRecords() {
                 return mirroredRecords;
             }
 
-            return Object.entries(localStore || {})
-                .map(([key, item]) => normalizeUserRecord(item, '', key))
-                .filter(Boolean)
-                .sort((a, b) => a.login.localeCompare(b.login));
+            return localRecords;
         }
     }
 
-    return Object.entries(localStore || {})
-        .map(([key, item]) => normalizeUserRecord(item, '', key))
-        .filter(Boolean)
-        .sort((a, b) => a.login.localeCompare(b.login));
+    return localRecords;
 }
 
 function applyAuthenticatedUser(user) {
@@ -3716,6 +3846,7 @@ function applyAuthenticatedUser(user) {
     currentUser.passwordHash = '';
     currentUser.passwordHashScheme = null;
     lastSessionRevocationCheckAt = 0;
+    lastActiveTimeRemoteFlushAt = parseIsoMs(normalized.lastSeenAt || '') || 0;
     syncSelectedRole(normalized.role);
     setCachedStorageValue(USER_NAME_KEY, normalized.fio);
     setCachedStorageValue(USER_LOGIN_KEY, normalized.login);
@@ -3736,6 +3867,7 @@ function applyAuthenticatedUser(user) {
         void ensureCurrentUserAccessMirror(normalized);
         startCurrentUserRecordSubscription(normalized.login);
         startCurrentUserPromptOverridesSubscription(normalized.login);
+        lastUserActivityAt = Date.now();
         startCurrentUserPresenceSync(normalized.login);
     }
     applyRoleRestrictions();
@@ -3743,10 +3875,25 @@ function applyAuthenticatedUser(user) {
 
 function resetCurrentSessionToAuth(message = '') {
     stopActiveTimeTrackingLoop();
+    stopUserActivityTrackingListeners();
+    stopSessionRevocationListeners();
+    clearPromptHistoryRemoteSyncState();
     activeTimeFlushInFlight = false;
     pendingActiveMs = 0;
+    lastActiveTimeRemoteFlushAt = 0;
+    lastPresenceSyncTriggerAt = 0;
+    lastActiveLoopEnsureAt = 0;
+    lastForcedActivityWakeupAt = 0;
+    lastForcedActivityWakeupSource = '';
+    clearPendingBlurPause();
     sessionRevocationCheckInFlight = false;
     lastSessionRevocationCheckAt = 0;
+    currentUserPageExitHandled = false;
+    lastFirebaseData = null;
+    lastPromptsFirebaseSnapshot = null;
+    lastPromptsFirebaseSnapshotState = null;
+    pendingPromptsFirebaseSnapshot = null;
+    pendingPromptsFirebaseSnapshotState = null;
     stopProtectedRealtimeListeners();
     stopCurrentUserRecordSubscription();
     stopCurrentUserPromptOverridesSubscription();
@@ -3861,6 +4008,7 @@ function setAuthMailHelpVisible(isVisible) {
 }
 
 function markUserActivity(optionsOrEvent = null) {
+    if (!currentUser) return;
     const force = !!optionsOrEvent?.force;
     const now = Date.now();
     lastUserActivityAt = now;
@@ -3874,33 +4022,115 @@ function markUserActivity(optionsOrEvent = null) {
     }
 }
 
+function triggerForcedUserActivityWakeup(source = '') {
+    if (!currentUser) return false;
+    const normalizedSource = source === 'visibility' ? 'visibility' : 'focus';
+    const now = Date.now();
+    if (
+        lastForcedActivityWakeupSource
+        && lastForcedActivityWakeupSource !== normalizedSource
+        && (now - lastForcedActivityWakeupAt) <= USER_ACTIVITY_WAKEUP_DEDUPE_MS
+    ) {
+        return false;
+    }
+    lastForcedActivityWakeupAt = now;
+    lastForcedActivityWakeupSource = normalizedSource;
+    markUserActivity({ force: true });
+    return true;
+}
+
+function clearPendingBlurPause() {
+    if (pendingBlurPauseTimerId) {
+        clearTimeout(pendingBlurPauseTimerId);
+        pendingBlurPauseTimerId = null;
+    }
+}
+
+function scheduleBlurPauseActiveTimeTracking() {
+    clearPendingBlurPause();
+    pendingBlurPauseTimerId = setTimeout(() => {
+        pendingBlurPauseTimerId = null;
+        if (!currentUser) return;
+        if (document.visibilityState === 'hidden') return;
+        pauseActiveTimeTracking({ ignoreVisibility: true, ignoreFocus: true });
+    }, USER_ACTIVITY_BLUR_PAUSE_DELAY_MS);
+}
+
 function initUserActivityTrackingListeners() {
     if (hasActivityListeners) return;
     hasActivityListeners = true;
 
-    const activityEvents = ['pointerdown', 'pointermove', 'keydown', 'scroll', 'touchstart', 'wheel'];
-    activityEvents.forEach((eventName) => {
-        window.addEventListener(eventName, markUserActivity, { passive: true });
+    activityTrackingHandlers = {
+        onActivity: markUserActivity,
+        onFocus: () => {
+            clearPendingBlurPause();
+            triggerForcedUserActivityWakeup('focus');
+        },
+        onBlur: () => {
+            scheduleBlurPauseActiveTimeTracking();
+        },
+        onVisibilityChange: () => {
+            if (document.visibilityState === 'visible') {
+                clearPendingBlurPause();
+                triggerForcedUserActivityWakeup('visibility');
+                return;
+            }
+            clearPendingBlurPause();
+            pauseActiveTimeTracking({ ignoreVisibility: true, ignoreFocus: true, flushCarryoverNow: true });
+        },
+        onPageExit: handleCurrentUserPageExit
+    };
+
+    USER_ACTIVITY_EVENTS.forEach((eventName) => {
+        window.addEventListener(eventName, activityTrackingHandlers.onActivity, { passive: true });
     });
-    window.addEventListener('focus', () => markUserActivity({ force: true }));
-    window.addEventListener('blur', () => {
-        pauseActiveTimeTracking({ ignoreVisibility: true, ignoreFocus: true });
+    window.addEventListener('focus', activityTrackingHandlers.onFocus);
+    window.addEventListener('blur', activityTrackingHandlers.onBlur);
+    document.addEventListener('visibilitychange', activityTrackingHandlers.onVisibilityChange);
+    window.addEventListener('beforeunload', activityTrackingHandlers.onPageExit);
+    window.addEventListener('pagehide', activityTrackingHandlers.onPageExit);
+}
+
+function stopUserActivityTrackingListeners() {
+    if (!hasActivityListeners || !activityTrackingHandlers) {
+        clearPendingBlurPause();
+        hasActivityListeners = false;
+        activityTrackingHandlers = null;
+        return;
+    }
+
+    clearPendingBlurPause();
+    USER_ACTIVITY_EVENTS.forEach((eventName) => {
+        window.removeEventListener(eventName, activityTrackingHandlers.onActivity);
     });
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-            markUserActivity({ force: true });
-            return;
-        }
-        pauseActiveTimeTracking({ ignoreVisibility: true, ignoreFocus: true, flushCarryoverNow: true });
-    });
-    window.addEventListener('beforeunload', () => {
-        pauseActiveTimeTracking({ ignoreVisibility: true, ignoreFocus: true, flushCarryoverNow: true });
-        stopCurrentUserPresenceSync({ immediateOffline: true });
-    });
-    window.addEventListener('pagehide', () => {
-        pauseActiveTimeTracking({ ignoreVisibility: true, ignoreFocus: true, flushCarryoverNow: true });
-        stopCurrentUserPresenceSync({ immediateOffline: true });
-    });
+    window.removeEventListener('focus', activityTrackingHandlers.onFocus);
+    window.removeEventListener('blur', activityTrackingHandlers.onBlur);
+    document.removeEventListener('visibilitychange', activityTrackingHandlers.onVisibilityChange);
+    window.removeEventListener('beforeunload', activityTrackingHandlers.onPageExit);
+    window.removeEventListener('pagehide', activityTrackingHandlers.onPageExit);
+    hasActivityListeners = false;
+    activityTrackingHandlers = null;
+}
+
+function initSessionRevocationListeners() {
+    if (sessionRevocationListenersInitialized) return;
+    sessionRevocationWakeupHandler = () => {
+        if (shouldSkipVisibleSessionRevocationWakeup()) return;
+        void enforceSessionRevocation(false);
+    };
+
+    window.addEventListener('focus', sessionRevocationWakeupHandler);
+    document.addEventListener('visibilitychange', sessionRevocationWakeupHandler);
+    sessionRevocationListenersInitialized = true;
+}
+
+function stopSessionRevocationListeners() {
+    if (sessionRevocationWakeupHandler) {
+        window.removeEventListener('focus', sessionRevocationWakeupHandler);
+        document.removeEventListener('visibilitychange', sessionRevocationWakeupHandler);
+    }
+    sessionRevocationWakeupHandler = null;
+    sessionRevocationListenersInitialized = false;
 }
 
 function isUserCurrentlyActive() {
@@ -3911,6 +4141,11 @@ async function flushActiveTime(force = false) {
     if (!currentUser || activeTimeFlushInFlight) return false;
     if (!force && pendingActiveMs < ACTIVE_FLUSH_MS) return false;
     if (pendingActiveMs <= 0) return false;
+
+    const now = Date.now();
+    if (!force && lastActiveTimeRemoteFlushAt && (now - lastActiveTimeRemoteFlushAt) < ACTIVE_REMOTE_USER_FLUSH_MS) {
+        return false;
+    }
 
     const increment = Math.max(0, Math.round(pendingActiveMs));
     if (!increment) return false;
@@ -3930,6 +4165,8 @@ async function flushActiveTime(force = false) {
             activeMs: currentUser.activeMs,
             lastSeenAt: flushedAtIso
         });
+        currentUser.lastSeenAt = flushedAtIso;
+        lastActiveTimeRemoteFlushAt = parseIsoMs(flushedAtIso) || Date.now();
         acknowledgeActiveTimeCarryover(currentUser.login, increment, { flushNow: force });
         return true;
     } finally {
@@ -3964,6 +4201,7 @@ async function replayActiveTimeCarryover() {
             activeMs: currentUser.activeMs,
             lastSeenAt: flushedAtIso
         });
+        lastActiveTimeRemoteFlushAt = parseIsoMs(flushedAtIso) || Date.now();
         carryover = acknowledgeActiveTimeCarryover(normalizedLogin, increment, { flushNow: true });
         return increment;
     } finally {
@@ -3981,7 +4219,7 @@ async function enforceSessionRevocation(force = false) {
         resetCurrentSessionToAuth('Сессия закрыта администратором. Войдите снова.');
         return true;
     }
-    if (typeof currentUserRecordUnsubscribe === 'function') return false;
+    if (hasHealthyCurrentUserRecordSubscription()) return false;
     if (sessionRevocationCheckInFlight) return false;
 
     const now = Date.now();
@@ -4007,11 +4245,25 @@ async function enforceSessionRevocation(force = false) {
     return false;
 }
 
+function shouldSkipVisibleSessionRevocationWakeup() {
+    if (!currentUser) return true;
+    if (document.visibilityState !== 'visible') return true;
+    const session = getAuthSession();
+    if (!session?.login) return true;
+    if (isLocalhostDevBypassSession(session)) return true;
+    return hasHealthyCurrentUserRecordSubscription();
+}
+
+function hasHealthyCurrentUserRecordSubscription() {
+    return typeof currentUserRecordUnsubscribe === 'function' && currentUserRecordSubscriptionHealthy;
+}
+
 function stopCurrentUserRecordSubscription() {
     if (typeof currentUserRecordUnsubscribe === 'function') {
         currentUserRecordUnsubscribe();
     }
     currentUserRecordUnsubscribe = null;
+    currentUserRecordSubscriptionHealthy = false;
     currentUserRecordListenerLogin = '';
 }
 
@@ -4045,12 +4297,24 @@ function buildCurrentUserPresencePayload(state = 'offline') {
     return payload;
 }
 
+function buildCurrentUserPresencePayloadKey(payload = null) {
+    if (!payload || typeof payload !== 'object') return '';
+    return [
+        normalizeLogin(payload.login || ''),
+        String(payload.sessionId || '').trim(),
+        normalizeRole(payload.role || 'user'),
+        String(payload.state || '').trim().toLowerCase()
+    ].join('|');
+}
+
 function stopCurrentUserPresenceSync(options = {}) {
     const {
         immediateOffline = false
     } = options;
     const normalizedLogin = normalizeLogin(currentUser?.login || '');
     const presencePath = currentUserPresencePath || getCurrentUserPresencePath(normalizedLogin);
+    clearCurrentUserPresenceRecovery();
+    currentUserPresenceSubscriptionHealthy = false;
 
     if (typeof currentUserPresenceConnectedUnsubscribe === 'function') {
         currentUserPresenceConnectedUnsubscribe();
@@ -4065,6 +4329,7 @@ function stopCurrentUserPresenceSync(options = {}) {
     currentUserPresenceDisconnect = null;
     currentUserPresencePath = '';
     currentUserPresenceState = 'offline';
+    currentUserPresenceLastPayloadKey = '';
 
     if (immediateOffline && db && presencePath && normalizedLogin) {
         void update(ref(db, presencePath), {
@@ -4076,7 +4341,48 @@ function stopCurrentUserPresenceSync(options = {}) {
     }
 }
 
-function syncCurrentUserPresenceState(force = false) {
+function clearCurrentUserPresenceRecovery() {
+    if (!currentUserPresenceRecoveryTimerId) return;
+    clearTimeout(currentUserPresenceRecoveryTimerId);
+    currentUserPresenceRecoveryTimerId = null;
+}
+
+function hasHealthyCurrentUserPresenceSync() {
+    return typeof currentUserPresenceConnectedUnsubscribe === 'function' && currentUserPresenceSubscriptionHealthy;
+}
+
+function stopCurrentUserPresenceSyncTransport() {
+    clearCurrentUserPresenceRecovery();
+    currentUserPresenceSubscriptionHealthy = false;
+    if (typeof currentUserPresenceConnectedUnsubscribe === 'function') {
+        try {
+            currentUserPresenceConnectedUnsubscribe();
+        } catch (error) {
+            console.warn('Failed to stop current user presence live listener:', error);
+        }
+    }
+    currentUserPresenceConnectedUnsubscribe = null;
+    currentUserPresenceDisconnect = null;
+}
+
+function scheduleCurrentUserPresenceRecovery(login = currentUser?.login || '', reason = '', delayMs = PROTECTED_REALTIME_RECOVERY_DELAY_MS) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!normalizedLogin || currentUserPresenceRecoveryTimerId) {
+        return false;
+    }
+    currentUserPresenceRecoveryTimerId = setTimeout(() => {
+        currentUserPresenceRecoveryTimerId = null;
+        if (!currentUser || normalizeLogin(currentUser.login) !== normalizedLogin) return;
+        debugLog('Recovering current user presence live listener', { reason, login: normalizedLogin });
+        startCurrentUserPresenceSync(normalizedLogin);
+    }, Math.max(250, Number(delayMs) || PROTECTED_REALTIME_RECOVERY_DELAY_MS));
+    return true;
+}
+
+function syncCurrentUserPresenceState(options = {}) {
+    const force = typeof options === 'boolean'
+        ? options
+        : !!options?.force;
     if (!db || !currentUser) return false;
     const normalizedLogin = normalizeLogin(currentUser.login);
     if (!normalizedLogin) return false;
@@ -4087,10 +4393,17 @@ function syncCurrentUserPresenceState(force = false) {
     const presencePath = currentUserPresencePath || getCurrentUserPresencePath(normalizedLogin);
     if (!presencePath) return false;
 
+    const payload = buildCurrentUserPresencePayload(nextState);
+    const payloadKey = buildCurrentUserPresencePayloadKey(payload);
+    if (payloadKey && payloadKey === currentUserPresenceLastPayloadKey) {
+        return false;
+    }
+
     currentUserPresenceState = nextState;
     currentUserPresencePath = presencePath;
+    currentUserPresenceLastPayloadKey = payloadKey;
     lastPresenceSyncTriggerAt = Date.now();
-    void update(ref(db, presencePath), buildCurrentUserPresencePayload(nextState)).catch((error) => {
+    void update(ref(db, presencePath), payload).catch((error) => {
         console.error('Failed to sync current user presence:', error);
     });
     return true;
@@ -4104,17 +4417,31 @@ function startCurrentUserPresenceSync(login = currentUser?.login || '') {
     }
 
     const nextPath = getCurrentUserPresencePath(normalizedLogin);
-    if (typeof currentUserPresenceConnectedUnsubscribe === 'function' && currentUserPresencePath === nextPath) {
+    if (hasHealthyCurrentUserPresenceSync() && currentUserPresencePath === nextPath) {
         syncCurrentUserPresenceState(true);
         return true;
     }
 
-    stopCurrentUserPresenceSync();
+    if (currentUserPresencePath && currentUserPresencePath !== nextPath) {
+        stopCurrentUserPresenceSync();
+    } else {
+        stopCurrentUserPresenceSyncTransport();
+    }
     currentUserPresencePath = nextPath;
+    currentUserPresenceSubscriptionHealthy = false;
     currentUserPresenceConnectedUnsubscribe = onValue(
         ref(db, '.info/connected'),
         (snapshot) => {
-            if (snapshot.val() !== true || !currentUser || normalizeLogin(currentUser.login) !== normalizedLogin) {
+            clearCurrentUserPresenceRecovery();
+            currentUserPresenceSubscriptionHealthy = true;
+            if (snapshot.val() !== true) {
+                currentUserPresenceDisconnect = null;
+                currentUserPresenceState = 'offline';
+                currentUserPresenceLastPayloadKey = '';
+                return;
+            }
+
+            if (!currentUser || normalizeLogin(currentUser.login) !== normalizedLogin) {
                 return;
             }
 
@@ -4128,7 +4455,20 @@ function startCurrentUserPresenceSync(login = currentUser?.login || '') {
             syncCurrentUserPresenceState(true);
         },
         (error) => {
+            currentUserPresenceSubscriptionHealthy = false;
+            if (typeof currentUserPresenceConnectedUnsubscribe === 'function') {
+                try {
+                    currentUserPresenceConnectedUnsubscribe();
+                } catch (unsubscribeError) {
+                    console.warn('Failed to stop broken current user presence listener:', unsubscribeError);
+                }
+            }
+            currentUserPresenceConnectedUnsubscribe = null;
+            currentUserPresenceDisconnect = null;
+            currentUserPresenceState = 'offline';
+            currentUserPresenceLastPayloadKey = '';
             console.error('Current user presence live sync failed:', error);
+            scheduleCurrentUserPresenceRecovery(normalizedLogin, 'current-user-presence-live-sync-failed');
         }
     );
     return true;
@@ -4157,11 +4497,31 @@ function syncCurrentUserSettingsState() {
     }
 }
 
+function isCurrentUserRealtimeUiEchoOnly(previousUser, nextUser) {
+    if (!previousUser || !nextUser) return false;
+    return previousUser.uid === nextUser.uid
+        && previousUser.login === nextUser.login
+        && previousUser.fio === nextUser.fio
+        && normalizeRole(previousUser.role) === normalizeRole(nextUser.role)
+        && !!previousUser.passwordNeedsSetup === !!nextUser.passwordNeedsSetup
+        && String(previousUser.emailVerifiedAt || '') === String(nextUser.emailVerifiedAt || '')
+        && String(previousUser.emailVerificationSentAt || '') === String(nextUser.emailVerificationSentAt || '')
+        && Number(previousUser.failedLoginAttempts || 0) === Number(nextUser.failedLoginAttempts || 0)
+        && !!previousUser.isBlocked === !!nextUser.isBlocked
+        && String(previousUser.blockedReason || '') === String(nextUser.blockedReason || '')
+        && String(previousUser.failedLoginBackoffUntil || '') === String(nextUser.failedLoginBackoffUntil || '')
+        && String(previousUser.blockedAt || '') === String(nextUser.blockedAt || '')
+        && String(previousUser.sessionRevokedAt || '') === String(nextUser.sessionRevokedAt || '')
+        && String(previousUser.createdAt || '') === String(nextUser.createdAt || '')
+        && String(previousUser.lastLoginAt || '') === String(nextUser.lastLoginAt || '');
+}
+
 function applyCurrentUserRealtimeRecord(freshUser) {
     if (!freshUser || !currentUser) return;
     const normalizedLogin = normalizeLogin(freshUser.login || currentUser.login);
     if (!normalizedLogin || normalizeLogin(currentUser.login) !== normalizedLogin) return;
 
+    const previousUser = currentUser;
     const previousName = currentUser.fio;
     const previousRole = normalizeRole(currentUser.role);
     const previousSelectedRole = normalizeRole(selectedRole || 'user');
@@ -4174,6 +4534,13 @@ function applyCurrentUserRealtimeRecord(freshUser) {
     merged.passwordHash = '';
     merged.passwordHashScheme = null;
     currentUser = merged;
+    if (isCurrentUserRealtimeUiEchoOnly(previousUser, merged)) {
+        if (hasAdminAccount() && adminPanelAccordion?.style.display !== 'none' && Number(currentUser.activeMs) !== previousActiveMs) {
+            updateAdminUserTimeCell(currentUser.login, currentUser.activeMs);
+        }
+        return;
+    }
+
     if (hasAdminAccount(merged)) {
         startCurrentUserPromptOverridesSubscription(normalizedLogin);
     } else {
@@ -4211,16 +4578,18 @@ function startCurrentUserRecordSubscription(login) {
         stopCurrentUserRecordSubscription();
         return false;
     }
-    if (typeof currentUserRecordUnsubscribe === 'function' && currentUserRecordListenerLogin === normalizedLogin) {
+    if (hasHealthyCurrentUserRecordSubscription() && currentUserRecordListenerLogin === normalizedLogin) {
         return true;
     }
 
     stopCurrentUserRecordSubscription();
     currentUserRecordListenerLogin = normalizedLogin;
+    currentUserRecordSubscriptionHealthy = false;
     currentUserRecordUnsubscribe = onValue(
         ref(db, `${AUTH_USERS_DB_PATH}/${loginToStorageKey(normalizedLogin)}`),
         async (snapshot) => {
             if (!currentUser || normalizeLogin(currentUser.login) !== normalizedLogin) return;
+            currentUserRecordSubscriptionHealthy = true;
             if (!snapshot.exists()) {
                 if (isLocalhostAdminPreviewHost()) {
                     const fallbackUser = getLocalUserRecordByLogin(normalizedLogin);
@@ -4246,7 +4615,9 @@ function startCurrentUserRecordSubscription(login) {
             applyCurrentUserRealtimeRecord(freshUser);
         },
         (error) => {
+            currentUserRecordSubscriptionHealthy = false;
             console.error('Current user live sync failed:', error);
+            void enforceSessionRevocation(true);
         }
     );
     return true;
@@ -4254,22 +4625,12 @@ function startCurrentUserRecordSubscription(login) {
 
 function startActiveTimeTracking() {
     initUserActivityTrackingListeners();
+    currentUserPageExitHandled = false;
     lastUserActivityAt = Date.now();
     lastActiveTickAt = Date.now();
     pendingActiveMs = 0;
     stopActiveTimeTrackingLoop();
-
-    if (!sessionRevocationListenersInitialized) {
-        const enforceVisibleSessionRevocation = () => {
-            if (!currentUser) return;
-            if (document.visibilityState !== 'visible') return;
-            void enforceSessionRevocation(false);
-        };
-
-        window.addEventListener('focus', enforceVisibleSessionRevocation);
-        document.addEventListener('visibilitychange', enforceVisibleSessionRevocation);
-        sessionRevocationListenersInitialized = true;
-    }
+    initSessionRevocationListeners();
 
     ensureActiveTimeTrackingLoop();
     syncCurrentUserPresenceState(true);
@@ -4300,6 +4661,20 @@ function captureActiveTimeDelta(now = Date.now(), options = {}) {
     return delta;
 }
 
+function handleCurrentUserPageExit() {
+    if (currentUserPageExitHandled) return;
+    currentUserPageExitHandled = true;
+    clearPendingBlurPause();
+    void flushPromptHistoryRemoteSync();
+    pauseActiveTimeTracking({
+        ignoreVisibility: true,
+        ignoreFocus: true,
+        flushCarryoverNow: true,
+        skipPresenceSync: true
+    });
+    stopCurrentUserPresenceSync({ immediateOffline: true });
+}
+
 function pauseActiveTimeTracking(options = {}) {
     captureActiveTimeDelta(Date.now(), options);
     if (options.flushCarryoverNow) {
@@ -4307,7 +4682,9 @@ function pauseActiveTimeTracking(options = {}) {
     }
     stopActiveTimeTrackingLoop();
     void flushActiveTime(true);
-    syncCurrentUserPresenceState(true);
+    if (!options.skipPresenceSync) {
+        syncCurrentUserPresenceState(true);
+    }
 }
 
 function ensureActiveTimeTrackingLoop() {
@@ -4554,6 +4931,8 @@ async function toggleAccessForLogin(login, nextActive, user, invite, accessRevoc
                 ...currentUser,
                 ...refreshedUser
             }, normalizedLogin) || currentUser;
+            currentUser.passwordHash = '';
+            currentUser.passwordHashScheme = null;
             syncSelectedRole(selectedRole);
         }
     }
@@ -4564,6 +4943,44 @@ function hasAdminRealtimeTableData() {
         && Array.isArray(adminRealtimeInvites)
         && Array.isArray(adminRealtimeRevocations)
         && Array.isArray(adminRealtimePresence);
+}
+
+function markAdminRealtimeTableDataReadyIfPossible() {
+    if (!hasAdminRealtimeTableData() || !adminRealtimeTableDataReadyWaiters.length) return;
+    const waiters = adminRealtimeTableDataReadyWaiters.slice();
+    adminRealtimeTableDataReadyWaiters = [];
+    waiters.forEach((resolveReady) => {
+        try {
+            resolveReady(true);
+        } catch (error) {
+            console.warn('Failed to resolve admin realtime data waiter:', error);
+        }
+    });
+}
+
+function waitForAdminRealtimeTableData(timeoutMs = 250) {
+    if (hasAdminRealtimeTableData()) {
+        return Promise.resolve(true);
+    }
+    return new Promise((resolve) => {
+        let finished = false;
+        let timerId = null;
+        const finish = (ready) => {
+            if (finished) return;
+            finished = true;
+            if (timerId) {
+                clearTimeout(timerId);
+                timerId = null;
+            }
+            adminRealtimeTableDataReadyWaiters = adminRealtimeTableDataReadyWaiters.filter((item) => item !== onReady);
+            resolve(ready);
+        };
+        const onReady = (ready) => finish(ready);
+        adminRealtimeTableDataReadyWaiters.push(onReady);
+        timerId = setTimeout(() => {
+            finish(hasAdminRealtimeTableData());
+        }, Math.max(0, Number(timeoutMs) || 0));
+    });
 }
 
 function getAdminUsersTableFallbackRows() {
@@ -4586,6 +5003,11 @@ function resetAdminRealtimeTableData() {
     adminRealtimeInvites = null;
     adminRealtimeRevocations = null;
     adminRealtimePresence = null;
+    adminRealtimeUsersByLogin = null;
+    adminRealtimeInvitesByLogin = null;
+    adminRealtimeRevocationsByLogin = null;
+    adminRealtimePresenceByLogin = null;
+    adminRealtimeSortedLogins = null;
 }
 
 function resetAdminUsersTableDomState() {
@@ -4597,7 +5019,68 @@ function resetAdminUsersTableDomState() {
     }
 }
 
+function applyAdminUsersTableRows(rowsData = []) {
+    if (!adminUsersTableBody) return false;
+    adminUsersTableBody.querySelectorAll('.admin-empty-row').forEach((row) => row.remove());
+    const seenLogins = new Set();
+
+    rowsData.forEach((rowData) => {
+        let row = adminUserRowsByLogin.get(rowData.login);
+        if (!row) {
+            row = createAdminUsersTableRow(rowData.login);
+        }
+        updateAdminUsersTableRow(row, rowData);
+        adminUsersTableBody.appendChild(row);
+        seenLogins.add(rowData.login);
+    });
+
+    Array.from(adminUserRowsByLogin.entries()).forEach(([login, row]) => {
+        if (seenLogins.has(login)) return;
+        row.remove();
+        adminUserRowsByLogin.delete(login);
+    });
+
+    adminUsersTableInitialized = true;
+    return true;
+}
+
+function renderAdminUsersTableFromRealtimeState() {
+    if (!isSettingsModalOpen() || !isAdmin() || !hasAdminRealtimeTableData()) return false;
+
+    let rowsData = buildAdminUsersTableRowsFromMaps(
+        adminRealtimeUsersByLogin || buildLoginIndexedMap(Array.isArray(adminRealtimeUsers) ? adminRealtimeUsers : []),
+        adminRealtimeInvitesByLogin || buildLoginIndexedMap(Array.isArray(adminRealtimeInvites) ? adminRealtimeInvites : []),
+        adminRealtimeRevocationsByLogin || buildLoginIndexedMap(Array.isArray(adminRealtimeRevocations) ? adminRealtimeRevocations : []),
+        adminRealtimePresenceByLogin || buildLoginIndexedMap(Array.isArray(adminRealtimePresence) ? adminRealtimePresence : []),
+        adminRealtimeSortedLogins
+    );
+
+    if (!rowsData.length) {
+        rowsData = getAdminUsersTableFallbackRows();
+    }
+
+    if (!rowsData.length) {
+        setAdminUsersTableEmptyState('Пользователи пока не добавлены.');
+        adminUsersTableInitialized = true;
+        return true;
+    }
+
+    return applyAdminUsersTableRows(rowsData);
+}
+
 function stopAdminRealtimeSync() {
+    clearAdminRealtimeSyncRecovery();
+    stopAdminRealtimeSyncTransport();
+}
+
+function clearAdminRealtimeSyncRecovery() {
+    if (!adminRealtimeRecoveryTimerId) return;
+    clearTimeout(adminRealtimeRecoveryTimerId);
+    adminRealtimeRecoveryTimerId = null;
+}
+
+function stopAdminRealtimeSyncTransport(options = {}) {
+    const preserveState = !!options.preserveState;
     if (adminStatusRefreshTimerId) {
         clearInterval(adminStatusRefreshTimerId);
         adminStatusRefreshTimerId = null;
@@ -4610,41 +5093,399 @@ function stopAdminRealtimeSync() {
         });
     }
     adminRealtimeUnsubscribes = [];
+    adminRealtimeTableDataReadyWaiters = [];
     if (adminUsersTableRenderDebounceTimerId) {
         clearTimeout(adminUsersTableRenderDebounceTimerId);
         adminUsersTableRenderDebounceTimerId = null;
+    }
+    pendingAdminUsersTableRenderMode = '';
+    if (preserveState) {
+        return;
     }
     resetAdminRealtimeTableData();
     resetAdminUsersTableDomState();
 }
 
-function scheduleAdminUsersTableRender() {
+function scheduleAdminRealtimeSyncRecovery(reason = '', delayMs = PROTECTED_REALTIME_RECOVERY_DELAY_MS) {
+    if (adminRealtimeRecoveryTimerId) {
+        return false;
+    }
+    adminRealtimeRecoveryTimerId = setTimeout(() => {
+        adminRealtimeRecoveryTimerId = null;
+        if (!db || !isSettingsModalOpen() || !isAdmin()) return;
+        debugLog('Recovering admin realtime sync', { reason });
+        startAdminRealtimeSync();
+        void renderAdminUsersTable();
+    }, Math.max(250, Number(delayMs) || PROTECTED_REALTIME_RECOVERY_DELAY_MS));
+    return true;
+}
+
+function handleAdminRealtimeSyncFailure(scope, error) {
+    console.error(`Admin ${scope} live sync failed:`, error);
+    stopAdminRealtimeSyncTransport({ preserveState: true });
+    scheduleAdminRealtimeSyncRecovery(`${scope}-live-sync-failed`);
+}
+
+function scheduleAdminUsersTableRender(mode = 'full') {
     if (!isSettingsModalOpen() || !isAdmin()) return;
+    pendingAdminUsersTableRenderMode = mode === 'full' || pendingAdminUsersTableRenderMode === 'full'
+        ? 'full'
+        : 'incremental';
     if (adminUsersTableRenderDebounceTimerId) {
         clearTimeout(adminUsersTableRenderDebounceTimerId);
     }
     adminUsersTableRenderDebounceTimerId = setTimeout(() => {
         adminUsersTableRenderDebounceTimerId = null;
+        const nextMode = pendingAdminUsersTableRenderMode;
+        pendingAdminUsersTableRenderMode = '';
+        if (nextMode === 'incremental' && adminUsersTableInitialized && renderAdminUsersTableFromRealtimeState()) {
+            return;
+        }
         void renderAdminUsersTable();
     }, ADMIN_USERS_TABLE_RENDER_DEBOUNCE_MS);
 }
 
 function refreshAdminUsersPresenceLabels() {
     if (!isSettingsModalOpen() || !isAdmin() || !adminUserRowsByLogin.size) return;
-    adminUserRowsByLogin.forEach((row) => {
-        const rowData = row?._adminData;
-        const presenceText = row?._adminCells?.presenceText;
-        if (!rowData || !presenceText) return;
-        const presenceMeta = getAdminPresenceMeta(rowData.login, rowData.user, rowData.presence);
-        presenceText.className = `admin-presence ${presenceMeta.className}`.trim();
-        presenceText.textContent = presenceMeta.label;
+    adminUserRowsByLogin.forEach((row, login) => {
+        if (!row) return;
+        refreshAdminUserPresenceLabel(login);
+    });
+}
+
+function buildAdminRealtimeUserRenderKey(user) {
+    const normalizedUser = normalizeUserRecord(user, user?.login);
+    if (!normalizedUser) return '';
+    return JSON.stringify({
+        login: normalizedUser.login,
+        fio: normalizedUser.fio || '',
+        role: normalizeRole(normalizedUser.role),
+        uid: String(normalizedUser.uid || ''),
+        isBlocked: !!normalizedUser.isBlocked,
+        blockedReason: String(normalizedUser.blockedReason || ''),
+        blockedAt: String(normalizedUser.blockedAt || ''),
+        failedLoginBackoffUntil: String(normalizedUser.failedLoginBackoffUntil || ''),
+        sessionRevokedAt: String(normalizedUser.sessionRevokedAt || ''),
+        emailVerifiedAt: String(normalizedUser.emailVerifiedAt || ''),
+        passwordNeedsSetup: !!normalizedUser.passwordNeedsSetup,
+        lastLoginAt: String(normalizedUser.lastLoginAt || '')
+    });
+}
+
+function buildAdminRealtimeInviteRenderKey(invite) {
+    const normalizedInvite = normalizePartnerInvite(invite, invite?.login);
+    if (!normalizedInvite) return '';
+    return JSON.stringify({
+        login: normalizedInvite.login,
+        status: normalizedInvite.status,
+        createdAt: String(normalizedInvite.createdAt || ''),
+        createdBy: String(normalizedInvite.createdBy || ''),
+        expiresAt: String(normalizedInvite.expiresAt || ''),
+        emailVerifiedAt: String(normalizedInvite.emailVerifiedAt || ''),
+        note: String(normalizedInvite.note || '')
+    });
+}
+
+function buildAdminRealtimeRevocationRenderKey(accessRevocation) {
+    const normalizedAccessRevocation = normalizeAccessRevocation(accessRevocation, accessRevocation?.login);
+    if (!normalizedAccessRevocation) return '';
+    return JSON.stringify({
+        login: normalizedAccessRevocation.login,
+        status: normalizedAccessRevocation.status,
+        revokedAt: String(normalizedAccessRevocation.revokedAt || ''),
+        updatedAt: String(normalizedAccessRevocation.updatedAt || ''),
+        updatedBy: String(normalizedAccessRevocation.updatedBy || ''),
+        reason: String(normalizedAccessRevocation.reason || '')
+    });
+}
+
+function buildAdminRealtimePresenceRenderKey(presence) {
+    const normalizedPresence = normalizeUserPresence(presence, presence?.login);
+    if (!normalizedPresence) return '';
+    return JSON.stringify({
+        login: normalizedPresence.login,
+        state: normalizedPresence.state,
+        sessionId: String(normalizedPresence.sessionId || ''),
+        updatedAt: String(normalizedPresence.updatedAt || ''),
+        lastActiveAt: String(normalizedPresence.lastActiveAt || '')
+    });
+}
+
+function refreshAdminUserPresenceLabel(login) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!normalizedLogin) return;
+    const row = adminUserRowsByLogin.get(normalizedLogin);
+    const rowData = row?._adminData;
+    const presenceText = row?._adminCells?.presenceText;
+    if (!rowData || !presenceText) return;
+    const presenceMeta = getAdminPresenceMeta(rowData.login, rowData.user, rowData.presence);
+    presenceText.className = `admin-presence ${presenceMeta.className}`.trim();
+    presenceText.textContent = presenceMeta.label;
+}
+
+function applyAdminRealtimeUsersSnapshot(raw) {
+    const previousUsers = Array.isArray(adminRealtimeUsers) ? adminRealtimeUsers : [];
+    const nextUsers = Object.entries(raw || {})
+        .map(([key, item]) => normalizeUserRecord(item, '', key))
+        .filter(Boolean);
+    adminRealtimeUsers = nextUsers;
+    adminRealtimeUsersByLogin = buildLoginIndexedMap(nextUsers);
+    rebuildAdminRealtimeSortedLogins();
+    markAdminRealtimeTableDataReadyIfPossible();
+
+    if (!isSettingsModalOpen() || !isAdmin()) return;
+    if (!adminUsersTableInitialized || !adminUserRowsByLogin.size || !previousUsers.length) {
+        scheduleAdminUsersTableRender('incremental');
+        return;
+    }
+
+    const previousByLogin = new Map();
+    previousUsers.forEach((user) => {
+        const login = normalizeLogin(user?.login || '');
+        if (isValidLogin(login)) {
+            previousByLogin.set(login, user);
+        }
+    });
+    const nextByLogin = new Map();
+    nextUsers.forEach((user) => {
+        const login = normalizeLogin(user?.login || '');
+        if (isValidLogin(login)) {
+            nextByLogin.set(login, user);
+        }
+    });
+
+    if (previousByLogin.size !== nextByLogin.size) {
+        scheduleAdminUsersTableRender('incremental');
+        return;
+    }
+
+    const changedLogins = [];
+    const changedLoginSet = new Set();
+    const activeMsChangedLogins = [];
+    for (const [login, nextUser] of nextByLogin.entries()) {
+        const previousUser = previousByLogin.get(login);
+        const row = adminUserRowsByLogin.get(login);
+        if (!previousUser || !row?._adminData) {
+            scheduleAdminUsersTableRender('incremental');
+            return;
+        }
+        if (buildAdminRealtimeUserRenderKey(previousUser) !== buildAdminRealtimeUserRenderKey(nextUser)) {
+            changedLogins.push(login);
+            changedLoginSet.add(login);
+            continue;
+        }
+        if (Number(previousUser?.activeMs || 0) !== Number(nextUser?.activeMs || 0)) {
+            activeMsChangedLogins.push(login);
+        }
+    }
+
+    if (!changedLogins.length && !activeMsChangedLogins.length) return;
+
+    changedLogins.forEach((login) => {
+        const nextUser = nextByLogin.get(login);
+        const row = adminUserRowsByLogin.get(login);
+        if (!nextUser || !row?._adminData) return;
+        row._adminData.user = nextUser;
+        row._adminData.accessState = getAccessState(
+            login,
+            nextUser,
+            row._adminData.invite,
+            row._adminData.accessRevocation
+        );
+        updateAdminUsersTableRow(row, row._adminData);
+    });
+
+    activeMsChangedLogins.forEach((login) => {
+        if (changedLoginSet.has(login)) return;
+        const nextUser = nextByLogin.get(login);
+        const row = adminUserRowsByLogin.get(login);
+        if (!nextUser || !row?._adminData) return;
+        row._adminData.user = nextUser;
+        updateAdminUserTimeCell(login, nextUser.activeMs);
+    });
+}
+
+function applyAdminRealtimeInvitesSnapshot(raw) {
+    const previousInvites = Array.isArray(adminRealtimeInvites) ? adminRealtimeInvites : [];
+    const nextInvites = Object.entries(raw || {})
+        .map(([key, item]) => normalizePartnerInvite(item, '', key))
+        .filter(Boolean);
+    adminRealtimeInvites = nextInvites;
+    adminRealtimeInvitesByLogin = buildLoginIndexedMap(nextInvites);
+    rebuildAdminRealtimeSortedLogins();
+    markAdminRealtimeTableDataReadyIfPossible();
+
+    if (!isSettingsModalOpen() || !isAdmin()) return;
+    if (!adminUsersTableInitialized || !adminUserRowsByLogin.size || !previousInvites.length) {
+        scheduleAdminUsersTableRender('incremental');
+        return;
+    }
+
+    const previousByLogin = new Map();
+    previousInvites.forEach((invite) => {
+        const login = normalizeLogin(invite?.login || '');
+        if (isValidLogin(login)) {
+            previousByLogin.set(login, invite);
+        }
+    });
+    const nextByLogin = new Map();
+    nextInvites.forEach((invite) => {
+        const login = normalizeLogin(invite?.login || '');
+        if (isValidLogin(login)) {
+            nextByLogin.set(login, invite);
+        }
+    });
+
+    if (previousByLogin.size !== nextByLogin.size) {
+        scheduleAdminUsersTableRender('incremental');
+        return;
+    }
+
+    let hasChanges = false;
+    for (const [login, nextInvite] of nextByLogin.entries()) {
+        const previousInvite = previousByLogin.get(login);
+        const row = adminUserRowsByLogin.get(login);
+        if (!previousInvite || !row?._adminData) {
+            scheduleAdminUsersTableRender('incremental');
+            return;
+        }
+        if (buildAdminRealtimeInviteRenderKey(previousInvite) !== buildAdminRealtimeInviteRenderKey(nextInvite)) {
+            hasChanges = true;
+        }
+    }
+
+    if (!hasChanges) return;
+
+    nextByLogin.forEach((nextInvite, login) => {
+        const row = adminUserRowsByLogin.get(login);
+        if (!row?._adminData) return;
+        row._adminData.invite = nextInvite;
+        row._adminData.accessState = getAccessState(
+            login,
+            row._adminData.user,
+            nextInvite,
+            row._adminData.accessRevocation
+        );
+        updateAdminUsersTableRow(row, row._adminData);
+    });
+}
+
+function applyAdminRealtimeRevocationsSnapshot(raw) {
+    const previousRevocations = Array.isArray(adminRealtimeRevocations) ? adminRealtimeRevocations : [];
+    const nextRevocations = Object.entries(raw || {})
+        .map(([key, item]) => normalizeAccessRevocation(item, '', key))
+        .filter(Boolean);
+    adminRealtimeRevocations = nextRevocations;
+    adminRealtimeRevocationsByLogin = buildLoginIndexedMap(nextRevocations);
+    rebuildAdminRealtimeSortedLogins();
+    markAdminRealtimeTableDataReadyIfPossible();
+
+    if (!isSettingsModalOpen() || !isAdmin()) return;
+    if (!adminUsersTableInitialized || !adminUserRowsByLogin.size || !previousRevocations.length) {
+        scheduleAdminUsersTableRender('incremental');
+        return;
+    }
+
+    const previousByLogin = new Map();
+    previousRevocations.forEach((accessRevocation) => {
+        const login = normalizeLogin(accessRevocation?.login || '');
+        if (isValidLogin(login)) {
+            previousByLogin.set(login, accessRevocation);
+        }
+    });
+    const nextByLogin = new Map();
+    nextRevocations.forEach((accessRevocation) => {
+        const login = normalizeLogin(accessRevocation?.login || '');
+        if (isValidLogin(login)) {
+            nextByLogin.set(login, accessRevocation);
+        }
+    });
+
+    if (previousByLogin.size !== nextByLogin.size) {
+        scheduleAdminUsersTableRender('incremental');
+        return;
+    }
+
+    let hasChanges = false;
+    for (const [login, nextAccessRevocation] of nextByLogin.entries()) {
+        const previousAccessRevocation = previousByLogin.get(login);
+        const row = adminUserRowsByLogin.get(login);
+        if (!previousAccessRevocation || !row?._adminData) {
+            scheduleAdminUsersTableRender('incremental');
+            return;
+        }
+        if (buildAdminRealtimeRevocationRenderKey(previousAccessRevocation) !== buildAdminRealtimeRevocationRenderKey(nextAccessRevocation)) {
+            hasChanges = true;
+        }
+    }
+
+    if (!hasChanges) return;
+
+    nextByLogin.forEach((nextAccessRevocation, login) => {
+        const row = adminUserRowsByLogin.get(login);
+        if (!row?._adminData) return;
+        row._adminData.accessRevocation = nextAccessRevocation;
+        row._adminData.accessState = getAccessState(
+            login,
+            row._adminData.user,
+            row._adminData.invite,
+            nextAccessRevocation
+        );
+        updateAdminUsersTableRow(row, row._adminData);
+    });
+}
+
+function applyAdminRealtimePresenceSnapshot(raw) {
+    const previousPresence = Array.isArray(adminRealtimePresence) ? adminRealtimePresence : [];
+    adminRealtimePresence = Object.values(raw || {})
+        .map((item) => normalizeUserPresence(item))
+        .filter(Boolean);
+    adminRealtimePresenceByLogin = buildLoginIndexedMap(adminRealtimePresence);
+    markAdminRealtimeTableDataReadyIfPossible();
+
+    if (!isSettingsModalOpen() || !isAdmin()) return;
+    if (!adminUsersTableInitialized || !adminUserRowsByLogin.size) {
+        scheduleAdminUsersTableRender('incremental');
+        return;
+    }
+
+    const previousByLogin = new Map();
+    previousPresence.forEach((item) => {
+        const login = normalizeLogin(item?.login || '');
+        if (isValidLogin(login)) {
+            previousByLogin.set(login, item);
+        }
+    });
+    const presenceByLogin = new Map();
+    adminRealtimePresence.forEach((item) => {
+        const login = normalizeLogin(item?.login || '');
+        if (isValidLogin(login)) {
+            presenceByLogin.set(login, item);
+        }
+    });
+
+    const changedLogins = new Set();
+    adminUserRowsByLogin.forEach((row, login) => {
+        if (!row?._adminData) return;
+        const previousPresenceForLogin = previousByLogin.get(login) || null;
+        const nextPresenceForLogin = presenceByLogin.get(login) || null;
+        if (buildAdminRealtimePresenceRenderKey(previousPresenceForLogin) === buildAdminRealtimePresenceRenderKey(nextPresenceForLogin)) {
+            return;
+        }
+        row._adminData.presence = nextPresenceForLogin;
+        changedLogins.add(login);
+    });
+
+    if (!changedLogins.size) return;
+    changedLogins.forEach((login) => {
+        refreshAdminUserPresenceLabel(login);
     });
 }
 
 function refreshAdminUsersTableAfterMutation() {
     if (!isSettingsModalOpen() || !isAdmin()) return;
     if (db && adminRealtimeUnsubscribes.length > 0) {
-        scheduleAdminUsersTableRender();
+        scheduleAdminUsersTableRender('incremental');
         return;
     }
     void renderAdminUsersTable();
@@ -4652,43 +5493,45 @@ function refreshAdminUsersTableAfterMutation() {
 
 function startAdminRealtimeSync() {
     if (!db || adminRealtimeUnsubscribes.length > 0 || !isSettingsModalOpen() || !isAdmin()) return false;
-
-    const bindCollection = (path, assignData, errorLabel) => onValue(
-        ref(db, path),
-        (snapshot) => {
-            assignData(snapshot.val());
-            scheduleAdminUsersTableRender();
-        },
-        (error) => {
-            console.error(errorLabel, error);
-        }
-    );
+    clearAdminRealtimeSyncRecovery();
 
     adminRealtimeUnsubscribes = [
-        bindCollection(AUTH_USERS_DB_PATH, (raw) => {
-            adminRealtimeUsers = Object.entries(raw || {})
-                .map(([key, item]) => normalizeUserRecord(item, '', key))
-                .filter(Boolean)
-                .sort((a, b) => a.login.localeCompare(b.login));
-        }, 'Admin users live sync failed:'),
-        bindCollection(PARTNER_INVITES_DB_PATH, (raw) => {
-            adminRealtimeInvites = Object.entries(raw || {})
-                .map(([key, item]) => normalizePartnerInvite(item, '', key))
-                .filter(Boolean)
-                .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-        }, 'Admin invites live sync failed:'),
-        bindCollection(ACCESS_REVOKE_DB_PATH, (raw) => {
-            adminRealtimeRevocations = Object.entries(raw || {})
-                .map(([key, item]) => normalizeAccessRevocation(item, '', key))
-                .filter(Boolean)
-                .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
-        }, 'Admin revocations live sync failed:'),
-        bindCollection(USER_PRESENCE_DB_PATH, (raw) => {
-            adminRealtimePresence = Object.values(raw || {})
-                .map((item) => normalizeUserPresence(item))
-                .filter(Boolean)
-                .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
-        }, 'Admin presence live sync failed:')
+        onValue(
+            ref(db, AUTH_USERS_DB_PATH),
+            (snapshot) => {
+                applyAdminRealtimeUsersSnapshot(snapshot.val());
+            },
+            (error) => {
+                handleAdminRealtimeSyncFailure('users', error);
+            }
+        ),
+        onValue(
+            ref(db, PARTNER_INVITES_DB_PATH),
+            (snapshot) => {
+                applyAdminRealtimeInvitesSnapshot(snapshot.val());
+            },
+            (error) => {
+                handleAdminRealtimeSyncFailure('invites', error);
+            }
+        ),
+        onValue(
+            ref(db, ACCESS_REVOKE_DB_PATH),
+            (snapshot) => {
+                applyAdminRealtimeRevocationsSnapshot(snapshot.val());
+            },
+            (error) => {
+                handleAdminRealtimeSyncFailure('revocations', error);
+            }
+        ),
+        onValue(
+            ref(db, USER_PRESENCE_DB_PATH),
+            (snapshot) => {
+                applyAdminRealtimePresenceSnapshot(snapshot.val());
+            },
+            (error) => {
+                handleAdminRealtimeSyncFailure('presence', error);
+            }
+        )
     ];
     adminStatusRefreshTimerId = setInterval(() => {
         if (!isSettingsModalOpen() || !isAdmin()) {
@@ -4700,32 +5543,22 @@ function startAdminRealtimeSync() {
     return true;
 }
 
-function buildAdminUsersTableRows(users, invites, revocations, presenceEntries) {
-    const usersByLogin = new Map();
-    const invitesByLogin = new Map();
-    const revocationsByLogin = new Map();
-    const presenceByLogin = new Map();
-
-    users.forEach((user) => {
-        const login = normalizeLogin(user?.login || '');
-        if (isValidLogin(login)) usersByLogin.set(login, user);
-    });
-
-    invites.forEach((invite) => {
-        const login = normalizeLogin(invite?.login || '');
-        if (isValidLogin(login)) invitesByLogin.set(login, invite);
-    });
-
-    revocations.forEach((item) => {
+function buildLoginIndexedMap(items = []) {
+    const indexed = new Map();
+    items.forEach((item) => {
         const login = normalizeLogin(item?.login || '');
-        if (isValidLogin(login)) revocationsByLogin.set(login, item);
+        if (isValidLogin(login)) {
+            indexed.set(login, item);
+        }
     });
+    return indexed;
+}
 
-    presenceEntries.forEach((item) => {
-        const login = normalizeLogin(item?.login || '');
-        if (isValidLogin(login)) presenceByLogin.set(login, item);
-    });
-
+function buildAdminUsersSortedLogins(
+    usersByLogin = new Map(),
+    invitesByLogin = new Map(),
+    revocationsByLogin = new Map()
+) {
     return Array.from(new Set([
         ...usersByLogin.keys(),
         ...invitesByLogin.keys(),
@@ -4736,7 +5569,37 @@ function buildAdminUsersTableRows(users, invites, revocations, presenceEntries) 
         const accessRevocation = revocationsByLogin.get(login) || null;
         if (user || invite) return true;
         return !isAccessRevokedForLogin(accessRevocation, login);
-    }).sort((a, b) => a.localeCompare(b)).map((login) => {
+    }).sort((a, b) => a.localeCompare(b));
+}
+
+function rebuildAdminRealtimeSortedLogins() {
+    adminRealtimeSortedLogins = buildAdminUsersSortedLogins(
+        adminRealtimeUsersByLogin || new Map(),
+        adminRealtimeInvitesByLogin || new Map(),
+        adminRealtimeRevocationsByLogin || new Map()
+    );
+}
+
+function buildAdminUsersTableRows(users, invites, revocations, presenceEntries) {
+    return buildAdminUsersTableRowsFromMaps(
+        buildLoginIndexedMap(users),
+        buildLoginIndexedMap(invites),
+        buildLoginIndexedMap(revocations),
+        buildLoginIndexedMap(presenceEntries)
+    );
+}
+
+function buildAdminUsersTableRowsFromMaps(
+    usersByLogin = new Map(),
+    invitesByLogin = new Map(),
+    revocationsByLogin = new Map(),
+    presenceByLogin = new Map(),
+    sortedLogins = null
+) {
+    const orderedLogins = Array.isArray(sortedLogins)
+        ? sortedLogins
+        : buildAdminUsersSortedLogins(usersByLogin, invitesByLogin, revocationsByLogin);
+    return orderedLogins.map((login) => {
         const user = usersByLogin.get(login) || null;
         const invite = invitesByLogin.get(login) || null;
         const accessRevocation = revocationsByLogin.get(login) || null;
@@ -4871,9 +5734,14 @@ function updateAdminUsersTableRow(row, rowData) {
                     });
 
                     if (currentUser && currentRowData.user.login === currentUser.login) {
+                        const previousCurrentUserRole = normalizeRole(currentUser.role);
                         currentUser.role = nextRole;
                         syncSelectedRole(nextRole);
                         void ensureCurrentUserAccessMirror(currentUser);
+                        if (previousCurrentUserRole !== nextRole) {
+                            syncCurrentUserSettingsState();
+                            syncCurrentUserPresenceState(true);
+                        }
                         applyRoleRestrictions();
                     }
                     showCopyNotification(`Роль ${currentRowData.user.login} обновлена`);
@@ -4955,14 +5823,12 @@ async function renderAdminUsersTable() {
 
         startAdminRealtimeSync();
 
-        const liveDataReady = hasAdminRealtimeTableData();
+        let liveDataReady = hasAdminRealtimeTableData();
+        if (!liveDataReady && db && adminRealtimeUnsubscribes.length > 0) {
+            liveDataReady = await waitForAdminRealtimeTableData(ADMIN_REALTIME_INITIAL_DATA_WAIT_MS);
+        }
         const [users, invites, revocations, presenceEntries] = liveDataReady
-            ? [
-                Array.isArray(adminRealtimeUsers) ? adminRealtimeUsers : [],
-                Array.isArray(adminRealtimeInvites) ? adminRealtimeInvites : [],
-                Array.isArray(adminRealtimeRevocations) ? adminRealtimeRevocations : [],
-                Array.isArray(adminRealtimePresence) ? adminRealtimePresence : []
-            ]
+            ? [null, null, null, null]
             : await Promise.all([
                 listAllUserRecords().catch((error) => {
                     console.warn('Failed to load users for admin table, using fallback:', error);
@@ -4973,18 +5839,15 @@ async function renderAdminUsersTable() {
                 Promise.resolve([])
             ]);
 
-        let rowsData = buildAdminUsersTableRows(users, invites, revocations, presenceEntries);
-        if (!rowsData.length && liveDataReady) {
-            const usersFallback = await listAllUserRecords();
-            if (usersFallback.length > 0) {
-                rowsData = buildAdminUsersTableRows(
-                    usersFallback,
-                    invites,
-                    revocations,
-                    presenceEntries
-                );
-            }
-        }
+        let rowsData = liveDataReady
+            ? buildAdminUsersTableRowsFromMaps(
+                adminRealtimeUsersByLogin || buildLoginIndexedMap(Array.isArray(adminRealtimeUsers) ? adminRealtimeUsers : []),
+                adminRealtimeInvitesByLogin || buildLoginIndexedMap(Array.isArray(adminRealtimeInvites) ? adminRealtimeInvites : []),
+                adminRealtimeRevocationsByLogin || buildLoginIndexedMap(Array.isArray(adminRealtimeRevocations) ? adminRealtimeRevocations : []),
+                adminRealtimePresenceByLogin || buildLoginIndexedMap(Array.isArray(adminRealtimePresence) ? adminRealtimePresence : []),
+                adminRealtimeSortedLogins
+            )
+            : buildAdminUsersTableRows(users, invites, revocations, presenceEntries);
         if (!rowsData.length) {
             rowsData = getAdminUsersTableFallbackRows();
         }
@@ -4999,26 +5862,7 @@ async function renderAdminUsersTable() {
             return;
         }
 
-        adminUsersTableBody.querySelectorAll('.admin-empty-row').forEach((row) => row.remove());
-        const seenLogins = new Set();
-
-        rowsData.forEach((rowData) => {
-            let row = adminUserRowsByLogin.get(rowData.login);
-            if (!row) {
-                row = createAdminUsersTableRow(rowData.login);
-            }
-            updateAdminUsersTableRow(row, rowData);
-            adminUsersTableBody.appendChild(row);
-            seenLogins.add(rowData.login);
-        });
-
-        Array.from(adminUserRowsByLogin.entries()).forEach(([login, row]) => {
-            if (seenLogins.has(login)) return;
-            row.remove();
-            adminUserRowsByLogin.delete(login);
-        });
-
-        adminUsersTableInitialized = true;
+        applyAdminUsersTableRows(rowsData);
     } catch (error) {
         console.error('Failed to render admin users table:', error);
         setAdminUsersTableEmptyState('Ошибка загрузки таблицы пользователей. Проверьте права доступа Firebase и актуальность сессии.');
@@ -5062,6 +5906,8 @@ async function handleCreatePartnerInvite() {
     expiresAtDate.setDate(expiresAtDate.getDate() + days);
     const expiresAt = expiresAtDate.toISOString();
 
+    if (partnerInviteCreateInFlight) return;
+    partnerInviteCreateInFlight = true;
     if (partnerInviteAddBtn) partnerInviteAddBtn.disabled = true;
     try {
         await sendMagicLinkToEmail(login, 'invite');
@@ -5104,6 +5950,7 @@ async function handleCreatePartnerInvite() {
         console.error('Failed to send partner invite link:', error);
         showCopyNotification(`Письмо не отправлено. ${getReadableFirebaseAuthError(error, 'invite')}`);
     } finally {
+        partnerInviteCreateInFlight = false;
         if (partnerInviteAddBtn) partnerInviteAddBtn.disabled = false;
     }
 }
@@ -5148,36 +5995,9 @@ async function handleAuthSubmit() {
             AUTH_FLOW_STEP_TIMEOUT_MS,
             'Не удалось проверить аккаунт. Попробуйте ещё раз.'
         );
-        const hasEmergencyAccess = await isEmergencyAccessCredentialMatch(login, password);
-        if (hasEmergencyAccess && existingUser) {
-            const shouldResetEmergencyLockState = Number(existingUser.failedLoginAttempts || 0) > 0
-                || !!existingUser.isBlocked
-                || existingUser.blockedAt
-                || existingUser.blockedReason
-                || existingUser.failedLoginBackoffUntil;
-            if (shouldResetEmergencyLockState) {
-                existingUser = {
-                    ...existingUser,
-                    failedLoginAttempts: 0,
-                    isBlocked: false,
-                    blockedAt: null,
-                    blockedReason: null,
-                    failedLoginBackoffUntil: null
-                };
-                void patchUserRecord(login, {
-                    failedLoginAttempts: 0,
-                    isBlocked: false,
-                    blockedAt: null,
-                    blockedReason: null,
-                    failedLoginBackoffUntil: null
-                }).catch((error) => {
-                    console.warn('Не удалось сбросить блокировку экстренного входа:', error?.message || error);
-                });
-            }
-        }
         const accessPolicy = await runAuthStep(
             'Проверяем доступ...',
-            () => resolveAccessPolicy(login, existingUser, password),
+            () => resolveAccessPolicy(login, existingUser),
             AUTH_FLOW_STEP_TIMEOUT_MS,
             'Не удалось проверить доступ. Попробуйте ещё раз.'
         );
@@ -5191,11 +6011,11 @@ async function handleAuthSubmit() {
         }
 
         const backoffUntil = getFailedLoginBackoffState(existingUser || null);
-        if (!hasEmergencyAccess && backoffUntil) {
+        if (backoffUntil) {
             const waitSeconds = Math.max(1, Math.ceil((backoffUntil - Date.now()) / 1000));
             throw new Error(`Слишком много попыток. Подождите ${waitSeconds} сек перед новой попыткой.`);
         }
-        if (!hasEmergencyAccess && existingUser?.failedLoginBackoffUntil) {
+        if (existingUser?.failedLoginBackoffUntil) {
             await patchUserRecord(login, {
                 failedLoginBackoffUntil: null
             });
@@ -5221,7 +6041,7 @@ async function handleAuthSubmit() {
             const passwordNeedsSetup = existingIsVerified && isPendingFirstPasswordSetup(existingUser);
             const canSetPasswordAfterLink = existingIsVerified && hasEmailLinkVerification;
             const shouldVerifyPassword = !passwordNeedsSetup && !canSetPasswordAfterLink;
-            const isPasswordValid = shouldVerifyPassword ? (hasEmergencyAccess || await passwordValid()) : true;
+            const isPasswordValid = shouldVerifyPassword ? await passwordValid() : true;
             const localhostLocalUser = isLocalhostAdminPreviewHost() ? getLocalUserRecordByLogin(login) : null;
             const canUseLocalhostPasswordFallback = shouldVerifyPassword &&
                 !isPasswordValid &&
@@ -7038,7 +7858,7 @@ function getStablePromptOwnerKey() {
         return `login:${loginToStorageKey(normalizedLogin)}`;
     }
     const fallbackName = normalizePromptOwnerName(
-        getCachedStorageValue(USER_NAME_KEY, '') || managerNameInput?.value || currentUser?.fio || 'guest'
+        currentUser?.fio || managerNameInput?.value || getCachedStorageValue(USER_NAME_KEY, '') || 'guest'
     );
     return `guest:${fallbackName || 'guest'}`;
 }
@@ -7147,18 +7967,68 @@ function normalizePromptSnapshotForCache(rawSnapshot = {}) {
     return normalized;
 }
 
-function persistPublicPromptsSnapshot(snapshot = {}) {
-    const normalized = normalizePromptSnapshotForCache(snapshot);
-    if (!firebasePromptSnapshotHasMeaningfulContent(normalized)) {
+function buildNormalizedPromptSnapshotState(rawSnapshot = {}) {
+    const normalized = normalizePromptSnapshotForCache(rawSnapshot);
+    return {
+        normalized,
+        hash: JSON.stringify(normalized),
+        hasMeaningfulContent: firebasePromptSnapshotHasMeaningfulContent(normalized)
+    };
+}
+
+function getPublicPromptRoleSnapshotFromNormalizedData(source = {}, role = '') {
+    if (!PROMPT_ROLES.includes(role)) {
+        return { prompt: '', variations: [], activeId: null };
+    }
+    const safeSource = source && typeof source === 'object' ? source : {};
+    const activeId = typeof safeSource[role + '_activeId'] === 'string'
+        ? String(safeSource[role + '_activeId']).trim() || null
+        : null;
+    return {
+        prompt: String(safeSource[role + '_prompt'] || ''),
+        variations: Array.isArray(safeSource[role + '_variations']) ? safeSource[role + '_variations'] : [],
+        activeId
+    };
+}
+
+function getPromptSnapshotRoleHashes(snapshotState = null) {
+    if (!snapshotState || typeof snapshotState !== 'object') {
+        return {};
+    }
+    if (!snapshotState.roleHashes || typeof snapshotState.roleHashes !== 'object') {
+        const normalizedSnapshot = snapshotState.normalized && typeof snapshotState.normalized === 'object'
+            ? snapshotState.normalized
+            : normalizePromptSnapshotForCache(snapshotState.rawSnapshot || {});
+        snapshotState.normalized = normalizedSnapshot;
+        snapshotState.roleHashes = Object.fromEntries(
+            PROMPT_ROLES.map((role) => [role, JSON.stringify(getPublicPromptRoleSnapshotFromNormalizedData(normalizedSnapshot, role))])
+        );
+    }
+    return snapshotState.roleHashes;
+}
+
+function getPromptSnapshotRoleHash(snapshotState = null, role = '') {
+    if (!PROMPT_ROLES.includes(role)) {
+        return JSON.stringify({ prompt: '', variations: [], activeId: null });
+    }
+    const roleHashes = getPromptSnapshotRoleHashes(snapshotState);
+    return typeof roleHashes[role] === 'string'
+        ? roleHashes[role]
+        : JSON.stringify(getPublicPromptRoleSnapshotFromNormalizedData(snapshotState?.normalized || {}, role));
+}
+
+function persistPublicPromptsSnapshot(snapshot = {}, options = {}) {
+    const snapshotState = options.state || buildNormalizedPromptSnapshotState(snapshot);
+    const normalized = snapshotState.normalized;
+    if (!snapshotState.hasMeaningfulContent) {
         lastPublicPromptsSnapshotHash = '';
         clearCachedLocalStorageJson(LOCAL_PROMPTS_PUBLIC_SNAPSHOT_STORAGE_KEY);
         return null;
     }
-    const normalizedHash = JSON.stringify(normalized);
-    if (normalizedHash === lastPublicPromptsSnapshotHash) {
+    if (snapshotState.hash === lastPublicPromptsSnapshotHash) {
         return normalized;
     }
-    lastPublicPromptsSnapshotHash = normalizedHash;
+    lastPublicPromptsSnapshotHash = snapshotState.hash;
 
     const payload = {
         v: 1,
@@ -7169,17 +8039,17 @@ function persistPublicPromptsSnapshot(snapshot = {}) {
     return normalized;
 }
 
-function persistPublicPromptsEmergencySnapshot(snapshot = {}) {
-    const normalized = normalizePromptSnapshotForCache(snapshot);
-    if (!firebasePromptSnapshotHasMeaningfulContent(normalized)) {
+function persistPublicPromptsEmergencySnapshot(snapshot = {}, options = {}) {
+    const snapshotState = options.state || buildNormalizedPromptSnapshotState(snapshot);
+    const normalized = snapshotState.normalized;
+    if (!snapshotState.hasMeaningfulContent) {
         lastEmergencyPromptsSnapshotHash = '';
         return null;
     }
-    const normalizedHash = JSON.stringify(normalized);
-    if (normalizedHash === lastEmergencyPromptsSnapshotHash) {
+    if (snapshotState.hash === lastEmergencyPromptsSnapshotHash) {
         return normalized;
     }
-    lastEmergencyPromptsSnapshotHash = normalizedHash;
+    lastEmergencyPromptsSnapshotHash = snapshotState.hash;
 
     const payload = {
         v: 1,
@@ -7195,12 +8065,12 @@ function loadCachedPublicPromptsSnapshot() {
     const rawData = cached && typeof cached === 'object' && cached.data
         ? cached.data
         : cached;
-    const normalized = normalizePromptSnapshotForCache(rawData || {});
-    if (!firebasePromptSnapshotHasMeaningfulContent(normalized)) {
+    const snapshotState = buildNormalizedPromptSnapshotState(rawData || {});
+    if (!snapshotState.hasMeaningfulContent) {
         return null;
     }
-    lastPublicPromptsSnapshotHash = JSON.stringify(normalized);
-    return normalized;
+    lastPublicPromptsSnapshotHash = snapshotState.hash;
+    return snapshotState.normalized;
 }
 
 function loadCachedPublicPromptsEmergencySnapshot() {
@@ -7208,12 +8078,12 @@ function loadCachedPublicPromptsEmergencySnapshot() {
     const rawData = cached && typeof cached === 'object' && cached.data
         ? cached.data
         : cached;
-    const normalized = normalizePromptSnapshotForCache(rawData || {});
-    if (!firebasePromptSnapshotHasMeaningfulContent(normalized)) {
+    const snapshotState = buildNormalizedPromptSnapshotState(rawData || {});
+    if (!snapshotState.hasMeaningfulContent) {
         return null;
     }
-    lastEmergencyPromptsSnapshotHash = JSON.stringify(normalized);
-    return normalized;
+    lastEmergencyPromptsSnapshotHash = snapshotState.hash;
+    return snapshotState.normalized;
 }
 
 function parseLegacyPromptStorageEntry(storageKey = '') {
@@ -7232,9 +8102,9 @@ function getKnownLocalPromptStoreLogins() {
     const knownLogins = new Set();
     const currentLogin = normalizeLogin(
         currentUser?.login
-        || getCachedStorageValue(USER_LOGIN_KEY, '')
         || auth?.currentUser?.email
         || getAuthSession()?.login
+        || getCachedStorageValue(USER_LOGIN_KEY, '')
         || ''
     );
     if (currentLogin) {
@@ -7286,6 +8156,10 @@ function readPromptOverridesStoreByKey(storageKey) {
     return normalizePromptOverridesStore(getCachedLocalStorageJson(storageKey));
 }
 
+function readPromptOverridesStoreStateByKey(storageKey) {
+    return buildNormalizedPromptOverridesStoreState(getCachedLocalStorageJson(storageKey));
+}
+
 function getPromptOverridesRoleDataFromStore(store = {}, role) {
     const normalized = normalizePromptOverridesStore(store);
     return {
@@ -7298,6 +8172,13 @@ function promptOverridesRoleDataHasData(roleData = null) {
     return !!(
         roleData
         && (Array.isArray(roleData.variations) && roleData.variations.length > 0 || roleData.activeId)
+    );
+}
+
+function buildPromptOverridesRoleDataMap(store = {}) {
+    const normalizedStore = store && typeof store === 'object' ? store : {};
+    return Object.fromEntries(
+        PROMPT_ROLES.map((role) => [role, getPromptOverridesRoleSnapshotFromNormalizedStore(normalizedStore, role)])
     );
 }
 
@@ -7338,52 +8219,52 @@ function clearLegacyLocalPromptsStorageKeys() {
     });
 }
 
-function loadLocalPromptsStore() {
+function loadLocalPromptsStoreState() {
     const stableStorageKey = getLocalPromptsStorageKey();
-    const stableStore = readPromptOverridesStoreByKey(stableStorageKey);
+    const stableStoreState = readPromptOverridesStoreStateByKey(stableStorageKey);
     const legacyEntries = getLegacyLocalPromptsStorageEntries()
         .map((entry) => {
-            const store = readPromptOverridesStoreByKey(entry.storageKey);
+            const storeState = readPromptOverridesStoreStateByKey(entry.storageKey);
             return {
                 ...entry,
-                store,
-                roleDataMap: Object.fromEntries(
-                    PROMPT_ROLES.map((role) => [role, getPromptOverridesRoleDataFromStore(store, role)])
-                )
+                store: storeState.normalized,
+                storeState,
+                roleDataMap: buildPromptOverridesRoleDataMap(storeState.normalized)
             };
         })
-        .filter((entry) => promptOverridesStoreHasData(entry.store));
+        .filter((entry) => entry.storeState.hasData);
 
     if (!legacyEntries.length) {
-        return stableStore;
+        return stableStoreState;
     }
 
-    const migratedStore = mergeLegacyPromptOverridesStores([
+    const migratedStoreState = buildNormalizedPromptOverridesStoreState(mergeLegacyPromptOverridesStores([
         {
             ownerRole: '',
             storageKey: stableStorageKey,
-            store: stableStore,
-            roleDataMap: Object.fromEntries(
-                PROMPT_ROLES.map((role) => [role, getPromptOverridesRoleDataFromStore(stableStore, role)])
-            )
+            store: stableStoreState.normalized,
+            storeState: stableStoreState,
+            roleDataMap: buildPromptOverridesRoleDataMap(stableStoreState.normalized)
         },
         ...legacyEntries
-    ]);
-    const stableHash = JSON.stringify(normalizePromptOverridesStore(stableStore));
-    const migratedHash = JSON.stringify(migratedStore);
-    if (stableHash === migratedHash) {
-        return stableStore;
+    ]));
+    if (stableStoreState.hash === migratedStoreState.hash) {
+        return stableStoreState;
     }
 
-    if (!promptOverridesStoreHasData(migratedStore)) {
-        return stableStore;
+    if (!migratedStoreState.hasData) {
+        return stableStoreState;
     }
 
-    setCachedLocalStorageJson(stableStorageKey, migratedStore);
+    setCachedLocalStorageJson(stableStorageKey, migratedStoreState.normalized);
     legacyEntries.forEach((entry) => {
         clearCachedLocalStorageJson(entry.storageKey);
     });
-    return migratedStore;
+    return migratedStoreState;
+}
+
+function loadLocalPromptsStore() {
+    return loadLocalPromptsStoreState().normalized;
 }
 
 function normalizePromptOverrideVariation(raw) {
@@ -7439,14 +8320,17 @@ function promptOverridesStoreHasData(store = {}) {
 }
 
 function getPromptOverridesStore() {
-    return currentUserPromptOverridesStore !== null
-        ? normalizePromptOverridesStore(currentUserPromptOverridesStore)
-        : loadLocalPromptsStore();
+    return currentUserPromptOverridesStoreState?.normalized
+        || (currentUserPromptOverridesStore !== null
+            ? normalizePromptOverridesStore(currentUserPromptOverridesStore)
+            : null)
+        || loadLocalPromptsStoreState().normalized;
 }
 
-function persistPromptOverridesStoreLocally(store = {}) {
-    const normalized = normalizePromptOverridesStore(store);
-    if (promptOverridesStoreHasData(normalized)) {
+function persistPromptOverridesStoreLocally(store = {}, options = {}) {
+    const storeState = options.state || buildNormalizedPromptOverridesStoreState(store);
+    const normalized = storeState.normalized;
+    if (storeState.hasData) {
         setCachedLocalStorageJson(getLocalPromptsStorageKey(), normalized);
     } else {
         clearCachedLocalStorageJson(getLocalPromptsStorageKey());
@@ -7491,21 +8375,63 @@ function buildPromptOverridesPayload() {
     return normalizePromptOverridesStore(payload);
 }
 
-function getPromptOverridesRoleSnapshot(store, role) {
-    const normalizedStore = normalizePromptOverridesStore(store || {});
+function buildNormalizedPromptOverridesStoreState(rawStore = {}) {
+    const normalized = normalizePromptOverridesStore(rawStore);
     return {
-        variations: normalizedStore[role + '_variations'] || [],
+        normalized,
+        hash: JSON.stringify(normalized),
+        hasData: promptOverridesStoreHasData(normalized)
+    };
+}
+
+function getPromptOverridesRoleSnapshotFromNormalizedStore(store = {}, role = '') {
+    if (!PROMPT_ROLES.includes(role)) {
+        return { variations: [], activeId: null };
+    }
+    const normalizedStore = store && typeof store === 'object' ? store : {};
+    return {
+        variations: Array.isArray(normalizedStore[role + '_variations']) ? normalizedStore[role + '_variations'] : [],
         activeId: normalizedStore[role + '_activeId'] || null
     };
 }
 
+function getPromptOverridesStoreRoleHashes(storeState = null) {
+    if (!storeState || typeof storeState !== 'object') {
+        return {};
+    }
+    if (!storeState.roleHashes || typeof storeState.roleHashes !== 'object') {
+        const normalizedStore = storeState.normalized && typeof storeState.normalized === 'object'
+            ? storeState.normalized
+            : normalizePromptOverridesStore(storeState.rawStore || {});
+        storeState.normalized = normalizedStore;
+        storeState.roleHashes = Object.fromEntries(
+            PROMPT_ROLES.map((role) => [role, JSON.stringify(getPromptOverridesRoleSnapshotFromNormalizedStore(normalizedStore, role))])
+        );
+    }
+    return storeState.roleHashes;
+}
+
+function getPromptOverridesStoreRoleHash(storeState = null, role = '') {
+    if (!PROMPT_ROLES.includes(role)) {
+        return JSON.stringify({ variations: [], activeId: null });
+    }
+    const roleHashes = getPromptOverridesStoreRoleHashes(storeState);
+    return typeof roleHashes[role] === 'string'
+        ? roleHashes[role]
+        : JSON.stringify(getPromptOverridesRoleSnapshotFromNormalizedStore(storeState?.normalized || {}, role));
+}
+
+function getPromptOverridesRoleSnapshot(store, role) {
+    return getPromptOverridesRoleSnapshotFromNormalizedStore(normalizePromptOverridesStore(store || {}), role);
+}
+
 function recordDirtyPromptOverrideRoles(baseStore, nextStore) {
-    const normalizedBaseStore = normalizePromptOverridesStore(baseStore || {});
-    const normalizedNextStore = normalizePromptOverridesStore(nextStore || {});
+    const baseStoreState = buildNormalizedPromptOverridesStoreState(baseStore || {});
+    const nextStoreState = buildNormalizedPromptOverridesStoreState(nextStore || {});
 
     PROMPT_ROLES.forEach((role) => {
-        const before = JSON.stringify(getPromptOverridesRoleSnapshot(normalizedBaseStore, role));
-        const after = JSON.stringify(getPromptOverridesRoleSnapshot(normalizedNextStore, role));
+        const before = getPromptOverridesStoreRoleHash(baseStoreState, role);
+        const after = getPromptOverridesStoreRoleHash(nextStoreState, role);
         if (before !== after) {
             dirtyPromptOverrideRoles.add(role);
         }
@@ -7517,15 +8443,14 @@ function getPublicPromptRoleSnapshotFromFirebaseData(source = {}, role = '') {
         return { prompt: '', variations: [], activeId: null };
     }
     const safeSource = source && typeof source === 'object' ? source : {};
-    const variations = normalizePromptSnapshotVariations(safeSource[role + '_variations']);
-    const activeId = typeof safeSource[role + '_activeId'] === 'string'
-        ? String(safeSource[role + '_activeId']).trim() || null
-        : null;
-    return {
-        prompt: String(safeSource[role + '_prompt'] || ''),
-        variations,
-        activeId
+    const normalizedRoleSource = {
+        [role + '_prompt']: String(safeSource[role + '_prompt'] || ''),
+        [role + '_variations']: normalizePromptSnapshotVariations(safeSource[role + '_variations']),
+        [role + '_activeId']: typeof safeSource[role + '_activeId'] === 'string'
+            ? String(safeSource[role + '_activeId']).trim() || null
+            : null
     };
+    return getPublicPromptRoleSnapshotFromNormalizedData(normalizedRoleSource, role);
 }
 
 function getCurrentPublicPromptRoleSnapshot(role = '') {
@@ -7543,7 +8468,7 @@ function getPublicPromptRoleSnapshotHash(source, role = '') {
 function rememberPromptEditBaseline(role = '') {
     if (!PROMPT_ROLES.includes(role)) return;
     if (dirtyPublicPromptRoles.has(role) && promptEditRemoteBaselineHashes[role]) return;
-    promptEditRemoteBaselineHashes[role] = getPublicPromptRoleSnapshotHash(lastPromptsFirebaseSnapshot || {}, role);
+    promptEditRemoteBaselineHashes[role] = getPromptSnapshotRoleHash(lastPromptsFirebaseSnapshotState, role);
 }
 
 function clearPromptEditBaseline(role = '') {
@@ -7604,12 +8529,16 @@ function preservePromptConflictAsLocalDraft(role = '') {
 }
 
 function resolvePromptSyncConflicts(remoteSnapshot = {}) {
+    const remoteSnapshotState = pendingPromptsFirebaseSnapshotState
+        && pendingPromptsFirebaseSnapshot === remoteSnapshot
+        ? pendingPromptsFirebaseSnapshotState
+        : buildNormalizedPromptSnapshotState(remoteSnapshot);
     const conflictRoles = [];
     dirtyPublicPromptRoles.forEach((role) => {
         if (!PROMPT_ROLES.includes(role)) return;
         const baselineHash = promptEditRemoteBaselineHashes[role];
         if (!baselineHash) return;
-        const remoteHash = getPublicPromptRoleSnapshotHash(remoteSnapshot, role);
+        const remoteHash = getPromptSnapshotRoleHash(remoteSnapshotState, role);
         if (remoteHash !== baselineHash) {
             conflictRoles.push(role);
         }
@@ -7661,11 +8590,16 @@ function applyDeferredPromptRemoteState() {
     let didApply = false;
 
     if (pendingPromptOverridesRemoteStore !== null) {
-        const mergedPromptOverridesStore = buildMergedPromptOverridesStore(pendingPromptOverridesRemoteStore);
-        currentUserPromptOverridesStore = mergedPromptOverridesStore;
-        persistPromptOverridesStoreLocally(mergedPromptOverridesStore);
+        const pendingPromptOverridesState = pendingPromptOverridesRemoteStoreState
+            || buildNormalizedPromptOverridesStoreState(pendingPromptOverridesRemoteStore);
+        const mergedPromptOverridesStore = buildMergedPromptOverridesStore(pendingPromptOverridesState.normalized);
+        const mergedPromptOverridesStoreState = buildNormalizedPromptOverridesStoreState(mergedPromptOverridesStore);
+        currentUserPromptOverridesStore = mergedPromptOverridesStoreState.normalized;
+        currentUserPromptOverridesStoreState = mergedPromptOverridesStoreState;
+        persistPromptOverridesStoreLocally(mergedPromptOverridesStoreState.normalized, { state: mergedPromptOverridesStoreState });
         lastPromptOverridesRemoteHash = pendingPromptOverridesRemoteHash;
         pendingPromptOverridesRemoteStore = null;
+        pendingPromptOverridesRemoteStoreState = null;
         pendingPromptOverridesRemoteHash = '';
         didApply = true;
     }
@@ -7675,6 +8609,7 @@ function applyDeferredPromptRemoteState() {
         resolvePromptSyncConflicts(remoteSnapshot);
         const mergedSnapshot = buildMergedPromptsSnapshot(remoteSnapshot);
         pendingPromptsFirebaseSnapshot = null;
+        pendingPromptsFirebaseSnapshotState = null;
         const didApplyPrompts = initPromptsData(mergedSnapshot);
         didApply = didApply || didApplyPrompts;
     }
@@ -7720,20 +8655,45 @@ function schedulePromptEditingEnd(role = '', delayMs = 2000) {
     }, delayMs);
 }
 
+function clearPromptOverridesSyncRetry() {
+    if (!promptOverridesSyncRetryTimerId) return;
+    clearTimeout(promptOverridesSyncRetryTimerId);
+    promptOverridesSyncRetryTimerId = null;
+}
+
+function schedulePromptOverridesSyncRetry(payload = null) {
+    const payloadState = payload
+        ? buildNormalizedPromptOverridesStoreState(payload)
+        : (queuedPromptOverridesPayloadState || buildNormalizedPromptOverridesStoreState(queuedPromptOverridesPayload || buildPromptOverridesPayload()));
+    queuedPromptOverridesPayload = payloadState.normalized;
+    queuedPromptOverridesPayloadState = payloadState;
+    if (promptOverridesSyncRetryTimerId) {
+        return false;
+    }
+    promptOverridesSyncRetryTimerId = window.setTimeout(() => {
+        promptOverridesSyncRetryTimerId = null;
+        void savePromptOverridesToFirebaseNow();
+    }, PROMPT_REMOTE_SYNC_RETRY_DELAY_MS);
+    return true;
+}
+
 function queuePromptOverridesSave(payload = null) {
     if (!canSyncPromptOverrides()) return false;
-    const normalizedPayload = normalizePromptOverridesStore(payload || buildPromptOverridesPayload());
-    const payloadHash = JSON.stringify(normalizedPayload);
-    if (payloadHash === lastPromptOverridesRemoteHash) {
+    const payloadState = buildNormalizedPromptOverridesStoreState(payload || buildPromptOverridesPayload());
+    const normalizedPayload = payloadState.normalized;
+    if (payloadState.hash === lastPromptOverridesRemoteHash) {
         queuedPromptOverridesPayload = null;
+        queuedPromptOverridesPayloadState = null;
         if (currentUserPromptOverridesSaveTimer) {
             clearTimeout(currentUserPromptOverridesSaveTimer);
             currentUserPromptOverridesSaveTimer = null;
         }
+        clearPromptOverridesSyncRetry();
         return false;
     }
 
     queuedPromptOverridesPayload = normalizedPayload;
+    queuedPromptOverridesPayloadState = payloadState;
     if (currentUserPromptOverridesSaveTimer) {
         clearTimeout(currentUserPromptOverridesSaveTimer);
     }
@@ -7749,14 +8709,24 @@ async function savePromptOverridesToFirebaseNow(payload = null, options = {}) {
         currentUserPromptOverridesSaveTimer = null;
     }
 
-    const normalizedPayload = normalizePromptOverridesStore(payload || queuedPromptOverridesPayload || buildPromptOverridesPayload());
+    const payloadState = payload
+        ? buildNormalizedPromptOverridesStoreState(payload)
+        : (queuedPromptOverridesPayloadState || buildNormalizedPromptOverridesStoreState(queuedPromptOverridesPayload || buildPromptOverridesPayload()));
+    const normalizedPayload = payloadState.normalized;
+
+    if (promptOverridesSyncInFlight) {
+        schedulePromptOverridesSyncRetry(normalizedPayload);
+        return false;
+    }
 
     if (pendingPromptOverridesRemoteStore !== null) {
         queuedPromptOverridesPayload = normalizedPayload;
+        queuedPromptOverridesPayloadState = payloadState;
         return false;
     }
 
     queuedPromptOverridesPayload = null;
+    queuedPromptOverridesPayloadState = null;
 
     if (!canSyncPromptOverrides()) {
         return false;
@@ -7769,8 +8739,7 @@ async function savePromptOverridesToFirebaseNow(payload = null, options = {}) {
         return false;
     }
 
-    const payloadHash = JSON.stringify(normalizedPayload);
-    if (!options.force && payloadHash === lastPromptOverridesRemoteHash) {
+    if (!options.force && payloadState.hash === lastPromptOverridesRemoteHash) {
         return false;
     }
 
@@ -7780,36 +8749,89 @@ async function savePromptOverridesToFirebaseNow(payload = null, options = {}) {
     }
 
     try {
+        promptOverridesSyncInFlight = true;
         await set(
             ref(db, remotePath),
-            promptOverridesStoreHasData(normalizedPayload) ? normalizedPayload : null
+            payloadState.hasData ? normalizedPayload : null
         );
+        clearPromptOverridesSyncRetry();
         currentUserPromptOverridesStore = normalizedPayload;
-        lastPromptOverridesRemoteHash = payloadHash;
+        currentUserPromptOverridesStoreState = payloadState;
+        lastPromptOverridesRemoteHash = payloadState.hash;
         dirtyPromptOverrideRoles.clear();
         return true;
     } catch (error) {
         console.error('Failed to sync prompt overrides:', error);
+        schedulePromptOverridesSyncRetry(normalizedPayload);
         return false;
+    } finally {
+        promptOverridesSyncInFlight = false;
     }
 }
 
 function stopCurrentUserPromptOverridesSubscription() {
+    clearCurrentUserPromptOverridesRecovery();
+    clearPromptOverridesSyncRetry();
+    promptOverridesSyncInFlight = false;
+    currentUserPromptOverridesSubscriptionHealthy = false;
     if (typeof currentUserPromptOverridesUnsubscribe === 'function') {
         currentUserPromptOverridesUnsubscribe();
     }
     currentUserPromptOverridesUnsubscribe = null;
     currentUserPromptOverridesListenerLogin = '';
     currentUserPromptOverridesStore = null;
+    currentUserPromptOverridesStoreState = null;
     queuedPromptOverridesPayload = null;
+    queuedPromptOverridesPayloadState = null;
     lastPromptOverridesRemoteHash = '';
     pendingPromptOverridesRemoteStore = null;
+    pendingPromptOverridesRemoteStoreState = null;
     pendingPromptOverridesRemoteHash = '';
     dirtyPromptOverrideRoles.clear();
     if (currentUserPromptOverridesSaveTimer) {
         clearTimeout(currentUserPromptOverridesSaveTimer);
         currentUserPromptOverridesSaveTimer = null;
     }
+}
+
+function clearCurrentUserPromptOverridesRecovery() {
+    if (!currentUserPromptOverridesRecoveryTimerId) return;
+    clearTimeout(currentUserPromptOverridesRecoveryTimerId);
+    currentUserPromptOverridesRecoveryTimerId = null;
+}
+
+function hasHealthyCurrentUserPromptOverridesSubscription() {
+    return typeof currentUserPromptOverridesUnsubscribe === 'function' && currentUserPromptOverridesSubscriptionHealthy;
+}
+
+function stopCurrentUserPromptOverridesListenerTransport() {
+    clearCurrentUserPromptOverridesRecovery();
+    currentUserPromptOverridesSubscriptionHealthy = false;
+    if (typeof currentUserPromptOverridesUnsubscribe === 'function') {
+        try {
+            currentUserPromptOverridesUnsubscribe();
+        } catch (error) {
+            console.warn('Failed to stop prompt overrides live listener:', error);
+        }
+    }
+    currentUserPromptOverridesUnsubscribe = null;
+    currentUserPromptOverridesListenerLogin = '';
+}
+
+function scheduleCurrentUserPromptOverridesRecovery(login = currentUserPromptOverridesListenerLogin || currentUser?.login || '', reason = '', delayMs = PROTECTED_REALTIME_RECOVERY_DELAY_MS) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!normalizedLogin || currentUserPromptOverridesRecoveryTimerId) {
+        return false;
+    }
+    currentUserPromptOverridesRecoveryTimerId = setTimeout(() => {
+        currentUserPromptOverridesRecoveryTimerId = null;
+        if (!currentUser || normalizeLogin(currentUser.login) !== normalizedLogin) return;
+        const syncCandidateUser = { ...currentUser, login: normalizedLogin };
+        if (!canSyncPromptOverrides(syncCandidateUser)) return;
+        debugLog('Recovering prompt overrides live listener', { reason, login: normalizedLogin });
+        startCurrentUserPromptOverridesSubscription(normalizedLogin);
+    }, Math.max(250, Number(delayMs) || PROTECTED_REALTIME_RECOVERY_DELAY_MS));
+    return true;
 }
 
 function startCurrentUserPromptOverridesSubscription(login = currentUser?.login || '') {
@@ -7822,14 +8844,22 @@ function startCurrentUserPromptOverridesSubscription(login = currentUser?.login 
         return false;
     }
     if (
-        typeof currentUserPromptOverridesUnsubscribe === 'function'
+        hasHealthyCurrentUserPromptOverridesSubscription()
         && currentUserPromptOverridesListenerLogin === normalizedLogin
     ) {
         return true;
     }
 
-    stopCurrentUserPromptOverridesSubscription();
+    if (
+        currentUserPromptOverridesListenerLogin
+        && currentUserPromptOverridesListenerLogin !== normalizedLogin
+    ) {
+        stopCurrentUserPromptOverridesSubscription();
+    } else {
+        stopCurrentUserPromptOverridesListenerTransport();
+    }
     currentUserPromptOverridesListenerLogin = normalizedLogin;
+    currentUserPromptOverridesSubscriptionHealthy = false;
     const remotePath = getPromptOverridesDbPath(normalizedLogin);
     if (!remotePath) {
         return false;
@@ -7839,12 +8869,14 @@ function startCurrentUserPromptOverridesSubscription(login = currentUser?.login 
         ref(db, remotePath),
         (snapshot) => {
             if (!currentUser || normalizeLogin(currentUser.login) !== normalizedLogin) return;
+            clearCurrentUserPromptOverridesRecovery();
+            currentUserPromptOverridesSubscriptionHealthy = true;
 
-            const remoteStore = normalizePromptOverridesStore(snapshot.exists() ? snapshot.val() : {});
-            const localStore = loadLocalPromptsStore();
-            const shouldBootstrapRemote = !promptOverridesStoreHasData(remoteStore) && promptOverridesStoreHasData(localStore);
-            const effectiveStore = shouldBootstrapRemote ? localStore : remoteStore;
-            const remoteStoreHash = JSON.stringify(remoteStore);
+            const remoteStoreState = buildNormalizedPromptOverridesStoreState(snapshot.exists() ? snapshot.val() : {});
+            const localStoreState = loadLocalPromptsStoreState();
+            const shouldBootstrapRemote = !remoteStoreState.hasData && localStoreState.hasData;
+            const effectiveStoreState = shouldBootstrapRemote ? localStoreState : remoteStoreState;
+            const effectiveStore = effectiveStoreState.normalized;
 
             if (shouldBootstrapRemote) {
                 queuePromptOverridesSave(effectiveStore);
@@ -7852,17 +8884,30 @@ function startCurrentUserPromptOverridesSubscription(login = currentUser?.login 
 
             if (isUserEditing || lastPromptsFirebaseSnapshot === null) {
                 pendingPromptOverridesRemoteStore = effectiveStore;
-                pendingPromptOverridesRemoteHash = remoteStoreHash;
+                pendingPromptOverridesRemoteStoreState = effectiveStoreState;
+                pendingPromptOverridesRemoteHash = remoteStoreState.hash;
                 return;
             }
 
             currentUserPromptOverridesStore = effectiveStore;
-            persistPromptOverridesStoreLocally(effectiveStore);
-            lastPromptOverridesRemoteHash = remoteStoreHash;
+            currentUserPromptOverridesStoreState = effectiveStoreState;
+            persistPromptOverridesStoreLocally(effectiveStore, { state: effectiveStoreState });
+            lastPromptOverridesRemoteHash = remoteStoreState.hash;
             initPromptsData(lastPromptsFirebaseSnapshot || {});
         },
         (error) => {
+            currentUserPromptOverridesSubscriptionHealthy = false;
             console.error('Prompt overrides live sync failed:', error);
+            const localStoreState = loadLocalPromptsStoreState();
+            currentUserPromptOverridesStore = localStoreState.normalized;
+            currentUserPromptOverridesStoreState = localStoreState;
+            pendingPromptOverridesRemoteStore = null;
+            pendingPromptOverridesRemoteStoreState = null;
+            pendingPromptOverridesRemoteHash = '';
+            if (!isUserEditing && lastPromptsFirebaseSnapshot !== null) {
+                initPromptsData(lastPromptsFirebaseSnapshot || {});
+            }
+            scheduleCurrentUserPromptOverridesRecovery(normalizedLogin, 'prompt-overrides-live-sync-failed');
         }
     );
     return true;
@@ -7887,20 +8932,23 @@ function getLocalPromptsRoleData(role) {
 }
 
 function saveLocalPromptsData(options = {}) {
-    const normalizedPayload = buildPromptOverridesPayload();
-    recordDirtyPromptOverrideRoles(currentUserPromptOverridesStore, normalizedPayload);
-    persistPromptOverridesStoreLocally(normalizedPayload);
+    const payloadState = buildNormalizedPromptOverridesStoreState(buildPromptOverridesPayload());
+    const normalizedPayload = payloadState.normalized;
+    recordDirtyPromptOverrideRoles(currentUserPromptOverridesStoreState?.normalized || currentUserPromptOverridesStore, normalizedPayload);
+    persistPromptOverridesStoreLocally(normalizedPayload, { state: payloadState });
     if (currentUserPromptOverridesStore !== null || canSyncPromptOverrides()) {
         currentUserPromptOverridesStore = normalizedPayload;
+        currentUserPromptOverridesStoreState = payloadState;
     }
     if (options.syncRemote === false || !canSyncPromptOverrides()) {
         return normalizedPayload;
     }
     if (pendingPromptOverridesRemoteStore !== null) {
         queuedPromptOverridesPayload = normalizedPayload;
+        queuedPromptOverridesPayloadState = payloadState;
         return normalizedPayload;
     }
-    queuePromptOverridesSave(normalizedPayload);
+    queuePromptOverridesSave(payloadState.normalized);
     return normalizedPayload;
 }
 
@@ -8331,8 +9379,14 @@ function isClientVariationLocked(targetId) {
     return lockedPromptRole === 'client' && targetId !== lockedPromptVariationId;
 }
 
-function getManagerName() {
-    return managerNameInput.value.trim() || 'менеджер';
+function getManagerName(fallback = 'менеджер') {
+    const value = normalizeFio(
+        currentUser?.fio
+        || managerNameInput?.value
+        || getCachedStorageValue(USER_NAME_KEY, '')
+        || ''
+    );
+    return value || fallback;
 }
 
 function getVariationByName(role, name) {
@@ -8422,6 +9476,7 @@ function toggleInputState(enabled) {
     } else {
         userInput.classList.add('disabled');
         sendBtn.disabled = true;
+        updateRateChatButtonState();
     }
 }
 
@@ -8493,11 +9548,23 @@ function updateSendBtnState() {
     if (showVoiceModeAction) {
         setPrimaryActionMode('voice');
         sendBtn.disabled = userInput.disabled;
+        updateRateChatButtonState();
         return;
     }
 
     setPrimaryActionMode('send');
     sendBtn.disabled = !hasText || isProcessing || isDialogRated || isConversationClosed();
+    updateRateChatButtonState();
+}
+
+function updateRateChatButtonState() {
+    if (!rateChatBtn) return;
+    if (rateChatBtn.classList.contains('loading')) {
+        rateChatBtn.disabled = true;
+        return;
+    }
+    const hasDialog = conversationHistory.length > 0;
+    rateChatBtn.disabled = !(isChatReady && hasDialog && !isProcessing);
 }
 
 function lockDialogInput() {
@@ -8506,8 +9573,6 @@ function lockDialogInput() {
     sendBtn.disabled = true;
     voiceBtn.disabled = true;
     aiAssistBtn.disabled = true;
-    // rateChatBtn stays enabled so user can cancel the rating
-    rateChatBtn.disabled = false;
     userInput.placeholder = 'Очистите чат для нового диалога';
     userInput.classList.add('disabled');
     userInput.classList.add('locked-dialog');
@@ -8516,6 +9581,7 @@ function lockDialogInput() {
     requestAnimationFrame(() => {
         userInput.scrollTop = 0;
     });
+    updateRateChatButtonState();
 }
 
 function unlockDialogInput() {
@@ -8523,7 +9589,6 @@ function unlockDialogInput() {
     userInput.disabled = false;
     voiceBtn.disabled = false;
     aiAssistBtn.disabled = false;
-    rateChatBtn.disabled = false;
     userInput.placeholder = '';
     userInput.classList.remove('disabled');
     userInput.classList.remove('locked-dialog');
@@ -8809,11 +9874,150 @@ function getPromptHistoryEntries(role, variationId) {
     return promptHistory.filter(item => getPromptHistoryKey(item.role, item.variationId) === key);
 }
 
+function clonePromptHistoryEntry(entry = {}) {
+    if (!entry || typeof entry !== 'object') return null;
+    const id = String(entry.id || '').trim();
+    if (!id) return null;
+    return {
+        id,
+        ts: Number(entry.ts) || Date.now(),
+        role: String(entry.role || ''),
+        variationId: String(entry.variationId || ''),
+        variationName: String(entry.variationName || ''),
+        content: String(entry.content || ''),
+        kind: String(entry.kind || 'edit'),
+        note: String(entry.note || '')
+    };
+}
+
+function normalizePromptHistoryEntries(rawHistory = []) {
+    const entries = Array.isArray(rawHistory)
+        ? rawHistory
+        : (rawHistory && typeof rawHistory === 'object' ? Object.values(rawHistory) : []);
+
+    const normalized = entries
+        .map((entry) => clonePromptHistoryEntry(entry))
+        .filter(Boolean)
+        .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
+
+    const perPromptCount = new Map();
+    const trimmedHistory = [];
+    normalized.forEach((entry) => {
+        const key = getPromptHistoryKey(entry.role, entry.variationId);
+        const used = perPromptCount.get(key) || 0;
+        if (used >= HISTORY_LIMIT) return;
+        perPromptCount.set(key, used + 1);
+        trimmedHistory.push(entry);
+    });
+
+    return trimmedHistory;
+}
+
+function clearPromptHistoryRemoteSyncState() {
+    if (promptHistoryRemoteSyncTimer) {
+        clearTimeout(promptHistoryRemoteSyncTimer);
+        promptHistoryRemoteSyncTimer = null;
+    }
+    promptHistoryRemoteSyncInFlight = false;
+    queuedPromptHistoryRemoteEntries = new Map();
+    syncedPromptHistoryEntryIds = new Set();
+}
+
+function queuePromptHistoryRemoteSync(entries = []) {
+    if (!db || !isAdmin()) return false;
+    const normalizedEntries = (Array.isArray(entries) ? entries : [entries])
+        .map((entry) => clonePromptHistoryEntry(entry))
+        .filter(Boolean);
+    if (!normalizedEntries.length) return false;
+
+    let didQueue = false;
+    normalizedEntries.forEach((entry) => {
+        if (syncedPromptHistoryEntryIds.has(entry.id) && !queuedPromptHistoryRemoteEntries.has(entry.id)) {
+            return;
+        }
+        const previous = queuedPromptHistoryRemoteEntries.get(entry.id);
+        if (previous && JSON.stringify(previous) === JSON.stringify(entry)) {
+            return;
+        }
+        queuedPromptHistoryRemoteEntries.set(entry.id, entry);
+        didQueue = true;
+    });
+
+    if (!didQueue) return false;
+
+    if (promptHistoryRemoteSyncTimer) {
+        clearTimeout(promptHistoryRemoteSyncTimer);
+    }
+    promptHistoryRemoteSyncTimer = setTimeout(() => {
+        promptHistoryRemoteSyncTimer = null;
+        void flushPromptHistoryRemoteSync();
+    }, PROMPT_HISTORY_REMOTE_SYNC_DEBOUNCE_MS);
+    return true;
+}
+
+async function flushPromptHistoryRemoteSync() {
+    if (promptHistoryRemoteSyncTimer) {
+        clearTimeout(promptHistoryRemoteSyncTimer);
+        promptHistoryRemoteSyncTimer = null;
+    }
+    if (promptHistoryRemoteSyncInFlight || !db || !queuedPromptHistoryRemoteEntries.size || !isAdmin()) {
+        return false;
+    }
+
+    const batch = Array.from(queuedPromptHistoryRemoteEntries.values())
+        .map((entry) => clonePromptHistoryEntry(entry))
+        .filter(Boolean);
+    if (!batch.length) {
+        queuedPromptHistoryRemoteEntries = new Map();
+        return false;
+    }
+
+    queuedPromptHistoryRemoteEntries = new Map();
+    promptHistoryRemoteSyncInFlight = true;
+    try {
+        const canSync = await ensureCurrentUserAccessMirror();
+        if (!canSync) {
+            throw new Error('Не удалось синхронизировать prompt history access mirror.');
+        }
+
+        const updatesPayload = {};
+        batch.forEach((entry) => {
+            updatesPayload[entry.id] = entry;
+        });
+        await update(ref(db, 'prompt_history'), updatesPayload);
+        batch.forEach((entry) => {
+            syncedPromptHistoryEntryIds.add(entry.id);
+        });
+        debugLog('Prompt history synced incrementally', { count: batch.length });
+        return true;
+    } catch (error) {
+        console.error('Failed to sync history entries:', error);
+        batch.forEach((entry) => {
+            queuedPromptHistoryRemoteEntries.set(entry.id, entry);
+        });
+        if (!promptHistoryRemoteSyncTimer) {
+            promptHistoryRemoteSyncTimer = setTimeout(() => {
+                promptHistoryRemoteSyncTimer = null;
+                void flushPromptHistoryRemoteSync();
+            }, 2000);
+        }
+        return false;
+    } finally {
+        promptHistoryRemoteSyncInFlight = false;
+        if (queuedPromptHistoryRemoteEntries.size && !promptHistoryRemoteSyncTimer) {
+            promptHistoryRemoteSyncTimer = setTimeout(() => {
+                promptHistoryRemoteSyncTimer = null;
+                void flushPromptHistoryRemoteSync();
+            }, PROMPT_HISTORY_REMOTE_SYNC_DEBOUNCE_MS);
+        }
+    }
+}
+
 function ensurePromptHistoryBaseline(role, variation) {
     if (!isAdmin() || !role || !variation || variation.isLocal) return false;
     if (getPromptHistoryEntries(role, variation.id).length) return false;
 
-    promptHistory.push({
+    const entry = {
         id: generateId(),
         ts: Date.now(),
         role,
@@ -8822,8 +10026,9 @@ function ensurePromptHistoryBaseline(role, variation) {
         content: variation.content || '',
         kind: 'baseline',
         note: 'Базовая public-версия'
-    });
-    savePromptHistory();
+    };
+    promptHistory.push(entry);
+    savePromptHistory({ syncEntries: [entry] });
     if (promptHistoryModal?.classList.contains('active')) {
         renderPromptHistory();
     }
@@ -8961,20 +10166,10 @@ function renderPromptHistory() {
     });
 }
 
-function savePromptHistory() {
+function savePromptHistory(options = {}) {
     if (!promptHistory) return;
 
-    // Лимитируем историю отдельно для каждого промпта, а не глобально.
-    const perPromptCount = new Map();
-    const trimmedHistory = [];
-    promptHistory.forEach(entry => {
-        const key = getPromptHistoryKey(entry.role, entry.variationId);
-        const used = perPromptCount.get(key) || 0;
-        if (used >= HISTORY_LIMIT) return;
-        perPromptCount.set(key, used + 1);
-        trimmedHistory.push(entry);
-    });
-    promptHistory = trimmedHistory;
+    promptHistory = normalizePromptHistoryEntries(promptHistory);
     lastPromptHistorySnapshotHash = JSON.stringify(promptHistory);
 
     if (!promptHistory.length) {
@@ -8982,15 +10177,8 @@ function savePromptHistory() {
     } else {
         setCachedLocalStorageJson(LOCAL_PROMPTS_HISTORY_STORAGE_KEY, promptHistory);
     }
-    if (db) {
-        const syncPromise = isAdmin()
-            ? ensureCurrentUserAccessMirror()
-            : Promise.resolve(true);
-        syncPromise
-            .then(() => set(ref(db, 'prompt_history'), promptHistory))
-            .then(() => debugLog('Prompt history synced'))
-            .catch(e => console.error('Failed to sync history:', e));
-    }
+
+    queuePromptHistoryRemoteSync(options.syncEntries || []);
 }
 
 function checkpointPromptHistory(role, variationId = promptsData[role]?.activeId, options = {}) {
@@ -9024,7 +10212,7 @@ function recordPromptHistory(role, variation, options = {}) {
 
     promptHistory.unshift(entry);
     lastHistoryContent[role][variation.id] = content;
-    savePromptHistory();
+    savePromptHistory({ syncEntries: [entry] });
     if (promptHistoryModal?.classList.contains('active')) {
         renderPromptHistory();
     }
@@ -9266,6 +10454,33 @@ function queuePublicPromptSave(role) {
     savePromptsToFirebase();
 }
 
+function clearPublicPromptSyncRetry() {
+    if (!publicPromptSyncRetryTimerId) return;
+    clearTimeout(publicPromptSyncRetryTimerId);
+    publicPromptSyncRetryTimerId = null;
+}
+
+function schedulePublicPromptSyncRetry(options = {}) {
+    if (options.fullReplace) {
+        publicPromptSyncRetryFullReplace = true;
+    }
+    if (publicPromptSyncRetryTimerId) {
+        return false;
+    }
+    publicPromptSyncRetryTimerId = window.setTimeout(() => {
+        publicPromptSyncRetryTimerId = null;
+        if (!dirtyPublicPromptRoles.size) {
+            publicPromptSyncRetryFullReplace = false;
+            return;
+        }
+        savePromptsToFirebaseNow({
+            roles: [...dirtyPublicPromptRoles],
+            fullReplace: publicPromptSyncRetryFullReplace
+        });
+    }, PROMPT_REMOTE_SYNC_RETRY_DELAY_MS);
+    return true;
+}
+
 const savePromptsToFirebase = debounce(() => {
     const roles = [...dirtyPublicPromptRoles];
     if (!roles.length) return;
@@ -9284,8 +10499,11 @@ function savePromptsToFirebaseNow(options = {}) {
         }),
         { location: 'script.js:savePromptsToFirebaseNow', hypothesisId: 'B' }
     );
+    const effectiveFullReplace = !!options.fullReplace || publicPromptSyncRetryFullReplace;
     saveLocalPromptsData();
     if (!canSyncPublicPromptsToCloud()) {
+        clearPublicPromptSyncRetry();
+        publicPromptSyncRetryFullReplace = false;
         debugLog('Skipped cloud prompt sync: real admin access is required');
         return;
     }
@@ -9297,7 +10515,8 @@ function savePromptsToFirebaseNow(options = {}) {
     const roles = getNormalizedPromptSyncRoles(options.roles);
     const payload = buildPromptsSyncPayload(roles);
     const fullPayload = buildPromptsSyncPayload(PROMPT_ROLES);
-    persistPublicPromptsEmergencySnapshot(fullPayload);
+    const fullPayloadSnapshotState = buildNormalizedPromptSnapshotState(fullPayload);
+    persistPublicPromptsEmergencySnapshot(fullPayloadSnapshotState.normalized, { state: fullPayloadSnapshotState });
 
     // Critical Fix: Validation to prevent saving empty/corrupted data to cloud
     const hasEmptyEssential = roles.some(role => {
@@ -9310,12 +10529,19 @@ function savePromptsToFirebaseNow(options = {}) {
         console.warn('Sync cancelled: attempt to save empty prompt detected');
         return;
     }
+    if (publicPromptSyncInFlight) {
+        schedulePublicPromptSyncRetry({ fullReplace: effectiveFullReplace });
+        return;
+    }
 
+    publicPromptSyncInFlight = true;
     const syncPromise = ensureCurrentUserAccessMirror();
     syncPromise
-        .then(() => (options.fullReplace ? set(ref(db, 'prompts'), payload) : update(ref(db, 'prompts'), payload)))
+        .then(() => (effectiveFullReplace ? set(ref(db, 'prompts'), payload) : update(ref(db, 'prompts'), payload)))
         .then(() => {
-            persistPublicPromptsSnapshot(fullPayload);
+            clearPublicPromptSyncRetry();
+            publicPromptSyncRetryFullReplace = false;
+            persistPublicPromptsSnapshot(fullPayloadSnapshotState.normalized, { state: fullPayloadSnapshotState });
             roles.forEach((role) => {
                 dirtyPublicPromptRoles.delete(role);
                 clearPromptEditBaseline(role);
@@ -9324,10 +10550,20 @@ function savePromptsToFirebaseNow(options = {}) {
             debugLog('Prompts synced to Firebase');
             renderPromptSyncConflictNotice();
         })
-        .catch(e => console.error('Failed to sync:', e));
+        .catch((error) => {
+            console.error('Failed to sync:', error);
+            schedulePublicPromptSyncRetry({ fullReplace: effectiveFullReplace });
+        })
+        .finally(() => {
+            publicPromptSyncInFlight = false;
+        });
 }
 
 function stopProtectedRealtimeListeners() {
+    clearProtectedRealtimeListenersRecovery();
+    clearPublicPromptSyncRetry();
+    publicPromptSyncRetryFullReplace = false;
+    publicPromptSyncInFlight = false;
     if (!Array.isArray(protectedRealtimeUnsubscribes) || !protectedRealtimeUnsubscribes.length) return;
     protectedRealtimeUnsubscribes.forEach((unsubscribe) => {
         try {
@@ -9337,6 +10573,31 @@ function stopProtectedRealtimeListeners() {
         }
     });
     protectedRealtimeUnsubscribes = [];
+}
+
+function clearProtectedRealtimeListenersRecovery() {
+    if (!protectedRealtimeRecoveryTimerId) return;
+    clearTimeout(protectedRealtimeRecoveryTimerId);
+    protectedRealtimeRecoveryTimerId = null;
+}
+
+function scheduleProtectedRealtimeListenersRecovery(reason = '', delayMs = PROTECTED_REALTIME_RECOVERY_DELAY_MS) {
+    if (protectedRealtimeRecoveryTimerId) {
+        return false;
+    }
+    protectedRealtimeRecoveryTimerId = setTimeout(() => {
+        protectedRealtimeRecoveryTimerId = null;
+        if (!db || !auth?.currentUser) return;
+        try {
+            debugLog('Recovering protected realtime listeners', { reason });
+            setupPromptsAndConfigListeners();
+            void bootstrapPromptsViaRestFallback();
+        } catch (error) {
+            console.error('Protected realtime listeners recovery failed:', error);
+            scheduleProtectedRealtimeListenersRecovery('retry-after-recovery-failure');
+        }
+    }, Math.max(250, Number(delayMs) || PROTECTED_REALTIME_RECOVERY_DELAY_MS));
+    return true;
 }
 
 function setupPromptsAndConfigListeners() {
@@ -9352,13 +10613,14 @@ function setupPromptsAndConfigListeners() {
     try {
         const promptsRef = ref(db, 'prompts');
         const unsubscribePrompts = onValue(promptsRef, (snapshot) => {
-            const data = normalizePromptSnapshotForCache(snapshot.val() || {});
-            const dataStr = JSON.stringify(data);
-            if (firebasePromptSnapshotHasMeaningfulContent(data)) {
-                persistPublicPromptsSnapshot(data);
-                persistPublicPromptsEmergencySnapshot(data);
+            const promptSnapshotState = buildNormalizedPromptSnapshotState(snapshot.val() || {});
+            const data = promptSnapshotState.normalized;
+            if (promptSnapshotState.hasMeaningfulContent) {
+                persistPublicPromptsSnapshot(data, { state: promptSnapshotState });
+                persistPublicPromptsEmergencySnapshot(data, { state: promptSnapshotState });
             }
             lastPromptsFirebaseSnapshot = data;
+            lastPromptsFirebaseSnapshotState = promptSnapshotState;
             agentLog(
                 'Firebase onValue triggered',
                 { hasData: !!data, isUserEditing },
@@ -9368,12 +10630,13 @@ function setupPromptsAndConfigListeners() {
 
             if (isUserEditing) {
                 pendingPromptsFirebaseSnapshot = data;
-                lastFirebaseData = dataStr;
+                pendingPromptsFirebaseSnapshotState = promptSnapshotState;
+                lastFirebaseData = promptSnapshotState.hash;
                 debugLog('Deferring Firebase prompt update - user is editing');
                 return;
             }
 
-            if (lastFirebaseData === dataStr) {
+            if (lastFirebaseData === promptSnapshotState.hash) {
                 debugLog('Skipping Firebase update - data unchanged');
                 return;
             }
@@ -9382,8 +10645,9 @@ function setupPromptsAndConfigListeners() {
                 debugLog('Skipping Firebase prompts sync because payload had no meaningful content and local data is already populated');
                 return;
             }
-            lastFirebaseData = dataStr;
+            lastFirebaseData = promptSnapshotState.hash;
             pendingPromptsFirebaseSnapshot = null;
+            pendingPromptsFirebaseSnapshotState = null;
 
             if (didApplyPrompts && Object.keys(data).length === 0 && promptsStateHasMeaningfulContent()) {
                 if (canSyncPublicPromptsToCloud()) {
@@ -9395,13 +10659,22 @@ function setupPromptsAndConfigListeners() {
         }, (error) => {
             console.error('Firebase read error:', error);
             lastPromptsFirebaseSnapshot = null;
+            lastPromptsFirebaseSnapshotState = null;
+            pendingPromptsFirebaseSnapshot = null;
+            pendingPromptsFirebaseSnapshotState = null;
+            lastFirebaseData = null;
             const fallbackSnapshot = loadCachedPublicPromptsSnapshot() || loadCachedPublicPromptsEmergencySnapshot();
             if (fallbackSnapshot) {
-                initPromptsData(fallbackSnapshot);
+                const fallbackSnapshotState = buildNormalizedPromptSnapshotState(fallbackSnapshot);
+                lastPromptsFirebaseSnapshot = fallbackSnapshotState.normalized;
+                lastPromptsFirebaseSnapshotState = fallbackSnapshotState;
+                lastFirebaseData = fallbackSnapshotState.hash;
+                initPromptsData(fallbackSnapshotState.normalized);
             }
             if (auth?.currentUser && !promptsStateHasMeaningfulContent('client')) {
                 void bootstrapPromptsViaRestFallback();
             }
+            scheduleProtectedRealtimeListenersRecovery('prompts-read-error');
         });
         protectedRealtimeUnsubscribes.push(unsubscribePrompts);
 
@@ -9425,21 +10698,14 @@ function setupPromptsAndConfigListeners() {
             }
         }, (error) => {
             console.error('App config read error:', error);
-            setSharedGeminiTokenEndpoint('');
-            setSharedClientConversationActionPrompt('');
-            setSharedRaterHiddenPrompt('');
+            scheduleProtectedRealtimeListenersRecovery('app-config-read-error');
         });
         protectedRealtimeUnsubscribes.push(unsubscribeAppConfig);
 
         const historyRef = ref(db, 'prompt_history');
         const unsubscribeHistory = onValue(historyRef, (snapshot) => {
-            const historyData = snapshot.val();
-            let nextPromptHistory = [];
-            if (Array.isArray(historyData)) {
-                nextPromptHistory = historyData;
-            } else if (historyData && typeof historyData === 'object') {
-                nextPromptHistory = Object.values(historyData);
-            }
+            const nextPromptHistory = normalizePromptHistoryEntries(snapshot.val());
+            syncedPromptHistoryEntryIds = new Set(nextPromptHistory.map((entry) => entry.id).filter(Boolean));
             const historyHash = JSON.stringify(nextPromptHistory);
             if (historyHash === lastPromptHistorySnapshotHash) return;
             promptHistory = nextPromptHistory;
@@ -9447,17 +10713,22 @@ function setupPromptsAndConfigListeners() {
             if (promptHistoryModal?.classList.contains('active')) {
                 renderPromptHistory();
             }
+        }, (error) => {
+            console.error('Prompt history read error:', error);
+            scheduleProtectedRealtimeListenersRecovery('prompt-history-read-error');
         });
         protectedRealtimeUnsubscribes.push(unsubscribeHistory);
-        } catch (error) {
+    } catch (error) {
         console.error('Error setting up Firebase listener:', error);
-        setSharedGeminiTokenEndpoint('');
-        setSharedClientConversationActionPrompt('');
-        setSharedRaterHiddenPrompt('');
         const fallbackSnapshot = loadCachedPublicPromptsSnapshot() || loadCachedPublicPromptsEmergencySnapshot();
         if (fallbackSnapshot) {
-            initPromptsData(fallbackSnapshot);
+            const fallbackSnapshotState = buildNormalizedPromptSnapshotState(fallbackSnapshot);
+            lastPromptsFirebaseSnapshot = fallbackSnapshotState.normalized;
+            lastPromptsFirebaseSnapshotState = fallbackSnapshotState;
+            lastFirebaseData = fallbackSnapshotState.hash;
+            initPromptsData(fallbackSnapshotState.normalized);
         }
+        scheduleProtectedRealtimeListenersRecovery('setup-protected-listeners-failed');
     }
 }
 
@@ -9472,13 +10743,16 @@ async function refreshProtectedFirebaseDataAfterAuth() {
 async function bootstrapPromptsViaRestFallback() {
     if (!db || promptsStateHasMeaningfulContent('client')) return false;
     try {
-        const data = await fetchFirebaseJsonViaRest('prompts', PROMPTS_REST_FALLBACK_TIMEOUT_MS);
-        if (data && typeof data === 'object' && firebasePromptSnapshotHasMeaningfulContent(data)) {
+        const rawData = await fetchFirebaseJsonViaRest('prompts', PROMPTS_REST_FALLBACK_TIMEOUT_MS);
+        const promptSnapshotState = buildNormalizedPromptSnapshotState(rawData || {});
+        if (rawData && typeof rawData === 'object' && promptSnapshotState.hasMeaningfulContent) {
+            const data = promptSnapshotState.normalized;
             debugLog('Bootstrapping prompts via Firebase REST fallback');
             lastPromptsFirebaseSnapshot = data;
-            lastFirebaseData = JSON.stringify(data);
-            persistPublicPromptsSnapshot(data);
-            persistPublicPromptsEmergencySnapshot(data);
+            lastPromptsFirebaseSnapshotState = promptSnapshotState;
+            lastFirebaseData = promptSnapshotState.hash;
+            persistPublicPromptsSnapshot(data, { state: promptSnapshotState });
+            persistPublicPromptsEmergencySnapshot(data, { state: promptSnapshotState });
             initPromptsData(data);
             return true;
         }
@@ -9494,25 +10768,27 @@ async function loadPrompts() {
     // live Firebase snapshot. This prevents blank editors when RTDB is slow or stalls.
     const cachedPublicPromptsSnapshot = loadCachedPublicPromptsSnapshot();
     if (cachedPublicPromptsSnapshot) {
+        const cachedPublicPromptSnapshotState = buildNormalizedPromptSnapshotState(cachedPublicPromptsSnapshot);
         initPromptsData(cachedPublicPromptsSnapshot);
         lastPromptsFirebaseSnapshot = cachedPublicPromptsSnapshot;
-        lastFirebaseData = JSON.stringify(cachedPublicPromptsSnapshot);
+        lastPromptsFirebaseSnapshotState = cachedPublicPromptSnapshotState;
+        lastFirebaseData = cachedPublicPromptSnapshotState.hash;
     } else {
         const emergencyBackupSnapshot = loadCachedPublicPromptsEmergencySnapshot();
         if (emergencyBackupSnapshot) {
+            const emergencyPromptSnapshotState = buildNormalizedPromptSnapshotState(emergencyBackupSnapshot);
             initPromptsData(emergencyBackupSnapshot);
             lastPromptsFirebaseSnapshot = emergencyBackupSnapshot;
-            lastFirebaseData = JSON.stringify(emergencyBackupSnapshot);
+            lastPromptsFirebaseSnapshotState = emergencyPromptSnapshotState;
+            lastFirebaseData = emergencyPromptSnapshotState.hash;
             debugLog('Loaded prompts from emergency backup snapshot');
         } else {
             debugLog('No local prompt snapshots available before Firebase bootstrap');
         }
     }
-    promptHistory = getCachedLocalStorageJson(LOCAL_PROMPTS_HISTORY_STORAGE_KEY);
-    if (!Array.isArray(promptHistory)) {
-        promptHistory = [];
-    }
+    promptHistory = normalizePromptHistoryEntries(getCachedLocalStorageJson(LOCAL_PROMPTS_HISTORY_STORAGE_KEY));
     lastPromptHistorySnapshotHash = JSON.stringify(promptHistory);
+    clearPromptHistoryRemoteSyncState();
     renderPromptHistory();
 
     if (db) {
@@ -9533,11 +10809,9 @@ async function loadPrompts() {
         if (!cachedPublicPromptsSnapshot) {
             debugLog('Firebase unavailable and no cached prompt snapshot');
         }
-        promptHistory = getCachedLocalStorageJson(LOCAL_PROMPTS_HISTORY_STORAGE_KEY);
-        if (!Array.isArray(promptHistory)) {
-            promptHistory = [];
-        }
+        promptHistory = normalizePromptHistoryEntries(getCachedLocalStorageJson(LOCAL_PROMPTS_HISTORY_STORAGE_KEY));
         lastPromptHistorySnapshotHash = JSON.stringify(promptHistory);
+        clearPromptHistoryRemoteSyncState();
         renderPromptHistory();
     }
 
@@ -9713,9 +10987,35 @@ const debouncedSyncModalPasswordAutocompleteMode = debounce(() => {
     void syncModalPasswordAutocompleteMode();
 }, 180);
 
+function clearAuthModalInitialFocus() {
+    if (!authModalInitialFocusTimerId) return;
+    clearTimeout(authModalInitialFocusTimerId);
+    authModalInitialFocusTimerId = null;
+}
+
+function markAuthModalInteraction() {
+    didInteractWithAuthModalSinceOpen = true;
+    clearAuthModalInitialFocus();
+}
+
+function scheduleAuthModalInitialFocus() {
+    clearAuthModalInitialFocus();
+    authModalInitialFocusTimerId = setTimeout(() => {
+        authModalInitialFocusTimerId = null;
+        if (!nameModal?.classList.contains('active')) return;
+        if (didInteractWithAuthModalSinceOpen) return;
+        const activeElement = document.activeElement;
+        if (activeElement === modalNameInput || activeElement === modalLoginInput || activeElement === modalPasswordInput) {
+            return;
+        }
+        modalNameInput?.focus();
+    }, 100);
+}
+
 function showNameModal() {
     if (!nameModal) return;
     nameModal.classList.add('active');
+    didInteractWithAuthModalSinceOpen = false;
     syncLocalhostDevAuthActions();
     const localhostDevUser = getLocalhostDevAuthUser();
     if (nameModalStep1) {
@@ -9726,7 +11026,7 @@ function showNameModal() {
         sanitizeModalNameInput();
     }
     if (modalLoginInput && !modalLoginInput.value) {
-        modalLoginInput.value = getCachedStorageValue(USER_LOGIN_KEY) || localhostDevUser?.login || '';
+        modalLoginInput.value = localhostDevUser?.login || getCachedStorageValue(USER_LOGIN_KEY) || '';
     }
     setModalPasswordAutocompleteMode('current-password');
     setPasswordVisibility(false);
@@ -9734,12 +11034,14 @@ function showNameModal() {
     setAuthError('');
     scheduleModalAutofillRepair();
     void syncModalPasswordAutocompleteMode();
-    setTimeout(() => modalNameInput?.focus(), 100);
+    scheduleAuthModalInitialFocus();
 }
 
 function hideNameModal() {
     if (!nameModal) return;
     nameModal.classList.remove('active');
+    didInteractWithAuthModalSinceOpen = false;
+    clearAuthModalInitialFocus();
     if (modalPasswordInput) {
         modalPasswordInput.value = '';
     }
@@ -9762,14 +11064,17 @@ if (!authForm && modalNameSubmit) {
 
 if (modalNameInput) {
     modalNameInput.addEventListener('input', () => {
+        markAuthModalInteraction();
         repairModalAutofillCollision();
         sanitizeModalNameInput();
     });
     modalNameInput.addEventListener('focus', () => {
+        markAuthModalInteraction();
         repairModalAutofillCollision();
         sanitizeModalNameInput();
     });
     modalNameInput.addEventListener('change', () => {
+        markAuthModalInteraction();
         repairModalAutofillCollision();
         sanitizeModalNameInput();
     });
@@ -9777,10 +11082,12 @@ if (modalNameInput) {
 
 if (modalLoginInput) {
     modalLoginInput.addEventListener('change', () => {
+        markAuthModalInteraction();
         repairModalAutofillCollision();
         void syncModalPasswordAutocompleteMode();
     });
     modalLoginInput.addEventListener('input', () => {
+        markAuthModalInteraction();
         repairModalAutofillCollision();
         debouncedSyncModalPasswordAutocompleteMode();
     });
@@ -9788,11 +11095,18 @@ if (modalLoginInput) {
         repairModalAutofillCollision();
         void syncModalPasswordAutocompleteMode();
     });
+    modalLoginInput.addEventListener('focus', () => {
+        markAuthModalInteraction();
+    });
 }
 
 if (modalPasswordInput) {
     modalPasswordInput.addEventListener('focus', () => {
+        markAuthModalInteraction();
         void syncModalPasswordAutocompleteMode();
+    });
+    modalPasswordInput.addEventListener('input', () => {
+        markAuthModalInteraction();
     });
 }
 
@@ -9810,6 +11124,98 @@ if (authMailHelpImage) {
 }
 
 // ============ AI IMPROVE MODAL ============
+
+function createAiImproveCancelledError() {
+    const error = new Error('AI improve cancelled');
+    error.name = 'AbortError';
+    error.code = 'AI_IMPROVE_CANCELLED';
+    return error;
+}
+
+function isAiImproveCancelledError(error) {
+    return error?.code === 'AI_IMPROVE_CANCELLED' || error?.name === 'AbortError';
+}
+
+function beginAiImproveRequest() {
+    if (aiImproveRequestController) {
+        try {
+            aiImproveRequestController.abort(createAiImproveCancelledError());
+        } catch (_) {}
+    }
+    aiImproveRequestVersion += 1;
+    aiImproveRequestController = typeof AbortController !== 'undefined'
+        ? new AbortController()
+        : null;
+    return {
+        version: aiImproveRequestVersion,
+        signal: aiImproveRequestController?.signal || null
+    };
+}
+
+function cancelAiImproveRequest() {
+    if (aiImproveRequestController) {
+        try {
+            aiImproveRequestController.abort(createAiImproveCancelledError());
+        } catch (_) {}
+    }
+    aiImproveRequestController = null;
+    aiImproveRequestVersion += 1;
+}
+
+function finishAiImproveRequest(version = 0) {
+    if (version === aiImproveRequestVersion) {
+        aiImproveRequestController = null;
+    }
+}
+
+function throwIfAiImproveRequestStale(version = 0, snapshot = null) {
+    if (version !== aiImproveRequestVersion) {
+        throw createAiImproveCancelledError();
+    }
+    if (aiImproveRequestController?.signal?.aborted) {
+        throw createAiImproveCancelledError();
+    }
+    if (!aiImproveModal?.classList?.contains('active')) {
+        throw createAiImproveCancelledError();
+    }
+    if (!snapshot || typeof snapshot !== 'object') return;
+
+    if ((snapshot.mode || 'default') !== aiImproveMode) {
+        throw createAiImproveCancelledError();
+    }
+
+    const currentRatingContextJson = JSON.stringify(pendingRatingImproveContext || null);
+    if ((snapshot.ratingContextJson || 'null') !== currentRatingContextJson) {
+        throw createAiImproveCancelledError();
+    }
+
+    const currentActiveId = promptsData[snapshot.role]?.activeId || null;
+    if ((snapshot.activeVariationId || null) !== currentActiveId) {
+        throw createAiImproveCancelledError();
+    }
+
+    const currentPrompt = String(getActiveContent(snapshot.role) || '');
+    if (currentPrompt !== String(snapshot.prompt || '')) {
+        throw createAiImproveCancelledError();
+    }
+}
+
+function resetAiImproveSubmitUi() {
+    if (!aiImproveSubmit) return;
+    const btnText = aiImproveSubmit.querySelector('.btn-text');
+    const btnLoader = aiImproveSubmit.querySelector('.btn-loader');
+    if (btnText && !btnText.dataset.defaultText) {
+        btnText.dataset.defaultText = btnText.textContent;
+    }
+    aiImproveSubmit.disabled = false;
+    if (btnText) {
+        btnText.textContent = btnText.dataset.defaultText || btnText.textContent;
+        btnText.style.display = 'inline';
+    }
+    if (btnLoader) {
+        btnLoader.style.display = 'none';
+    }
+}
 
 function setAiImproveModalContent(mode = 'default') {
     if (!aiImproveModalTitle || !aiImproveModalDescription || !aiImproveInput) return;
@@ -9833,6 +11239,7 @@ function resetPendingImproveState() {
 
 function showAiImproveModal(options = {}) {
     hideTooltip(true);
+    cancelAiImproveRequest();
     const { mode = 'default', context = null } = options;
     aiImproveMode = mode;
     pendingRatingImproveContext = mode === 'rating' ? context : null;
@@ -9844,17 +11251,20 @@ function showAiImproveModal(options = {}) {
     aiImproveStep1.style.display = 'block';
     aiImproveStep2.style.display = 'none';
     resetPendingImproveState();
+    resetAiImproveSubmitUi();
     aiImproveInput.value = '';
     
     setTimeout(() => aiImproveInput.focus(), 100);
 }
 
 function hideAiImproveModal() {
+    cancelAiImproveRequest();
     aiImproveModal.classList.remove('active');
     pendingRatingImproveContext = null;
     aiImproveMode = 'default';
     setAiImproveModalContent('default');
     resetPendingImproveState();
+    resetAiImproveSubmitUi();
 }
 
 function setVoiceModeStatus(text, state = 'idle') {
@@ -10030,31 +11440,130 @@ function updateVoiceModeControls() {
         }
     }
     if (voiceModeStopBtn) {
-        voiceModeStopBtn.style.display = (isGeminiVoiceConnecting || isGeminiVoiceActive) ? '' : 'none';
-        voiceModeStopBtn.disabled = !isGeminiVoiceConnecting && !isGeminiVoiceActive;
+        const shouldShowStop = isGeminiVoiceConnecting || isGeminiVoiceActive;
+        voiceModeStopBtn.hidden = !shouldShowStop;
+        voiceModeStopBtn.style.display = shouldShowStop ? '' : 'none';
+        voiceModeStopBtn.disabled = !shouldShowStop;
     }
-}
-
-function getConfiguredGeminiApiKey() {
-    return String(
-        (typeof window !== 'undefined' && (window.GEMINI_LIVE_API_KEY || window.GEMINI_API_KEY)) ||
-        getCachedStorageValue(GEMINI_LIVE_API_KEY_STORAGE_KEY) ||
-        ''
-    ).trim();
 }
 
 function normalizeGeminiTokenEndpoint(value) {
     const normalized = String(value || '').trim();
     if (!normalized) return '';
-    return normalized.replace(/\/api\/gemini-live-token\/?$/i, '/api/openai-realtime-session');
+    return normalized
+        .replace(/\/api\/openai-realtime-session\/?$/i, '/api/gemini-live-token')
+        .replace(/\/api\/gemini-live-token\/?$/i, '/api/gemini-live-token');
+}
+
+function isLoopbackHostname(hostname = '') {
+    const normalized = String(hostname || '').trim().toLowerCase();
+    return normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '[::1]' || normalized === '::1';
+}
+
+function getTrustedVoiceTokenEndpointOrigins() {
+    const origins = new Set(TRUSTED_VOICE_TOKEN_ENDPOINT_ORIGINS);
+    const currentOrigin = String(window?.location?.origin || '').trim();
+    if (/^https?:\/\//i.test(currentOrigin)) {
+        origins.add(currentOrigin);
+    }
+
+    const configuredOrigins = typeof window !== 'undefined'
+        ? (window.ALLOWED_VOICE_TOKEN_ENDPOINT_ORIGINS || window.OPENAI_REALTIME_ALLOWED_ORIGINS || [])
+        : [];
+    const rawItems = Array.isArray(configuredOrigins)
+        ? configuredOrigins
+        : String(configuredOrigins || '').split(',');
+
+    rawItems.forEach((item) => {
+        const raw = String(item || '').trim();
+        if (!raw) return;
+        try {
+            const parsed = new URL(raw);
+            if (/^https?:$/i.test(parsed.protocol)) {
+                origins.add(parsed.origin);
+            }
+        } catch (error) {}
+    });
+
+    return origins;
+}
+
+function sanitizeGeminiTokenEndpointOrThrow(value, options = {}) {
+    const {
+        source = 'Token endpoint'
+    } = options;
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+
+    const hasExplicitScheme = /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(raw);
+    const isProtocolRelative = raw.startsWith('//');
+    const normalizedRaw = normalizeGeminiTokenEndpoint(raw);
+
+    let parsed = null;
+    try {
+        parsed = new URL(normalizedRaw, window.location.origin);
+    } catch (error) {
+        throw new Error(`${source}: укажите корректный URL.`);
+    }
+
+    if (!/^https?:$/i.test(parsed.protocol)) {
+        throw new Error(`${source}: разрешён только http/https URL.`);
+    }
+    if (parsed.username || parsed.password) {
+        throw new Error(`${source}: URL не должен содержать логин или пароль.`);
+    }
+    if (parsed.search || parsed.hash) {
+        throw new Error(`${source}: URL не должен содержать query или hash.`);
+    }
+
+    const normalizedPath = normalizeGeminiTokenEndpoint(parsed.pathname || '').replace(/\/+$/, '') || '/';
+    if (normalizedPath !== GEMINI_LIVE_ALLOWED_TOKEN_ENDPOINT_PATH) {
+        throw new Error(`${source}: разрешён только путь ${GEMINI_LIVE_ALLOWED_TOKEN_ENDPOINT_PATH}.`);
+    }
+
+    const isLoopback = isLoopbackHostname(parsed.hostname);
+    const allowedOrigins = getTrustedVoiceTokenEndpointOrigins();
+    if (!(parsed.origin === window.location.origin || allowedOrigins.has(parsed.origin) || isLoopback)) {
+        throw new Error(`${source}: домен не входит в доверенный allowlist.`);
+    }
+    if (parsed.protocol === 'http:' && !isLoopback) {
+        throw new Error(`${source}: HTTP разрешён только для localhost.`);
+    }
+
+    if ((!hasExplicitScheme && !isProtocolRelative) || parsed.origin === window.location.origin) {
+        return normalizedPath;
+    }
+    return `${parsed.origin}${normalizedPath}`;
+}
+
+function getTrustedGeminiTokenEndpointOrEmpty(value, options = {}) {
+    const {
+        source = 'Token endpoint',
+        clearStorageKey = ''
+    } = options;
+    try {
+        return sanitizeGeminiTokenEndpointOrThrow(value, { source });
+    } catch (error) {
+        if (clearStorageKey) {
+            removeCachedStorageValue(clearStorageKey);
+        }
+        if (String(value || '').trim()) {
+            console.warn(`Ignoring unsafe voice token endpoint from ${source}:`, error);
+        }
+        return '';
+    }
 }
 
 function getSharedGeminiTokenEndpoint() {
-    return normalizeGeminiTokenEndpoint(sharedAppConfig?.geminiTokenEndpoint || '');
+    return getTrustedGeminiTokenEndpointOrEmpty(sharedAppConfig?.geminiTokenEndpoint || '', {
+        source: 'shared voice token endpoint'
+    });
 }
 
 function setSharedGeminiTokenEndpoint(value) {
-    sharedAppConfig.geminiTokenEndpoint = normalizeGeminiTokenEndpoint(value);
+    sharedAppConfig.geminiTokenEndpoint = getTrustedGeminiTokenEndpointOrEmpty(value, {
+        source: 'shared voice token endpoint'
+    });
 }
 
 function normalizeClientConversationActionPrompt(value) {
@@ -10114,35 +11623,43 @@ function getDefaultGeminiTokenEndpoint() {
     return String(
         (
             typeof window !== 'undefined' &&
-            (window.OPENAI_REALTIME_TOKEN_ENDPOINT || window.OPENAI_TOKEN_ENDPOINT || window.GEMINI_LIVE_TOKEN_ENDPOINT || window.GEMINI_TOKEN_ENDPOINT)
+            (window.GEMINI_LIVE_TOKEN_ENDPOINT || window.GEMINI_TOKEN_ENDPOINT || window.OPENAI_REALTIME_TOKEN_ENDPOINT || window.OPENAI_TOKEN_ENDPOINT)
         ) ||
         GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT
     ).trim();
 }
 
 function getConfiguredGeminiTokenEndpoint() {
-    const localOverride = normalizeGeminiTokenEndpoint(getCachedStorageValue(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY));
+    const localOverride = getTrustedGeminiTokenEndpointOrEmpty(
+        getCachedStorageValue(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY),
+        {
+            source: 'local voice token endpoint',
+            clearStorageKey: GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY
+        }
+    );
     if (localOverride) return localOverride;
 
     const sharedEndpoint = getSharedGeminiTokenEndpoint();
     if (sharedEndpoint) return sharedEndpoint;
 
-    return getDefaultGeminiTokenEndpoint();
+    return getTrustedGeminiTokenEndpointOrEmpty(getDefaultGeminiTokenEndpoint(), {
+        source: 'default voice token endpoint'
+    }) || GEMINI_LIVE_ALLOWED_TOKEN_ENDPOINT_PATH;
 }
 
 function getConfiguredGeminiVoiceName() {
     const value = String(
         (typeof window !== 'undefined' && window.GEMINI_LIVE_VOICE_NAME) ||
         getCachedStorageValue(GEMINI_LIVE_VOICE_NAME_STORAGE_KEY) ||
-        ''
-    ).trim().toLowerCase();
-    if (!value) return OPENAI_DEFAULT_VOICE;
-    return OPENAI_VOICE_NAMES.has(value) ? value : OPENAI_DEFAULT_VOICE;
+        GEMINI_LIVE_DEFAULT_VOICE
+    ).trim();
+    return value || GEMINI_LIVE_DEFAULT_VOICE;
 }
 
 function populateVoiceConfigFields() {
     if (geminiApiKeyInput) {
-        geminiApiKeyInput.value = getCachedStorageValue(GEMINI_LIVE_API_KEY_STORAGE_KEY);
+        removeCachedStorageValue(LEGACY_GEMINI_LIVE_API_KEY_STORAGE_KEY);
+        geminiApiKeyInput.value = '';
     }
     if (geminiTokenEndpointInput) {
         geminiTokenEndpointInput.value = getConfiguredGeminiTokenEndpoint();
@@ -10165,7 +11682,9 @@ function populateHiddenRaterPromptField() {
 async function saveSharedGeminiTokenEndpointConfig(value) {
     if (!(db && selectedRole === 'admin')) return false;
     await ensureCurrentUserAccessMirror();
-    const normalized = normalizeGeminiTokenEndpoint(value);
+    const normalized = sanitizeGeminiTokenEndpointOrThrow(value, {
+        source: 'Глобальный voice token endpoint'
+    });
     await set(ref(db, `${APP_CONFIG_DB_PATH}/geminiTokenEndpoint`), normalized || null);
     setSharedGeminiTokenEndpoint(normalized);
     return true;
@@ -10245,15 +11764,13 @@ async function resetHiddenRaterPromptToDefault() {
 
 async function saveVoiceModeConfigFromInputs() {
     const apiKey = String(geminiApiKeyInput?.value || '').trim();
-    const tokenEndpoint = normalizeGeminiTokenEndpoint(geminiTokenEndpointInput?.value || '');
-    const voiceNameRaw = String(geminiVoiceNameInput?.value || '').trim().toLowerCase();
-    const voiceName = voiceNameRaw ? (OPENAI_VOICE_NAMES.has(voiceNameRaw) ? voiceNameRaw : OPENAI_DEFAULT_VOICE) : '';
+    const tokenEndpoint = sanitizeGeminiTokenEndpointOrThrow(geminiTokenEndpointInput?.value || '', {
+        source: 'Voice token endpoint'
+    });
+    const voiceNameRaw = String(geminiVoiceNameInput?.value || '').trim();
+    const voiceName = voiceNameRaw || GEMINI_LIVE_DEFAULT_VOICE;
 
-    if (apiKey) {
-        setCachedStorageValue(GEMINI_LIVE_API_KEY_STORAGE_KEY, apiKey);
-    } else {
-        removeCachedStorageValue(GEMINI_LIVE_API_KEY_STORAGE_KEY);
-    }
+    removeCachedStorageValue(LEGACY_GEMINI_LIVE_API_KEY_STORAGE_KEY);
 
     if (tokenEndpoint) {
         setCachedStorageValue(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY, tokenEndpoint);
@@ -10274,15 +11791,21 @@ async function saveVoiceModeConfigFromInputs() {
         console.warn('Failed to save shared Gemini token endpoint:', error);
     }
 
-    if (apiKey || tokenEndpoint || voiceName) {
-        showCopyNotification(sharedSaved ? 'Настройки OpenAI Voice сохранены для всех пользователей' : 'Настройки OpenAI Voice сохранены');
+    if (tokenEndpoint || voiceName) {
+        showCopyNotification(sharedSaved ? 'Настройки Gemini Live сохранены для всех пользователей' : 'Настройки Gemini Live сохранены');
+    } else if (apiKey) {
+        showCopyNotification('API key в браузере больше не используется. Настройте token endpoint.');
     } else {
         showCopyNotification('Настройки голосового режима очищены');
     }
 }
 
+function getVoiceConfigErrorMessage(error) {
+    return String(error?.message || 'Ошибка сохранения настроек Gemini Live');
+}
+
 async function clearVoiceModeConfig() {
-    removeCachedStorageValue(GEMINI_LIVE_API_KEY_STORAGE_KEY);
+    removeCachedStorageValue(LEGACY_GEMINI_LIVE_API_KEY_STORAGE_KEY);
     removeCachedStorageValue(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY);
     removeCachedStorageValue(GEMINI_LIVE_VOICE_NAME_STORAGE_KEY);
 
@@ -10298,7 +11821,7 @@ async function clearVoiceModeConfig() {
 
     if (geminiApiKeyInput) geminiApiKeyInput.value = '';
     if (geminiTokenEndpointInput) geminiTokenEndpointInput.value = getConfiguredGeminiTokenEndpoint();
-    if (geminiVoiceNameInput) geminiVoiceNameInput.value = OPENAI_DEFAULT_VOICE;
+    if (geminiVoiceNameInput) geminiVoiceNameInput.value = GEMINI_LIVE_DEFAULT_VOICE;
     showCopyNotification('Данные голосового режима удалены на этом устройстве');
 }
 
@@ -10312,64 +11835,129 @@ async function getFirebaseAuthIdToken() {
     }
 }
 
-async function resolveGeminiLiveApiKey(sessionConfig = {}) {
-    const tokenEndpoint = getConfiguredGeminiTokenEndpoint();
-    if (tokenEndpoint) {
-        const idToken = await getFirebaseAuthIdToken();
-        if (!idToken) {
-            throw new Error('Для голосового режима нужен подтвержденный вход через email.');
-        }
-        const headers = { 'Content-Type': 'application/json' };
-        headers.Authorization = `Bearer ${idToken}`;
+function createGeminiVoiceStartCancelledError() {
+    const error = new Error('Voice start cancelled');
+    error.code = 'VOICE_START_CANCELLED';
+    return error;
+}
 
-        const tokenResponse = await fetchWithTimeout(tokenEndpoint, {
-            method: 'POST',
-            headers,
-            credentials: 'omit',
-            body: JSON.stringify({
-                source: 'client-simulator-web',
-                login: currentUser?.login || getCachedStorageValue(USER_LOGIN_KEY) || '',
-                model: sessionConfig?.model || GEMINI_LIVE_MODEL,
-                voice: sessionConfig?.voice || getConfiguredGeminiVoiceName(),
-                instructions: String(sessionConfig?.instructions || '').trim()
-            })
-        }, 20000);
-        if (!tokenResponse.ok) {
-            const tokenErrorPayload = await readResponseJsonWithTimeout(
-                tokenResponse,
-                10000,
-                'Таймаут чтения ошибки token endpoint.',
-                {}
-            );
-            const tokenErrorText = String(tokenErrorPayload?.error || '').trim();
-            if (tokenResponse.status === 401 || tokenResponse.status === 403) {
-                throw new Error(tokenErrorText || 'Нет доступа к голосовому режиму');
-            }
-            throw new Error(tokenErrorText || `Не удалось получить ключ сессии (HTTP ${tokenResponse.status})`);
-        }
-        const tokenPayload = await readResponseJsonWithTimeout(
-            tokenResponse,
-            20000,
-            'Таймаут чтения ответа token endpoint.'
-        );
-        const token = String(
-            tokenPayload?.client_secret?.value ||
-            tokenPayload?.name ||
-            tokenPayload?.token ||
-            tokenPayload?.accessToken ||
-            tokenPayload?.apiKey ||
-            ''
-        ).trim();
-        if (token) return token;
-        throw new Error('Эндпоинт ключа сессии вернул пустой ответ');
+function isGeminiVoiceStartCancelledError(error) {
+    return error?.code === 'VOICE_START_CANCELLED' || error?.name === 'AbortError';
+}
+
+function beginGeminiVoiceStartAttempt() {
+    if (geminiVoiceStartAbortController) {
+        try {
+            geminiVoiceStartAbortController.abort();
+        } catch (error) {}
+    }
+    geminiVoiceStartAttemptId += 1;
+    geminiVoiceStartAbortController = typeof AbortController !== 'undefined'
+        ? new AbortController()
+        : null;
+    return {
+        id: geminiVoiceStartAttemptId,
+        signal: geminiVoiceStartAbortController?.signal || null
+    };
+}
+
+function cancelGeminiVoiceStartAttempt() {
+    if (geminiVoiceStartAbortController) {
+        try {
+            geminiVoiceStartAbortController.abort();
+        } catch (error) {}
+    }
+    geminiVoiceStartAbortController = null;
+    geminiVoiceStartAttemptId += 1;
+}
+
+function finishGeminiVoiceStartAttempt(attemptId = 0) {
+    if (attemptId === geminiVoiceStartAttemptId) {
+        geminiVoiceStartAbortController = null;
+    }
+}
+
+function throwIfGeminiVoiceStartAttemptStale(attemptId = 0) {
+    if (attemptId !== geminiVoiceStartAttemptId) {
+        throw createGeminiVoiceStartCancelledError();
+    }
+    if (geminiVoiceStartAbortController?.signal?.aborted) {
+        throw createGeminiVoiceStartCancelledError();
+    }
+}
+
+async function loadGeminiSdkModule() {
+    if (!geminiSdkModulePromise) {
+        geminiSdkModulePromise = import(GEMINI_SDK_CDN_URL).catch((error) => {
+            geminiSdkModulePromise = null;
+            throw error;
+        });
+    }
+    return geminiSdkModulePromise;
+}
+
+async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
+    const tokenEndpoint = sanitizeGeminiTokenEndpointOrThrow(getConfiguredGeminiTokenEndpoint(), {
+        source: 'Voice token endpoint'
+    });
+    if (!tokenEndpoint) {
+        throw new Error('Голосовой режим не настроен: нужен token endpoint сервера.');
     }
 
-    const directApiKey = getConfiguredGeminiApiKey();
-    if (directApiKey) return directApiKey;
+    const idToken = await getFirebaseAuthIdToken();
+    if (!idToken) {
+        throw new Error('Для голосового режима нужен подтвержденный вход через email.');
+    }
+    const headers = { 'Content-Type': 'application/json' };
+    headers.Authorization = `Bearer ${idToken}`;
 
-    throw new Error(
-        'Голосовой режим не настроен: недоступен token endpoint и не задан резервный API key'
+    const tokenResponse = await fetchWithTimeout(tokenEndpoint, {
+        method: 'POST',
+        headers,
+        credentials: 'omit',
+        body: JSON.stringify({
+            source: 'client-simulator-web',
+            login: normalizeLogin(
+                currentUser?.login
+                || auth?.currentUser?.email
+                || getAuthSession()?.login
+                || getCachedStorageValue(USER_LOGIN_KEY)
+                || ''
+            ),
+            model: sessionConfig?.model || GEMINI_LIVE_MODEL,
+            voice: sessionConfig?.voice || getConfiguredGeminiVoiceName(),
+            instructions: String(sessionConfig?.instructions || '').trim()
+        }),
+        signal: options?.signal
+    }, 20000);
+    if (!tokenResponse.ok) {
+        const tokenErrorPayload = await readResponseJsonWithTimeout(
+            tokenResponse,
+            10000,
+            'Таймаут чтения ошибки token endpoint.',
+            {}
+        );
+        const tokenErrorText = String(tokenErrorPayload?.error || '').trim();
+        if (tokenResponse.status === 401 || tokenResponse.status === 403) {
+            throw new Error(tokenErrorText || 'Нет доступа к голосовому режиму');
+        }
+        throw new Error(tokenErrorText || `Не удалось получить ключ сессии (HTTP ${tokenResponse.status})`);
+    }
+    const tokenPayload = await readResponseJsonWithTimeout(
+        tokenResponse,
+        20000,
+        'Таймаут чтения ответа token endpoint.'
     );
+    const token = String(
+        tokenPayload?.client_secret?.value ||
+        tokenPayload?.name ||
+        tokenPayload?.token ||
+        tokenPayload?.accessToken ||
+        tokenPayload?.apiKey ||
+        ''
+    ).trim();
+    if (token) return token;
+    throw new Error('Эндпоинт ключа сессии вернул пустой ответ');
 }
 
 function uint8ToBase64(bytes) {
@@ -10819,18 +12407,44 @@ function appendGeminiVoiceDialogToChat() {
     return appendedCount;
 }
 
-function buildOpenAiSessionConfig() {
+function buildGeminiVoiceSystemInstruction(baseInstructions = '') {
+    const cleanInstructions = normalizeVoiceDialogText(baseInstructions);
+    const defaultInstruction = 'Ты вежливый клиент, веди естественный разговор голосом на русском языке.';
+    const effectiveInstructions = cleanInstructions || defaultInstruction;
+    return `${effectiveInstructions}\n\n${VOICE_FAST_PACE_INSTRUCTIONS}`;
+}
+
+function buildGeminiVoiceSessionConfig(sdk) {
     const activeVoiceClientPrompt = String(getActiveContent('manager_call') || '').trim();
     const activeClientPrompt = String(getActiveContent('client') || '').trim();
-    const effectivePrompt = activeVoiceClientPrompt || activeClientPrompt;
+    const effectivePrompt = activeVoiceClientPrompt || activeClientPrompt || 'Ты вежливый клиент, веди естественный разговор голосом на русском языке.';
+    const resolvedVoiceName = getConfiguredGeminiVoiceName();
     return {
         model: GEMINI_LIVE_MODEL,
-        voice: getConfiguredGeminiVoiceName(),
-        instructions: effectivePrompt || 'Ты вежливый клиент, веди естественный разговор голосом на русском языке.'
+        voice: resolvedVoiceName,
+        instructions: effectivePrompt,
+        systemInstruction: buildGeminiVoiceSystemInstruction(effectivePrompt),
+        connectConfig: {
+            responseModalities: [sdk.Modality.AUDIO],
+            speechConfig: {
+                voiceConfig: {
+                    prebuiltVoiceConfig: {
+                        voiceName: resolvedVoiceName
+                    }
+                }
+            },
+            mediaResolution: sdk.MediaResolution?.MEDIA_RESOLUTION_LOW || GEMINI_LIVE_MEDIA_RESOLUTION,
+            thinkingConfig: {
+                thinkingBudget: GEMINI_LIVE_THINKING_BUDGET
+            },
+            inputAudioTranscription: {},
+            outputAudioTranscription: {},
+            systemInstruction: buildGeminiVoiceSystemInstruction(effectivePrompt)
+        }
     };
 }
 
-function buildOpenAiFirstTurnInstructions(sessionInstructions) {
+function buildVoiceFirstTurnInstructions(sessionInstructions) {
     const base = normalizeVoiceDialogText(sessionInstructions);
     const opener = 'Начни разговор первым: коротко поздоровайся и задай один уточняющий вопрос менеджеру. Говори максимально быстрым темпом, но разборчиво.';
     if (!base) return opener;
@@ -10862,12 +12476,41 @@ async function waitForOpenAiDataChannelReady(timeoutMs = 8000) {
             settled = true;
             clearTimeout(timeoutId);
             channel.removeEventListener('open', handleOpen);
+            channel.removeEventListener('close', handleClose);
+            channel.removeEventListener('error', handleError);
             resolve(value);
         };
         const handleOpen = () => finish(true);
+        const handleClose = () => finish(false);
+        const handleError = () => finish(false);
         const timeoutId = setTimeout(() => finish(false), timeoutMs);
         channel.addEventListener('open', handleOpen, { once: true });
+        channel.addEventListener('close', handleClose, { once: true });
+        channel.addEventListener('error', handleError, { once: true });
     });
+}
+
+function handleGeminiVoiceTransportFailure(message = 'Соединение голосового канала прервано. Попробуйте начать звонок заново.') {
+    if (geminiVoiceCloseExpected || (!isGeminiVoiceActive && !isGeminiVoiceConnecting)) {
+        return false;
+    }
+    geminiVoiceCloseExpected = true;
+    const preserveDialogForRating = hasBufferedVoiceDialog();
+    stopGeminiVoiceMode({
+        silent: true,
+        expectedClose: true,
+        preserveDialogForRating
+    }).catch(() => {}).finally(() => {
+        geminiVoiceCloseExpected = false;
+        if (preserveDialogForRating && hasBufferedVoiceDialog()) {
+            geminiVoiceConversationFinished = true;
+            updateVoiceModeRateButtonState();
+            setVoiceModeStatus('Соединение прервано, но диалог сохранён. Можно оценить звонок.', 'ready');
+            return;
+        }
+        setVoiceModeStatus(message, 'error');
+    });
+    return true;
 }
 
 function requestOpenAiAssistantResponse(instructions = '') {
@@ -10999,155 +12642,111 @@ function consumeOpenAiUserTranscript(rawText, itemId = '') {
     return true;
 }
 
-async function handleGeminiLiveMessage(rawMessage) {
-    let message = rawMessage;
-    if (typeof rawMessage === 'string') {
-        try {
-            message = JSON.parse(rawMessage);
-        } catch {
-            return;
+async function handleGeminiLiveMessage(message) {
+    if (!message || typeof message !== 'object') return;
+
+    if (message.setupComplete) {
+        geminiVoiceSetupComplete = true;
+        if (!geminiVoiceHasAssistantReply) {
+            setVoiceModeStatus('Соединение установлено. ИИ-клиент начинает разговор…', 'waiting');
         }
     }
 
-    const eventType = String(message?.type || '').trim();
-    if (!eventType) return;
+    const serverContent = message?.serverContent;
+    if (!serverContent || typeof serverContent !== 'object') return;
 
-    if (eventType === 'response.created') {
-        flushOpenAiPendingUserTurn({ requestResponse: false });
-        openAiResponsePending = true;
-        openAiResponseQueued = false;
-        openAiHasUnansweredUserTurn = false;
-        geminiVoiceAssistantPreview = '';
-        geminiVoiceAssistantDraft = '';
-        setVoiceModeStatus('ИИ-клиент готовит ответ…', 'waiting');
-        return;
-    }
-
-    if (eventType === 'conversation.item.created' || eventType === 'conversation.item.updated') {
-        const item = message?.item;
-        const itemRole = String(item?.role || '').toLowerCase();
-        if (itemRole === 'user') {
-            const itemTranscript = extractOpenAiConversationItemTranscript(item);
-            consumeOpenAiUserTranscript(itemTranscript, item?.id || message?.item_id || '');
-        }
-        return;
-    }
-
-    if (eventType === 'conversation.item.input_audio_transcription.delta') {
-        geminiVoiceUserPreview = mergeVoiceStreamingText(geminiVoiceUserPreview, message?.delta || '');
-        const previewText = normalizeVoiceDialogText(geminiVoiceUserPreview);
-        if (previewText) {
-            setVoiceModeStatus(getShortStatusText('Вы:', previewText), 'listening');
-        }
-        return;
-    }
-
-    if (eventType === 'conversation.item.input_audio_transcription.completed') {
-        const userText = normalizeVoiceDialogText(String(message?.transcript || ''));
-        if (!consumeOpenAiUserTranscript(userText, message?.item_id || '')) {
-            if (geminiVoiceUserPreview.trim()) {
-                consumeOpenAiUserTranscript(geminiVoiceUserPreview, message?.item_id || '');
+    const inputText = normalizeVoiceDialogText(serverContent?.inputTranscription?.text || '');
+    const inputFinished = !!serverContent?.inputTranscription?.finished;
+    if (inputText) {
+        geminiVoiceUserPreview = mergeVoiceStreamingText(geminiVoiceUserPreview, inputText);
+        setVoiceModeStatus(getShortStatusText('Вы:', geminiVoiceUserPreview), 'listening');
+        if (inputFinished) {
+            const completedUserText = sanitizeUserCompletedTranscript(geminiVoiceUserPreview || inputText);
+            geminiVoiceUserPreview = '';
+            if (completedUserText) {
+                geminiVoiceUserDraft = normalizeVoiceDialogText(
+                    mergeVoiceStreamingText(geminiVoiceUserDraft, completedUserText)
+                );
+                flushGeminiVoiceDraftLine('user');
+                geminiVoiceConversationFinished = false;
             }
-            geminiVoiceUserPreview = '';
         }
-        return;
     }
 
-    if (eventType === 'conversation.item.input_audio_transcription.failed') {
-        if (geminiVoiceUserPreview.trim()) {
-            consumeOpenAiUserTranscript(geminiVoiceUserPreview, message?.item_id || '');
-            geminiVoiceUserPreview = '';
-        }
-        return;
-    }
-
-    if (eventType === 'input_audio_buffer.committed') {
-        if (!openAiHasUnansweredUserTurn) {
-            return;
-        }
-        if (openAiResponsePending) {
-            openAiResponseQueued = true;
-            return;
-        }
-        const requested = requestOpenAiAssistantResponse();
-        if (!requested) {
-            setVoiceModeStatus('Не удалось запросить ответ ИИ-клиента.', 'error');
-        }
-        return;
-    }
-
-    if (eventType === 'response.audio_transcript.delta' || eventType === 'response.output_audio_transcript.delta') {
-        const assistantDelta = String(message?.delta || '').trim();
-        if (!assistantDelta) return;
-
+    const outputText = normalizeVoiceDialogText(serverContent?.outputTranscription?.text || '');
+    const outputFinished = !!serverContent?.outputTranscription?.finished;
+    if (outputText) {
         if (!geminiVoiceHasAssistantReply) {
             geminiVoiceHasAssistantReply = true;
             clearGeminiFirstReplyHintTimer();
         }
-
-        geminiVoiceAssistantPreview = mergeVoiceStreamingText(geminiVoiceAssistantPreview, assistantDelta);
-        setVoiceModeStatus(
-            getShortStatusText('ИИ-клиент:', normalizeVoiceDialogText(geminiVoiceAssistantPreview)),
-            'ready'
-        );
-        return;
+        geminiVoiceAssistantPreview = mergeVoiceStreamingText(geminiVoiceAssistantPreview, outputText);
+        setVoiceModeStatus(getShortStatusText('ИИ-клиент:', geminiVoiceAssistantPreview), 'ready');
+        if (outputFinished) {
+            const completedAssistantText = sanitizeAssistantCompletedTranscript(geminiVoiceAssistantPreview || outputText);
+            geminiVoiceAssistantPreview = '';
+            if (completedAssistantText) {
+                geminiVoiceAssistantDraft = normalizeVoiceDialogText(
+                    mergeVoiceStreamingText(geminiVoiceAssistantDraft, completedAssistantText)
+                );
+            }
+        }
     }
 
-    if (eventType === 'response.audio_transcript.done' || eventType === 'response.output_audio_transcript.done') {
-        const assistantDone = sanitizeAssistantCompletedTranscript(String(message?.transcript || ''));
-        if (assistantDone.trim()) {
-            geminiVoiceAssistantDraft = normalizeVoiceDialogText(
-                mergeVoiceStreamingText(geminiVoiceAssistantDraft, assistantDone)
-            );
-        } else if (geminiVoiceAssistantPreview.trim()) {
+    const parts = Array.isArray(serverContent?.modelTurn?.parts) ? serverContent.modelTurn.parts : [];
+    for (const part of parts) {
+        const inlineData = part?.inlineData;
+        const mimeType = String(inlineData?.mimeType || inlineData?.mime_type || '').trim();
+        const audioBase64 = String(inlineData?.data || '').trim();
+        if (audioBase64 && /^audio\//i.test(mimeType)) {
+            await enqueueGeminiAudioPlayback(audioBase64, mimeType).catch((error) => {
+                console.warn('Failed to play Gemini Live audio chunk:', error);
+            });
+            continue;
+        }
+        const partText = normalizeVoiceDialogText(part?.text || '');
+        if (partText && !outputText) {
+            if (!geminiVoiceHasAssistantReply) {
+                geminiVoiceHasAssistantReply = true;
+                clearGeminiFirstReplyHintTimer();
+            }
+            geminiVoiceAssistantPreview = mergeVoiceStreamingText(geminiVoiceAssistantPreview, partText);
+            setVoiceModeStatus(getShortStatusText('ИИ-клиент:', geminiVoiceAssistantPreview), 'ready');
+        }
+    }
+
+    if (serverContent?.interrupted) {
+        resetGeminiPlaybackCursor();
+    }
+
+    if (serverContent?.turnComplete || serverContent?.generationComplete) {
+        if (!geminiVoiceAssistantDraft.trim() && geminiVoiceAssistantPreview.trim()) {
             geminiVoiceAssistantDraft = normalizeVoiceDialogText(
                 mergeVoiceStreamingText(geminiVoiceAssistantDraft, geminiVoiceAssistantPreview)
             );
         }
         geminiVoiceAssistantPreview = '';
-        return;
-    }
-
-    if (eventType === 'response.done') {
-        if (openAiPendingUserTurn.trim()) {
-            flushOpenAiPendingUserTurn({ requestResponse: false });
-        }
-        if (!geminiVoiceAssistantDraft.trim() && geminiVoiceAssistantPreview.trim()) {
-            geminiVoiceAssistantDraft = normalizeVoiceDialogText(
-                mergeVoiceStreamingText(geminiVoiceAssistantDraft, geminiVoiceAssistantPreview)
-            );
-            geminiVoiceAssistantPreview = '';
-        }
         if (geminiVoiceAssistantDraft.trim()) {
             flushGeminiVoiceDraftLine('assistant');
         }
-
-        openAiResponsePending = false;
-        if (openAiResponseQueued) {
-            openAiResponseQueued = false;
-            requestOpenAiAssistantResponse();
-            return;
+        if (isGeminiVoiceActive) {
+            setVoiceModeStatus('Слушаю вас… Говорите.', 'listening');
         }
-
-        setVoiceModeStatus('Слушаю вас… Говорите.', 'listening');
         return;
     }
 
-    if (eventType === 'error') {
-        const errorMessage = String(message?.error?.message || message?.message || '').trim();
-        if (errorMessage) {
-            setVoiceModeStatus(`Ошибка голосового канала: ${errorMessage}`, 'error');
-        }
+    if (serverContent?.waitingForInput && isGeminiVoiceActive) {
+        setVoiceModeStatus('Слушаю вас… Говорите.', 'listening');
     }
 }
 
-async function initGeminiVoiceCapture(clientSecret, sessionConfig) {
+async function initGeminiVoiceCapture() {
+    if (!geminiLiveSession || typeof geminiLiveSession.sendRealtimeInput !== 'function') {
+        throw new Error('Gemini Live session is not ready');
+    }
     const mediaDevices = navigator.mediaDevices;
     if (!mediaDevices?.getUserMedia) {
         throw new Error('Браузер не поддерживает доступ к микрофону');
-    }
-    if (typeof window.RTCPeerConnection !== 'function') {
-        throw new Error('Браузер не поддерживает WebRTC');
     }
 
     geminiVoiceInputStream = await mediaDevices.getUserMedia({
@@ -11159,107 +12758,63 @@ async function initGeminiVoiceCapture(clientSecret, sessionConfig) {
         }
     });
 
-    const peerConnection = new RTCPeerConnection();
-    openAiVoicePeerConnection = peerConnection;
-    geminiLiveSession = peerConnection;
-
-    geminiVoiceInputStream.getTracks().forEach((track) => {
-        peerConnection.addTrack(track, geminiVoiceInputStream);
-    });
-
-    openAiVoiceRemoteAudio = document.createElement('audio');
-    openAiVoiceRemoteAudio.autoplay = true;
-    openAiVoiceRemoteAudio.playsInline = true;
-
-    peerConnection.ontrack = (event) => {
-        const [stream] = event.streams || [];
-        if (stream) {
-            openAiVoiceRemoteAudio.srcObject = stream;
-            openAiVoiceRemoteAudio.play().catch(() => {});
-        }
-    };
-
-    peerConnection.onconnectionstatechange = () => {
-        const state = String(peerConnection.connectionState || '');
-        if (state === 'connected') {
-            setVoiceModeStatus('Соединение установлено. Говорите.', 'listening');
-            return;
-        }
-        if (!['failed', 'disconnected'].includes(state)) return;
-        const expectedClose = geminiVoiceCloseExpected;
-        if (expectedClose || (!isGeminiVoiceActive && !isGeminiVoiceConnecting)) return;
-
-        stopGeminiVoiceMode({ silent: true, expectedClose }).catch(() => {}).finally(() => {
-            setVoiceModeStatus('Соединение прервано. Нажмите «Начать», чтобы подключиться снова.', 'error');
-            geminiVoiceCloseExpected = false;
-        });
-    };
-
-    openAiVoiceDataChannel = peerConnection.createDataChannel('oai-events');
-    openAiVoiceDataChannel.onmessage = (event) => {
-        handleGeminiLiveMessage(event?.data).catch((error) => {
-            console.error('OpenAI realtime message handling error:', error);
-        });
-    };
-    openAiVoiceDataChannel.onerror = (error) => {
-        console.error('OpenAI realtime data channel error:', error);
-    };
-
-    const offer = await peerConnection.createOffer({
-        offerToReceiveAudio: true
-    });
-    await peerConnection.setLocalDescription(offer);
-
-    const openAiRealtimeSdpTimeoutMs = 30000;
-    const response = await fetchWithTimeout(
-        `https://api.openai.com/v1/realtime?model=${encodeURIComponent(sessionConfig.model)}`,
-        {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${clientSecret}`,
-                'Content-Type': 'application/sdp'
-            },
-            body: String(offer.sdp || '')
-        },
-        openAiRealtimeSdpTimeoutMs
-    );
-
-    if (!response.ok) {
-        const errorText = String(
-            await readResponseTextWithTimeout(
-                response,
-                Math.min(10000, openAiRealtimeSdpTimeoutMs),
-                'Таймаут чтения ошибки OpenAI Realtime SDP.'
-            ).catch(() => '')
-        ).trim();
-        throw new Error(errorText || `OpenAI Realtime SDP error (HTTP ${response.status})`);
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (typeof AudioCtx !== 'function') {
+        throw new Error('Браузер не поддерживает Web Audio API');
     }
 
-    const answerSdp = await readResponseTextWithTimeout(
-        response,
-        openAiRealtimeSdpTimeoutMs,
-        'Таймаут чтения OpenAI Realtime SDP.'
-    );
-    await peerConnection.setRemoteDescription({
-        type: 'answer',
-        sdp: answerSdp
-    });
+    geminiVoiceAudioContext = geminiVoiceAudioContext || new AudioCtx();
+    if (geminiVoiceAudioContext.state === 'suspended') {
+        await geminiVoiceAudioContext.resume();
+    }
+
+    geminiVoiceSourceNode = geminiVoiceAudioContext.createMediaStreamSource(geminiVoiceInputStream);
+    geminiVoiceProcessorNode = geminiVoiceAudioContext.createScriptProcessor(4096, 1, 1);
+    geminiVoiceSilenceGain = geminiVoiceAudioContext.createGain();
+    geminiVoiceSilenceGain.gain.value = 0;
+
+    geminiVoiceProcessorNode.onaudioprocess = (event) => {
+        if (!isGeminiVoiceActive || !geminiLiveSession || typeof geminiLiveSession.sendRealtimeInput !== 'function') {
+            return;
+        }
+        try {
+            const inputChannel = event.inputBuffer?.getChannelData?.(0);
+            if (!inputChannel?.length) return;
+            const downsampled = downsampleAudioBuffer(inputChannel, event.inputBuffer.sampleRate, 16000);
+            if (!downsampled.length) return;
+            const pcm = float32ToInt16Pcm(downsampled);
+            geminiLiveSession.sendRealtimeInput({
+                audio: new Blob([pcm], {
+                    type: 'audio/pcm;rate=16000'
+                })
+            });
+        } catch (error) {
+            console.warn('Failed to stream Gemini microphone chunk:', error);
+        }
+    };
+
+    geminiVoiceSourceNode.connect(geminiVoiceProcessorNode);
+    geminiVoiceProcessorNode.connect(geminiVoiceSilenceGain);
+    geminiVoiceSilenceGain.connect(geminiVoiceAudioContext.destination);
 }
 
 function teardownGeminiVoiceCapture() {
-    if (openAiVoiceDataChannel) {
-        try { openAiVoiceDataChannel.close(); } catch (e) {}
-        openAiVoiceDataChannel = null;
+    if (geminiVoiceProcessorNode) {
+        try {
+            geminiVoiceProcessorNode.onaudioprocess = null;
+            geminiVoiceProcessorNode.disconnect();
+        } catch (e) {}
+        geminiVoiceProcessorNode = null;
     }
 
-    if (openAiVoicePeerConnection) {
-        try {
-            openAiVoicePeerConnection.getSenders().forEach((sender) => {
-                try { sender.track?.stop(); } catch (e) {}
-            });
-            openAiVoicePeerConnection.close();
-        } catch (e) {}
-        openAiVoicePeerConnection = null;
+    if (geminiVoiceSourceNode) {
+        try { geminiVoiceSourceNode.disconnect(); } catch (e) {}
+        geminiVoiceSourceNode = null;
+    }
+
+    if (geminiVoiceSilenceGain) {
+        try { geminiVoiceSilenceGain.disconnect(); } catch (e) {}
+        geminiVoiceSilenceGain = null;
     }
 
     if (geminiVoiceInputStream) {
@@ -11277,17 +12832,32 @@ function teardownGeminiVoiceCapture() {
         openAiVoiceRemoteAudio = null;
     }
 
+    if (geminiLiveSession && typeof geminiLiveSession.close === 'function') {
+        try { geminiLiveSession.close(); } catch (e) {}
+    }
     geminiLiveSession = null;
+    geminiLiveApiClient = null;
+    geminiVoiceSetupComplete = false;
+    geminiVoiceFirstTurnRequested = false;
     resetGeminiPlaybackCursor();
 }
 
 async function stopGeminiVoiceMode(options = {}) {
-    const { silent = false, expectedClose = true } = options;
+    const {
+        silent = false,
+        expectedClose = true,
+        preserveDialogForRating = false
+    } = options;
+    cancelGeminiVoiceStartAttempt();
     geminiVoiceCloseExpected = !!expectedClose;
-    const shouldRenderDialog = !silent;
+    const shouldPreserveDialog = !!preserveDialogForRating && hasBufferedVoiceDialog();
+    const shouldRenderDialog = !silent && !shouldPreserveDialog;
 
-    if (!isGeminiVoiceActive && !isGeminiVoiceConnecting && !geminiLiveSession && !openAiVoicePeerConnection) {
-        resetGeminiVoiceDialogBuffer();
+    if (!isGeminiVoiceActive && !isGeminiVoiceConnecting && !geminiLiveSession) {
+        if (!shouldPreserveDialog) {
+            resetGeminiVoiceDialogBuffer();
+            geminiVoiceConversationFinished = false;
+        }
         return;
     }
 
@@ -11298,12 +12868,28 @@ async function stopGeminiVoiceMode(options = {}) {
     teardownGeminiVoiceCapture();
     updateVoiceModeControls();
 
-    flushOpenAiPendingUserTurn({ requestResponse: false });
-
     if (shouldRenderDialog) {
         appendGeminiVoiceDialogToChat();
     }
+
+    if (shouldPreserveDialog) {
+        flushGeminiVoiceDraftLine('user');
+        flushGeminiVoiceDraftLine('assistant');
+        geminiVoiceConversationFinished = hasBufferedVoiceDialog();
+        updateVoiceModeRateButtonState();
+        if (!silent) {
+            setVoiceModeStatus(
+                geminiVoiceConversationFinished
+                    ? 'Диалог остановлен. Можно оценить звонок.'
+                    : 'Диалог остановлен. Реплики не найдены.',
+                geminiVoiceConversationFinished ? 'ready' : 'error'
+            );
+        }
+        return;
+    }
+
     resetGeminiVoiceDialogBuffer();
+    geminiVoiceConversationFinished = false;
 
     if (!silent) {
         setVoiceModeStatus('Голосовой режим остановлен.', 'idle');
@@ -11320,77 +12906,84 @@ async function startGeminiVoiceMode() {
     geminiVoiceCloseExpected = false;
     geminiVoiceStartTimestamp = Date.now();
     resetGeminiVoiceDialogBuffer();
+    geminiVoiceConversationFinished = false;
+    geminiVoiceSetupComplete = false;
+    geminiVoiceFirstTurnRequested = false;
     isGeminiVoiceConnecting = true;
     updateVoiceModeControls();
-    setVoiceModeStatus('Подключаюсь к OpenAI Realtime…', 'idle');
+    setVoiceModeStatus('Подключаюсь к Gemini Live…', 'idle');
+    const startAttempt = beginGeminiVoiceStartAttempt();
 
     try {
-        const sessionConfig = buildOpenAiSessionConfig();
-        const clientSecret = await resolveGeminiLiveApiKey(sessionConfig);
-        await initGeminiVoiceCapture(clientSecret, sessionConfig);
+        const sdk = await loadGeminiSdkModule();
+        throwIfGeminiVoiceStartAttemptStale(startAttempt.id);
+        const sessionConfig = buildGeminiVoiceSessionConfig(sdk);
+        const clientSecret = await resolveGeminiLiveApiKey(sessionConfig, {
+            signal: startAttempt.signal
+        });
+        throwIfGeminiVoiceStartAttemptStale(startAttempt.id);
+
+        geminiLiveApiClient = new sdk.GoogleGenAI({
+            apiKey: clientSecret,
+            httpOptions: {
+                apiVersion: 'v1alpha'
+            }
+        });
+        geminiLiveSession = await geminiLiveApiClient.live.connect({
+            model: sessionConfig.model,
+            config: sessionConfig.connectConfig,
+            callbacks: {
+                onopen: () => {
+                    if (startAttempt.id !== geminiVoiceStartAttemptId) return;
+                    setVoiceModeStatus('Соединение с Gemini Live открыто…', 'waiting');
+                },
+                onmessage: (message) => {
+                    handleGeminiLiveMessage(message).catch((error) => {
+                        console.error('Gemini Live message handling error:', error);
+                    });
+                },
+                onerror: (event) => {
+                    console.error('Gemini Live error:', event);
+                    handleGeminiVoiceTransportFailure('Ошибка Gemini Live. Попробуйте запустить звонок заново.');
+                },
+                onclose: (event) => {
+                    const closeReason = getGeminiCloseReasonText(event);
+                    handleGeminiVoiceTransportFailure(
+                        closeReason
+                            ? `Соединение Gemini Live закрыто${closeReason}.`
+                            : 'Соединение Gemini Live закрыто.'
+                    );
+                }
+            }
+        });
+        throwIfGeminiVoiceStartAttemptStale(startAttempt.id);
+        await initGeminiVoiceCapture();
+        throwIfGeminiVoiceStartAttemptStale(startAttempt.id);
 
         isGeminiVoiceConnecting = false;
         isGeminiVoiceActive = true;
         updateVoiceModeControls();
         setVoiceModeStatus('Запрашиваю первое сообщение от ИИ-клиента…', 'waiting');
         scheduleGeminiFirstReplyHint();
-
-        const isChannelReady = await waitForOpenAiDataChannelReady(8000);
-        if (!isChannelReady) {
-            throw new Error('Канал данных OpenAI не открылся вовремя');
-        }
-
-        const sessionUpdated = sendOpenAiRealtimeEvent({
-            type: 'session.update',
-            session: {
-                instructions: sessionConfig.instructions,
-                input_audio_transcription: {
-                    model: OPENAI_INPUT_TRANSCRIBE_MODEL
-                },
-                turn_detection: {
-                    type: 'semantic_vad',
-                    eagerness: 'high',
-                    create_response: false,
-                    interrupt_response: true
-                },
-                audio: {
-                    input: {
-                        transcription: {
-                            model: OPENAI_INPUT_TRANSCRIBE_MODEL
-                        },
-                        turn_detection: {
-                            type: 'semantic_vad',
-                            eagerness: 'high',
-                            create_response: false,
-                            interrupt_response: true
-                        }
-                    },
-                    output: {
-                        voice: sessionConfig.voice,
-                        speed: OPENAI_OUTPUT_SPEECH_SPEED
-                    }
-                }
-            }
+        geminiVoiceFirstTurnRequested = true;
+        geminiLiveSession.sendClientContent({
+            turns: sdk.createUserContent(buildVoiceFirstTurnInstructions(sessionConfig.instructions)),
+            turnComplete: true
         });
-
-        const responseCreated = requestOpenAiAssistantResponse(
-            buildOpenAiFirstTurnInstructions(sessionConfig.instructions)
-        );
-
-        if (!sessionUpdated || !responseCreated) {
-            throw new Error('Не удалось отправить стартовые команды голосовой сессии');
-        }
     } catch (error) {
         console.error('Failed to start voice mode:', error);
         isGeminiVoiceConnecting = false;
         isGeminiVoiceActive = false;
         await stopGeminiVoiceMode({ silent: true, expectedClose: true });
         geminiVoiceCloseExpected = false;
-        setVoiceModeStatus(
-            `Не удалось запустить голосовой режим: ${error?.message || 'неизвестная ошибка'}`,
-            'error'
-        );
+        if (!isGeminiVoiceStartCancelledError(error)) {
+            setVoiceModeStatus(
+                `Не удалось запустить голосовой режим: ${error?.message || 'неизвестная ошибка'}`,
+                'error'
+            );
+        }
     } finally {
+        finishGeminiVoiceStartAttempt(startAttempt.id);
         updateVoiceModeControls();
     }
 }
@@ -11424,7 +13017,7 @@ function buildVoiceDialogTextFromBufferedLines() {
 function updateVoiceModeRateButtonState() {
     const isVoiceScreenActive = !!voiceModeScreen && !voiceModeScreen.hidden;
     const canShowRate = isVoiceScreenActive &&
-        elevenLabsConversationFinished &&
+        geminiVoiceConversationFinished &&
         hasBufferedVoiceDialog() &&
         !isProcessing &&
         !isDialogRated;
@@ -11438,16 +13031,21 @@ function updateVoiceModeRateButtonState() {
         setVoiceModeStatus('Звонок завершён. Нажмите «Оценить диалог».', 'ready');
         return;
     }
-    if (elevenLabsActiveSocketCount > 0) {
+    if (isGeminiVoiceConnecting) {
+        setVoiceModeStatus('Подключаюсь к Gemini Live…', 'waiting');
+        return;
+    }
+    if (isGeminiVoiceActive) {
         setVoiceModeStatus('Идёт диалог…', 'listening');
         return;
     }
-    setVoiceModeStatus('скоро должна появиться окно звонка. Если не появилась, включите VPN', 'idle');
+    setVoiceModeStatus('Голосовой режим готов к запуску.', 'idle');
 }
 
-function resetElevenLabsVoiceSessionState() {
-    elevenLabsConversationFinished = false;
-    elevenLabsActiveSocketCount = 0;
+function resetVoiceModeSessionState() {
+    geminiVoiceConversationFinished = false;
+    geminiVoiceSetupComplete = false;
+    geminiVoiceFirstTurnRequested = false;
     resetGeminiVoiceDialogBuffer();
     setVoiceModeRateButtonVisible(false);
     setVoiceModeStatus('Открываю голосовой режим…', 'idle');
@@ -11605,13 +13203,22 @@ async function handleVoiceModeRateClick() {
     setVoiceModeStatus('Оцениваю диалог…', 'waiting');
     appendGeminiVoiceDialogToChat();
     resetGeminiVoiceDialogBuffer();
-    elevenLabsConversationFinished = false;
+    geminiVoiceConversationFinished = false;
     setVoiceModeRateButtonVisible(false);
     hideVoiceModeModal();
 
     await rateChat({
         force: true,
         dialogTextOverride: dialogText
+    });
+}
+
+async function handleVoiceModeStopClick() {
+    if (!isGeminiVoiceConnecting && !isGeminiVoiceActive) return;
+    await stopGeminiVoiceMode({
+        silent: false,
+        expectedClose: true,
+        preserveDialogForRating: true
     });
 }
 
@@ -11669,42 +13276,18 @@ function setVoiceModeScreenActive(active) {
 async function showVoiceModeModal() {
     hideTooltip(true);
     const openRequestId = ++voiceModeOpenRequestId;
-    activeVoiceModeProvider = 'elevenlabs';
-    clearVoiceModeWidgetHideTimer();
+    activeVoiceModeProvider = 'gemini';
     try {
-        resetElevenLabsVoiceSessionState();
+        resetVoiceModeSessionState();
         setVoiceModeStatus('Открываю голосовой режим…', 'idle');
         setVoiceModeScreenActive(true);
-        setElevenLabsWidgetHidden(true);
-
-        const widgetReady = await ensureElevenLabsWidgetReady();
-        if (openRequestId !== voiceModeOpenRequestId || !voiceModeScreen || voiceModeScreen.hidden) return;
-
-        const networkReady = widgetReady ? await canReachElevenLabsNetwork() : false;
-        if (openRequestId !== voiceModeOpenRequestId || !voiceModeScreen || voiceModeScreen.hidden) return;
-
-        if (widgetReady && networkReady) {
-            ensureElevenLabsSocketBridge();
-            setVoiceModeStatus('скоро должна появиться окно звонка. Если не появилась, включите VPN', 'idle');
-            setElevenLabsWidgetHidden(false);
-            dispatchElevenLabsExpandEvent('expand');
-            return;
-        }
-
-        activeVoiceModeProvider = 'openai';
-        if (widgetReady && !networkReady) {
-            setVoiceModeStatus('Сеть блокирует ElevenLabs. Подключаю встроенный голосовой режим…', 'waiting');
-            showCopyNotification('ElevenLabs недоступен в текущей сети. Запускаю встроенный режим.');
-        } else {
-            setVoiceModeStatus('ElevenLabs не загрузился. Подключаю встроенный голосовой режим…', 'waiting');
-        }
         await startGeminiVoiceMode();
         if (openRequestId !== voiceModeOpenRequestId || !voiceModeScreen || voiceModeScreen.hidden) {
             await stopGeminiVoiceMode({ silent: true, expectedClose: true });
             return;
         }
         if (!isGeminiVoiceActive && !isGeminiVoiceConnecting) {
-            setVoiceModeStatus('Не удалось запустить голосовой режим. Попробуйте VPN или проверьте сеть.', 'error');
+            setVoiceModeStatus('Не удалось запустить Gemini Live. Проверьте настройки и попробуйте позже.', 'error');
         }
     } catch (error) {
         console.error('Failed to open voice mode:', error);
@@ -11715,23 +13298,15 @@ async function showVoiceModeModal() {
 
 function hideVoiceModeModal() {
     voiceModeOpenRequestId += 1;
-    clearVoiceModeWidgetHideTimer();
-    const shouldStopRealtimeVoice = activeVoiceModeProvider === 'openai' ||
-        isGeminiVoiceConnecting ||
+    const shouldStopRealtimeVoice = isGeminiVoiceConnecting ||
         isGeminiVoiceActive ||
-        !!geminiLiveSession ||
-        !!openAiVoicePeerConnection;
+        !!geminiLiveSession;
     if (shouldStopRealtimeVoice) {
         stopGeminiVoiceMode({ silent: true, expectedClose: true }).catch(() => {});
     }
-    dispatchElevenLabsExpandEvent('collapse');
     setVoiceModeScreenActive(false);
-    elevenLabsConversationFinished = false;
-    activeVoiceModeProvider = 'elevenlabs';
-    voiceModeWidgetHideTimerId = setTimeout(() => {
-        voiceModeWidgetHideTimerId = 0;
-        setElevenLabsWidgetHidden(true);
-    }, 120);
+    geminiVoiceConversationFinished = false;
+    activeVoiceModeProvider = 'gemini';
 }
 
 function buildPromptCompareDiffHtml(publicContent = '', draftContent = '') {
@@ -11968,6 +13543,14 @@ async function improvePromptWithAI() {
         alert('Сначала добавьте текст в инструкцию');
         return;
     }
+    const requestState = beginAiImproveRequest();
+    const contextSnapshot = {
+        mode: aiImproveMode,
+        role,
+        activeVariationId: activeVar?.id || null,
+        prompt: String(currentPrompt || ''),
+        ratingContextJson: JSON.stringify(pendingRatingImproveContext || null)
+    };
 
     let userMessage = `Изначальный промпт:\n\n${currentPrompt}\n\n---\n\nЗапрос на улучшение: ${improvementRequest}\n\n---\n\nВАЖНО: Верни ПОЛНЫЙ текст улучшенного промпта. Подсвети изменения так:\n1. Удаленный/измененный текст оберни в ~~ (например: ~~старый текст~~)\n2. Новый/добавленный текст оберни в ++ (например: ++новый текст++)\n3. Остальной текст оставь без изменений.\nНе используй markdown код-блоки.`;
 
@@ -11995,6 +13578,9 @@ async function improvePromptWithAI() {
     // Start funny messages cycle
     let msgIndex = 0;
     const originalText = btnText.textContent;
+    if (!btnText.dataset.defaultText) {
+        btnText.dataset.defaultText = originalText;
+    }
     btnText.textContent = FUNNY_LOADING_MESSAGES[Math.floor(Math.random() * FUNNY_LOADING_MESSAGES.length)];
     
     const messageInterval = setInterval(() => {
@@ -12017,10 +13603,12 @@ async function improvePromptWithAI() {
         const improveResponse = await requestAiImproveResponseText(
             requestId,
             userMessage,
-            AI_HELPER_WEBHOOK_TIMEOUT_MS
+            AI_HELPER_WEBHOOK_TIMEOUT_MS,
+            { signal: requestState.signal }
         );
         response = improveResponse.response;
         const responseText = improveResponse.responseText;
+        throwIfAiImproveRequestStale(requestState.version, contextSnapshot);
 
         let data;
         try {
@@ -12032,6 +13620,7 @@ async function improvePromptWithAI() {
         }
 
         const rawResponse = extractApiResponse(data);
+        throwIfAiImproveRequestStale(requestState.version, contextSnapshot);
         
         if (!rawResponse) throw new Error('Не удалось получить текст из ответа');
         finishWebhookDebugRequest(debugEntryId, {
@@ -12047,6 +13636,7 @@ async function improvePromptWithAI() {
             .trim();
 
         // Store pending data
+        throwIfAiImproveRequestStale(requestState.version, contextSnapshot);
         pendingImprovedPrompt = cleanPrompt;
         pendingRole = role;
         pendingName = currentName;
@@ -12057,14 +13647,19 @@ async function improvePromptWithAI() {
         
     } catch (error) {
         failWebhookDebugRequest(debugEntryId, error, response?.status);
+        if (isAiImproveCancelledError(error)) {
+            return;
+        }
         console.error('AI improve error:', error);
         alert('Ошибка улучшения: ' + error.message);
     } finally {
+        const shouldRestoreUi = requestState.version === aiImproveRequestVersion
+            && !requestState.signal?.aborted;
+        finishAiImproveRequest(requestState.version);
         clearInterval(messageInterval);
-        submitBtn.disabled = false;
-        btnText.textContent = originalText; // Restore original text
-        btnText.style.display = 'inline';
-        btnLoader.style.display = 'none';
+        if (shouldRestoreUi) {
+            resetAiImproveSubmitUi();
+        }
     }
 }
 
@@ -12240,11 +13835,11 @@ bindEvent(settingsNameInput, 'input', () => {
     if (!newName || !currentUser) return;
     managerNameInput.value = newName;
     currentUser.fio = newName;
+    setCachedStorageValue(USER_NAME_KEY, newName);
     updateUserNameDisplay();
 
     if (fioSaveTimeout) clearTimeout(fioSaveTimeout);
     fioSaveTimeout = setTimeout(() => {
-        setCachedStorageValue(USER_NAME_KEY, newName);
         patchUserRecord(currentUser.login, {
             fio: newName,
             lastSeenAt: new Date().toISOString()
@@ -12255,7 +13850,7 @@ bindEvent(settingsNameInput, 'input', () => {
 bindEvent(saveVoiceConfigBtn, 'click', () => {
     saveVoiceModeConfigFromInputs().catch((error) => {
         console.error('Failed to save voice config:', error);
-        showCopyNotification('Ошибка сохранения настроек OpenAI Voice');
+        showCopyNotification(getVoiceConfigErrorMessage(error));
     });
 });
 
@@ -12323,7 +13918,7 @@ bindEvent(adminWebhookDebugClearBtn, 'click', () => {
         e.preventDefault();
         saveVoiceModeConfigFromInputs().catch((error) => {
             console.error('Failed to save voice config:', error);
-            showCopyNotification('Ошибка сохранения настроек OpenAI Voice');
+            showCopyNotification(getVoiceConfigErrorMessage(error));
         });
     });
 });
@@ -12748,14 +14343,24 @@ function appendConversationHistoryEntry(entry) {
     conversationHistory.push({ role, content });
     const nextLine = buildConversationHistoryLine(role, content);
     conversationHistoryText = conversationHistoryText ? `${conversationHistoryText}\n\n${nextLine}` : nextLine;
+    conversationHistoryRevision += 1;
 }
 
 function resetConversationHistory() {
     conversationHistory = [];
     conversationHistoryText = '';
+    conversationHistoryRevision += 1;
+}
+
+function restoreStartConversationBlock() {
+    const startDiv = document.getElementById('startConversation');
+    if (!startDiv) return;
+    startDiv.style.display = '';
 }
 
 function clearChat() {
+    invalidateActiveChatUiRequests();
+    isProcessing = false;
     resetConversationHistory();
     lastRating = null;
     isDialogRated = false;
@@ -12764,6 +14369,9 @@ function clearChat() {
     updatePromptLock();
     unlockDialogInput();
     rateChatBtn.classList.remove('rated');
+    rateChatBtn.classList.remove('loading');
+    aiAssistBtn.classList.remove('loading');
+    updateRateChatButtonState();
     
     refreshSessionIds(generateSessionId());
     
@@ -12946,9 +14554,13 @@ async function sendMessage() {
     if (!isChatReady) return;
     const userMessage = userInput.value.trim();
     if (!userMessage || isProcessing || isDialogRated || isConversationClosed()) return;
+    const requestGuard = beginChatUiRequestGuard();
 
     const baseSystemPrompt = validatePromptBeforeWebhook('client', systemPromptInput.value);
-    if (!baseSystemPrompt) return;
+    if (!baseSystemPrompt) {
+        finishChatUiRequestGuard(requestGuard);
+        return;
+    }
     const conversationActionState = getConversationActionStatePayload();
     const systemPrompt = buildClientSystemPromptForWebhook(baseSystemPrompt, conversationActionState);
     
@@ -12984,6 +14596,7 @@ async function sendMessage() {
         response = await fetchWithTimeout(WEBHOOK_URL, {
             method: 'POST',
             headers: buildJsonRequestHeaders(requestId, 'chat', 'chat'),
+            signal: requestGuard.signal,
             body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('chat', {
                 userMessage,
                 systemPrompt,
@@ -13001,6 +14614,7 @@ async function sendMessage() {
         }
         
         const { message: assistantMessage, conversationAction } = await readWebhookEnvelope(response, CHAT_WEBHOOK_TIMEOUT_MS);
+        ensureChatUiRequestGuardCurrent(requestGuard);
         if (!assistantMessage && !conversationAction) {
             failWebhookDebugRequest(debugEntryId, new Error('Пустой ответ webhook'), response.status);
             console.warn('Empty webhook response for user message.');
@@ -13026,6 +14640,10 @@ async function sendMessage() {
         
     } catch (error) {
         failWebhookDebugRequest(debugEntryId, error, response?.status);
+        if (isChatUiRequestCancelledError(error)) {
+            loadingMsg.remove();
+            return;
+        }
         console.error('Error:', error);
         loadingMsg.remove();
         addMessage(`Ошибка: ${error.message}`, 'error', false);
@@ -13033,8 +14651,14 @@ async function sendMessage() {
             showConversationActionNotice(conversationRecoverableAction);
         }
     } finally {
-        isProcessing = false;
-        if (!lastRating) {
+        const shouldRestoreUi = requestGuard.version === chatUiSessionVersion
+            && requestGuard.sessionId === baseSessionId
+            && !requestGuard.signal.aborted;
+        finishChatUiRequestGuard(requestGuard);
+        if (shouldRestoreUi) {
+            isProcessing = false;
+        }
+        if (!lastRating && shouldRestoreUi) {
             if (isConversationClosed()) {
                 lockDialogInput();
             } else {
@@ -13047,12 +14671,15 @@ async function sendMessage() {
 
 async function startConversationHandler() {
     if (!isChatReady) return;
+    if (isProcessing) return;
     const baseSystemPrompt = validatePromptBeforeWebhook('client', systemPromptInput.value);
     if (!baseSystemPrompt) return;
     clearConversationTerminalState();
     const conversationActionState = getConversationActionStatePayload();
     const systemPrompt = buildClientSystemPromptForWebhook(baseSystemPrompt, conversationActionState);
 
+    invalidateActiveChatUiRequests();
+    isProcessing = false;
     refreshSessionIds(generateSessionId());
     resetConversationHistory();
     lastRating = null;
@@ -13060,7 +14687,10 @@ async function startConversationHandler() {
     removeReratePrompt();
     rateChatBtn.classList.remove('rated');
     updatePromptLock();
-    toggleInputState(true);
+    isProcessing = true;
+    toggleInputState(false);
+    setStartButtonsEnabled(false);
+    const requestGuard = beginChatUiRequestGuard();
     
     const startDiv = document.getElementById('startConversation');
     if (startDiv) startDiv.style.display = 'none';
@@ -13080,6 +14710,7 @@ async function startConversationHandler() {
         response = await fetchWithTimeout(WEBHOOK_URL, {
             method: 'POST',
             headers: buildJsonRequestHeaders(requestId, 'chat_start', 'chat_start'),
+            signal: requestGuard.signal,
             body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('chat_start', {
                 userMessage: '/start',
                 systemPrompt,
@@ -13097,10 +14728,12 @@ async function startConversationHandler() {
         }
         
         const { message: assistantMessage, conversationAction } = await readWebhookEnvelope(response, CHAT_WEBHOOK_TIMEOUT_MS);
+        ensureChatUiRequestGuardCurrent(requestGuard);
         if (!assistantMessage && !conversationAction) {
             failWebhookDebugRequest(debugEntryId, new Error('Пустой ответ webhook'), response.status);
             console.warn('Empty webhook response for /start.');
             loadingMsg.remove();
+            restoreStartConversationBlock();
             addMessage('Ошибка: что-то сломалось. Обратитесь к администратору сайта.', 'error', false);
             return;
         }
@@ -13125,9 +14758,31 @@ async function startConversationHandler() {
         
     } catch (error) {
         failWebhookDebugRequest(debugEntryId, error, response?.status);
+        if (isChatUiRequestCancelledError(error)) {
+            loadingMsg.remove();
+            return;
+        }
         console.error('Error:', error);
         loadingMsg.remove();
+        restoreStartConversationBlock();
         addMessage(`Ошибка: ${error.message}`, 'error', false);
+    } finally {
+        const shouldRestoreUi = requestGuard.version === chatUiSessionVersion
+            && requestGuard.sessionId === baseSessionId
+            && !requestGuard.signal.aborted;
+        finishChatUiRequestGuard(requestGuard);
+        if (shouldRestoreUi) {
+            isProcessing = false;
+            setStartButtonsEnabled(isChatReady);
+            if (!lastRating) {
+                if (isConversationClosed()) {
+                    lockDialogInput();
+                } else {
+                    toggleInputState(true);
+                    userInput.focus();
+                }
+            }
+        }
     }
 }
 
@@ -13269,6 +14924,27 @@ function buildDialogText() {
 
 function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function delayWithSignal(ms, signal) {
+    if (!signal) {
+        return delay(ms);
+    }
+    if (signal.aborted) {
+        return Promise.reject(createChatUiSessionResetError());
+    }
+    return new Promise((resolve, reject) => {
+        const abortHandler = () => {
+            clearTimeout(timeoutId);
+            signal.removeEventListener('abort', abortHandler);
+            reject(createChatUiSessionResetError());
+        };
+        const timeoutId = setTimeout(() => {
+            signal.removeEventListener('abort', abortHandler);
+            resolve();
+        }, ms);
+        signal.addEventListener('abort', abortHandler, { once: true });
+    });
 }
 
 function buildAttestationRequestId() {
@@ -13484,7 +15160,8 @@ function isRetryableRatingError(error) {
     );
 }
 
-async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RATING_SEND_ATTEMPTS) {
+async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RATING_SEND_ATTEMPTS, options = {}) {
+    const signal = options?.signal;
     const requestId = buildRequestId('rating');
     let lastError = null;
     const runtimeRatingConfig = getRuntimeRatingRequestConfig();
@@ -13499,6 +15176,9 @@ async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RAT
         let debugEntryId = null;
         let response = null;
         try {
+            if (signal?.aborted) {
+                throw createChatUiSessionResetError();
+            }
             debugEntryId = startWebhookDebugRequest({
                 type: 'rating',
                 endpoint: RATE_WEBHOOK_URL,
@@ -13509,6 +15189,7 @@ async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RAT
             response = await fetchWithTimeout(RATE_WEBHOOK_URL, {
                 method: 'POST',
                 headers: buildJsonRequestHeaders(requestId, 'rating', 'rating'),
+                signal,
                 body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('rating', {
                     dialog: dialogText,
                     systemPrompt: effectiveRaterPrompt,
@@ -13531,6 +15212,9 @@ async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RAT
             }
 
             const rawRatingMessage = await readWebhookResponse(response, runtimeRatingConfig.timeoutMs);
+            if (signal?.aborted) {
+                throw createChatUiSessionResetError();
+            }
             const ratingResult = normalizeRatingWebhookResult(rawRatingMessage, conversationOutcomeState);
             if (/^\s*<!doctype|^\s*<html/i.test(ratingResult.displayText || '')) {
                 const err = new Error('Некорректный ответ сервера оценки');
@@ -13552,7 +15236,7 @@ async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RAT
         } catch (error) {
             failWebhookDebugRequest(debugEntryId, error, response?.status);
             lastError = error;
-            if (attempt >= effectiveMaxAttempts || !isRetryableRatingError(error)) {
+            if (attempt >= effectiveMaxAttempts || !isRetryableRatingError(error) || isChatUiRequestCancelledError(error)) {
                 throw lastError;
             }
             console.warn(`Rating webhook attempt ${attempt}/${effectiveMaxAttempts} failed, retrying...`, error);
@@ -13561,7 +15245,7 @@ async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RAT
                 runtimeRatingConfig.retryBaseMs * Math.pow(2, attempt - 1)
             );
             const jitter = Math.floor(Math.random() * 250);
-            await delay(baseDelay + jitter);
+            await delayWithSignal(baseDelay + jitter, signal);
         }
     }
 
@@ -13586,9 +15270,13 @@ async function rateChat(options = {}) {
     if (force) {
         resetRatingUiForRerun();
     }
+    const requestGuard = beginChatUiRequestGuard();
 
     const raterPrompt = validatePromptBeforeWebhook('rater', raterPromptInput.value);
-    if (!raterPrompt) return;
+    if (!raterPrompt) {
+        finishChatUiRequestGuard(requestGuard);
+        return;
+    }
     
     rateChatBtn.disabled = true;
     rateChatBtn.classList.add('loading');
@@ -13602,7 +15290,10 @@ async function rateChat(options = {}) {
         if (!dialogText) {
             throw new Error('Нет диалога для оценки');
         }
-        const ratingResult = await requestRatingWithRetry(dialogText, raterPrompt, RATING_SEND_ATTEMPTS);
+        const ratingResult = await requestRatingWithRetry(dialogText, raterPrompt, RATING_SEND_ATTEMPTS, {
+            signal: requestGuard.signal
+        });
+        ensureChatUiRequestGuardCurrent(requestGuard);
         
         loadingMsg.remove();
         lastRating = ratingResult.exportText;
@@ -13622,21 +15313,31 @@ async function rateChat(options = {}) {
         }
         
     } catch (error) {
+        if (isChatUiRequestCancelledError(error)) {
+            loadingMsg.remove();
+            return;
+        }
         console.error('Rating error details:', error);
         console.error('Error type:', error.name);
         console.error('Error message:', error.message);
         loadingMsg.remove();
         addMessage(`Ошибка оценки: ${error.message}. Проверьте консоль (F12) для деталей.`, 'error', false);
     } finally {
-        rateChatBtn.disabled = false;
-        rateChatBtn.classList.remove('loading');
-        aiAssistBtn.disabled = false;
-        if (!lastRating) {
-            if (isConversationClosed()) {
-                lockDialogInput();
+        const shouldRestoreUi = requestGuard.version === chatUiSessionVersion
+            && requestGuard.sessionId === baseSessionId
+            && !requestGuard.signal.aborted;
+        finishChatUiRequestGuard(requestGuard);
+        if (shouldRestoreUi) {
+            rateChatBtn.classList.remove('loading');
+            if (!lastRating) {
+                if (isConversationClosed()) {
+                    lockDialogInput();
+                } else {
+                    toggleInputState(true);
+                    userInput.focus();
+                }
             } else {
-                toggleInputState(true);
-                userInput.focus();
+                updateRateChatButtonState();
             }
         }
     }
@@ -13708,7 +15409,7 @@ async function sendAttestationResult(dialogText, ratingText) {
         id: requestId,
         requestId,
         createdAt: new Date().toISOString(),
-        managerName: getCachedStorageValue(USER_NAME_KEY),
+        managerName: getManagerName(''),
         dialog,
         rating,
         clientPrompt: getActiveContent('client'),
@@ -13780,7 +15481,7 @@ async function buildAttestationDocxPayload(dialogText, ratingText, options = {})
     const fileBase64 = await blobToBase64(blob);
     const timestampSource = options.timestamp || new Date().toISOString();
     const timestamp = timestampSource.replace(/[:.]/g, '-');
-    const rawName = options.managerName || getCachedStorageValue(USER_NAME_KEY) || '';
+    const rawName = options.managerName || getManagerName('') || '';
     const safeName = sanitizeFileNamePart(rawName) || 'user';
     return {
         fileName: `attestation_${safeName}_${timestamp}.docx`,
@@ -13804,9 +15505,16 @@ function blobToBase64(blob) {
 
 async function generateAIResponse() {
     if (isDialogRated || conversationHistory.length === 0 || isProcessing) return;
+    const requestGuard = beginChatUiRequestGuard();
+    const conversationRevisionAtStart = conversationHistoryRevision;
+    const sessionIdAtStart = managerSessionId;
+    const inputValueAtStart = userInput.value;
 
     const basePrompt = validatePromptBeforeWebhook('manager', managerPromptInput.value);
-    if (!basePrompt) return;
+    if (!basePrompt) {
+        finishChatUiRequestGuard(requestGuard);
+        return;
+    }
     
     aiAssistBtn.disabled = true;
     rateChatBtn.disabled = true;
@@ -13830,6 +15538,7 @@ async function generateAIResponse() {
         response = await fetchWithTimeout(MANAGER_ASSISTANT_WEBHOOK_URL, {
             method: 'POST',
             headers: buildJsonRequestHeaders(requestId, 'manager_assist', 'manager_assist'),
+            signal: requestGuard.signal,
             body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('manager_assist', {
                 systemPrompt: fullPrompt,
                 userMessage: lastMessage,
@@ -13846,6 +15555,10 @@ async function generateAIResponse() {
         }
         
         const aiMessage = await readWebhookResponse(response, AI_HELPER_WEBHOOK_TIMEOUT_MS);
+        ensureChatUiRequestGuardCurrent(requestGuard);
+        if (conversationHistoryRevision !== conversationRevisionAtStart || managerSessionId !== sessionIdAtStart) {
+            throw createChatUiRequestStaleError();
+        }
         if (!aiMessage) throw new Error('Пустой ответ');
         finishWebhookDebugRequest(debugEntryId, {
             httpStatus: response.status,
@@ -13853,6 +15566,9 @@ async function generateAIResponse() {
         });
         
         const cleanedMessage = aiMessage.trim().replace(/^["']|["']$/g, '').replace(/^(Менеджер|Manager):\s*/i, '');
+        if (userInput.value !== inputValueAtStart) {
+            throw createChatUiRequestStaleError();
+        }
         
         userInput.value = cleanedMessage;
         autoResizeTextarea(userInput);
@@ -13861,11 +15577,22 @@ async function generateAIResponse() {
         
     } catch (error) {
         failWebhookDebugRequest(debugEntryId, error, response?.status);
+        if (isChatUiRequestCancelledError(error)) {
+            return;
+        }
         console.error('AI generation error:', error);
         alert('Ошибка: ' + error.message);
     } finally {
-        aiAssistBtn.disabled = false;
-        rateChatBtn.disabled = false;
+        const shouldRestoreUi = requestGuard.version === chatUiSessionVersion
+            && requestGuard.sessionId === baseSessionId
+            && !requestGuard.signal.aborted;
+        finishChatUiRequestGuard(requestGuard);
+        if (shouldRestoreUi) {
+            if (!isProcessing) {
+                aiAssistBtn.disabled = false;
+            }
+            updateRateChatButtonState();
+        }
         aiAssistBtn.classList.remove('loading');
     }
 }
@@ -14593,9 +16320,9 @@ function handlePrimaryActionClick() {
     sendMessage();
 }
 
-setElevenLabsWidgetHidden(true);
 setVoiceModeScreenActive(false);
 bindEvent(voiceModeExitBtn, 'click', hideVoiceModeModal);
+bindEvent(voiceModeStopBtn, 'click', handleVoiceModeStopClick);
 bindEvent(voiceModeRateBtn, 'click', handleVoiceModeRateClick);
 document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
@@ -15024,22 +16751,25 @@ function installLocalhostTestHooks() {
             return JSON.parse(JSON.stringify(buildPromptsSyncPayload(PROMPT_ROLES)));
         },
         simulateRemotePromptsSnapshot(nextSnapshot = {}) {
-            const data = nextSnapshot && typeof nextSnapshot === 'object' ? nextSnapshot : {};
-            const dataStr = JSON.stringify(data);
+            const promptSnapshotState = buildNormalizedPromptSnapshotState(nextSnapshot && typeof nextSnapshot === 'object' ? nextSnapshot : {});
+            const data = promptSnapshotState.normalized;
             lastPromptsFirebaseSnapshot = data;
+            lastPromptsFirebaseSnapshotState = promptSnapshotState;
 
             if (isUserEditing) {
                 pendingPromptsFirebaseSnapshot = data;
-                lastFirebaseData = dataStr;
+                pendingPromptsFirebaseSnapshotState = promptSnapshotState;
+                lastFirebaseData = promptSnapshotState.hash;
                 return { deferred: true };
             }
 
-            if (lastFirebaseData === dataStr) {
+            if (lastFirebaseData === promptSnapshotState.hash) {
                 return { deferred: false, skipped: 'unchanged' };
             }
 
-            lastFirebaseData = dataStr;
+            lastFirebaseData = promptSnapshotState.hash;
             pendingPromptsFirebaseSnapshot = null;
+            pendingPromptsFirebaseSnapshotState = null;
             const didApply = initPromptsData(data, { forceApplyEmpty: true });
             return { deferred: false, didApply };
         },
@@ -15099,6 +16829,7 @@ window.addEventListener('load', () => {
     updateChatReadyState();
 });
 window.addEventListener('pageshow', () => {
+    currentUserPageExitHandled = false;
     isWindowLoaded = true;
     updateChatReadyState();
 });

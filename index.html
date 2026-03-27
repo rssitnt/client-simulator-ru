@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta
         http-equiv="Content-Security-Policy"
-        content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' https://cdnjs.cloudflare.com https://www.gstatic.com https://unpkg.com https://cdn.jsdelivr.net https://*.firebasedatabase.app https://*.firebaseio.com; script-src-elem 'self' https://cdnjs.cloudflare.com https://www.gstatic.com https://unpkg.com https://cdn.jsdelivr.net https://*.firebasedatabase.app https://*.firebaseio.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; font-src 'self' data: https://cdnjs.cloudflare.com; connect-src 'self' https://cdnjs.cloudflare.com https://www.gstatic.com https://unpkg.com https://cdn.jsdelivr.net https://n8n-api.tradicia-k.ru https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firebaseinstallations.googleapis.com https://www.googleapis.com https://*.googleapis.com https://client-simulator-default-rtdb.europe-west1.firebasedatabase.app https://*.firebasedatabase.app https://*.firebaseio.com https://firebasedatabase.googleapis.com wss://*.firebasedatabase.app wss://*.firebaseio.com https://api.openai.com https://api.elevenlabs.io https://elevenlabs.io wss://*.elevenlabs.io; frame-src 'self' https://elevenlabs.io https://*.elevenlabs.io; media-src 'self' blob: data:; manifest-src 'self'; worker-src 'self' blob:"
+        content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' https://cdnjs.cloudflare.com https://www.gstatic.com https://unpkg.com https://cdn.jsdelivr.net https://*.firebasedatabase.app https://*.firebaseio.com; script-src-elem 'self' https://cdnjs.cloudflare.com https://www.gstatic.com https://unpkg.com https://cdn.jsdelivr.net https://*.firebasedatabase.app https://*.firebaseio.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; font-src 'self' data: https://cdnjs.cloudflare.com; connect-src 'self' https://cdnjs.cloudflare.com https://www.gstatic.com https://unpkg.com https://cdn.jsdelivr.net https://n8n-api.tradicia-k.ru https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firebaseinstallations.googleapis.com https://www.googleapis.com https://*.googleapis.com https://generativelanguage.googleapis.com https://client-simulator-default-rtdb.europe-west1.firebasedatabase.app https://*.firebasedatabase.app https://*.firebaseio.com https://firebasedatabase.googleapis.com wss://*.firebasedatabase.app wss://*.firebaseio.com wss://*.googleapis.com wss://generativelanguage.googleapis.com; frame-src 'self'; media-src 'self' blob: data:; manifest-src 'self'; worker-src 'self' blob:"
     >
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Студия для тестирования ИИ-ассистентов оценки и продаж">
@@ -153,11 +153,11 @@
     <div id="voiceModeActions" class="voice-mode-actions" hidden>
         <div class="voice-mode-actions-row">
             <button id="voiceModeExitBtn" type="button" class="voice-mode-exit-btn">Выход</button>
+            <button id="voiceModeStopBtn" type="button" class="voice-mode-stop-btn" hidden>Завершить</button>
             <button id="voiceModeRateBtn" type="button" class="voice-mode-rate-btn" hidden>Оценить диалог</button>
         </div>
         <div id="voiceModeStatus" class="voice-mode-status" data-state="idle">Открываю голосовой режим…</div>
     </div>
-    <elevenlabs-convai id="elevenlabsConvaiWidget" data-voice-hidden="true" aria-hidden="true" agent-id="agent_4101kh5kyvrhfba8fcq7ky33wk8e"></elevenlabs-convai>
 
     <!-- Модальное окно настроек -->
     <div id="settingsModal" class="modal-overlay">
@@ -601,7 +601,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js" integrity="sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3" crossorigin="anonymous" defer></script>
     <!-- Turndown for HTML to Markdown conversion (WYSIWYG editing) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js" integrity="sha384-m6AyXEhyWRg2s2wrkDV64LGkaManYgMSAjn2U+zymzSJ42WthRSjCu1AqZJhoQV0" crossorigin="anonymous" defer></script>
-    <script type="module" src="script.js?v=20260325-26"></script>
+    <script type="module" src="script.js?v=20260327-01"></script>
     <!-- Last deployment trigger: 2026-03-24 15:00 -->
 </body>
 </html>

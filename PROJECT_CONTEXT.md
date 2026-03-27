@@ -1,5 +1,970 @@
 # PROJECT_CONTEXT.md
 
+## 2026-03-27 — Голосовой режим переведён с ElevenLabs на Gemini Live с фиксированными настройками
+- Выполнен крупный pass по voice-mode пути в `script.js`, `index.html`, `style.css`, `server/gemini-token-server.mjs`, `README.md` и `server/README.md`.
+- Что было найдено до правки:
+  - основной voice flow сначала пытался открыть `ElevenLabs`, а встроенный режим был лишь fallback;
+  - текущий “Gemini” на фронте фактически жил на OpenAI Realtime (`/api/openai-realtime-session`, WebRTC SDP, OpenAI events), а не на Gemini Live;
+  - это делало настройки voice mode запутанными и не соответствующими целевой конфигурации из AI Studio.
+- Что изменено:
+  - ElevenLabs widget убран из `index.html`, из live-flow и из CSP-разрешений;
+  - фронт по умолчанию переведён на `POST /api/gemini-live-token`;
+  - голосовой режим теперь поднимает настоящий Gemini Live через `@google/genai` и short-lived token, без API key в браузере;
+  - для Gemini Live зафиксированы настройки:
+    - model: `gemini-3.1-flash-live-preview`
+    - voice: `Enceladus`
+    - media resolution: low (`MEDIA_RESOLUTION_LOW`, ближайшее API-представление для режима “66 tokens / image”)
+    - thinking: `thinkingBudget = 0` (“No Thinking”)
+  - token server теперь тоже фиксирует эти поля в ephemeral token constraints, чтобы фронт и сервер не расходились;
+  - в voice modal добавлена явная кнопка завершения звонка для корректной остановки Gemini Live и дальнейшей оценки диалога.
+- Практический смысл:
+  - больше нет попыток открыть звонок через ElevenLabs/VPN fallback;
+  - голосовой режим стал однопровайдерным и соответствует Gemini-настройкам из пользовательского запроса;
+  - браузер получает только короткоживущий Gemini token, а не постоянный ключ.
+- Технический хвост:
+  - часть старых helper-ов и констант вокруг ElevenLabs/OpenAI voice в `script.js` пока осталась как мёртвый код;
+  - runtime-path уже переведён на Gemini Live, но внутреннюю чистку этих legacy-блоков можно сделать отдельным безопасным проходом.
+- Проверка после правок:
+  - `node --check script.js`
+  - `node --check server/gemini-token-server.mjs`
+  - `npm run test:smoke`
+- Отдельная живая server-side проверка после получения рабочего `GEMINI_API_KEY` от пользователя:
+  - token server был поднят временно через process env без записи ключа в репозиторий;
+  - `POST /api/gemini-live-token` вернул валидный Gemini auth token;
+  - проверка прошла через `ALLOW_LEGACY_LOGIN_FALLBACK=true` + allowlist domain для технического smoke запроса.
+- Ограничение проверки:
+  - текущий smoke не покрывает реальный voice-session handshake с Gemini Live, поэтому полноценную живую проверку нужно делать уже с рабочим `GEMINI_API_KEY` и локально поднятым token server.
+
+## 2026-03-27 — Существенный фикс: отправка партнёрского инвайта больше не дублируется по повторному `Enter`
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже в `handleCreatePartnerInvite()`.
+- Найдена следующая хрупкая зона:
+  - email-поле инвайта напрямую вызывало `handleCreatePartnerInvite()` по `Enter`;
+  - сама кнопка блокировалась, но у handler-а не было собственного `inFlight`-guard;
+  - из-за этого повторные `Enter` во время отправки могли повторно запустить invite flow и дать дублирующие отправки.
+- Исправление:
+  - добавлен `partnerInviteCreateInFlight`;
+  - `handleCreatePartnerInvite()` теперь отсекает повторный запуск до завершения текущего invite request;
+  - защита находится внутри самого handler-а, поэтому работает и для клика, и для `Enter`, и для любых будущих путей вызова.
+- Практический смысл:
+  - при быстром повторном нажатии `Enter` один и тот же инвайт больше не должен улетать дублем;
+  - админский invite flow стал устойчивее к обычным race-сценариям ввода.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: кнопка оценки больше не залипает после гонки `AI assist -> send`
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже вокруг `rateChatBtn` и `generateAIResponse()`.
+- Найдена следующая хрупкая зона:
+  - `generateAIResponse()` временно выключал `rateChatBtn`, но возвращал её назад только если в момент `finally` уже не шёл другой chat request;
+  - если пользователь успевал отправить обычное сообщение, кнопка оценки могла остаться disabled;
+  - параллельно вскрылось, что состояние `rateChatBtn` вообще было размазано по нескольким async-путям без общего helper-а.
+- Исправление:
+  - добавлен единый `updateRateChatButtonState()` для расчёта доступности кнопки оценки;
+  - `toggleInputState()`, `updateSendBtnState()`, `lockDialogInput()`, `clearChat()`, `rateChat()` и `generateAIResponse()` теперь используют общий пересчёт вместо разрозненных ручных `disabled = false`;
+  - `clearChat()` теперь также чистит `aiAssistBtn.loading`, чтобы старый helper-request не оставлял визуальный хвост после reset.
+- Практический смысл:
+  - после сценария “AI-подсказка -> быстро отправили своё сообщение” кнопка оценки больше не должна залипать disabled;
+  - состояние кнопки оценки стало предсказуемее и меньше зависит от порядка завершения async-запросов.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: `AI Improve` больше не применяет устаревший ответ после закрытия модалки или смены контекста
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже в `improvePromptWithAI()` и модалке AI Improve.
+- Найдена следующая хрупкая зона:
+  - запрос на AI-улучшение промпта не имел cancel/stale-защиты и мог доехать уже после закрытия модалки;
+  - старый ответ мог подменить `pendingImprovedPrompt`, diff и шаг модалки уже в новом контексте;
+  - при повторном открытии/новом запросе старый `finally` тоже мог вмешаться в loading-state кнопки.
+- Исправление:
+  - добавлен отдельный cancel/version flow для AI Improve request;
+  - `showAiImproveModal()` и `hideAiImproveModal()` теперь инвалидируют старый improve-запрос;
+  - `requestAiImproveResponseText()` теперь принимает `signal`, а `improvePromptWithAI()` проверяет, что модалка, режим, active variation и исходный prompt всё ещё те же;
+  - stale/cancelled improve-response теперь тихо отбрасывается и не трогает pending/diff state.
+- Практический смысл:
+  - старый AI-ответ больше не должен внезапно всплывать после закрытия модалки;
+  - повторный запуск AI Improve не конфликтует с предыдущим незавершённым запросом;
+  - loading-state кнопки улучшения не затирается старым `finally`.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: AI-подсказка менеджеру больше не затирает новый диалог или уже набранный текст
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже в `generateAIResponse()`.
+- Найдена следующая хрупкая зона:
+  - async-ответ AI-подсказки мог прийти уже после `clearChat()`, нового сообщения или нового старта и всё равно записаться в `userInput`;
+  - отдельного guard-а по chat-сессии и состоянию диалога у `manager_assist` не было;
+  - подсказка могла перезаписать даже уже вручную набранный пользователем текст, если он начал печатать, пока ответ летел.
+- Исправление:
+  - `generateAIResponse()` переведён на тот же `chatUiRequestGuard`, что и основные chat/start/rating path;
+  - добавлен `conversationHistoryRevision`, чтобы отсекать assist-ответы для уже изменившегося диалога;
+  - assist-ответ теперь не применяется, если за время запроса сменился session/context или пользователь уже изменил поле ввода;
+  - stale/cancelled assist path завершается тихо, без ложной ошибки для пользователя.
+- Практический смысл:
+  - старые AI-подсказки больше не должны всплывать в новом диалоге;
+  - ручной текст в поле ввода не затирается поздним assist-ответом;
+  - менеджерский helper стал предсказуемее в реальной работе, когда пользователь быстро продолжает диалог.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: после ошибки `/start` стартовый блок снова показывается и даёт повторить запуск
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже в error-path `startConversationHandler()`.
+- Найдена следующая хрупкая зона:
+  - стартовый блок скрывался до запроса `/start`, но при ошибке или пустом ответе не возвращался назад;
+  - после одного сетевого сбоя пользователь мог остаться без нормальной кнопки “Начать диалог”;
+  - это ломало не внешний вид, а сам повторный старт сценария.
+- Исправление:
+  - добавлен helper для восстановления `startConversation` блока;
+  - при ошибке `/start` и при пустом webhook-ответе стартовый блок снова показывается до вывода сообщения об ошибке;
+  - cancelled/stale request path по-прежнему не трогает UI новой сессии.
+- Практический смысл:
+  - после неудачного `/start` пользователь может сразу нажать “Начать диалог” повторно;
+  - чат больше не застревает в полусломанном состоянии без точки входа.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: `/start` теперь не гоняется с обычной отправкой и не запускается повторно
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже в `startConversationHandler()`.
+- Найдена следующая хрупкая зона:
+  - `/start` не ставил `isProcessing`, не блокировал ввод и старт-кнопки на время webhook-запроса;
+  - из-за этого можно было словить двойной старт или успеть отправить обычное сообщение до прихода стартовой реплики;
+  - старый `finally` start-path тоже мог поздно вмешаться в UI уже новой сессии.
+- Исправление:
+  - `startConversationHandler()` теперь сразу отсекает повторный запуск через `isProcessing`;
+  - на время `/start` блокируются input и start buttons по той же модели, что и обычная отправка;
+  - `finally` start-path теперь восстанавливает UI только если запрос всё ещё относится к текущей chat-сессии.
+- Практический смысл:
+  - нельзя случайно запустить `/start` дважды быстрым кликом;
+  - пользователь не отправит первое обычное сообщение раньше стартового ответа;
+  - стартовый flow стал предсказуемее и ближе к обычной chat-отправке.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: `clearChat()` теперь реально отрезает старые chat/start/rating ответы от новой сессии
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже в async chat flow вокруг `clearChat()`, `/start`, обычной отправки и rating.
+- Найдена следующая хрупкая зона:
+  - `clearChat()` менял session id и перерисовывал чат, но старые webhook-ответы всё равно могли дописаться позже уже в новый пустой диалог;
+  - отдельного abort/session-guard слоя у chat UI не было, поэтому stale reply мог приехать из `sendMessage()`, `startConversationHandler()` и `rateChat()`;
+  - отменённый старый `send` ещё и мог поздним `finally` сбросить UI-состояние уже новой сессии.
+- Исправление:
+  - добавлен общий `chatUiRequestGuard` с session-version и `AbortController` для chat/start/rating path;
+  - `clearChat()` теперь инвалидирует и абортит все активные chat UI requests перед reset новой сессии;
+  - `sendMessage()`, `startConversationHandler()` и `rateChat()` теперь перед применением ответа проверяют, что запрос всё ещё относится к текущей сессии;
+  - rating retry-path тоже стал abort-aware, чтобы не продолжать retries после `clearChat()`;
+  - UI restore в `sendMessage()` теперь не может поздно вмешаться в уже новую сессию.
+- Практический смысл:
+  - после очистки чата старые ответы больше не должны “воскресать” в новой сессии;
+  - rating и `/start` тоже не засоряют уже заново начатый диалог;
+  - chat UI стал стабильнее в сценариях “отправил -> быстро очистил / начал заново”.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: устаревший запуск built-in voice mode теперь реально отменяется, а не доезжает постфактум
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже в startup path встроенного OpenAI Realtime voice mode.
+- Найдена следующая хрупкая зона:
+  - если voice-экран закрывали во время запуска, token request и startup flow могли всё равно доехать до конца;
+  - код в основном ловил это только поздним `stopGeminiVoiceMode()` уже после получения токена, микрофона и части WebRTC setup;
+  - `fetchWithTimeout()` не умел различать timeout abort и внешний abort от отменённого запуска.
+- Исправление:
+  - добавлен attempt-id и abort-controller для startup path built-in voice mode;
+  - `resolveGeminiLiveApiKey()` теперь умеет принимать `signal`, а `fetchWithTimeout()` поддерживает внешний abort отдельно от timeout;
+  - `startGeminiVoiceMode()` проверяет stale/cancelled start после критичных async-шагов и не показывает ложную ошибку для уже отменённого запуска;
+  - `stopGeminiVoiceMode()` теперь сразу инвалидирует текущий startup attempt.
+- Практический смысл:
+  - при быстром закрытии voice mode устаревший запуск не продолжает молча получать токен и поднимать transport;
+  - built-in voice меньше открывает микрофон и WebRTC "вдогонку" уже закрытому экрану;
+  - abort больше не маскируется под обычный timeout.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: OpenAI Realtime voice transport больше не зависает при аварийном падении data channel
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже в built-in voice mode на OpenAI Realtime.
+- Найдена следующая хрупкая зона:
+  - data channel OpenAI Realtime почти не обрабатывал аварийные `close/error`;
+  - voice UI мог остаться в состоянии "как будто активен", хотя командный канал уже умер;
+  - `waitForOpenAiDataChannelReady()` тоже ждал только `open` или timeout и не завершался раньше при явном `close/error`.
+- Исправление:
+  - добавлен единый controlled failure handler для аварий transport-а голосового канала;
+  - `peerConnection` disconnect/fail, `dataChannel.onerror` и `dataChannel.onclose` теперь переводят voice mode в корректный stop/recovery state с понятным статусом;
+  - `waitForOpenAiDataChannelReady()` теперь завершает ожидание сразу и на `close/error`, а не только по timeout.
+- Практический смысл:
+  - built-in voice mode меньше зависает в ложном active-state после сетевых/transport сбоев;
+  - пользователь быстрее получает понятное состояние "нажмите начать снова" вместо подвешенного канала;
+  - start-path быстрее отваливается при реально умершем data channel.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: single-record Firebase reads больше не стирают локальный fallback после одного пустого SDK-read
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже в single-record read path для `users`, `partner_invites` и `access_revocations`.
+- Найдена следующая хрупкая зона:
+  - `getUserRecordByLogin()`, `getPartnerInviteByLogin()` и `getAccessRevocation()` на пустом успешном SDK-read сразу очищали локальный cache;
+  - это уже расходилось с недавно исправленными list-path и могло терять локальный запасной state слишком агрессивно;
+  - при transient деградации RTDB path локальный fallback мог быть удалён раньше, чем второй канал чтения что-то подтвердил.
+- Исправление:
+  - добавлен общий helper verified local fallback для single-record read;
+  - локальная запись теперь очищается только если и SDK, и REST согласованно подтверждают, что remote записи нет;
+  - если remote record существует, но приходит в битом виде, код сохраняет локальный fallback вместо немедленного самообнуления.
+- Практический смысл:
+  - auth/access-related single-record read path стал устойчивее к временно пустым или деградировавшим RTDB ответам;
+  - локальный fallback больше не теряется после одного неудачного канала чтения;
+  - поведение single-record path выровнено с уже исправленными list-path.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: prompt write-path теперь переживает transient Firebase write-сбои без ручного повторного редактирования
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже в write path для public prompts и `prompt_overrides`.
+- Найдена следующая хрупкая зона:
+  - `savePromptsToFirebaseNow()` и `savePromptOverridesToFirebaseNow()` при transient write-error только логировали сбой;
+  - public/draft prompt sync после этого мог остаться в подвешенном состоянии до следующего случайного редактирования;
+  - не было защиты от overlap write-ов и не было controlled retry для уже собранного payload/state.
+- Исправление:
+  - добавлен deduped retry-path для public prompts и prompt overrides write-веток;
+  - добавлены `inFlight` guards, чтобы не запускать overlapping write-и поверх уже идущего sync;
+  - при write-failure текущий payload/state ставится в controlled retry вместо тихого обнуления попытки;
+  - при stop/reset protected realtime и prompt-overrides subscription теперь дополнительно чистится stale retry-state, чтобы старые retry/full-replace флаги не протекали в следующую сессию.
+- Практический смысл:
+  - transient Firebase write-сбой больше не требует обязательно ещё раз что-то редактировать, чтобы sync сдвинулся с места;
+  - prompt editor меньше зависает в состоянии “локально изменено, но в облако уже не поедет”;
+  - overlapping sync write-и стали аккуратнее и предсказуемее.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: current user presence live listener теперь сам восстанавливается после сбоев
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже в `currentUserPresence` live path.
+- Найдена следующая хрупкая зона:
+  - `.info/connected` listener текущего пользователя при ошибке только логировал сбой;
+  - presence sync после этого не пытался автоматически вернуть healthy live-state;
+  - `startCurrentUserPresenceSync()` считал transport рабочим по одному факту наличия `unsubscribe`, даже если listener уже был сломан.
+- Исправление:
+  - добавлены health-флаг и recovery timer для current-user presence listener;
+  - повторный старт presence transport теперь reuse-ит только здоровую подписку;
+  - при live error broken listener корректно снимается, local presence state сбрасывается в offline и планируется мягкий restart `.info/connected` подписки;
+  - full `stopCurrentUserPresenceSync()` теперь также очищает pending recovery.
+- Практический смысл:
+  - presence текущего пользователя меньше застревает после transient RTDB-сбоев;
+  - `.info/connected` listener возвращается сам, без ручного refresh страницы;
+  - activity/presence path больше не держится за формально существующую, но уже нездоровую подписку.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: admin realtime sync теперь самовосстанавливается после live listener сбоев
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже в live path админской таблицы.
+- Найдена следующая хрупкая зона:
+  - `users`, `partner_invites`, `access_revocations` и `user_presence` listener-ы админки при ошибке только логировали сбой;
+  - таблица могла зависнуть на старом состоянии и не вернуться в live-mode без ручного refresh;
+  - при этом приложение продолжало считать admin realtime transport активным, потому что unsubscribe-функции оставались в памяти.
+- Исправление:
+  - добавлен controlled recovery для admin realtime sync;
+  - любой live error теперь мягко останавливает только transport-часть подписок и таймеров, но не очищает уже показанную таблицу и live state;
+  - затем планируется deduped restart `startAdminRealtimeSync()` и повторный `renderAdminUsersTable()`;
+  - `stopAdminRealtimeSync()` теперь отдельно умеет полностью останавливать sync, включая pending recovery timer.
+- Практический смысл:
+  - админская таблица не застревает навсегда после transient RTDB-сбоев;
+  - live обновления users/invites/revocations/presence возвращаются сами;
+  - при recovery не происходит лишнего визуального сброса уже открытой таблицы.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: prompt overrides live listener теперь восстанавливается без потери локального state
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже в `currentUserPromptOverridesSubscription`.
+- Найдена следующая хрупкая зона:
+  - listener local draft-промптов при `onValue` error только логировал сбой;
+  - код продолжал держать старый subscription transport и не пытался нормально вернуть healthy live-state;
+  - грубый `stopCurrentUserPromptOverridesSubscription()` очищал слишком много state, поэтому простой restart мог потерять queued/local override context.
+- Исправление:
+  - добавлены health-флаг и recovery timer для current-user prompt overrides listener;
+  - при live error listener помечается как нездоровый, UI немедленно откатывается на локальный prompt-overrides store и планируется мягкий restart;
+  - для restart добавлен transport-only teardown без очистки локального override state, dirty ролей и queued payload;
+  - повторный `startCurrentUserPromptOverridesSubscription()` больше не считает нездоровую подписку рабочей.
+- Практический смысл:
+  - локальные draft-промпты остаются доступны и согласованны даже после transient RTDB-сбоев;
+  - live subscription для prompt overrides возвращается сама, без ручного refresh страницы;
+  - recovery больше не рискует потерять локальный override state только ради пересборки listener-а.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: protected realtime listeners теперь самовосстанавливаются после RTDB-сбоев
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже в protected Firebase live path для `prompts`, `app_config` и `prompt_history`.
+- Найдена следующая хрупкая зона:
+  - protected listeners после `onValue` error уходили на fallback, но не пытались заново поднять live sync;
+  - в таком режиме public prompts могли остаться только на cached/REST bootstrap, а `app_config` и history — без нормального live recovery;
+  - `app_config` дополнительно обнулялся на transient read-error, хотя проблема могла быть временной.
+- Исправление:
+  - добавлен controlled recovery timer для protected listeners;
+  - при ошибках `prompts`, `app_config`, `prompt_history` и при падении setup теперь планируется перезапуск `setupPromptsAndConfigListeners()` с повторным `bootstrapPromptsViaRestFallback()`;
+  - повторные recovery-сигналы дедуплируются одним timer;
+  - `stopProtectedRealtimeListeners()` теперь всегда отменяет pending recovery, чтобы listeners не поднимались заново после logout/reset;
+  - на transient `app_config` read-error больше не затирается текущий shared config до пустых значений.
+- Практический смысл:
+  - live sync protected данных возвращается сам после кратковременных RTDB-сбоев;
+  - public prompts, shared voice config и prompt history меньше зависят от ручного refresh страницы;
+  - transient сбой чтения `app_config` больше не обнуляет UI-конфиг без причины.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: после сбоя current-user realtime listener снова включается fallback-проверка ревока сессии
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже в live auth/session path.
+- Найдена следующая хрупкая зона:
+  - `startCurrentUserRecordSubscription()` при ошибке listener-а только логировал сбой;
+  - код продолжал считать current-user realtime subscription "живой" просто по факту наличия `unsubscribe`-функции;
+  - из-за этого `enforceSessionRevocation()` и visible wakeup-path переставали делать fallback-check, даже если live sync уже был нерабочим.
+- Исправление:
+  - добавлен health-флаг `currentUserRecordSubscriptionHealthy`;
+  - skip polling теперь разрешён только когда current-user subscription реально здорова, а не просто существует;
+  - при `onValue` error health-флаг сбрасывается и сразу запускается `enforceSessionRevocation(true)`, чтобы backup-path не ждал следующего случайного wakeup;
+  - повторный `startCurrentUserRecordSubscription()` теперь не держится за нездоровую подписку и может заново её пересобрать.
+- Практический смысл:
+  - ревок сессии не "зависает" в fail-open режиме после ошибки current-user live listener;
+  - active session быстрее возвращается на backup-check path при деградации realtime;
+  - auth/session поведение стало устойчивее без UX-изменений.
+- Во время проверки всплыл отдельный auth-modal race:
+  - отложенный autofocus в `showNameModal()` мог перехватывать ввод и уводить пароль в поле ФИО;
+  - добавлен безопасный initial-focus timer с отменой при первом взаимодействии пользователя с auth-модалкой.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: realtime admin state теперь кэширует и отсортированный список логинов
+- Выполнен ещё один заметный non-UX pass по `script.js`, как продолжение оптимизации admin table build path.
+- Найдена следующая тяжёлая зона:
+  - даже после перехода на realtime login-maps каждый rebuild админской таблицы заново собирал и сортировал общий список логинов;
+  - при активной админской сессии это повторялось на каждом incremental/full render без изменения самого login-set.
+- Исправление:
+  - добавлен `adminRealtimeSortedLogins` и helpers для построения/обновления отсортированного login-list;
+  - users/invites/revocations snapshot handlers теперь пересобирают этот список один раз в момент live update;
+  - `renderAdminUsersTableFromRealtimeState()` и live-ready ветка `renderAdminUsersTable()` переиспользуют уже готовый sorted login list.
+- Практический смысл:
+  - incremental/full rebuild админской таблицы стал ещё легче;
+  - меньше лишней сортировки и пересборки одинакового login-set;
+  - поведение таблицы не менялось, изменился только внутренний data-prep path.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: invites/revocations fallback больше не очищает local cache на пустом remote
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже в `listPartnerInvites()` и `listAccessRevocations()`.
+- Найдена следующая хрупкая зона:
+  - обе list-функции при успешном, но пустом remote read слишком агрессивно очищали локальный cache и возвращали пустой список;
+  - при временно пустом/деградировавшем RTDB это могло убирать локальный запасной список invite/revoke записей;
+  - normalize/sort логика была размазана по нескольким веткам каждой функции.
+- Исправление:
+  - invites и revocations теперь используют единый local normalize/sort path внутри своей list-функции;
+  - при пустом remote обе функции возвращают локальный fallback list вместо очистки cache;
+  - поведение выровнено с недавно исправленным `listAllUserRecords()`.
+- Практический смысл:
+  - админка и access-related экраны стали устойчивее при временно пустом RTDB read-path;
+  - локальный запасной список invite/revoke записей больше не теряется слишком агрессивно;
+  - fallback-поведение стало предсказуемее.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: fallback user-list больше не затирает локальный запасной список на пустом remote
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже в `listAllUserRecords()`.
+- Найдена следующая хрупкая зона:
+  - при успешном, но пустом чтении `users` и `users_by_uid` код считал remote authoritative-empty и очищал локальный users cache;
+  - если это было временное пустое состояние/деградация чтения, админка теряла локальный запасной список пользователей;
+  - normalize/sort user records был размазан по нескольким веткам функции.
+- Исправление:
+  - добавлен общий normalize/sort path для user record collections;
+  - `listAllUserRecords()` теперь возвращает локальный fallback list, если remote paths пусты, вместо агрессивного `saveLocalUsersStore({})`;
+  - primary users path, `users_by_uid` mirror и local cache теперь используют один и тот же helper для сборки и сортировки записей.
+- Практический смысл:
+  - админская таблица стала устойчивее при временно пустом или деградировавшем RTDB read-path;
+  - локальный запасной список пользователей больше не теряется слишком агрессивно;
+  - код user-list fallback стал короче и предсказуемее.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: build/render админской таблицы теперь использует готовые realtime login-maps
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже в `buildAdminUsersTableRows()` и admin realtime state.
+- Найдена следующая тяжёлая зона:
+  - realtime snapshot handlers хранили данные в массивах, а `renderAdminUsersTableFromRealtimeState()` и `renderAdminUsersTable()` потом на каждом rebuild заново пересобирали `users/invites/revocations/presence` в `Map`;
+  - при активной админской сессии это повторялось много раз без реальной пользы.
+- Исправление:
+  - добавлены login-indexed realtime maps для `users`, `invites`, `revocations` и `presence`;
+  - snapshot handlers теперь один раз индексируют данные по логину в момент получения;
+  - `renderAdminUsersTableFromRealtimeState()` и live-ready ветка `renderAdminUsersTable()` переведены на `buildAdminUsersTableRowsFromMaps(...)`, без повторного пересбора тех же `Map` на каждый render.
+- Практический смысл:
+  - incremental/full rebuild админской таблицы стал легче по CPU;
+  - при живых обновлениях и повторных открытиях админки меньше лишней подготовки данных перед рендером;
+  - UX и состав строк не менялись, изменился только внутренний data-shaping path.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: первый render админской таблицы теперь ждёт realtime state и реже уходит в тяжёлый fallback
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже в `renderAdminUsersTable()`.
+- Найдена следующая тяжёлая зона:
+  - при первом открытии админской таблицы код сразу стартовал realtime listeners, но почти без ожидания уходил в `Promise.all(...)`/fallback fetch, хотя live state часто уже был на подходе;
+  - даже когда live state потом оказывался готов, render-path уже успевал сделать лишний широкий fetch.
+- Исправление:
+  - добавлен короткий wait-path `waitForAdminRealtimeTableData(...)` с резолвом от realtime snapshot handlers;
+  - `renderAdminUsersTable()` теперь даёт live state короткое окно на заполнение перед тяжёлым fallback fetch;
+  - убран лишний повторный `listAllUserRecords()` в ветке, где live data уже признан готовым.
+- Практический смысл:
+  - первый рендер админской таблицы реже делает лишние полные чтения данных;
+  - открытие админки стало спокойнее, когда realtime listeners уже могут быстро отдать состояние;
+  - full fallback остался только когда live state действительно не успел или недоступен.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: admin realtime presence теперь обновляет только затронутые логины
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже в `adminRealtimePresence` live path.
+- Найдена следующая тяжёлая зона:
+  - каждый live snapshot presence раньше переписывал presence-data по всем строкам таблицы и потом обновлял все presence-метки разом;
+  - даже если поменялся один пользователь, проход шёл по всему `adminUserRowsByLogin`.
+- Исправление:
+  - добавлены точечные helpers для presence render key и обновления одной presence-метки по логину;
+  - `applyAdminRealtimePresenceSnapshot(...)` теперь сравнивает предыдущий и новый presence по логинам и обновляет только реально изменившиеся строки;
+  - если таблица ещё не инициализирована, presence-path теперь идёт только в incremental render, а не в более широкий fallback.
+- Практический смысл:
+  - presence live sync меньше будит всю админскую таблицу;
+  - смена online/idle/away/hidden/offline у одного пользователя больше не гоняет полный проход по всем строкам;
+  - общий refresh всех presence labels оставлен только для периодического таймера относительных подписей.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: admin realtime users snapshot теперь точечно обновляет строки, а не срывается в широкий render
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже в `adminRealtimeUsers` live path.
+- Найдена следующая тяжёлая зона:
+  - `applyAdminRealtimeUsersSnapshot(...)` умел спокойно жить только с `activeMs`-изменениями;
+  - если у пользователя менялись роль, блокировка, `emailVerifiedAt`, `passwordNeedsSetup`, `sessionRevokedAt` и другие row-поля, код уходил в широкий render-path, хотя логин-сет и DOM-строки уже были на месте.
+- Исправление:
+  - при неизменном наборе логинов `users` live snapshot теперь обновляет только затронутые строки через `updateAdminUsersTableRow(...)`;
+  - `activeMs` по-прежнему обновляется самым лёгким путём через `updateAdminUserTimeCell(...)`;
+  - structural cases вроде добавления/удаления логина теперь ведут только в incremental render, а не в более тяжёлый full render.
+- Практический смысл:
+  - админская таблица меньше дёргает широкий render-path при живых изменениях профилей пользователей;
+  - смена роли, блокировка, верификация и похожие updates теперь обновляют только нужные строки;
+  - таблица стала заметно спокойнее при активной админской работе.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: legacy local prompt-store migration больше не делает лишний full-store compare на каждом чтении
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже в legacy local prompt-store migration.
+- Найдена следующая тяжёлая зона:
+  - при каждом чтении локальных prompt overrides код заново собирал stable/legacy stores, а потом ещё раз нормализовал и сериализовал их для сравнения `stable vs migrated`;
+  - live bootstrap prompt overrides поверх этого ещё раз заворачивал `loadLocalPromptsStore()` в новый normalize/hash цикл.
+- Исправление:
+  - добавлены `readPromptOverridesStoreStateByKey(...)` и `loadLocalPromptsStoreState()`, которые сразу работают через normalized/hash state;
+  - legacy merge теперь собирает role-data map из уже нормализованных store и сравнивает `stable` и `migrated` через готовые state hash, без повторного `JSON.stringify(normalize(...))`;
+  - `getPromptOverridesStore()` и live bootstrap prompt overrides переведены на reuse этого state-path, без лишнего повторного wrap в `buildNormalizedPromptOverridesStoreState(...)`.
+- Практический смысл:
+  - локальная загрузка и миграция старых draft-prompt storage keys стала легче;
+  - меньше лишних full-store normalize/hash проходов при старте и при работе с local overrides;
+  - UX и формат хранения не менялись, изменился только внутренний migration/load path.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: prompt overrides больше не гоняет лишние full-store hash/normalize по кругу
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже в ветке локальных prompt overrides.
+- Найдена следующая тяжёлая зона:
+  - `prompt_overrides` несколько раз подряд заново нормализовал один и тот же store и сериализовал его целиком в local save, remote save и live subscription;
+  - diff по ролям тоже шёл через повторные role-snapshot compare поверх заново нормализованных store;
+  - pending/current/queued override state жили отдельно от derived hash-state, из-за чего часть горячего пути делала лишнюю работу.
+- Исправление:
+  - добавлен общий helper `buildNormalizedPromptOverridesStoreState(...)` и role-hash helpers для override store;
+  - `queuePromptOverridesSave()`, `savePromptOverridesToFirebaseNow()`, `startCurrentUserPromptOverridesSubscription()` и `saveLocalPromptsData()` переведены на reuse одного и того же normalized/hash state;
+  - добавлены runtime state-переменные для current/queued/pending prompt overrides store, чтобы не пересчитывать hash/normalize повторно на соседних шагах;
+  - deferred apply теперь тоже использует уже подготовленный pending override state.
+- Практический смысл:
+  - local override path стал легче по CPU и памяти;
+  - меньше лишних full-store compare и сериализаций при редактировании/автосохранении локальных draft-prompts;
+  - поведение prompt overrides не менялось, изменился только внутренний sync/state path.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: baseline/conflict path по prompt roles больше не пересчитывает remote role hash заново
+- Выполнен ещё один заметный non-UX pass по `script.js`, как продолжение prompt-sync performance cleanup.
+- Найдена следующая тяжёлая и хрупкая зона:
+  - при начале редактирования и при conflict-check роли baseline брался через повторный role-level hash из `lastPromptsFirebaseSnapshot`;
+  - если listener временно падал и фронт откатывался на cached snapshot, baseline state мог остаться пустым;
+  - pending/last prompt snapshot и его derived role hashes жили разрозненно, поэтому edit/conflict ветка делала лишние пересчёты.
+- Исправление:
+  - добавлены `lastPromptsFirebaseSnapshotState` и `pendingPromptsFirebaseSnapshotState`;
+  - role-level hashes для prompt snapshot теперь вычисляются лениво и кэшируются внутри snapshot state, а baseline/conflict path переиспользует их вместо повторного пересчёта;
+  - при fallback на cached prompt snapshot после listener/read ошибки теперь сохраняется и сам snapshot state, а не только UI-данные;
+  - при reset/logout prompt snapshot state очищается вместе с остальным auth/runtime state, чтобы новый hash-cache не переживал старую сессию.
+- Практический смысл:
+  - меньше лишних role-level compare во время редактирования и conflict recovery;
+  - baseline для конфликтов стал стабильнее даже при деградации realtime listener и откате на local cache;
+  - поведение prompt editor не менялось, изменился только внутренний state/cache path.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-27 — Существенный фикс: prompt realtime listener больше не сериализует один и тот же snapshot по несколько раз
+- Выполнен ещё один заметный non-UX pass по `script.js`, нацеленный на горячий путь prompt sync.
+- Найдена системная проблема:
+  - live listener по `prompts`, REST bootstrap, local cache bootstrap и localhost test hook держали разрозненную логику сравнения snapshot;
+  - один и тот же нормализованный prompt snapshot сериализовался повторно в нескольких местах подряд, включая listener и оба local backup path.
+- Исправление:
+  - добавлен общий helper `buildNormalizedPromptSnapshotState(...)`, который за один проход готовит нормализованный snapshot, его stable hash и флаг meaningful content;
+  - `setupPromptsAndConfigListeners()`, `bootstrapPromptsViaRestFallback()`, `loadPrompts()` и localhost test hook переведены на этот общий state вместо локальных `JSON.stringify(data)` путей;
+  - `persistPublicPromptsSnapshot(...)` и `persistPublicPromptsEmergencySnapshot(...)` теперь умеют принимать уже посчитанный snapshot state и не делают повторную нормализацию/сериализацию того же payload.
+- Практический смысл:
+  - prompt realtime path стал легче по CPU и памяти, особенно на больших prompt variation snapshot;
+  - listener, REST fallback и локальные backup-и теперь сравнивают один и тот же canonical snapshot одинаково;
+  - поведение prompt sync не менялось, изменился только внутренний путь dedupe/caching.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-26 — Существенный фикс: admin realtime table теперь точечно обновляет invite/revoke строки
+- Выполнен ещё один заметный non-UX pass по `script.js`, как продолжение прошлых admin-table оптимизаций.
+- Найдена следующая тяжёлая зона:
+  - live snapshot по `partner_invites` и `access_revocations` всё ещё будил общий incremental refresh всей таблицы;
+  - на практике даже одиночный invite/revoke update зря прогонял пересборку row data по всем логинам.
+- Исправление:
+  - добавлены отдельные fast-path handlers для `partner_invites` и `access_revocations`;
+  - если набор логинов не изменился, меняется только затронутая строка: пересчитываются `invite` / `accessRevocation`, `accessState` и затем вызывается `updateAdminUsersTableRow(...)`;
+  - общий live refresh оставлен как fallback только для структурных изменений.
+- Практический смысл:
+  - действия администратора вроде invite / revoke / un-revoke меньше будят тяжёлый путь обновления таблицы;
+  - админка стала спокойнее не только на `users`, но и на access-related live updates.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-26 — Существенный фикс: prompt history больше не перезаписывает весь remote snapshot на каждый checkpoint
+- Выполнен ещё один заметный non-UX pass по `script.js`.
+- Найдена серьёзная проблема в `prompt_history`:
+  - новая версия промпта раньше вела к полной перезаписи всего `prompt_history` через `set(ref(db, 'prompt_history'), promptHistory)`;
+  - это давало лишние тяжёлые full-state write и повышало риск гонки “кто последний переписал весь массив, тот и победил”.
+- Исправление:
+  - remote sync prompt history переведён на append-only по `entry.id` через incremental `update(...)`;
+  - добавлена serial queue с debounce и retry для remote sync history entries;
+  - локальное сохранение истории осталось мгновенным и по-прежнему работает через local cache;
+  - чтение `prompt_history` теперь нормализует и array, и object-формат, сортирует по времени и режет до `HISTORY_LIMIT` на каждый prompt.
+- Практический смысл:
+  - новая history entry больше не перезаписывает весь remote blob;
+  - уменьшается write amplification и снижается риск потери history entries при параллельной работе;
+  - схема стала совместимой и со старым массивом, и с новым object/append-only форматом.
+- Проверка после правок:
+  - `npm run test:smoke`
+
+## 2026-03-26 — Существенный фикс: admin realtime table больше не гонит полный render на каждый live snapshot
+- Выполнен ещё один заметный non-UX pass по `script.js`, уже поверх предыдущего active-time throttle.
+- Найдена следующая системная проблема:
+  - админская realtime-таблица на любые live snapshot изменения в `users`, `partner_invites` и `access_revocations` шла через полный `renderAdminUsersTable()`;
+  - это заново запускало тяжёлый render-path даже тогда, когда данные уже были в памяти и нужен был обычный refresh строк.
+- Исправление:
+  - выделен общий updater строк `applyAdminUsersTableRows(...)`;
+  - добавлен отдельный live-path `renderAdminUsersTableFromRealtimeState()`, который берёт уже собранные realtime-данные и обновляет таблицу без полного render-flow;
+  - `scheduleAdminUsersTableRender(...)` теперь различает `full` и `incremental` режимы, а live callbacks переводят таблицу именно в incremental refresh;
+  - полный `renderAdminUsersTable()` оставлен как fallback для первого запуска и случаев, когда realtime state ещё не собран.
+- Практический смысл:
+  - админка меньше дёргает тяжёлый render-path при live-обновлениях;
+  - снижается лишняя работа по JS и DOM при активной админской сессии;
+  - логика ролей, доступа и содержимого строк не менялась, поменялся только путь обновления.
+- Проверка после правок:
+  - `node --check script.js`
+  - `npm run test:smoke`
+
+## 2026-03-26 — Существенный фикс: active time теперь пишет в `users` заметно реже
+- Выполнен более крупный non-UX pass по `script.js`, нацеленный на снижение лишних RTDB write и пробуждений админки.
+- Найдена системная проблема:
+  - `flushActiveTime()` писал `activeMs` и `lastSeenAt` в общую ветку `users` примерно каждые 15 секунд во время активности;
+  - админская таблица подписана на всю коллекцию `users`, поэтому каждая такая запись будила полный users snapshot/remap и последующую перерисовку.
+- Исправление:
+  - добавлен отдельный throttle `ACTIVE_REMOTE_USER_FLUSH_MS = 60000` для remote flush активного времени в `users`;
+  - принудительные точки сохранения оставлены без изменений: pause / pagehide / logout / recovery-path;
+  - время последнего успешного flush теперь хранится в runtime и сбрасывается при reset сессии.
+- Дополнительно во время проверки всплыл отдельный latent-bug:
+  - в импорт Firebase RTDB были оставлены неиспользуемые `onChildAdded/onChildChanged/onChildRemoved`, которых нет в текущем browser bundle;
+  - это ломало загрузку страницы в smoke;
+  - неиспользуемые импорты удалены.
+- Практический смысл:
+  - при активной работе сайт заметно реже пишет `activeMs/lastSeenAt` в `users`;
+  - это снижает сетевой шум и лишние пробуждения админской realtime-таблицы;
+  - presence-статус остаётся жить в отдельной `user_presence`, как и раньше.
+- Проверка после правок:
+  - `npm run test:smoke`
+
+## 2026-03-26 — После security-pass: auth modal prefill login теперь берёт localhost runtime раньше cache
+- Выполнен ещё один безопасный pass по `script.js` без UX-изменений.
+- Найден ещё один cache-first хвост вокруг логина:
+  - при открытии auth modal prefill для `modalLoginInput` брал `USER_LOGIN_KEY` раньше, чем `localhostDevUser?.login`;
+  - из-за этого в localhost dev bypass сценарии модалка могла сначала показывать старый login из cache вместо текущего runtime-пользователя.
+- Исправление:
+  - порядок fallback для prefill логина в модалке выровнен на runtime-first:
+    `localhostDevUser?.login -> USER_LOGIN_KEY`.
+- Практический смысл:
+  - auth modal показывает актуальный localhost runtime login, если он уже известен;
+  - local cache остался только запасным fallback.
+- Проверка после правок:
+  - `npm run test:smoke`
+
+## 2026-03-26 — После security-pass: voice token request теперь берёт login из runtime раньше local cache
+- Выполнен ещё один безопасный pass по `script.js` без UX-изменений.
+- Найден cache-first хвост в voice token request:
+  - при запросе ephemeral voice session frontend передавал `login` как `currentUser?.login || USER_LOGIN_KEY`;
+  - если `currentUser` ещё не собрался, request мог раньше времени взять stale login из local cache.
+- Исправление:
+  - поле `login` в body запроса выровнено на runtime-first порядок:
+    `currentUser?.login -> auth.currentUser.email -> authSession.login -> USER_LOGIN_KEY`;
+  - значение дополнительно проходит через `normalizeLogin(...)`.
+- Практический смысл:
+  - token request опирается сначала на текущую живую auth/session информацию;
+  - local cache остался только резервным fallback, а не ранним источником идентичности.
+- Проверка после правок:
+  - `npm run test:smoke`
+
+## 2026-03-26 — После security-pass: legacy prompt-store login discovery теперь runtime-first
+- Выполнен ещё один безопасный pass по `script.js` без UX-изменений.
+- Найден ещё один cache-first хвост вокруг логина:
+  - `getKnownLocalPromptStoreLogins()` для adoption/поиска legacy local prompt stores брал `USER_LOGIN_KEY` раньше, чем живую Firebase/auth-session информацию;
+  - из-за этого stale cache мог раньше времени попадать в список “известных логинов”.
+- Исправление:
+  - порядок fallback выровнен на runtime-first: `currentUser?.login -> auth.currentUser.email -> authSession.login -> USER_LOGIN_KEY`.
+- Практический смысл:
+  - legacy prompt-store paths опираются сначала на текущую сессию, а не на старый local cache;
+  - меньше риск, что stale login будет участвовать в adoption local prompt stores.
+- Проверка после правок:
+  - `npm run test:smoke`
+
+## 2026-03-26 — После security-pass: stable prompt owner key теперь тоже берёт живое имя раньше кэша
+- Выполнен ещё один безопасный pass по `script.js` без UX-изменений.
+- Найден ещё один хвост того же класса рассинхрона:
+  - `getStablePromptOwnerKey()` в guest/fallback path всё ещё строил owner key от `USER_NAME_KEY` раньше, чем от живого `currentUser` или `managerNameInput`;
+  - из-за этого локальный store key для промптов мог короткое время привязываться к старому имени, хотя runtime-имя уже обновилось.
+- Исправление:
+  - порядок fallback выровнен на runtime-first: `currentUser?.fio -> managerNameInput?.value -> USER_NAME_KEY -> guest`.
+- Практический смысл:
+  - fallback owner key теперь совпадает с текущим именем сессии, а не со старым cache-first значением;
+  - это снижает риск тихого расползания локальных prompt-store ключей после переименования.
+- Проверка после правок:
+  - `npm run test:smoke`
+
+## 2026-03-26 — После security-pass: attestation/export берут имя менеджера из runtime раньше кэша
+- Выполнен ещё один безопасный pass по `script.js` без UX-изменений.
+- Найден хвост в attestation/export path:
+  - отправка аттестации в очередь и генерация docx всё ещё могли брать имя менеджера из local cache как fallback раньше, чем из живого runtime-state;
+  - после локального редактирования имени это могло давать старое имя в очереди и имени файла.
+- Исправление:
+  - `getManagerName()` переведён на runtime-first fallback: `currentUser?.fio -> managerNameInput?.value -> USER_NAME_KEY`;
+  - `sendAttestationResult()` теперь кладёт в очередь `managerName` через `getManagerName('')`;
+  - `buildAttestationDocxPayload()` тоже берёт manager name через тот же helper, если имя не пришло в `options`.
+- Практический смысл:
+  - очередь аттестации и имя экспортируемого файла видят то же имя, что и текущая сессия;
+  - local cache остался только резервным fallback, а не первым источником.
+- Проверка после правок:
+  - `npm run test:smoke`
+
+## 2026-03-26 — После security-pass: локальный кэш имени обновляется сразу, без ожидания debounce-save
+- Выполнен ещё один безопасный pass по `script.js` без UX-изменений.
+- Найден хвост в profile/name path:
+  - при вводе нового имени `currentUser.fio` и UI обновлялись сразу;
+  - но `USER_NAME_KEY` в local cache обновлялся только внутри debounce перед `patchUserRecord(...)`.
+- Почему это было неидеально:
+  - часть runtime-path читает сначала кэш имени (`USER_NAME_KEY`) для export / legacy prompt owner keys / fallback owner name;
+  - в коротком окне до debounce эти ветки могли видеть старое имя, хотя локальный профиль уже показывал новое.
+- Исправление:
+  - `setCachedStorageValue(USER_NAME_KEY, newName)` перенесён в immediate input-path;
+  - remote save в `patchUserRecord(...)` всё ещё остаётся отложенным на debounce.
+- Практический смысл:
+  - локальный runtime, export-path и owner-key fallback видят одно и то же имя сразу;
+  - лишних Firebase write на каждый input не добавлено.
+- Проверка после правок:
+  - `npm run test:smoke`
+
+## 2026-03-26 — После security-pass: self role change сразу обновляет settings state
+- Выполнен ещё один безопасный pass по `script.js` без UX-изменений.
+- Найден stale-case в self role-change через admin users table:
+  - локальная роль текущего пользователя менялась сразу;
+  - `presence` уже синхронизировался отдельной правкой;
+  - но `settings`-состояние могло остаться “админским” до realtime-эха.
+- Исправление:
+  - в self-update path после `syncSelectedRole(nextRole)` теперь вызывается `syncCurrentUserSettingsState()` только если роль реально изменилась;
+  - после этого остаются `syncCurrentUserPresenceState(true)` и `applyRoleRestrictions()`.
+- Практический смысл:
+  - settings modal синхронно прячет/обновляет админский блок сразу после self role-change;
+  - не нужно ждать realtime-эхо для локального UI-state.
+- Проверка после правок:
+  - `npm run test:smoke`
+
+## 2026-03-26 — После security-pass: patchUserRecord() больше не возвращает sensitive auth поля caller-ам
+- Выполнен ещё один безопасный pass по `script.js` без UX-изменений.
+- На выходе `patchUserRecord()` возвращаемая нормализованная запись пользователя теперь всегда дополнительно очищает:
+  - `passwordHash`
+  - `passwordHashScheme`
+- Практический смысл:
+  - caller-ы `patchUserRecord()` больше не получают эти поля обратно даже случайно;
+  - это уменьшает риск тихого повторного заноса auth-sensitive данных в runtime-path через return value.
+- Проверка после правок:
+  - `npm run test:smoke`
+
+## 2026-03-26 — После security-pass: локальные пересборки currentUser снова чистят sensitive auth поля
+- Выполнен ещё один безопасный pass по `script.js` без UX-изменений.
+- Найдены ещё 2 локальные ветки, где `currentUser` пересобирался из свежей записи пользователя вне основных auth/realtime-path:
+  - после `ensureCurrentUserAccessMirror()` при дозаписи `uid`;
+  - после локального refresh текущего пользователя в access-state ветке.
+- В этих местах теперь снова принудительно очищаются:
+  - `currentUser.passwordHash = ''`
+  - `currentUser.passwordHashScheme = null`
+- Практический смысл:
+  - sensitive auth поля не возвращаются обратно в `currentUser` даже если свежая запись пользователя пришла из patch/read path;
+  - это выравнивает поведение с уже существующими sanitize-path в `applyAuthenticatedUser()` и `applyCurrentUserRealtimeRecord()`.
+- Проверка после правок:
+  - `npm run test:smoke`
+
+## 2026-03-26 — После security-pass: self role change сразу обновляет presence role
+- Выполнен ещё один безопасный pass по `script.js` без UX-изменений.
+- Найден тихий рассинхрон:
+  - если админ меняет собственную роль через admin users table, `currentUser.role` обновлялся локально сразу;
+  - но presence payload мог остаться со старой ролью до следующей активности, потому что realtime-эхо потом уже не видело `roleChanged`.
+- Исправление:
+  - в self-update path админской таблицы добавлен точечный `syncCurrentUserPresenceState(true)` только если реальная роль пользователя действительно изменилась.
+- Практический смысл:
+  - presence role обновляется сразу после self role change;
+  - лишних sync при no-op выборе той же роли не добавлено.
+- Проверка:
+  - один первый прогон `npm run test:smoke` упал на флаки prompt-workflow шаге, но повторный прогон на том же коде прошёл полностью;
+  - итоговый зафиксированный статус — smoke зелёный.
+
+## 2026-03-26 — После security-pass: blur и hidden больше не запускают двойной pause-path
+- Выполнен ещё один безопасный cleanup pass по `script.js` без UX-изменений.
+- Найден типовой дубль:
+  - при переключении вкладки браузер часто даёт сначала `blur`, потом `visibilitychange -> hidden`;
+  - оба пути раньше почти подряд запускали pause/flush/presence logic.
+- Исправление:
+  - для `blur` добавлена короткая отложенная пауза `USER_ACTIVITY_BLUR_PAUSE_DELAY_MS = 120`;
+  - если за это время приходит `hidden`, pending blur-pause отменяется и остаётся только hidden-path;
+  - если это обычная потеря фокуса окна без скрытия вкладки, pause всё равно выполняется.
+- Guard чистится на `focus`, `visibility -> visible`, `page exit`, снятии listeners и logout.
+- Практический смысл:
+  - меньше лишних двойных pause/flush операций при обычном переключении вкладок;
+  - сценарий “окно потеряло фокус, но вкладка осталась видимой” не ломается.
+- Проверка после правок:
+  - `npm run test:smoke`
+
+## 2026-03-26 — После security-pass: схлопнут быстрый дубль wakeup между visibility и focus
+- Выполнен ещё один безопасный cleanup pass по `script.js` без UX-изменений.
+- Найден мелкий фоновый шум на возврате вкладки:
+  - браузер часто шлёт парой `visibilitychange -> visible` и `focus`;
+  - оба пути раньше сразу запускали forced activity wakeup, хотя это один и тот же возврат пользователя.
+- Исправление:
+  - добавлен короткий dedupe-guard `USER_ACTIVITY_WAKEUP_DEDUPE_MS = 400`;
+  - `focus` и `visibility -> visible` теперь идут через общий `triggerForcedUserActivityWakeup(...)`;
+  - если второй сигнал приходит почти сразу после первого, он игнорируется как дубль.
+- Практический смысл:
+  - меньше лишних forced wakeups на возврате во вкладку;
+  - обычные pointer/keyboard/scroll события и более поздние реальные wakeups не затронуты.
+- На logout этот guard тоже сбрасывается вместе с остальным activity-state.
+- Проверка после правок:
+  - `npm run test:smoke`
+
+## 2026-03-26 — После security-pass: выровнен стартовый presence-state на login/restore
+- Выполнен ещё один безопасный cleanup pass по `script.js` без UX-изменений.
+- Найден нюанс стартового presence-path:
+  - `applyAuthenticatedUser()` поднимал presence sync ещё до `startActiveTimeTracking()`;
+  - если пользователь долго сидел на форме входа, первый `.info/connected` sync мог успеть посчитать состояние по старому `lastUserActivityAt`.
+- Исправление:
+  - перед `startCurrentUserPresenceSync(normalized.login)` в `applyAuthenticatedUser()` теперь принудительно обновляется `lastUserActivityAt = Date.now()`;
+  - это даёт корректное стартовое состояние новой сессии уже на первом presence sync, а дальнейший sync из `startActiveTimeTracking()` схлопывается существующим dedupe там, где payload не изменился.
+- Во время проверки один прогон `npm run test:smoke` упал на флаки email-auth шаге (в screenshot пароль оказался в поле имени), но повторный прогон на том же коде прошёл полностью; итоговый зафиксированный статус — smoke зелёный.
+- Проверка после финальной правки:
+  - `npm run test:smoke`
+
+## 2026-03-26 — После security-pass: listeners активности и session-wakeup снимаются на logout
+- Выполнен ещё один безопасный cleanup pass по `script.js` без UX-изменений.
+- Что изменено:
+  - `markUserActivity()` теперь сразу выходит, если текущего пользователя уже нет;
+  - listeners активности (`pointer/scroll/keydown/focus/blur/visibilitychange/pagehide/beforeunload`) переведены на именованные handler-ссылки и теперь снимаются через `stopUserActivityTrackingListeners()`;
+  - listeners для wakeup-проверки отзыва сессии тоже получили отдельный teardown через `stopSessionRevocationListeners()`.
+- Когда это срабатывает:
+  - при `resetCurrentSessionToAuth()` listeners и их локальные throttle-счётчики теперь сбрасываются;
+  - при следующем логине они поднимаются заново через `startActiveTimeTracking()`.
+- Практический смысл:
+  - после logout окно и документ больше не продолжают будить фоновые activity/session handlers;
+  - это убирает холостую работу между сессиями и делает повторный логин чище.
+- Проверка после правок:
+  - `npm run test:smoke`
+
+## 2026-03-26 — После security-pass: облегчён realtime-path админской таблицы
+- Выполнен ещё один безопасный performance pass по `script.js` без UX-изменений.
+- В admin realtime sync убрана двойная лишняя сортировка:
+  - входные realtime-массивы пользователей, инвайтов и ревокаций больше не сортируются сразу в callback;
+  - таблица всё равно собирает `Map` и сортирует уже финальный список логинов перед рендером, поэтому ранняя сортировка только тратила CPU.
+- Presence realtime-поток облегчен отдельно:
+  - presence snapshot теперь обновляет `adminRealtimePresence`;
+  - если строки таблицы уже нарисованы, для них обновляется только presence-часть и вызывается `refreshAdminUsersPresenceLabels()` вместо полного `renderAdminUsersTable()`.
+- Практический смысл:
+  - меньше лишней работы на каждом realtime-апдейте в админке;
+  - статусы присутствия продолжают обновляться, но без пересборки всей таблицы.
+- Проверка после правок:
+  - `npm run test:smoke`
+
+## 2026-03-26 — Read-only analysis: currentUser presence / active-time / session revocation
+- Выполнен отдельный read-only проход по `script.js` без правок кода, только для поиска безопасных cleanup-кандидатов.
+- Подтверждены 3 спокойных направления без ожидаемого UX-эффекта:
+  - listeners активности после первого логина не снимаются на logout и продолжают будить `markUserActivity()`, хотя дальше код почти сразу упирается в early-return из-за отсутствия `currentUser`;
+  - стартовый `syncCurrentUserPresenceState(true)` в `startActiveTimeTracking()` выглядит дублирующим по отношению к `.info/connected` callback в `startCurrentUserPresenceSync()`, который и так публикует presence при подключении;
+  - polling/check path для session revocation через `focus` / `visibilitychange` уже во многом избыточен, потому что основной auth-flow держит realtime-подписку на запись текущего пользователя и она остаётся главным источником истины.
+
+## 2026-03-26 — После security-pass: убраны лишние wakeups вокруг session revocation
+- Выполнен ещё один безопасный cleanup pass по `script.js` без UX-изменений.
+- `focus` / `visibilitychange` listeners для проверки отзыва сессии теперь отсекают лишние wakeups до вызова `enforceSessionRevocation()`:
+  - если пользователь не залогинен;
+  - если вкладка не видима;
+  - если это localhost dev bypass;
+  - если уже активна realtime-подписка на текущего пользователя и она всё равно является источником истины.
+- Практический смысл:
+  - меньше фоновых холостых вызовов при переключении вкладок и возврате в окно;
+  - логика отзыва сессии не меняется, потому что раньше `enforceSessionRevocation()` в этих же случаях тоже сразу делал `return false`.
+- Проверка после правок:
+  - `npm run test:smoke`
+
+## 2026-03-26 — После security-pass: срезаны дубли финального presence/offline write на выходе со страницы
+- Выполнен небольшой cleanup pass по `script.js` без UX-изменений.
+- Логика `beforeunload` / `pagehide` собрана в один guarded path:
+  - добавлен единый `handleCurrentUserPageExit()`;
+  - повторный вызов при втором событии игнорируется через локальный guard, поэтому финальный offline-path больше не запускается дважды.
+- В unload-пути `pauseActiveTimeTracking()` теперь умеет работать с `skipPresenceSync`, чтобы не делать промежуточный presence sync прямо перед `stopCurrentUserPresenceSync({ immediateOffline: true })`.
+- На `pageshow` guard сбрасывается, чтобы возврат из BFCache не ломал следующий нормальный выход со страницы.
+- Проверка после правок:
+  - `npm run test:smoke`
+
+## 2026-03-26 — После security-pass: срезан лишний UI-sync на echo-апдейтах current user record
+- Выполнен ещё один безопасный performance pass по `script.js` без UX-изменений.
+- В `applyCurrentUserRealtimeRecord()` добавлен early-return для echo-only кейса:
+  - если realtime-апдейт фактически меняет только `activeMs` и/или `lastSeenAt`, фронтенд больше не прогоняет полный user/settings/role sync;
+  - при этом `currentUser` всё равно обновляется, а в админском режиме ячейка времени продолжает обновляться отдельно.
+- Практический смысл:
+  - собственные `patchUserRecord(activeMs, lastSeenAt)` больше не возвращаются через realtime как повод лишний раз дёргать `updateUserNameDisplay()`, `syncCurrentUserSettingsState()` и related UI-paths;
+  - это уменьшает лишнюю работу на фоне при активной сессии.
+- Проверка после правок:
+  - `npm run test:smoke`
+
+## 2026-03-26 — После security-pass: срезан лишний presence write-noise во фронте
+- Выполнен небольшой performance/cleanup pass по `script.js` без UX-изменений.
+- В presence sync добавлен payload-level dedupe:
+  - фронтенд больше не пишет повторно один и тот же presence payload, если фактически не изменились `login`, `sessionId`, `role` и `state`;
+  - это снижает лишние RTDB `update(...)` на forced presence sync путях (focus/visibility/reconnect/start tracking), не меняя доступы и пользовательские сценарии.
+- В `.info/connected` listener при потере соединения теперь локально сбрасываются `currentUserPresenceState` и presence payload cache; это нужно, чтобы после reconnect `online` публиковался заново корректно и dedupe не мешал восстановлению presence.
+- Проверка после правок:
+  - `npm run test:smoke`
+
+## 2026-03-26 — Пункт 4 закрыт: shared voice endpoint больше не может увести Firebase ID token на произвольный URL
+- Выполнен frontend security pass по `script.js`, плюс кратко обновлены `README.md` и `server/README.md`.
+- Добавлена жёсткая allowlist-проверка для voice token endpoint:
+  - разрешён только путь `/api/openai-realtime-session`;
+  - разрешены только same-origin URL, production origins `https://client-simulator.ru` / `https://www.client-simulator.ru`, loopback (`localhost`, `127.0.0.1`, `::1`) и опциональные origins из `window.ALLOWED_VOICE_TOKEN_ENDPOINT_ORIGINS` / `window.OPENAI_REALTIME_ALLOWED_ORIGINS`;
+  - `http:` разрешён только для loopback/local dev;
+  - URL с `query`, `hash`, embedded credentials или произвольным путём отклоняются.
+- Защита стоит в двух слоях:
+  - при чтении shared/local endpoint из `app_config` и `localStorage` небезопасное значение игнорируется;
+  - перед `fetch()` в `resolveGeminiLiveApiKey()` endpoint проверяется повторно, так что Firebase ID token не уйдёт на произвольный адрес даже если плохой URL уже записан.
+- Сохранение voice-настроек теперь тоже валидирует endpoint до записи; при попытке сохранить плохой URL UI возвращает текст ошибки вместо молчаливого generic fail.
+- Проверка после правок:
+  - `npm run test:smoke`
+
+## 2026-03-26 — Пункт 3 закрыт: token server выровнен с access-моделью сайта
+- Выполнен server-side pass по `server/gemini-token-server.mjs` и `server/README.md`.
+- В secure-ветке (`Authorization: Bearer <Firebase ID token>`) token server теперь повторяет ту же базовую access-логику, что и сайт:
+  - читает `users/$key`, `access_revocations/$key`, `partner_invites/$key` через RTDB REST с Firebase ID token;
+  - deny при `users.isBlocked`;
+  - deny при `access_revocations.status === 'revoked'`;
+  - allow только для `admin`, corporate domain или active invite;
+  - после allow deny при `passwordNeedsSetup`;
+  - после allow deny без `emailVerifiedAt` в user/invite state.
+- В ответ token server теперь возвращает `requestContext.accessSource`, чтобы было видно, по какому пути доступ был выдан.
+- Legacy fallback по `login`/`email` не удалён полностью, потому что он нужен как временный миграционный режим и по определению не несёт Firebase ID token; из-за этого без отдельной server-side service auth он не может гарантировать полный паритет self-state checks.
+- При этом legacy fallback теперь тоже сначала проходит через общий helper `resolveVoiceAccess()`, а затем уже падает в совместимый compat-path только если secure-style проверка недоступна без auth context.
+- Проверка после правок:
+  - `node --check server/gemini-token-server.mjs`
+  - `npm run test:smoke`
+
+## 2026-03-26 — Пункт 3: собран минимальный safe edit plan без правок кода
+- Выполнен read-only разбор расхождения между `server/gemini-token-server.mjs` и клиентской access-моделью (`resolveAccessPolicy`, `normalizeAccessRevocation`, `normalizePartnerInvite`, `isPartnerInviteActive`, `restoreAuthSession`).
+- Подтверждённый разрыв сейчас такой:
+  - secure server-ветка с Firebase ID token проверяет только валидность токена и `ALLOWED_EMAIL_DOMAINS`;
+  - fallback server-ветка дополнительно смотрит `users/$key.role` и `partner_invites/$key`, но всё равно не учитывает `access_revocations`, `isBlocked`, `passwordNeedsSetup`, `emailVerifiedAt`;
+  - фронтенд после логина живёт по более строгой модели: deny при `isBlocked`, deny при revoked access, deny при `passwordNeedsSetup`, deny без `emailVerifiedAt`, allow для `admin` / corporate email / active invite.
+- Минимальный безопасный план для следующего edit-pass:
+  - вынести на сервер единый helper резолва доступа по login, который читает `users/$key`, `access_revocations/$key`, `partner_invites/$key` и повторяет тот же порядок проверок, что фронтенд;
+  - перевести и Firebase-ID-token ветку, и legacy fallback на этот единый helper, чтобы server больше не жил по отдельной access-модели;
+  - сохранить `ALLOWED_EMAIL_DOMAINS` только как часть corporate allow-check, а не как отдельный hard gate раньше admin/invite/revocation logic.
+- Точные серверные проверки, которые должны появиться:
+  - deny при невалидном login;
+  - deny при `users/$key.isBlocked === true`;
+  - deny при `access_revocations/$key.status === 'revoked'`;
+  - allow при `users/$key.role === 'admin'`;
+  - allow при corporate email по `ALLOWED_EMAIL_DOMAINS`;
+  - allow при `partner_invites/$key.status === 'active'` и `expiresAt` отсутствует или в будущем;
+  - после allow: deny при `users/$key.passwordNeedsSetup === true`;
+  - после allow: deny если нет `users/$key.emailVerifiedAt` и нет `partner_invites/$key.emailVerifiedAt`;
+  - при Firebase ID token path login должен браться из подтверждённого email токена, а не из request body.
+
+## 2026-03-26 — Пункт 2 закрыт: ужесточены RTDB rules для user security-state
+- Выполнен второй практический security pass по `database.rules.json`.
+- Ветка `users/$key` усилена child-level validations:
+  - обычный пользователь больше не может свободно переписывать `failedLoginAttempts`, `isBlocked`, `blockedReason`, `failedLoginBackoffUntil`, `blockedAt`, `sessionRevokedAt`;
+  - эти поля теперь допускают только admin-write, либо неизменённое значение, либо безопасные create-time defaults;
+  - `emailVerifiedAt` и `passwordNeedsSetup` ужесточены частично: для self-write они теперь допускают только ограниченные переходы, совместимые с текущим email-link/auth flow.
+- Практический смысл:
+  - закрыт главный сценарий self-unblock / self-unrevoke через прямую запись в `users/$key`;
+  - при этом текущий фронтовый auth-flow не сломан и `npm run test:smoke` остаётся зелёным.
+- Важно:
+  - это пока репозиторное изменение; чтобы прод реально стал безопаснее, новые rules нужно опубликовать в Firebase Realtime Database.
+- Ограничение текущего шага:
+  - `emailVerificationSentAt`, `passwordHash`, `passwordHashScheme` и часть verification-flow всё ещё остаются в self-write модели, потому что текущая архитектура auth хранит и мигрирует пароль на фронте; их можно ужесточать уже только вместе с отдельным рефакторингом auth.
+
+## 2026-03-26 — Пункт 1 закрыт: убраны client-side fallback paths для voice и emergency bypass
+- Выполнен первый практический security-cleanup pass без изменения UX-структуры.
+- В `script.js`:
+  - voice переведён в fail-closed режим: браузер больше не использует long-lived API key из `window`/`localStorage`; `resolveGeminiLiveApiKey()` теперь работает только через token endpoint и Firebase ID token;
+  - legacy localStorage ключ `geminiLiveApiKey` больше не используется для voice и очищается как миграционный хвост;
+  - сохранение voice-настроек больше не пишет API key в browser storage; если пользователь пытается сохранить только API key, UI получает уведомление, что нужен token endpoint;
+  - полностью удалён client-side emergency bypass из auth-flow: убраны hardcoded emergency credentials, special-case в `verifyPasswordHash()`, ранний `allow` в `resolveAccessPolicy()` и emergency-сброс lock-state в `handleAuthSubmit()`.
+- В `server/README.md`:
+  - явно зафиксировано, что browser-side API key fallback больше не поддерживается;
+  - `ALLOWED_ORIGINS` помечен как фактически обязательный для браузерного использования;
+  - локальный запуск переписан под PowerShell/Windows окружение.
+- Проверка после правок:
+  - `npm run test:smoke` проходит полностью.
+
+## 2026-03-26 — Обзор сайта: что чинить, ускорять и упрощать
+- Выполнен обзорный проход по фронту, voice/token-server, RTDB rules, auth и UI/UX; код не менялся, это аналитический pass с приоритетами.
+- Самые критичные находки по безопасности и доступу:
+  - во фронтенде всё ещё есть client-side fallback для voice с long-lived API key (`script.js`), хотя проектный инвариант требует только server-issued session;
+  - в `script.js` остаётся emergency-access логика прямо на клиенте, включая жёстко зашитую экстренную credential-связку и её проверку в браузере;
+  - `database.rules.json` для `users/$key` разрешает владельцу записи менять чувствительные поля (`emailVerifiedAt`, `passwordNeedsSetup`, `failedLoginAttempts`, `isBlocked`, `sessionRevokedAt` и др.), на которых затем держится фронтовый access policy;
+  - token server в secure-ветке авторизации живёт по другой модели доступа, чем основной сайт: он не учитывает `access_revocations`, invite-логику и часть user-state, поэтому revoked user может сохранить voice-доступ, а invited external user — потерять его;
+  - глобально настраиваемый voice endpoint может увести Firebase ID token на произвольный origin, потому что URL сохраняется в `app_config` и потом используется клиентами без host allowlist.
+- Подтверждённые техдолги по производительности и поддержке:
+  - `script.js` вырос до ~13.6k строк и содержит слишком связанную auth-ветку (`handleAuthSubmit`) плюс мёртвый webhook-debug subsystem;
+  - prompt sync и prompt history всё ещё работают как full-state overwrite / full-state compare (`set(..., promptHistory)`, `JSON.stringify(...)` по целым blob-объектам);
+  - админская realtime-таблица подписывается на целые коллекции `users`, `partner_invites`, `access_revocations`, `user_presence` и на каждом снапшоте заново нормализует/сортирует данные, что будет тяжело расти по мере увеличения числа пользователей.
+- Подтверждённые UX/accessibility проблемы:
+  - мобильный переход desktop -> mobile может оставить интерфейс без активной панели;
+  - модалки и табы почти без dialog/tab semantics, без фокус-трапа и слабо дружат с клавиатурой;
+  - compact dropdown ролей не имеет нормальной keyboard/ARIA-поддержки;
+  - в проекте много снятых focus-outline и иконок без `aria-label`.
+- Рекомендуемый порядок следующего практического прохода:
+  1. убрать клиентские emergency/API-key fallback paths и привести token-server + RTDB rules к единой access-модели;
+  2. починить mobile panel bug и базовую accessibility семантику модалок/таба/dropdown;
+  3. вынести auth, voice, prompt-sync и admin-table из монолитного `script.js` в отдельные модули;
+  4. заменить full overwrite/history sync на более узкие записи и lazy/on-demand загрузку там, где это возможно.
+
 ## 2026-03-25 — Integration smoke: проверка rater payload в live-контуре
 - В `scripts/integration-smoke.mjs` добавлен прозрачный перехват запросов к `n8n` через `route.continue()` (без моков ответа) для аудита отправляемого payload.
 - Перед запуском rating сценарий задаёт `adminHiddenRaterPromptInput`, затем проверяет, что в реальном `rating`-payload поле `raterPrompt` содержит скрытый prompt оценщика и не содержит старый фиксированный блок `СЛУЖЕБНЫЙ КОНТРАКТ ФОРМАТА ОЦЕНКИ`.

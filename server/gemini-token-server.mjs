@@ -16,7 +16,10 @@ const ALLOWED_EMAIL_DOMAINS = String(process.env.ALLOWED_EMAIL_DOMAINS || '')
     .filter(Boolean);
 const ALLOW_LEGACY_LOGIN_FALLBACK = String(process.env.ALLOW_LEGACY_LOGIN_FALLBACK || '').trim().toLowerCase() === 'true';
 
-const GEMINI_LIVE_MODEL = String(process.env.GEMINI_LIVE_MODEL || 'gemini-2.5-flash-native-audio-preview-09-2025').trim();
+const GEMINI_LIVE_MODEL = String(process.env.GEMINI_LIVE_MODEL || 'gemini-3.1-flash-live-preview').trim();
+const GEMINI_LIVE_VOICE = String(process.env.GEMINI_LIVE_VOICE || 'Enceladus').trim();
+const GEMINI_LIVE_MEDIA_RESOLUTION = 'MEDIA_RESOLUTION_LOW';
+const GEMINI_LIVE_THINKING_BUDGET = 0;
 const TOKEN_PATH = '/api/gemini-live-token';
 const OPENAI_TOKEN_PATH = '/api/openai-realtime-session';
 const OPENAI_REALTIME_MODEL = String(process.env.OPENAI_REALTIME_MODEL || 'gpt-4o-realtime-preview-2025-06-03').trim();
@@ -161,6 +164,52 @@ function parseDateMs(value) {
     return Number.isFinite(ms) ? ms : null;
 }
 
+function normalizeRole(value) {
+    return String(value || '').trim().toLowerCase() === 'admin' ? 'admin' : 'user';
+}
+
+function normalizeUserRecord(raw, loginFallback = '') {
+    if (!raw || typeof raw !== 'object') return null;
+    const login = normalizeLogin(raw.login || loginFallback);
+    if (!isValidLogin(login)) return null;
+    return {
+        login,
+        role: normalizeRole(raw.role),
+        emailVerifiedAt: raw.emailVerifiedAt || null,
+        passwordNeedsSetup: !!raw.passwordNeedsSetup,
+        isBlocked: !!raw.isBlocked
+    };
+}
+
+function normalizeAccessRevocation(raw, loginFallback = '') {
+    if (!raw || typeof raw !== 'object') return null;
+    const login = normalizeLogin(raw.login || loginFallback);
+    if (!isValidLogin(login)) return null;
+    return {
+        login,
+        status: raw.status === 'active' ? 'active' : 'revoked'
+    };
+}
+
+function normalizePartnerInvite(raw, loginFallback = '') {
+    if (!raw || typeof raw !== 'object') return null;
+    const login = normalizeLogin(raw.login || loginFallback);
+    if (!isValidLogin(login)) return null;
+    return {
+        login,
+        status: raw.status === 'revoked' ? 'revoked' : 'active',
+        expiresAt: raw.expiresAt || null,
+        emailVerifiedAt: raw.emailVerifiedAt || null
+    };
+}
+
+function isPartnerInviteActive(invite) {
+    if (!invite || invite.status !== 'active') return false;
+    if (!invite.expiresAt) return true;
+    const expiresAtMs = parseDateMs(invite.expiresAt);
+    return !!expiresAtMs && expiresAtMs > Date.now();
+}
+
 async function fetchWithTimeout(url, options = {}, timeoutMs, timeoutMessage) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -208,10 +257,11 @@ async function readJsonWithTimeout(response, timeoutMs, timeoutMessage, fallback
     }
 }
 
-async function readDbJson(path) {
+async function readDbJson(path, authToken = '') {
     if (!FIREBASE_DATABASE_URL) return null;
+    const authSuffix = authToken ? `?auth=${encodeURIComponent(authToken)}` : '';
     const response = await fetchWithTimeout(
-        `${FIREBASE_DATABASE_URL}/${path}.json`,
+        `${FIREBASE_DATABASE_URL}/${path}.json${authSuffix}`,
         {},
         FIREBASE_REQUEST_TIMEOUT_MS,
         'Firebase RTDB request timed out'
@@ -220,11 +270,77 @@ async function readDbJson(path) {
     return readJsonWithTimeout(response, FIREBASE_REQUEST_TIMEOUT_MS, 'Firebase RTDB response body timed out', null);
 }
 
+async function resolveVoiceAccess(login, authToken = '') {
+    const normalizedLogin = normalizeLogin(login);
+    if (!isValidLogin(normalizedLogin)) {
+        throw createHttpError(403, 'Access denied for this login');
+    }
+
+    const key = loginToStorageKey(normalizedLogin);
+    const [userRaw, revocationRaw, inviteRaw] = await Promise.all([
+        readDbJson(`users/${key}`, authToken),
+        readDbJson(`access_revocations/${key}`, authToken),
+        readDbJson(`partner_invites/${key}`, authToken)
+    ]);
+
+    const user = normalizeUserRecord(userRaw, normalizedLogin);
+    const accessRevocation = normalizeAccessRevocation(revocationRaw, normalizedLogin);
+    const invite = normalizePartnerInvite(inviteRaw, normalizedLogin);
+
+    if (user?.isBlocked) {
+        throw createHttpError(403, 'User account is blocked');
+    }
+    if (accessRevocation?.status === 'revoked') {
+        throw createHttpError(403, 'Access has been revoked');
+    }
+
+    let accessSource = '';
+    if (user?.role === 'admin') {
+        accessSource = 'admin-user';
+    } else if (isAllowedEmailDomain(normalizedLogin)) {
+        accessSource = 'domain-allowlist';
+    } else if (isPartnerInviteActive(invite)) {
+        accessSource = 'active-invite';
+    }
+
+    if (!accessSource) {
+        throw createHttpError(403, 'Access denied for this login');
+    }
+    if (user?.passwordNeedsSetup) {
+        throw createHttpError(403, 'Password setup is incomplete');
+    }
+
+    const verifiedAt = user?.emailVerifiedAt || invite?.emailVerifiedAt || null;
+    if (!verifiedAt) {
+        throw createHttpError(403, 'Email verification is required');
+    }
+
+    return {
+        login: normalizedLogin,
+        user,
+        invite,
+        accessSource
+    };
+}
+
 async function verifyLoginFallbackAccess(login) {
     const normalizedLogin = normalizeLogin(login);
     if (!isValidLogin(normalizedLogin)) {
         throw new Error('Invalid login');
     }
+
+    try {
+        const accessState = await resolveVoiceAccess(normalizedLogin);
+        return {
+            login: accessState.login,
+            accessSource: accessState.accessSource
+        };
+    } catch (error) {
+        // Legacy fallback has no Firebase auth context, so keep a narrow
+        // compatibility path for temporary migrations when RTDB self-state
+        // cannot be resolved here.
+    }
+
     const key = loginToStorageKey(normalizedLogin);
     let userRaw = null;
     try {
@@ -238,11 +354,11 @@ async function verifyLoginFallbackAccess(login) {
     const user = userRaw && typeof userRaw === 'object' ? userRaw : null;
     const role = String(user?.role || '').trim().toLowerCase();
     if (role === 'admin') {
-        return { login: normalizedLogin, source: 'admin-user' };
+        return { login: normalizedLogin, accessSource: 'admin-user' };
     }
 
     if (isAllowedEmailDomain(normalizedLogin)) {
-        return { login: normalizedLogin, source: 'domain-allowlist' };
+        return { login: normalizedLogin, accessSource: 'domain-allowlist' };
     }
 
     const inviteRaw = await readDbJson(`partner_invites/${key}`);
@@ -251,7 +367,7 @@ async function verifyLoginFallbackAccess(login) {
     const expiresAtMs = parseDateMs(invite?.expiresAt);
     const isInviteActive = inviteStatus === 'active' && (!expiresAtMs || expiresAtMs > Date.now());
     if (isInviteActive) {
-        return { login: normalizedLogin, source: 'active-invite' };
+        return { login: normalizedLogin, accessSource: 'active-invite' };
     }
 
     throw new Error('Access denied for this login');
@@ -335,11 +451,28 @@ async function createGeminiEphemeralToken() {
             expireTime,
             newSessionExpireTime,
             liveConnectConstraints: {
-                model: GEMINI_LIVE_MODEL
+                model: GEMINI_LIVE_MODEL,
+                config: {
+                    responseModalities: ['AUDIO'],
+                    mediaResolution: GEMINI_LIVE_MEDIA_RESOLUTION,
+                    speechConfig: {
+                        voiceConfig: {
+                            prebuiltVoiceConfig: {
+                                voiceName: GEMINI_LIVE_VOICE
+                            }
+                        }
+                    },
+                    thinkingConfig: {
+                        thinkingBudget: GEMINI_LIVE_THINKING_BUDGET
+                    },
+                    inputAudioTranscription: {},
+                    outputAudioTranscription: {}
+                }
             },
+            lockAdditionalFields: [],
             httpOptions: {
                 apiVersion: 'v1alpha'
-            }
+            },
         }
     });
 }
@@ -447,17 +580,14 @@ const server = createServer(async (req, res) => {
 
         if (idToken) {
             const firebaseUser = await verifyFirebaseIdToken(idToken);
+            const accessState = await resolveVoiceAccess(firebaseUser.email || '', idToken);
             authIdentity = {
                 uid: firebaseUser.localId || null,
                 email: firebaseUser.email || null,
                 login: normalizeLogin(firebaseUser.email || ''),
-                source: 'firebase-id-token'
+                source: 'firebase-id-token',
+                accessSource: accessState.accessSource
             };
-
-            if (!isAllowedEmailDomain(firebaseUser.email)) {
-                sendJson(res, 403, { error: 'Email domain is not allowed' }, requestOrigin);
-                return;
-            }
         } else if (ALLOW_LEGACY_LOGIN_FALLBACK) {
             const loginFromBody = normalizeLogin(requestBody?.login || requestBody?.email || '');
             const fallbackAuth = await verifyLoginFallbackAccess(loginFromBody);
@@ -465,7 +595,8 @@ const server = createServer(async (req, res) => {
                 uid: null,
                 email: fallbackAuth.login,
                 login: fallbackAuth.login,
-                source: fallbackAuth.source
+                source: 'legacy-login-fallback',
+                accessSource: fallbackAuth.accessSource || null
             };
         } else {
             sendJson(res, 401, { error: 'Firebase ID token is required' }, requestOrigin);
@@ -492,7 +623,8 @@ const server = createServer(async (req, res) => {
                 },
                 requestContext: {
                     source: requestBody?.source || null,
-                    authSource: authIdentity.source
+                    authSource: authIdentity.source,
+                    accessSource: authIdentity.accessSource || null
                 }
             }, requestOrigin);
             return;
@@ -508,15 +640,16 @@ const server = createServer(async (req, res) => {
             name: tokenName,
             expireTime: token?.expireTime || null,
             newSessionExpireTime: token?.newSessionExpireTime || null,
-            issuedFor: {
-                uid: authIdentity.uid || null,
-                email: authIdentity.email || null
-            },
-            requestContext: {
-                source: requestBody?.source || null,
-                authSource: authIdentity.source
-            }
-        }, requestOrigin);
+                issuedFor: {
+                    uid: authIdentity.uid || null,
+                    email: authIdentity.email || null
+                },
+                requestContext: {
+                    source: requestBody?.source || null,
+                    authSource: authIdentity.source,
+                    accessSource: authIdentity.accessSource || null
+                }
+            }, requestOrigin);
     } catch (error) {
         const message = String(error?.message || 'Failed to create voice session token');
         const status = Number.isInteger(error?.statusCode)

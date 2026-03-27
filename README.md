@@ -20,6 +20,7 @@
 - Markdown-ответы, подсветка кода, экспорт диалога и инструкций.
 - Голосовой режим через безопасный token endpoint.
 - Админский режим с пользователями, доступами, скрытым prompt и realtime presence.
+- Shared voice token endpoint принимается только с доверенного домена и только по пути `/api/gemini-live-token`; произвольные адреса блокируются на фронтенде до отправки Firebase ID token.
 
 ## Основные файлы
 
@@ -174,8 +175,8 @@ Webhook -> Normalize Input -> AI Agent -> Respond to Webhook
 Чтобы сотрудники не вставляли API key вручную:
 
 1. Поднимите token server из `server/gemini-token-server.mjs`.
-2. Храните `OPENAI_API_KEY` только на сервере.
-3. Фронт по умолчанию обращается к `POST /api/openai-realtime-session`.
+2. Храните `GEMINI_API_KEY` только на сервере.
+3. Фронт по умолчанию обращается к `POST /api/gemini-live-token`.
 4. Браузер отправляет Firebase ID token в `Authorization`.
 
 Подробности и env-переменные: `server/README.md`.
