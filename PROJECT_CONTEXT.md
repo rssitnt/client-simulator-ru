@@ -1579,6 +1579,10 @@
 - В `script.js` `resolveAccessPolicy()` теперь разрешает вход любому пользователю, который уже есть в базе (`userRecord`), даже если email не корпоративный и нет активного инвайта.
 - Блокировки (`isBlocked`) и ревокации (`access_revocations`) остаются приоритетными и продолжают закрывать доступ.
 
+## 2026-03-27 — Admin users list: merge `users` + `users_by_uid`
+- В `listAllUserRecords()` теперь используется объединение записей из `users` и зеркала `users_by_uid`, чтобы список не обрезался, когда в `users` остались только часть логинов.
+- Вводится `mergeUserRecordsByLogin(...)`, который оставляет приоритет за `users`, но добавляет отсутствующие логины из `users_by_uid`.
+
 ## Open Next Steps
 - Revisit prompt sync further if multi-admin concurrent public edits still collide semantically.
 - Consider diff-based Firebase prompt writes instead of full role payloads where practical.

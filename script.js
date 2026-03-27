@@ -3792,6 +3792,22 @@ function buildNormalizedUserRecordsFromEntries(entries = [], mapEntry = null) {
     return sortUserRecords(normalizedRecords);
 }
 
+function mergeUserRecordsByLogin(primary = [], secondary = []) {
+    const merged = new Map();
+    primary.forEach((record) => {
+        const login = normalizeLogin(record?.login || '');
+        if (isValidLogin(login)) {
+            merged.set(login, record);
+        }
+    });
+    secondary.forEach((record) => {
+        const login = normalizeLogin(record?.login || '');
+        if (!isValidLogin(login) || merged.has(login)) return;
+        merged.set(login, record);
+    });
+    return sortUserRecords(Array.from(merged.values()));
+}
+
 async function listAllUserRecords() {
     const localStore = loadLocalUsersStore();
     const localRecords = buildNormalizedUserRecordsFromEntries(Object.entries(localStore || {}));
@@ -3822,17 +3838,15 @@ async function listAllUserRecords() {
     if (db) {
         try {
             const snapshot = await firebaseGetWithTimeout(AUTH_USERS_DB_PATH);
+            let records = [];
             if (snapshot.exists()) {
                 const raw = snapshot.val();
-                const records = buildNormalizedUserRecordsFromEntries(Object.entries(raw || {}));
-                if (records.length > 0) {
-                    return records;
-                }
+                records = buildNormalizedUserRecordsFromEntries(Object.entries(raw || {}));
             }
 
             const mirrorRecords = await collectUsersFromByUidMirror();
-            if (mirrorRecords.length > 0) {
-                return mirrorRecords;
+            if (records.length > 0 || mirrorRecords.length > 0) {
+                return mergeUserRecordsByLogin(records, mirrorRecords);
             }
 
             return localRecords;
@@ -3840,7 +3854,7 @@ async function listAllUserRecords() {
             console.error('Failed to load users list from Firebase:', error);
             const mirroredRecords = await collectUsersFromByUidMirror();
             if (mirroredRecords.length > 0) {
-                return mirroredRecords;
+                return mergeUserRecordsByLogin(mirroredRecords, localRecords);
             }
 
             return localRecords;
