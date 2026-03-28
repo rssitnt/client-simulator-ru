@@ -4429,6 +4429,13 @@ body.light-theme .admin-hidden-prompt-textarea::-webkit-scrollbar-thumb:hover {
     flex-wrap: wrap;
 }
 
+.admin-webhook-debug-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
 .admin-webhook-debug-meta {
     color: #8f8f8f;
     font-size: 12px;

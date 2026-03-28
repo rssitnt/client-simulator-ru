@@ -21,6 +21,10 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-28`, admin settings now include a local Gemini Live tech log:
+  - logs recent voice-session events from this browser: start request, token endpoint, `setupComplete`, first manager audio, first assistant text, first assistant audio chunk, first playback, transport close/error, reconnect scheduling, and stop/start failures.
+  - stored locally in browser storage and exposed via an admin accordion with `Скопировать техлог` / `Очистить`.
+  - goal: debug real voice failures quickly without changing normal UX for regular users.
 - As of `2026-03-28`, the idle voice connect pill no longer leaks onto the main screen:
   - root cause was CSS overriding the native `hidden` attribute on `.voice-connect-status` with `display:flex`.
   - added `.voice-connect-status[hidden] { display: none !important; }`, so “Идёт подключение…” only appears during a real voice start.

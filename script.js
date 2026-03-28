@@ -135,6 +135,8 @@ const RATER_HIDDEN_PROMPT_STORAGE_KEY = 'raterHiddenPrompt:v1';
 const WEBHOOK_DEBUG_CONFIG_STORAGE_KEY = 'webhookDebugConfig:v1';
 const WEBHOOK_DEBUG_LOG_STORAGE_KEY = 'webhookDebugLog:v1';
 const WEBHOOK_DEBUG_LOG_MAX_ENTRIES = 40;
+const VOICE_DEBUG_LOG_STORAGE_KEY = 'voiceDebugLog:v1';
+const VOICE_DEBUG_LOG_MAX_ENTRIES = 80;
 const ENABLE_LOCAL_WEBHOOK_DEBUG = false;
 const FIREBASE_FRONTEND_GET_TIMEOUT_MS = 4000;
 const FIREBASE_REST_FALLBACK_BASE_DELAY_MS = 2000;
@@ -1406,6 +1408,11 @@ const adminWebhookDebugAccordion = document.getElementById('adminWebhookDebugAcc
 const adminWebhookDebugMeta = document.getElementById('adminWebhookDebugMeta');
 const adminWebhookDebugList = document.getElementById('adminWebhookDebugList');
 const adminWebhookDebugClearBtn = document.getElementById('adminWebhookDebugClearBtn');
+const adminVoiceDebugAccordion = document.getElementById('adminVoiceDebugAccordion');
+const adminVoiceDebugMeta = document.getElementById('adminVoiceDebugMeta');
+const adminVoiceDebugList = document.getElementById('adminVoiceDebugList');
+const adminVoiceDebugCopyBtn = document.getElementById('adminVoiceDebugCopyBtn');
+const adminVoiceDebugClearBtn = document.getElementById('adminVoiceDebugClearBtn');
 const adminUsersAccessAccordion = document.getElementById('adminUsersAccessAccordion');
 const adminPanelAccordion = document.getElementById('adminPanelAccordion');
 const adminPanel = document.getElementById('adminPanel');
@@ -1498,6 +1505,8 @@ let aiImproveRequestVersion = 0;
 let aiImproveRequestController = null;
 let webhookDebugEntries = ENABLE_LOCAL_WEBHOOK_DEBUG ? loadWebhookDebugEntries() : [];
 let webhookDebugRenderQueued = false;
+let voiceDebugEntries = loadVoiceDebugEntries();
+let voiceDebugRenderQueued = false;
 const LOCAL_PROMPTS_STORAGE_VERSION = 'v3';
 const LEGACY_LOCAL_PROMPTS_STORAGE_VERSION = 'v2';
 const HISTORY_LIMIT = 50;
@@ -1575,6 +1584,11 @@ let geminiVoiceAutoStopTimerId = 0;
 let geminiVoiceAutoStopRequested = false;
 let geminiVoiceConversationFinished = false;
 let geminiVoiceSessionConfig = null;
+let geminiVoiceDebugSessionId = '';
+let geminiVoiceFirstUserAudioLogged = false;
+let geminiVoiceFirstAssistantTextLogged = false;
+let geminiVoiceFirstAudioChunkLogged = false;
+let geminiVoiceFirstPlaybackLogged = false;
 let geminiVoiceMicInputEnabled = false;
 let geminiVoiceMicUnlockTimerId = 0;
 let geminiVoiceMicLevelNormalized = 0;
@@ -7821,6 +7835,266 @@ function clearWebhookDebugEntries() {
     renderWebhookDebugPanel();
 }
 
+function loadVoiceDebugEntries() {
+    try {
+        const raw = getCachedLocalStorageJson(VOICE_DEBUG_LOG_STORAGE_KEY);
+        return Array.isArray(raw)
+            ? raw.filter((entry) => entry && typeof entry === 'object').slice(0, VOICE_DEBUG_LOG_MAX_ENTRIES)
+            : [];
+    } catch (error) {
+        console.warn('Failed to load voice debug log:', error);
+        return [];
+    }
+}
+
+function saveVoiceDebugEntries() {
+    try {
+        setCachedLocalStorageJson(
+            VOICE_DEBUG_LOG_STORAGE_KEY,
+            Array.isArray(voiceDebugEntries) ? voiceDebugEntries.slice(0, VOICE_DEBUG_LOG_MAX_ENTRIES) : []
+        );
+    } catch (error) {
+        console.warn('Failed to save voice debug log:', error);
+    }
+}
+
+function getVoiceDebugStageLabel(stage = '') {
+    switch (String(stage || '').trim()) {
+        case 'start_requested': return 'Старт звонка';
+        case 'sdk_loaded': return 'SDK загружен';
+        case 'token_request_started': return 'Запрос session key';
+        case 'token_request_succeeded': return 'Session key получен';
+        case 'token_request_failed': return 'Session key не получен';
+        case 'live_connect_started': return 'Открытие Gemini Live';
+        case 'live_open': return 'Соединение открыто';
+        case 'capture_fallback_default': return 'Микрофон переключён';
+        case 'capture_ready': return 'Микрофон готов';
+        case 'capture_failed': return 'Микрофон не инициализирован';
+        case 'audio_output_primed': return 'Аудиовыход прогрет';
+        case 'call_active': return 'Звонок активирован';
+        case 'setup_complete': return 'Gemini готов';
+        case 'first_user_audio': return 'Пошёл первый звук менеджера';
+        case 'first_assistant_text': return 'Пришёл первый текст клиента';
+        case 'first_audio_chunk': return 'Пришёл первый аудиочанк клиента';
+        case 'first_audio_playback': return 'Стартовало первое воспроизведение';
+        case 'transport_error': return 'Ошибка транспорта';
+        case 'transport_close': return 'Соединение закрыто';
+        case 'transport_failure': return 'Сбой голосового канала';
+        case 'reconnect_scheduled': return 'Автопереподключение';
+        case 'stop_requested': return 'Остановка звонка';
+        case 'stopped': return 'Звонок остановлен';
+        case 'start_failed': return 'Старт провалился';
+        default: return stage || 'Событие';
+    }
+}
+
+function getVoiceDebugStatusLabel(status = '') {
+    switch (String(status || '').trim()) {
+        case 'ok': return 'OK';
+        case 'error': return 'Ошибка';
+        default: return 'Лог';
+    }
+}
+
+function getVoiceDebugMicSnapshot() {
+    const deviceId = getSelectedGeminiAudioInputDeviceId();
+    const selectedOption = geminiAudioInputDeviceInput?.selectedOptions?.[0]
+        || geminiAudioInputDeviceInput?.options?.[geminiAudioInputDeviceInput?.selectedIndex || 0]
+        || null;
+    const device = geminiAudioInputDevices.find((item) => item.deviceId === deviceId) || null;
+    const trackLabel = normalizeGeminiAudioInputLabel(geminiVoiceInputStream?.getAudioTracks?.()[0]?.label || '');
+    const optionLabel = normalizeGeminiAudioInputLabel(selectedOption?.dataset?.pickerName || selectedOption?.textContent || '');
+    const label = device?.label || trackLabel || optionLabel || '';
+    const micState = geminiVoiceMicMeterReady ? getGeminiVoiceMicLevelState(geminiVoiceMicLevelNormalized) : '';
+    return {
+        deviceId: String(deviceId || '').trim(),
+        label,
+        micState,
+        micLevel: geminiVoiceMicMeterReady ? Math.round(geminiVoiceMicLevelNormalized * 100) : null
+    };
+}
+
+function getVoiceDebugSessionElapsedMs() {
+    const startedAt = Number(geminiVoiceStartTimestamp || 0);
+    if (!startedAt) return null;
+    const elapsed = Date.now() - startedAt;
+    return elapsed >= 0 ? elapsed : null;
+}
+
+function buildVoiceDebugEntry(stage = '', details = {}) {
+    const mic = getVoiceDebugMicSnapshot();
+    const nowMs = Date.now();
+    const entry = {
+        id: buildRequestId('voice_dbg'),
+        stage: String(stage || '').trim() || 'event',
+        status: String(details.status || 'info').trim() || 'info',
+        sessionId: String(details.sessionId || geminiVoiceDebugSessionId || '').trim(),
+        startedAt: new Date(nowMs).toISOString(),
+        startedAtMs: nowMs,
+        elapsedMs: Number.isFinite(Number(details.elapsedMs))
+            ? Number(details.elapsedMs)
+            : getVoiceDebugSessionElapsedMs(),
+        message: truncateWebhookDebugText(details.message || ''),
+        voice: String(details.voice || geminiVoiceSessionConfig?.voice || getConfiguredGeminiVoiceName() || '').trim(),
+        model: String(details.model || geminiVoiceSessionConfig?.model || GEMINI_LIVE_MODEL || '').trim(),
+        micLabel: String(details.micLabel || mic.label || '').trim(),
+        micDeviceId: String(details.micDeviceId || mic.deviceId || '').trim(),
+        micState: String(details.micState || mic.micState || '').trim(),
+        micLevel: Number.isFinite(Number(details.micLevel)) ? Math.round(Number(details.micLevel)) : mic.micLevel,
+        closeCode: Number.isFinite(Number(details.closeCode)) ? Number(details.closeCode) : null,
+        closeReason: truncateWebhookDebugText(details.closeReason || ''),
+        httpStatus: Number.isFinite(Number(details.httpStatus)) ? Number(details.httpStatus) : null,
+        mimeType: String(details.mimeType || '').trim(),
+        chunkBytes: Number.isFinite(Number(details.chunkBytes)) ? Number(details.chunkBytes) : null,
+        instructionsLength: Number.isFinite(Number(details.instructionsLength)) ? Number(details.instructionsLength) : null,
+        systemInstructionLength: Number.isFinite(Number(details.systemInstructionLength)) ? Number(details.systemInstructionLength) : null
+    };
+    return entry;
+}
+
+function recordVoiceDebugEvent(stage = '', details = {}) {
+    const entry = buildVoiceDebugEntry(stage, details);
+    voiceDebugEntries = [entry, ...voiceDebugEntries].slice(0, VOICE_DEBUG_LOG_MAX_ENTRIES);
+    saveVoiceDebugEntries();
+    queueVoiceDebugRender();
+    return entry.id;
+}
+
+function queueVoiceDebugRender() {
+    if (voiceDebugRenderQueued) return;
+    voiceDebugRenderQueued = true;
+    queueMicrotask(() => {
+        voiceDebugRenderQueued = false;
+        renderVoiceDebugPanel();
+    });
+}
+
+function renderVoiceDebugPanel() {
+    if (!adminVoiceDebugList || !adminVoiceDebugMeta) return;
+    const total = voiceDebugEntries.length;
+    const errorCount = voiceDebugEntries.filter((entry) => entry.status === 'error').length;
+    const sessionCount = new Set(voiceDebugEntries.map((entry) => String(entry.sessionId || '').trim()).filter(Boolean)).size;
+    adminVoiceDebugMeta.textContent = total
+        ? `Показаны последние ${Math.min(total, VOICE_DEBUG_LOG_MAX_ENTRIES)} событий. Сессий: ${sessionCount}. Ошибок: ${errorCount}.`
+        : 'Здесь видно этапы Gemini Live: старт, token endpoint, первый текст, первое аудио, причины close/error.';
+
+    if (!total) {
+        adminVoiceDebugList.innerHTML = '<div class="admin-webhook-debug-empty">Техлог пока пуст</div>';
+        return;
+    }
+
+    adminVoiceDebugList.innerHTML = voiceDebugEntries.map((entry) => {
+        const status = String(entry.status || 'info');
+        const badgeStatus = status === 'error' ? 'error' : status === 'ok' ? 'ok' : 'pending';
+        const detailFields = [
+            entry.sessionId ? { label: 'Сессия', value: `<code>${escapeHtml(entry.sessionId)}</code>` } : null,
+            entry.elapsedMs != null ? { label: 'От старта', value: escapeHtml(formatWebhookDebugDuration(entry.elapsedMs)) } : null,
+            entry.voice ? { label: 'Голос', value: escapeHtml(entry.voice) } : null,
+            entry.model ? { label: 'Модель', value: escapeHtml(entry.model) } : null,
+            entry.micLabel ? { label: 'Микрофон', value: escapeHtml(entry.micLabel) } : null,
+            entry.micDeviceId ? { label: 'Device ID', value: `<code>${escapeHtml(entry.micDeviceId)}</code>` } : null,
+            entry.micState ? { label: 'Громкость', value: escapeHtml(`${entry.micState}${entry.micLevel != null ? ` (${entry.micLevel}%)` : ''}`) } : null,
+            entry.httpStatus != null ? { label: 'HTTP', value: escapeHtml(`${entry.httpStatus}`) } : null,
+            entry.closeCode != null ? { label: 'Close code', value: escapeHtml(`${entry.closeCode}`) } : null,
+            entry.closeReason ? { label: 'Close reason', value: escapeHtml(entry.closeReason) } : null,
+            entry.mimeType ? { label: 'Audio MIME', value: `<code>${escapeHtml(entry.mimeType)}</code>` } : null,
+            entry.chunkBytes != null ? { label: 'Размер чанка', value: escapeHtml(`${entry.chunkBytes} B`) } : null,
+            entry.instructionsLength != null ? { label: 'Prompt', value: escapeHtml(`${entry.instructionsLength} симв.`) } : null,
+            entry.systemInstructionLength != null ? { label: 'System prompt', value: escapeHtml(`${entry.systemInstructionLength} симв.`) } : null,
+            entry.message ? { label: 'Сообщение', value: escapeHtml(entry.message) } : null
+        ].filter(Boolean);
+        const startedAtText = formatWebhookDebugTime(entry.startedAt);
+        return `
+            <div class="admin-webhook-debug-item is-${badgeStatus}">
+                <div class="admin-webhook-debug-head">
+                    <div class="admin-webhook-debug-title">
+                        <span>${escapeHtml(getVoiceDebugStageLabel(entry.stage))}</span>
+                        <span class="admin-webhook-debug-status is-${badgeStatus}">${escapeHtml(getVoiceDebugStatusLabel(status))}</span>
+                    </div>
+                    <div class="admin-webhook-debug-time">${escapeHtml(startedAtText)}</div>
+                </div>
+                <div class="admin-webhook-debug-grid">
+                    ${detailFields.map((field) => `
+                        <div class="admin-webhook-debug-field">
+                            <div class="admin-webhook-debug-label">${escapeHtml(field.label)}</div>
+                            <div class="admin-webhook-debug-value">${field.value}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function clearVoiceDebugEntries() {
+    voiceDebugEntries = [];
+    clearCachedLocalStorageJson(VOICE_DEBUG_LOG_STORAGE_KEY, []);
+    renderVoiceDebugPanel();
+}
+
+function buildVoiceDebugClipboardText() {
+    if (!voiceDebugEntries.length) {
+        return 'Техлог голосового режима пуст.';
+    }
+    return voiceDebugEntries
+        .slice()
+        .reverse()
+        .map((entry) => {
+            const parts = [
+                `[${formatWebhookDebugTime(entry.startedAt)}] ${getVoiceDebugStageLabel(entry.stage)}`
+            ];
+            if (entry.status === 'error') parts.push('status=error');
+            else if (entry.status === 'ok') parts.push('status=ok');
+            if (entry.sessionId) parts.push(`session=${entry.sessionId}`);
+            if (entry.elapsedMs != null) parts.push(`elapsed=${formatWebhookDebugDuration(entry.elapsedMs)}`);
+            if (entry.voice) parts.push(`voice=${entry.voice}`);
+            if (entry.model) parts.push(`model=${entry.model}`);
+            if (entry.micLabel) parts.push(`mic=${entry.micLabel}`);
+            if (entry.micLevel != null) parts.push(`micLevel=${entry.micLevel}%`);
+            if (entry.httpStatus != null) parts.push(`http=${entry.httpStatus}`);
+            if (entry.closeCode != null) parts.push(`closeCode=${entry.closeCode}`);
+            if (entry.closeReason) parts.push(`closeReason=${entry.closeReason}`);
+            if (entry.mimeType) parts.push(`mime=${entry.mimeType}`);
+            if (entry.chunkBytes != null) parts.push(`chunk=${entry.chunkBytes}B`);
+            if (entry.message) parts.push(`message=${entry.message}`);
+            return parts.join(' | ');
+        })
+        .join('\n');
+}
+
+async function copyVoiceDebugEntriesToClipboard() {
+    const text = buildVoiceDebugClipboardText();
+    await navigator.clipboard.writeText(text);
+}
+
+function resetGeminiVoiceDebugSessionMarkers() {
+    geminiVoiceFirstUserAudioLogged = false;
+    geminiVoiceFirstAssistantTextLogged = false;
+    geminiVoiceFirstAudioChunkLogged = false;
+    geminiVoiceFirstPlaybackLogged = false;
+}
+
+function recordGeminiFirstAssistantTextIfNeeded(text = '') {
+    const normalized = normalizeVoiceDialogText(text);
+    if (!normalized || geminiVoiceFirstAssistantTextLogged) return;
+    geminiVoiceFirstAssistantTextLogged = true;
+    recordVoiceDebugEvent('first_assistant_text', {
+        status: 'ok',
+        message: normalized
+    });
+}
+
+function recordGeminiFirstAudioChunkIfNeeded(base64Data = '', mimeType = '') {
+    const normalizedData = String(base64Data || '').trim();
+    if (!normalizedData || geminiVoiceFirstAudioChunkLogged) return;
+    geminiVoiceFirstAudioChunkLogged = true;
+    recordVoiceDebugEvent('first_audio_chunk', {
+        status: 'ok',
+        mimeType: String(mimeType || '').trim() || 'audio/pcm;rate=24000',
+        chunkBytes: base64ToUint8(normalizedData).byteLength
+    });
+}
+
 function debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {
@@ -12939,6 +13213,11 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
 
     let tokenResponse;
     try {
+        recordVoiceDebugEvent('token_request_started', {
+            message: tokenEndpoint,
+            voice: sessionConfig?.voice || getConfiguredGeminiVoiceName(),
+            model: sessionConfig?.model || GEMINI_LIVE_MODEL
+        });
         tokenResponse = await fetchWithTimeout(tokenEndpoint, {
             method: 'POST',
             headers,
@@ -12959,6 +13238,10 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
             signal: options?.signal
         }, VOICE_TOKEN_ENDPOINT_TIMEOUT_MS);
     } catch (error) {
+        recordVoiceDebugEvent('token_request_failed', {
+            status: 'error',
+            message: error?.message || 'Token endpoint request failed'
+        });
         const message = String(error?.message || '').toLowerCase();
         if (message.includes('таймаут') || message.includes('timeout')) {
             throw new Error(`Таймаут token endpoint (${VOICE_TOKEN_ENDPOINT_TIMEOUT_MS / 1000}с). Сервер может просыпаться после простоя — попробуйте ещё раз.`);
@@ -12973,6 +13256,11 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
             {}
         );
         const tokenErrorText = String(tokenErrorPayload?.error || '').trim();
+        recordVoiceDebugEvent('token_request_failed', {
+            status: 'error',
+            httpStatus: tokenResponse.status,
+            message: tokenErrorText || `HTTP ${tokenResponse.status}`
+        });
         if (tokenResponse.status === 401 || tokenResponse.status === 403) {
             throw new Error(tokenErrorText || 'Нет доступа к голосовому режиму');
         }
@@ -12991,7 +13279,18 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
         tokenPayload?.apiKey ||
         ''
     ).trim();
-    if (token) return token;
+    if (token) {
+        recordVoiceDebugEvent('token_request_succeeded', {
+            status: 'ok',
+            httpStatus: tokenResponse.status
+        });
+        return token;
+    }
+    recordVoiceDebugEvent('token_request_failed', {
+        status: 'error',
+        httpStatus: tokenResponse.status,
+        message: 'Пустой ответ token endpoint'
+    });
     throw new Error('Эндпоинт ключа сессии вернул пустой ответ');
 }
 
@@ -13116,6 +13415,14 @@ async function enqueueGeminiAudioPlayback(base64Data, mimeType = 'audio/pcm;rate
                     startAt = now + 0.01;
                 }
                 source.start(startAt);
+                if (!geminiVoiceFirstPlaybackLogged) {
+                    geminiVoiceFirstPlaybackLogged = true;
+                    recordVoiceDebugEvent('first_audio_playback', {
+                        status: 'ok',
+                        mimeType: mimeType || normalizedMime || 'decoded',
+                        chunkBytes: byteView.byteLength
+                    });
+                }
                 geminiVoicePlaybackCursor = startAt + decoded.duration;
                 geminiVoiceHasAudioOutput = true;
                 if (!geminiVoiceMicInputEnabled && geminiVoiceHasAssistantReply) {
@@ -13147,6 +13454,14 @@ async function enqueueGeminiAudioPlayback(base64Data, mimeType = 'audio/pcm;rate
             startAt = now + 0.01;
         }
         source.start(startAt);
+        if (!geminiVoiceFirstPlaybackLogged) {
+            geminiVoiceFirstPlaybackLogged = true;
+            recordVoiceDebugEvent('first_audio_playback', {
+                status: 'ok',
+                mimeType: mimeType || 'audio/pcm;rate=24000',
+                chunkBytes: byteView.byteLength
+            });
+        }
         geminiVoicePlaybackCursor = startAt + audioBuffer.duration;
         geminiVoiceHasAudioOutput = true;
         if (!geminiVoiceMicInputEnabled && geminiVoiceHasAssistantReply) {
@@ -13912,9 +14227,19 @@ function handleGeminiVoiceTransportFailure(message = 'Соединение го�
         !geminiVoiceHasAudioOutput &&
         !hasBufferedVoiceDialog();
 
+    recordVoiceDebugEvent('transport_failure', {
+        status: shouldRetryEarlyClose ? 'info' : 'error',
+        elapsedMs,
+        message
+    });
     stopGeminiDialTone();
     if (shouldRetryEarlyClose) {
         geminiVoiceEarlyReconnectAttempts += 1;
+        recordVoiceDebugEvent('reconnect_scheduled', {
+            status: 'info',
+            elapsedMs,
+            message: `Ранняя повторная попытка ${geminiVoiceEarlyReconnectAttempts}/${GEMINI_VOICE_EARLY_RECONNECT_MAX_ATTEMPTS}`
+        });
         geminiVoiceCloseExpected = true;
         stopGeminiVoiceMode({
             silent: true,
@@ -14092,6 +14417,10 @@ async function handleGeminiLiveMessage(message) {
 
     if (message.setupComplete) {
         geminiVoiceSetupComplete = true;
+        recordVoiceDebugEvent('setup_complete', {
+            status: 'ok',
+            message: 'Gemini Live прислал setupComplete'
+        });
         stopGeminiDialTone();
         if (!maybeActivateGeminiVoiceManagerInput()) {
             setVoiceModeStatus('Клиент на линии. Подготавливаем микрофон…', 'waiting');
@@ -14120,6 +14449,7 @@ async function handleGeminiLiveMessage(message) {
     const outputFinished = !!serverContent?.outputTranscription?.finished;
         if (outputText) {
             stopGeminiDialTone();
+            recordGeminiFirstAssistantTextIfNeeded(outputText);
             if (!geminiVoiceUserTurnFinalized && geminiVoiceUserPreview.trim()) {
                 finalizeGeminiUserTurn(geminiVoiceUserPreview);
             }
@@ -14156,6 +14486,7 @@ async function handleGeminiLiveMessage(message) {
         const mimeType = String(inlineData?.mimeType || inlineData?.mime_type || '').trim();
         const audioBase64 = String(inlineData?.data || '').trim();
         if (audioBase64 && (!mimeType || /^audio\//i.test(mimeType))) {
+            recordGeminiFirstAudioChunkIfNeeded(audioBase64, mimeType);
             await enqueueGeminiAudioPlayback(audioBase64, mimeType).catch((error) => {
                 console.warn('Failed to play Gemini Live audio chunk:', error);
             });
@@ -14164,6 +14495,7 @@ async function handleGeminiLiveMessage(message) {
         }
         const partText = normalizeVoiceDialogText(part?.text || '');
         if (partText && !outputText) {
+            recordGeminiFirstAssistantTextIfNeeded(partText);
             if (!geminiVoiceUserTurnFinalized && geminiVoiceUserPreview.trim()) {
                 finalizeGeminiUserTurn(geminiVoiceUserPreview);
             }
@@ -14180,6 +14512,7 @@ async function handleGeminiLiveMessage(message) {
         const audioBase64 = String(outputAudio?.data || outputAudio?.audio || outputAudio?.audioData || '').trim();
         const mimeType = String(outputAudio?.mimeType || outputAudio?.mime_type || outputAudio?.contentType || '').trim();
         if (audioBase64 && (!mimeType || /^audio\//i.test(mimeType))) {
+            recordGeminiFirstAudioChunkIfNeeded(audioBase64, mimeType || 'audio/pcm;rate=24000');
             await enqueueGeminiAudioPlayback(audioBase64, mimeType || 'audio/pcm;rate=24000').catch((error) => {
                 console.warn('Failed to play Gemini Live audio chunk:', error);
             });
@@ -14187,6 +14520,9 @@ async function handleGeminiLiveMessage(message) {
     }
 
     if (serverContent?.interrupted) {
+        recordVoiceDebugEvent('transport_failure', {
+            message: 'Gemini прислал interrupted'
+        });
         if (geminiVoiceHasAudioOutput) {
             resetGeminiPlaybackCursor();
         } else if (geminiVoiceAudioContext) {
@@ -14265,6 +14601,10 @@ async function initGeminiVoiceCapture() {
         const shouldFallbackToDefaultInput = !!selectedAudioInputDeviceId
             && ['OverconstrainedError', 'NotFoundError', 'DevicesNotFoundError'].includes(String(error?.name || ''));
         if (!shouldFallbackToDefaultInput) {
+            recordVoiceDebugEvent('capture_failed', {
+                status: 'error',
+                message: error?.message || 'getUserMedia failed'
+            });
             throw error;
         }
         console.warn('Selected microphone is unavailable, falling back to the current real input:', error);
@@ -14273,6 +14613,10 @@ async function initGeminiVoiceCapture() {
             console.warn('Failed to refresh audio input picker after microphone fallback:', refreshError);
         });
         showCopyNotification('Выбранный микрофон недоступен. Переключил звонок на доступный вход.');
+        recordVoiceDebugEvent('capture_fallback_default', {
+            status: 'error',
+            message: error?.message || 'Saved microphone unavailable'
+        });
         geminiVoiceInputStream = await mediaDevices.getUserMedia({
             audio: baseAudioConstraints
         });
@@ -14293,6 +14637,11 @@ async function initGeminiVoiceCapture() {
     geminiVoiceSilenceGain = geminiVoiceAudioContext.createGain();
     geminiVoiceSilenceGain.gain.value = 0;
     resetGeminiVoiceMicMeter();
+    recordVoiceDebugEvent('capture_ready', {
+        status: 'ok',
+        micLabel: normalizeGeminiAudioInputLabel(geminiVoiceInputStream?.getAudioTracks?.()[0]?.label || ''),
+        micDeviceId: selectedAudioInputDeviceId
+    });
 
     geminiVoiceProcessorNode.onaudioprocess = (event) => {
         const inputChannel = event.inputBuffer?.getChannelData?.(0);
@@ -14311,6 +14660,14 @@ async function initGeminiVoiceCapture() {
             if (!inputChannel?.length) return;
             const downsampled = downsampleAudioBuffer(inputChannel, event.inputBuffer.sampleRate, 16000);
             if (!downsampled.length) return;
+            if (!geminiVoiceFirstUserAudioLogged) {
+                geminiVoiceFirstUserAudioLogged = true;
+                recordVoiceDebugEvent('first_user_audio', {
+                    status: 'ok',
+                    micLevel: Math.round(geminiVoiceMicLevelNormalized * 100),
+                    micState: geminiVoiceMicMeterReady ? getGeminiVoiceMicLevelState(geminiVoiceMicLevelNormalized) : ''
+                });
+            }
             const pcm = float32ToInt16Pcm(downsampled);
             const pcmBytes = new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength);
             geminiLiveSession.sendRealtimeInput({
@@ -14388,6 +14745,10 @@ async function stopGeminiVoiceMode(options = {}) {
     setGeminiVoiceMicInputEnabled(false);
     resetGeminiPlaybackCursor();
     geminiVoiceCloseExpected = !!expectedClose;
+    recordVoiceDebugEvent('stop_requested', {
+        status: 'info',
+        message: silent ? 'Тихая остановка' : 'Обычная остановка'
+    });
     const shouldPreserveDialog = !!preserveDialogForRating && hasBufferedVoiceDialog();
     const shouldRenderDialog = !silent && !shouldPreserveDialog;
 
@@ -14396,6 +14757,10 @@ async function stopGeminiVoiceMode(options = {}) {
             resetGeminiVoiceDialogBuffer();
             geminiVoiceConversationFinished = false;
         }
+        recordVoiceDebugEvent('stopped', {
+            status: 'ok',
+            message: 'Голосовой режим уже был остановлен'
+        });
         return;
     }
 
@@ -14429,6 +14794,10 @@ async function stopGeminiVoiceMode(options = {}) {
 
     resetGeminiVoiceDialogBuffer();
     geminiVoiceConversationFinished = false;
+    recordVoiceDebugEvent('stopped', {
+        status: 'ok',
+        message: shouldPreserveDialog ? 'Звонок остановлен, диалог сохранён' : 'Звонок остановлен'
+    });
 
     if (!silent) {
         setVoiceModeStatus('Голосовой режим остановлен.', 'idle');
@@ -14444,6 +14813,8 @@ async function startGeminiVoiceMode() {
 
     geminiVoiceCloseExpected = false;
     geminiVoiceStartTimestamp = Date.now();
+    geminiVoiceDebugSessionId = buildRequestId('voice');
+    resetGeminiVoiceDebugSessionMarkers();
     resetGeminiVoiceDialogBuffer();
     geminiVoiceConversationFinished = false;
     geminiVoiceSetupComplete = false;
@@ -14454,6 +14825,10 @@ async function startGeminiVoiceMode() {
     setGeminiVoiceMicInputEnabled(false);
     clearGeminiVoiceMicUnlockTimer();
     resetGeminiVoiceMicMeter();
+    recordVoiceDebugEvent('start_requested', {
+        status: 'info',
+        instructionsLength: Number((getActiveContent('manager_call') || getActiveContent('client') || '').length || 0)
+    });
     isGeminiVoiceConnecting = true;
     updateVoiceModeControls();
     setVoiceModeStatus('Звоним клиенту…', 'waiting');
@@ -14462,9 +14837,19 @@ async function startGeminiVoiceMode() {
 
     try {
         const sdk = await loadGeminiSdkModule();
+        recordVoiceDebugEvent('sdk_loaded', {
+            status: 'ok'
+        });
         throwIfGeminiVoiceStartAttemptStale(startAttempt.id);
         const sessionConfig = buildGeminiVoiceSessionConfig(sdk);
         geminiVoiceSessionConfig = sessionConfig;
+        recordVoiceDebugEvent('live_connect_started', {
+            status: 'info',
+            voice: sessionConfig.voice,
+            model: sessionConfig.model,
+            instructionsLength: String(sessionConfig.instructions || '').trim().length,
+            systemInstructionLength: String(sessionConfig.systemInstruction || '').trim().length
+        });
         const clientSecret = await resolveGeminiLiveApiKey(sessionConfig, {
             signal: startAttempt.signal
         });
@@ -14482,6 +14867,9 @@ async function startGeminiVoiceMode() {
             callbacks: {
                 onopen: () => {
                     if (startAttempt.id !== geminiVoiceStartAttemptId) return;
+                    recordVoiceDebugEvent('live_open', {
+                        status: 'ok'
+                    });
                     setVoiceModeStatus('Соединяем клиента…', 'waiting');
                 },
                 onmessage: (message) => {
@@ -14493,11 +14881,21 @@ async function startGeminiVoiceMode() {
                 onerror: (event) => {
                     if (startAttempt.id !== geminiVoiceStartAttemptId) return;
                     console.error('Gemini Live error:', event);
+                    recordVoiceDebugEvent('transport_error', {
+                        status: 'error',
+                        message: event?.message || event?.error?.message || 'Gemini Live error event'
+                    });
                     handleGeminiVoiceTransportFailure('Ошибка Gemini Live. Попробуйте запустить звонок заново.');
                 },
                 onclose: (event) => {
                     if (startAttempt.id !== geminiVoiceStartAttemptId) return;
                     const closeReason = getGeminiCloseReasonText(event);
+                    recordVoiceDebugEvent('transport_close', {
+                        status: Number(event?.code) === 1000 ? 'ok' : 'error',
+                        closeCode: event?.code,
+                        closeReason: String(event?.reason || event?.message || '').trim(),
+                        message: closeReason || 'Gemini Live close event'
+                    });
                     handleGeminiVoiceTransportFailure(
                         closeReason
                             ? `Соединение Gemini Live закрыто${closeReason}.`
@@ -14511,10 +14909,17 @@ async function startGeminiVoiceMode() {
         resetGeminiPlaybackCursor();
         await primeGeminiVoiceAudioOutput();
         geminiVoiceAudioReady = true;
+        recordVoiceDebugEvent('audio_output_primed', {
+            status: 'ok'
+        });
         throwIfGeminiVoiceStartAttemptStale(startAttempt.id);
 
         isGeminiVoiceConnecting = false;
         isGeminiVoiceActive = true;
+        recordVoiceDebugEvent('call_active', {
+            status: 'ok',
+            message: 'Сессия активна и ждёт setup/audio'
+        });
         updateVoiceModeControls();
         maybeActivateGeminiVoiceManagerInput();
         updateVoiceConnectingUi();
@@ -14523,6 +14928,10 @@ async function startGeminiVoiceMode() {
         }
     } catch (error) {
         console.error('Failed to start voice mode:', error);
+        recordVoiceDebugEvent('start_failed', {
+            status: 'error',
+            message: error?.message || 'Неизвестная ошибка старта'
+        });
         isGeminiVoiceConnecting = false;
         isGeminiVoiceActive = false;
         await stopGeminiVoiceMode({ silent: true, expectedClose: true });
@@ -15039,7 +15448,7 @@ function showSettingsModal() {
     populateHiddenClientPromptField();
     populateHiddenRaterPromptField();
     settingsModal.classList.add('active');
-    [adminHiddenClientPromptAccordion, adminHiddenRaterPromptAccordion, adminUsersAccessAccordion]
+    [adminHiddenClientPromptAccordion, adminHiddenRaterPromptAccordion, adminUsersAccessAccordion, adminVoiceDebugAccordion]
         .forEach((accordion) => {
             accordion?.removeAttribute('open');
         });
@@ -15051,6 +15460,7 @@ function showSettingsModal() {
         }
         startAdminRealtimeSync();
         renderAdminUsersTable();
+        renderVoiceDebugPanel();
     } else if (adminPanelAccordion) {
         adminPanelAccordion.style.display = 'none';
         adminPanelAccordion.removeAttribute('open');
@@ -15615,6 +16025,21 @@ bindEvent(adminHiddenRaterPromptInput, 'keydown', (e) => {
 bindEvent(adminWebhookDebugClearBtn, 'click', () => {
     clearWebhookDebugEntries();
     showCopyNotification('Лог webhook очищен');
+});
+
+bindEvent(adminVoiceDebugCopyBtn, 'click', async () => {
+    try {
+        await copyVoiceDebugEntriesToClipboard();
+        showCopyNotification('Техлог голоса скопирован');
+    } catch (error) {
+        console.error('Failed to copy voice debug log:', error);
+        showCopyNotification('Не удалось скопировать техлог голоса');
+    }
+});
+
+bindEvent(adminVoiceDebugClearBtn, 'click', () => {
+    clearVoiceDebugEntries();
+    showCopyNotification('Техлог голоса очищен');
 });
 
 [geminiApiKeyInput, geminiTokenEndpointInput, geminiVoiceNameInput, geminiAudioInputDeviceInput].forEach((input) => {
