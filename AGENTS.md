@@ -21,6 +21,9 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-28`, stale Gemini Live callbacks no longer abort a fresh call start:
+  - `onmessage`, `onerror`, and `onclose` now ignore events from old start attempts, not only `onopen`.
+  - this closes a race where a late `close` from the previous session could reset a brand new outgoing call before it actually started.
 - As of `2026-03-28`, finalized Gemini Live transcripts now pass through a short-noise filter before appending to chat:
   - streaming status text is untouched; only finalized chat lines are filtered.
   - ultra-short foreign/non-Cyrillic fragments in a Russian dialog context (for example stray `Sí.`) are dropped instead of being written as full chat bubbles.

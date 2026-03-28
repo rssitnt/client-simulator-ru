@@ -14119,15 +14119,18 @@ async function startGeminiVoiceMode() {
                     setVoiceModeStatus('Соединяем клиента…', 'waiting');
                 },
                 onmessage: (message) => {
+                    if (startAttempt.id !== geminiVoiceStartAttemptId) return;
                     handleGeminiLiveMessage(message).catch((error) => {
                         console.error('Gemini Live message handling error:', error);
                     });
                 },
                 onerror: (event) => {
+                    if (startAttempt.id !== geminiVoiceStartAttemptId) return;
                     console.error('Gemini Live error:', event);
                     handleGeminiVoiceTransportFailure('Ошибка Gemini Live. Попробуйте запустить звонок заново.');
                 },
                 onclose: (event) => {
+                    if (startAttempt.id !== geminiVoiceStartAttemptId) return;
                     const closeReason = getGeminiCloseReasonText(event);
                     handleGeminiVoiceTransportFailure(
                         closeReason
