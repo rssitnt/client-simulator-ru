@@ -3298,6 +3298,7 @@ body.light-theme .btn-icon:hover {
     gap: 8px;
     flex: 1;
     min-width: 0;
+    max-width: 620px;
 }
 
 .voice-config-actions {
