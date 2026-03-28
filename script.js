@@ -12177,7 +12177,10 @@ function populateVoiceConfigFields() {
         geminiTokenEndpointInput.value = getConfiguredGeminiTokenEndpoint();
     }
     if (geminiVoiceNameInput) {
-        geminiVoiceNameInput.value = getConfiguredGeminiVoiceName();
+        const desired = getConfiguredGeminiVoiceName();
+        const options = geminiVoiceNameInput.options;
+        const hasOption = options && Array.from(options).some((option) => option.value === desired);
+        geminiVoiceNameInput.value = hasOption ? desired : GEMINI_LIVE_DEFAULT_VOICE;
     }
 }
 
