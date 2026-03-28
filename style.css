@@ -865,6 +865,18 @@ body.attestation-mode .btn-attestation-exit {
     flex-direction: column;
 }
 
+.voice-connect-status {
+    align-self: center;
+    margin: 16px 0 0;
+    padding: 10px 16px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(18, 18, 18, 0.92);
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    line-height: 1.35;
+}
+
 .btn-start {
     width: 320px;
     max-width: 90%;

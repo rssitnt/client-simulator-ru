@@ -21,6 +21,8 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-28`, a “Идёт подключение…” status is shown during ringing:
+  - start buttons are hidden while the voice connection is in progress.
 - As of `2026-03-28`, tooltips are force-hidden on primary action click:
   - prevents “Завершить звонок” tooltip from sticking after click.
 - As of `2026-03-28`, the voice status pill was removed from the DOM:

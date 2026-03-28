@@ -1252,6 +1252,7 @@ const aiAssistBtn = document.getElementById('aiAssistBtn');
 const rateChatBtn = document.getElementById('rateChat');
 const startBtn = document.getElementById('startBtn');
 const startConversation = document.getElementById('startConversation');
+const voiceConnectStatus = document.getElementById('voiceConnectStatus');
 const managerNameInput = document.getElementById('managerName');
 const exitAttestationBtn = document.getElementById('exitAttestationBtn');
 const startAttestationBtn = document.getElementById('startAttestationBtn');
@@ -9974,10 +9975,31 @@ function setVoiceCallUiActive(active) {
     userInput.disabled = false;
 }
 
+function updateVoiceConnectingUi() {
+    const startDiv = document.getElementById('startConversation');
+    const shouldHideStart = isGeminiVoiceConnecting || isGeminiVoiceActive;
+    if (startDiv) {
+        if (shouldHideStart) {
+            startDiv.style.display = 'none';
+        } else if (!conversationHistory.length) {
+            startDiv.style.display = '';
+        }
+    }
+    if (voiceConnectStatus) {
+        if (isGeminiVoiceConnecting) {
+            voiceConnectStatus.textContent = 'Идёт подключение…';
+            voiceConnectStatus.hidden = false;
+        } else {
+            voiceConnectStatus.hidden = true;
+        }
+    }
+}
+
 function updateSendBtnState() {
     const hasText = !!userInput.value.trim();
     const voiceCallActive = isGeminiVoiceConnecting || isGeminiVoiceActive;
 
+    updateVoiceConnectingUi();
     setVoiceCallUiActive(voiceCallActive);
 
     if (voiceCallActive) {
@@ -15131,6 +15153,7 @@ function resetConversationHistory() {
 function restoreStartConversationBlock() {
     const startDiv = document.getElementById('startConversation');
     if (!startDiv) return;
+    if (isGeminiVoiceConnecting || isGeminiVoiceActive) return;
     startDiv.style.display = '';
 }
 
