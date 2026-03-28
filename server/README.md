@@ -46,6 +46,8 @@
 - `ALLOWED_ORIGINS` — для браузерного использования фактически обязателен, например: `https://client-simulator.ru,https://www.client-simulator.ru`
 - `ALLOWED_EMAIL_DOMAINS` — например: `tradicia-k.ru,tradicia-k.kz`
 - `ALLOW_LEGACY_LOGIN_FALLBACK` — по умолчанию `false`, включать только временно для миграции
+- `FIREBASE_APP_CHECK_ENFORCE` — `true/false`, если `true` то запросы обязаны иметь заголовок `X-Firebase-AppCheck`
+- `FIREBASE_SERVICE_ACCOUNT_JSON` или `FIREBASE_SERVICE_ACCOUNT_PATH` — нужны для проверки App Check токена на сервере
 - `MAX_JSON_BODY_BYTES` — лимит JSON body, по умолчанию `65536`
 - `GEMINI_LIVE_MODEL` — по умолчанию `gemini-3.1-flash-live-preview`
 - `GEMINI_LIVE_VOICE` — по умолчанию `Enceladus`

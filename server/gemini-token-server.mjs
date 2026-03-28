@@ -1,12 +1,20 @@
 import { createServer } from 'node:http';
 import { pathToFileURL } from 'node:url';
+import fs from 'node:fs';
 import { GoogleGenAI } from '@google/genai';
+import { initializeApp as initializeAdminApp, cert, getApps as getAdminApps } from 'firebase-admin/app';
+import { getAppCheck } from 'firebase-admin/app-check';
 
 const PORT = Number.parseInt(process.env.PORT || '8787', 10);
 const GEMINI_API_KEY = String(process.env.GEMINI_API_KEY || '').trim();
 const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || '').trim();
 const FIREBASE_WEB_API_KEY = String(process.env.FIREBASE_WEB_API_KEY || '').trim();
 const FIREBASE_DATABASE_URL = String(process.env.FIREBASE_DATABASE_URL || '').trim().replace(/\/+$/, '');
+const FIREBASE_APP_CHECK_ENFORCE = String(process.env.FIREBASE_APP_CHECK_ENFORCE || '').trim().toLowerCase() === 'true';
+const FIREBASE_SERVICE_ACCOUNT_JSON = String(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '').trim();
+const FIREBASE_SERVICE_ACCOUNT_PATH = String(
+    process.env.FIREBASE_SERVICE_ACCOUNT_PATH || process.env.GOOGLE_APPLICATION_CREDENTIALS || ''
+).trim();
 const ALLOWED_ORIGINS = String(process.env.ALLOWED_ORIGINS || '')
     .split(',')
     .map((value) => value.trim())
@@ -69,6 +77,9 @@ function getMissingServerConfigMessage() {
     if (!FIREBASE_WEB_API_KEY) {
         return 'Token server is not configured: FIREBASE_WEB_API_KEY is required.';
     }
+    if (FIREBASE_APP_CHECK_ENFORCE && !hasServiceAccountConfig()) {
+        return 'Token server is not configured: App Check enforcement requires FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_SERVICE_ACCOUNT_PATH.';
+    }
     return '';
 }
 
@@ -83,7 +94,7 @@ function applyCors(res, requestOrigin) {
     if (corsOrigin) {
         res.setHeader('Access-Control-Allow-Origin', corsOrigin);
         res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Firebase-AppCheck');
         res.setHeader('Access-Control-Max-Age', '600');
         res.setHeader('Vary', 'Origin');
     }
@@ -104,6 +115,69 @@ function createHttpError(statusCode, message, cause = null) {
         error.cause = cause;
     }
     return error;
+}
+
+function hasServiceAccountConfig() {
+    return !!(FIREBASE_SERVICE_ACCOUNT_JSON || FIREBASE_SERVICE_ACCOUNT_PATH);
+}
+
+function loadServiceAccountConfig() {
+    if (FIREBASE_SERVICE_ACCOUNT_JSON) {
+        try {
+            return JSON.parse(FIREBASE_SERVICE_ACCOUNT_JSON);
+        } catch (error) {
+            throw createHttpError(500, 'Invalid FIREBASE_SERVICE_ACCOUNT_JSON payload.', error);
+        }
+    }
+    if (FIREBASE_SERVICE_ACCOUNT_PATH) {
+        try {
+            const raw = fs.readFileSync(FIREBASE_SERVICE_ACCOUNT_PATH, 'utf8');
+            return JSON.parse(raw);
+        } catch (error) {
+            throw createHttpError(500, 'Failed to read FIREBASE_SERVICE_ACCOUNT_PATH.', error);
+        }
+    }
+    return null;
+}
+
+let firebaseAdminApp = null;
+
+function getFirebaseAdminApp() {
+    if (firebaseAdminApp) return firebaseAdminApp;
+    if (getAdminApps().length) {
+        firebaseAdminApp = getAdminApps()[0];
+        return firebaseAdminApp;
+    }
+    const credentials = loadServiceAccountConfig();
+    if (!credentials) {
+        throw createHttpError(500, 'Firebase service account credentials are missing.');
+    }
+    firebaseAdminApp = initializeAdminApp({
+        credential: cert(credentials)
+    });
+    return firebaseAdminApp;
+}
+
+function extractAppCheckToken(req) {
+    const raw = req?.headers?.['x-firebase-appcheck'];
+    if (!raw) return '';
+    if (Array.isArray(raw)) {
+        return String(raw[0] || '').trim();
+    }
+    return String(raw || '').trim();
+}
+
+async function verifyAppCheckToken(appCheckToken) {
+    if (!FIREBASE_APP_CHECK_ENFORCE) return null;
+    if (!appCheckToken) {
+        throw createHttpError(401, 'Firebase App Check token is required.');
+    }
+    try {
+        const app = getFirebaseAdminApp();
+        return await getAppCheck(app).verifyToken(appCheckToken);
+    } catch (error) {
+        throw createHttpError(401, 'Firebase App Check verification failed.', error);
+    }
 }
 
 async function readJsonBody(req) {
@@ -590,8 +664,12 @@ export async function handleTokenServerRequest(req, res) {
     }
 
     const idToken = extractBearerToken(req);
+    const appCheckToken = extractAppCheckToken(req);
 
     try {
+        if (FIREBASE_APP_CHECK_ENFORCE) {
+            await verifyAppCheckToken(appCheckToken);
+        }
         const requestBody = await readJsonBody(req);
         let authIdentity = null;
 

@@ -21,6 +21,16 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-28`, voice-mode preview text spacing fixed:
+  - streaming transcript fragments now insert missing spaces between words/punctuation.
+  - prevents “тебеужевсёсказал.Либодавай...” in voice status line.
+- As of `2026-03-28`, voice-mode status no longer disappears instantly:
+  - streaming status text now has a short lock to prevent generic “Идёт диалог…” from overwriting it.
+- As of `2026-03-28`, роли и App Check усилены без изменения UX:
+  - админ‑доступ на фронте и в правилах RTDB теперь читается из Firebase Custom Claims (`auth.token.admin/role`), а не из RTDB роли (кроме localhost preview).
+  - REST‑fallback в браузере отключён для `client-simulator.ru` (остался для localhost/preview), чтобы убрать канал с токеном в URL.
+  - добавлен App Check (reCAPTCHA v3) на фронте; токен‑сервер умеет принудительно проверять App Check при `FIREBASE_APP_CHECK_ENFORCE=true` + service account.
+  - добавлен скрипт `scripts/set-custom-claims.mjs` и зависимость `firebase-admin` для проставления ролей в claims.
 - As of `2026-03-28`, realtime listener recovery hardened:
   - exponential backoff (2s → 4s → 8s → … capped at 30s) added for presence/admin/prompt overrides/protected listeners.
   - backoff resets on successful recovery to avoid long delays after a stable reconnect.

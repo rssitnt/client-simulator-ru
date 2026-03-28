@@ -15,6 +15,7 @@
     "minimatch": "9.0.7"
   },
   "dependencies": {
-    "@google/genai": "^1.29.0"
+    "@google/genai": "^1.29.0",
+    "firebase-admin": "^12.6.0"
   }
 }

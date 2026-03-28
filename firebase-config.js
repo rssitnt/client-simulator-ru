@@ -7,5 +7,6 @@ export const firebaseConfig = {
     storageBucket: "client-simulator.firebasestorage.app",
     messagingSenderId: "693043957358",
     appId: "1:693043957358:web:12d8f5f181e6e8e5d5207f",
-    measurementId: "G-RSM1WK5QGX"
+    measurementId: "G-RSM1WK5QGX",
+    appCheckSiteKey: ""
 };

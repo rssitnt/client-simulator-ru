@@ -9,17 +9,31 @@ import {
     createUserWithEmailAndPassword,
     signOut
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { initializeAppCheck, ReCaptchaV3Provider, getToken as getAppCheckToken } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js";
 import { firebaseConfig } from "./firebase-config.js";
 
 // Initialize Firebase
 let db = null;
 let firebaseApp = null;
 let auth = null;
+let appCheck = null;
 try {
     if (firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("EXAMPLE")) {
         firebaseApp = initializeApp(firebaseConfig);
         db = getDatabase(firebaseApp);
         auth = getAuth(firebaseApp);
+        const appCheckSiteKey = String(firebaseConfig?.appCheckSiteKey || '').trim();
+        if (appCheckSiteKey) {
+            try {
+                appCheck = initializeAppCheck(firebaseApp, {
+                    provider: new ReCaptchaV3Provider(appCheckSiteKey),
+                    isTokenAutoRefreshEnabled: true
+                });
+                console.log("Firebase App Check initialized");
+            } catch (error) {
+                console.warn("Firebase App Check initialization failed:", error);
+            }
+        }
         console.log("Firebase initialized");
     } else {
         console.warn("Firebase config is using placeholders.");
@@ -92,6 +106,11 @@ const ENABLE_LOCAL_WEBHOOK_DEBUG = false;
 const FIREBASE_FRONTEND_GET_TIMEOUT_MS = 4000;
 const FIREBASE_REST_FALLBACK_BASE_DELAY_MS = 2000;
 const FIREBASE_REST_FALLBACK_MAX_DELAY_MS = 30000;
+const DISABLE_FIREBASE_REST_FALLBACK_IN_PROD = true;
+const PRODUCTION_HOSTNAMES = new Set([
+    'client-simulator.ru',
+    'www.client-simulator.ru'
+]);
 const EMAIL_LINK_PROCESSED_TTL_MS = 24 * 60 * 60 * 1000;
 const SESSION_ID_STORAGE_KEY = 'sessionId';
 const EMAIL_LINK_HINT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -656,9 +675,11 @@ function firstSuccessfulPromise(promises = []) {
 async function firebaseGetWithTimeout(dbPath, timeoutMs = FIREBASE_FRONTEND_GET_TIMEOUT_MS) {
     if (!db) return null;
     const readStrategies = [
-        get(ref(db, dbPath)),
-        fetchFirebaseJsonViaRest(dbPath, timeoutMs).then((value) => createFirebaseSnapshotShim(value))
+        get(ref(db, dbPath))
     ];
+    if (shouldAllowFirebaseRestFallback()) {
+        readStrategies.push(fetchFirebaseJsonViaRest(dbPath, timeoutMs).then((value) => createFirebaseSnapshotShim(value)));
+    }
     return withPromiseTimeout(
         firstSuccessfulPromise(readStrategies),
         timeoutMs,
@@ -780,6 +801,11 @@ async function fetchFirebaseJsonViaRest(path, timeoutMs = PROMPTS_REST_FALLBACK_
     const pathKey = normalizeFirebaseRestPathKey(path);
     const url = buildFirebaseRestUrl(pathKey);
     if (!url) return null;
+    if (!shouldAllowFirebaseRestFallback()) {
+        const error = new Error('Firebase REST fallback is disabled on this host.');
+        error.code = 'rest-fallback-disabled';
+        throw error;
+    }
     const cooldownState = getRestFallbackBackoffState(pathKey);
     if (cooldownState && Date.now() < Number(cooldownState.nextAt) && pathKey) {
         throw buildRestFallbackCooldownError(pathKey, Number(cooldownState.nextAt) - Date.now());
@@ -791,9 +817,15 @@ async function fetchFirebaseJsonViaRest(path, timeoutMs = PROMPTS_REST_FALLBACK_
             requestUrl += (requestUrl.includes('?') ? '&' : '?') + `auth=${encodeURIComponent(token)}`;
         }
     }
+    const headers = {};
+    const appCheckToken = await getFirebaseAppCheckToken().catch(() => '');
+    if (appCheckToken) {
+        headers['X-Firebase-AppCheck'] = appCheckToken;
+    }
     try {
         const response = await fetchWithTimeout(requestUrl, {
             method: 'GET',
+            headers,
             credentials: 'omit',
             cache: 'no-store'
         }, timeoutMs);
@@ -821,6 +853,11 @@ async function writeFirebaseJsonViaRest(path, value, method = 'PUT', timeoutMs =
     const includeAuth = options?.includeAuth !== false;
     const url = buildFirebaseRestUrl(path);
     if (!url) return null;
+    if (!shouldAllowFirebaseRestFallback()) {
+        const error = new Error('Firebase REST fallback is disabled on this host.');
+        error.code = 'rest-fallback-disabled';
+        throw error;
+    }
 
     let requestUrl = url;
     if (includeAuth) {
@@ -839,6 +876,10 @@ async function writeFirebaseJsonViaRest(path, value, method = 'PUT', timeoutMs =
             'Content-Type': 'application/json'
         }
     };
+    const appCheckToken = await getFirebaseAppCheckToken().catch(() => '');
+    if (appCheckToken) {
+        requestOptions.headers['X-Firebase-AppCheck'] = appCheckToken;
+    }
 
     if (normalizedMethod !== 'DELETE') {
         requestOptions.body = JSON.stringify(value);
@@ -863,7 +904,9 @@ async function firebaseWritePathWithFallback(dbPath, sdkWriteOperation, restPayl
     if (db && typeof sdkWriteOperation === 'function') {
         strategies.push(Promise.resolve().then(() => sdkWriteOperation()));
     }
-    strategies.push(writeFirebaseJsonViaRest(dbPath, restPayload, restMethod, timeoutMs));
+    if (shouldAllowFirebaseRestFallback()) {
+        strategies.push(writeFirebaseJsonViaRest(dbPath, restPayload, restMethod, timeoutMs));
+    }
 
     return withPromiseTimeout(
         firstSuccessfulPromise(strategies),
@@ -899,15 +942,18 @@ async function loadSingleFirebaseRecordWithVerifiedLocalFallback(options = {}) {
 
     const localRecord = normalizeRecord(localStore[key], ...normalizeArgs);
     const remotePath = `${String(dbPath || '').replace(/\/+$/, '')}/${key}`;
+    const allowRestFallback = shouldAllowFirebaseRestFallback();
 
-    const readRestRecord = async () => {
-        const restValue = await fetchFirebaseJsonViaRest(remotePath, FIREBASE_FRONTEND_GET_TIMEOUT_MS);
-        const hasRemoteValue = !!restValue && typeof restValue === 'object';
-        return {
-            hasRemoteValue,
-            normalized: hasRemoteValue ? normalizeRecord(restValue, ...normalizeArgs) : null
-        };
-    };
+    const readRestRecord = allowRestFallback
+        ? async () => {
+            const restValue = await fetchFirebaseJsonViaRest(remotePath, FIREBASE_FRONTEND_GET_TIMEOUT_MS);
+            const hasRemoteValue = !!restValue && typeof restValue === 'object';
+            return {
+                hasRemoteValue,
+                normalized: hasRemoteValue ? normalizeRecord(restValue, ...normalizeArgs) : null
+            };
+        }
+        : null;
 
     if (db) {
         try {
@@ -922,35 +968,43 @@ async function loadSingleFirebaseRecordWithVerifiedLocalFallback(options = {}) {
                 return localRecord;
             }
 
-            try {
-                const restRecord = await readRestRecord();
-                if (restRecord.normalized) {
-                    return restRecord.normalized;
-                }
-                if (restRecord.hasRemoteValue) {
-                    console.warn(`Malformed ${recordLabel} record from Firebase REST, keeping local fallback if present.`);
+            if (allowRestFallback && readRestRecord) {
+                try {
+                    const restRecord = await readRestRecord();
+                    if (restRecord.normalized) {
+                        return restRecord.normalized;
+                    }
+                    if (restRecord.hasRemoteValue) {
+                        console.warn(`Malformed ${recordLabel} record from Firebase REST, keeping local fallback if present.`);
+                        return localRecord;
+                    }
+                } catch (restError) {
+                    if (restError?.code !== 'rest-fallback-disabled' && restError?.code !== 'rest-fallback-cooldown') {
+                        console.error(`Failed to verify missing ${recordLabel} via Firebase REST:`, restError);
+                    }
                     return localRecord;
                 }
-            } catch (restError) {
-                console.error(`Failed to verify missing ${recordLabel} via Firebase REST:`, restError);
-                return localRecord;
             }
 
             clearLocalStoreRecordByKey(localStore, key, saveLocalStore);
             return null;
         } catch (error) {
             console.error(`Failed to load ${recordLabel} from Firebase:`, error);
-            try {
-                const restRecord = await readRestRecord();
-                if (restRecord.normalized) {
-                    return restRecord.normalized;
+            if (allowRestFallback && readRestRecord) {
+                try {
+                    const restRecord = await readRestRecord();
+                    if (restRecord.normalized) {
+                        return restRecord.normalized;
+                    }
+                    if (restRecord.hasRemoteValue) {
+                        console.warn(`Malformed ${recordLabel} record from Firebase REST, keeping local fallback if present.`);
+                        return localRecord;
+                    }
+                } catch (restError) {
+                    if (restError?.code !== 'rest-fallback-disabled' && restError?.code !== 'rest-fallback-cooldown') {
+                        console.error(`Failed to load ${recordLabel} via Firebase REST:`, restError);
+                    }
                 }
-                if (restRecord.hasRemoteValue) {
-                    console.warn(`Malformed ${recordLabel} record from Firebase REST, keeping local fallback if present.`);
-                    return localRecord;
-                }
-            } catch (restError) {
-                console.error(`Failed to load ${recordLabel} via Firebase REST:`, restError);
             }
             return localRecord;
         }
@@ -1643,6 +1697,67 @@ function normalizeRole(value) {
     return String(value || '').trim().toLowerCase() === 'admin' ? 'admin' : 'user';
 }
 
+let currentAuthClaims = null;
+let currentAuthClaimsLogin = '';
+
+function normalizeRoleFromClaims(claims) {
+    if (!claims || typeof claims !== 'object') return '';
+    if (claims.admin === true) return 'admin';
+    const role = String(claims.role || '').trim().toLowerCase();
+    return role === 'admin' ? 'admin' : '';
+}
+
+function hasAdminClaim(claims = currentAuthClaims) {
+    return normalizeRoleFromClaims(claims) === 'admin';
+}
+
+function resolveEffectiveUserRole(user = currentUser, claims = currentAuthClaims) {
+    if (hasAdminClaim(claims)) return 'admin';
+    if (isLocalhostAdminPreviewHost()) {
+        return normalizeRole(user?.role || 'user');
+    }
+    return 'user';
+}
+
+function clearAuthClaimsCache() {
+    currentAuthClaims = null;
+    currentAuthClaimsLogin = '';
+}
+
+async function refreshAuthClaims(force = false) {
+    if (!auth?.currentUser) return null;
+    const login = normalizeLogin(auth.currentUser.email || '');
+    if (!force && currentAuthClaims && currentAuthClaimsLogin === login) {
+        return currentAuthClaims;
+    }
+    try {
+        const tokenResult = await auth.currentUser.getIdTokenResult(!!force);
+        currentAuthClaims = tokenResult?.claims || null;
+        currentAuthClaimsLogin = login;
+        return currentAuthClaims;
+    } catch (error) {
+        console.warn('Failed to refresh auth claims:', error);
+        return null;
+    }
+}
+
+async function syncAuthClaimsForCurrentUser(options = {}) {
+    if (!auth?.currentUser || !currentUser) return false;
+    if (isLocalhostDevBypassSession()) return false;
+    const claims = await refreshAuthClaims(!!options?.force);
+    const roleFromClaims = normalizeRoleFromClaims(claims);
+    if (!roleFromClaims) return false;
+    const currentRole = normalizeRole(currentUser.role || 'user');
+    if (currentRole === roleFromClaims) return false;
+    currentUser.role = roleFromClaims;
+    syncSelectedRole(roleFromClaims);
+    applyRoleRestrictions();
+    if (isSettingsModalOpen()) {
+        void renderAdminUsersTable();
+    }
+    return true;
+}
+
 function getRoleLabelUi(role) {
     if (role === 'admin') return 'Админ';
     return 'Юзер';
@@ -1654,7 +1769,11 @@ function getRoleIcon(role) {
 }
 
 function hasAdminAccount(user = currentUser) {
-    return normalizeRole(user?.role || 'user') === 'admin';
+    if (hasAdminClaim()) return true;
+    if (isLocalhostAdminPreviewHost()) {
+        return normalizeRole(user?.role || 'user') === 'admin';
+    }
+    return false;
 }
 
 removeCachedStorageValue('activeTestScenario:v1');
@@ -1665,6 +1784,19 @@ webhookDebugEntries = [];
 function isLocalhostAdminPreviewHost() {
     const hostname = String(window?.location?.hostname || '').trim().toLowerCase();
     return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
+}
+
+function isProductionHost() {
+    const hostname = String(window?.location?.hostname || '').trim().toLowerCase();
+    if (!hostname) return false;
+    return PRODUCTION_HOSTNAMES.has(hostname);
+}
+
+function shouldAllowFirebaseRestFallback() {
+    if (!DISABLE_FIREBASE_REST_FALLBACK_IN_PROD) return true;
+    if (isLocalhostAdminPreviewHost()) return true;
+    if (!isProductionHost()) return true;
+    return false;
 }
 
 function normalizeDebugPositiveInt(value, fallback, min = 1, max = Number.MAX_SAFE_INTEGER) {
@@ -2086,6 +2218,7 @@ function getAuthSession() {
 
 function clearAuthSession() {
     removeCachedStorageValue(AUTH_SESSION_STORAGE_KEY);
+    clearAuthClaimsCache();
 }
 
 function isLocalhostDevBypassSession(session = getAuthSession()) {
@@ -3972,14 +4105,19 @@ async function listAllUserRecords() {
 function applyAuthenticatedUser(user) {
     const normalized = normalizeUserRecord(user, user?.login);
     if (!normalized) return;
+    clearAuthClaimsCache();
     const isDevBypassSession = isLocalhostDevBypassSession();
+    const effectiveRole = resolveEffectiveUserRole(normalized, currentAuthClaims);
 
-    currentUser = normalized;
+    currentUser = {
+        ...normalized,
+        role: effectiveRole
+    };
     currentUser.passwordHash = '';
     currentUser.passwordHashScheme = null;
     lastSessionRevocationCheckAt = 0;
     lastActiveTimeRemoteFlushAt = parseIsoMs(normalized.lastSeenAt || '') || 0;
-    syncSelectedRole(normalized.role);
+    syncSelectedRole(effectiveRole);
     setCachedStorageValue(USER_NAME_KEY, normalized.fio);
     setCachedStorageValue(USER_LOGIN_KEY, normalized.login);
     managerNameInput.value = normalized.fio;
@@ -4001,6 +4139,7 @@ function applyAuthenticatedUser(user) {
         startCurrentUserPromptOverridesSubscription(normalized.login);
         lastUserActivityAt = Date.now();
         startCurrentUserPresenceSync(normalized.login);
+        void syncAuthClaimsForCurrentUser({ force: true });
     }
     applyRoleRestrictions();
 }
@@ -11012,6 +11151,7 @@ async function refreshProtectedFirebaseDataAfterAuth() {
 
 async function bootstrapPromptsViaRestFallback() {
     if (!db || promptsStateHasMeaningfulContent('client')) return false;
+    if (!shouldAllowFirebaseRestFallback()) return false;
     try {
         const rawData = await fetchFirebaseJsonViaRest('prompts', PROMPTS_REST_FALLBACK_TIMEOUT_MS);
         const promptSnapshotState = buildNormalizedPromptSnapshotState(rawData || {});
@@ -11537,8 +11677,14 @@ function hideAiImproveModal() {
     resetAiImproveSubmitUi();
 }
 
-function setVoiceModeStatus(text, state = 'idle') {
+let voiceModeStatusLockUntil = 0;
+
+function setVoiceModeStatus(text, state = 'idle', options = {}) {
     if (!voiceModeStatus) return;
+    const lockMs = Math.max(0, Number(options?.lockMs) || 0);
+    if (lockMs) {
+        voiceModeStatusLockUntil = Math.max(voiceModeStatusLockUntil, Date.now() + lockMs);
+    }
     voiceModeStatus.textContent = text;
     voiceModeStatus.dataset.state = state;
 }
@@ -12113,6 +12259,17 @@ async function getFirebaseAuthIdToken() {
     }
 }
 
+async function getFirebaseAppCheckToken() {
+    if (!appCheck || typeof getAppCheckToken !== 'function') return '';
+    try {
+        const tokenResult = await getAppCheckToken(appCheck, false);
+        return String(tokenResult?.token || '').trim();
+    } catch (error) {
+        console.warn('Failed to get Firebase App Check token:', error);
+        return '';
+    }
+}
+
 function createGeminiVoiceStartCancelledError() {
     const error = new Error('Voice start cancelled');
     error.code = 'VOICE_START_CANCELLED';
@@ -12200,6 +12357,10 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
     const headers = { 'Content-Type': 'application/json' };
     if (idToken) {
         headers.Authorization = `Bearer ${idToken}`;
+    }
+    const appCheckToken = await getFirebaseAppCheckToken().catch(() => '');
+    if (appCheckToken) {
+        headers['X-Firebase-AppCheck'] = appCheckToken;
     }
 
     const tokenResponse = await fetchWithTimeout(tokenEndpoint, {
@@ -12389,6 +12550,8 @@ function normalizeVoiceDialogText(text) {
     return String(text || '')
         .replace(/\u00a0/g, ' ')
         .replace(/\s+/g, ' ')
+        .replace(/([.!?…])([A-Za-zА-Яа-яЁё])/g, '$1 $2')
+        .replace(/([,;:])([A-Za-zА-Яа-яЁё])/g, '$1 $2')
         .replace(/\s+([,.;:!?])/g, '$1')
         .trim();
 }
@@ -12414,6 +12577,28 @@ function pickReadableVoiceVariant(a, b) {
     };
 
     return score(second) >= score(first) ? second : first;
+}
+
+function shouldInsertVoiceSpace(leftChar, rightChar) {
+    const left = String(leftChar || '');
+    const right = String(rightChar || '');
+    if (!left || !right) return false;
+    const letterOrDigit = /[A-Za-zА-Яа-яЁё0-9]/;
+    if (letterOrDigit.test(left) && letterOrDigit.test(right)) return true;
+    if (/[.!?…,;:)]/.test(left) && letterOrDigit.test(right)) return true;
+    if (left === '—' && letterOrDigit.test(right)) return true;
+    return false;
+}
+
+function joinVoiceStreamingFragments(prevText, nextText) {
+    const prev = String(prevText || '');
+    const next = String(nextText || '');
+    if (!prev.trim()) return next.trimStart();
+    if (!next.trim()) return prev;
+    const left = prev.replace(/\s+$/, '');
+    const right = next.replace(/^\s+/, '');
+    const insertSpace = shouldInsertVoiceSpace(left.slice(-1), right.slice(0, 1));
+    return left + (insertSpace ? ' ' : '') + right;
 }
 
 function hasCompactBoundaryOverlap(a, b, minOverlap = 8) {
@@ -12585,7 +12770,7 @@ function mergeVoiceStreamingText(prevText, nextText) {
         }
     }
 
-    return prev + next;
+    return joinVoiceStreamingFragments(prev, next);
 }
 
 function pushGeminiVoiceDialogLine(role, text) {
@@ -12950,7 +13135,7 @@ async function handleGeminiLiveMessage(message) {
     const inputFinished = !!serverContent?.inputTranscription?.finished;
     if (inputText) {
         geminiVoiceUserPreview = mergeVoiceStreamingText(geminiVoiceUserPreview, inputText);
-        setVoiceModeStatus(getShortStatusText('Вы:', geminiVoiceUserPreview), 'listening');
+        setVoiceModeStatus(getShortStatusText('Вы:', geminiVoiceUserPreview), 'listening', { lockMs: 3000 });
         if (inputFinished) {
             const completedUserText = sanitizeUserCompletedTranscript(geminiVoiceUserPreview || inputText);
             geminiVoiceUserPreview = '';
@@ -12972,7 +13157,7 @@ async function handleGeminiLiveMessage(message) {
             clearGeminiFirstReplyHintTimer();
         }
         geminiVoiceAssistantPreview = mergeVoiceStreamingText(geminiVoiceAssistantPreview, outputText);
-        setVoiceModeStatus(getShortStatusText('ИИ-клиент:', geminiVoiceAssistantPreview), 'ready');
+        setVoiceModeStatus(getShortStatusText('ИИ-клиент:', geminiVoiceAssistantPreview), 'ready', { lockMs: 3000 });
         if (outputFinished) {
             const completedAssistantText = sanitizeAssistantCompletedTranscript(geminiVoiceAssistantPreview || outputText);
             geminiVoiceAssistantPreview = '';
@@ -13002,7 +13187,7 @@ async function handleGeminiLiveMessage(message) {
                 clearGeminiFirstReplyHintTimer();
             }
             geminiVoiceAssistantPreview = mergeVoiceStreamingText(geminiVoiceAssistantPreview, partText);
-            setVoiceModeStatus(getShortStatusText('ИИ-клиент:', geminiVoiceAssistantPreview), 'ready');
+            setVoiceModeStatus(getShortStatusText('ИИ-клиент:', geminiVoiceAssistantPreview), 'ready', { lockMs: 3000 });
         }
     }
 
@@ -13315,6 +13500,19 @@ function updateVoiceModeRateButtonState() {
         !isDialogRated;
     setVoiceModeRateButtonVisible(canShowRate);
     if (!isVoiceScreenActive) return;
+    const now = Date.now();
+    const isLocked = now < voiceModeStatusLockUntil;
+    const statusState = voiceModeStatus?.dataset?.state;
+    if (
+        isLocked &&
+        isGeminiVoiceActive &&
+        !isProcessing &&
+        !canShowRate &&
+        !isGeminiVoiceConnecting &&
+        (statusState === 'listening' || statusState === 'ready')
+    ) {
+        return;
+    }
     if (isProcessing) {
         setVoiceModeStatus('Оцениваю диалог…', 'waiting');
         return;

@@ -1,5 +1,21 @@
 # PROJECT_CONTEXT.md
 
+## 2026-03-28 — Исправлены склейки слов в голосовом статусе
+- В voice-mode потоковом тексте добавлена логика вставки пробела между фрагментами.
+- Теперь фразы не слипаются в «тебеужевсёсказал.Либодавай…».
+
+## 2026-03-28 — Голосовой статус больше не исчезает сразу
+- Добавлен короткий lock на статус во время стриминга.
+- Это не даёт системному “Идёт диалог…” перезаписывать свежий текст.
+
+## 2026-03-28 — Роли переведены в Custom Claims + включён App Check + REST fallback выключен в проде
+- Админ‑доступ теперь определяется по Firebase Custom Claims (`auth.token.admin/role`), а не по RTDB роли (localhost preview сохранён).
+- `database.rules.json` обновлён под claims (нужно опубликовать в Firebase Console).
+- В браузере добавлен App Check (reCAPTCHA v3 через `firebase-config.js -> appCheckSiteKey`).
+- Token server умеет жёстко требовать App Check при `FIREBASE_APP_CHECK_ENFORCE=true` и service account env.
+- REST‑fallback в браузере отключён на `client-simulator.ru` (остался только для localhost/preview).
+- Добавлен скрипт `scripts/set-custom-claims.mjs` для проставления claims (через `firebase-admin`).
+
 ## 2026-03-28 — Ускорена обработка prompt_history без изменения UX
 - Убраны тяжёлые `JSON.stringify` по full history при каждом обновлении.
 - Добавлен компактный hash по `id/ts/role/variationId/kind` для сравнения снапшотов и очереди sync.
