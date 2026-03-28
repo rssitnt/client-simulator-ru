@@ -17083,6 +17083,9 @@ function setupDragAndDropForPreview(previewElement, textarea) {
 // ============ EVENT LISTENERS ============
 
 function handlePrimaryActionClick() {
+    hideTooltip(true);
+    sendBtn?.blur();
+
     if (isGeminiVoiceConnecting || isGeminiVoiceActive) {
         handleVoiceModeStopClick();
         return;
