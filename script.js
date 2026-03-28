@@ -12596,9 +12596,15 @@ async function enqueueGeminiAudioPlayback(base64Data, mimeType = 'audio/pcm;rate
 
     const bytes = base64ToUint8(base64Data);
     if (!bytes.length) return;
+    let byteView = bytes;
+    if (byteView.length % 2 !== 0) {
+        const evenLength = byteView.length - 1;
+        if (evenLength <= 0) return;
+        byteView = byteView.subarray(0, evenLength);
+    }
     const normalizedMime = String(mimeType || '').toLowerCase();
     if (normalizedMime && !normalizedMime.includes('pcm') && !normalizedMime.includes('l16')) {
-        const rawBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+        const rawBuffer = byteView.buffer.slice(byteView.byteOffset, byteView.byteOffset + byteView.byteLength);
         try {
             const decoded = await audioContext.decodeAudioData(rawBuffer.slice(0));
             const source = audioContext.createBufferSource();
@@ -12613,9 +12619,7 @@ async function enqueueGeminiAudioPlayback(base64Data, mimeType = 'audio/pcm;rate
             console.warn('Failed to decode Gemini Live audio chunk, falling back to PCM:', error);
         }
     }
-    if (bytes.length % 2 !== 0) return;
-
-    const int16 = new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2);
+    const int16 = new Int16Array(byteView.buffer, byteView.byteOffset, byteView.byteLength / 2);
     const sampleRate = getMimeRate(mimeType, 24000);
     const audioBuffer = audioContext.createBuffer(1, int16.length, sampleRate);
     const channel = audioBuffer.getChannelData(0);
@@ -13520,7 +13524,7 @@ async function handleGeminiLiveMessage(message) {
         const inlineData = part?.inlineData;
         const mimeType = String(inlineData?.mimeType || inlineData?.mime_type || '').trim();
         const audioBase64 = String(inlineData?.data || '').trim();
-        if (audioBase64 && /^audio\//i.test(mimeType)) {
+        if (audioBase64 && (!mimeType || /^audio\//i.test(mimeType))) {
             await enqueueGeminiAudioPlayback(audioBase64, mimeType).catch((error) => {
                 console.warn('Failed to play Gemini Live audio chunk:', error);
             });
