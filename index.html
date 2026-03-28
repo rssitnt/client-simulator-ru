@@ -282,7 +282,7 @@
             <div class="settings-row voice-row">
                 <span class="settings-label">Голос:</span>
                 <div class="voice-config-block">
-                    <select id="geminiVoiceNameInput" class="name-input voice-select">
+                    <select id="geminiVoiceNameInput" class="voice-select-native" tabindex="-1" aria-hidden="true">
                         <option value="Zephyr">Zephyr — Яркий, высокий тон</option>
                         <option value="Puck">Puck — Бодрый, средний тон</option>
                         <option value="Charon">Charon — Информативный, низкий тон</option>
@@ -313,6 +313,25 @@
                         <option value="Sadaltager">Sadaltager — Осведомлённый, средний тон</option>
                         <option value="Sulafat">Sulafat — Тёплый, средний тон</option>
                     </select>
+                    <div class="voice-picker" id="geminiVoicePicker">
+                        <button
+                            type="button"
+                            id="geminiVoicePickerTrigger"
+                            class="voice-picker-trigger"
+                            aria-haspopup="listbox"
+                            aria-expanded="false"
+                            aria-controls="geminiVoicePickerMenu"
+                        >
+                            <span class="voice-picker-current">
+                                <span id="geminiVoicePickerName" class="voice-picker-current-name">Enceladus</span>
+                                <span id="geminiVoicePickerDescription" class="voice-picker-current-description">С придыханием, низкий тон</span>
+                            </span>
+                            <svg class="voice-picker-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </button>
+                        <div id="geminiVoicePickerMenu" class="voice-picker-menu" role="listbox" aria-labelledby="geminiVoicePickerTrigger"></div>
+                    </div>
                 </div>
             </div>
 

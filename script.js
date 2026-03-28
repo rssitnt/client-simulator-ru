@@ -1345,6 +1345,11 @@ const exportPromptSettingsMenu = document.getElementById('exportPromptSettingsMe
 const geminiApiKeyInput = document.getElementById('geminiApiKeyInput');
 const geminiTokenEndpointInput = document.getElementById('geminiTokenEndpointInput');
 const geminiVoiceNameInput = document.getElementById('geminiVoiceNameInput');
+const geminiVoicePicker = document.getElementById('geminiVoicePicker');
+const geminiVoicePickerTrigger = document.getElementById('geminiVoicePickerTrigger');
+const geminiVoicePickerMenu = document.getElementById('geminiVoicePickerMenu');
+const geminiVoicePickerName = document.getElementById('geminiVoicePickerName');
+const geminiVoicePickerDescription = document.getElementById('geminiVoicePickerDescription');
 const saveVoiceConfigBtn = document.getElementById('saveVoiceConfigBtn');
 const clearVoiceConfigBtn = document.getElementById('clearVoiceConfigBtn');
 const adminHiddenClientPromptAccordion = document.getElementById('adminHiddenClientPromptAccordion');
@@ -12168,6 +12173,88 @@ function getConfiguredGeminiVoiceName() {
     return value || GEMINI_LIVE_DEFAULT_VOICE;
 }
 
+function splitGeminiVoiceOptionLabel(label = '') {
+    const [name = '', ...descriptionParts] = String(label).split(' — ');
+    return {
+        name: name.trim(),
+        description: descriptionParts.join(' — ').trim()
+    };
+}
+
+function setGeminiVoicePickerOpen(isOpen) {
+    if (!geminiVoicePicker || !geminiVoicePickerTrigger) return;
+    geminiVoicePicker.classList.toggle('active', !!isOpen);
+    geminiVoicePickerTrigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+}
+
+function syncGeminiVoicePickerFromSelect() {
+    if (!geminiVoiceNameInput || !geminiVoicePickerName || !geminiVoicePickerDescription) return;
+    const selectedOption = geminiVoiceNameInput.selectedOptions?.[0] || geminiVoiceNameInput.options?.[geminiVoiceNameInput.selectedIndex] || null;
+    const { name, description } = splitGeminiVoiceOptionLabel(selectedOption?.textContent || selectedOption?.label || geminiVoiceNameInput.value || '');
+    geminiVoicePickerName.textContent = name || geminiVoiceNameInput.value || GEMINI_LIVE_DEFAULT_VOICE;
+    geminiVoicePickerDescription.textContent = description || 'Голос Gemini Live';
+    geminiVoicePickerDescription.hidden = !description;
+
+    if (!geminiVoicePickerMenu) return;
+    Array.from(geminiVoicePickerMenu.querySelectorAll('.voice-picker-option')).forEach((optionEl) => {
+        const isActive = optionEl.dataset.value === geminiVoiceNameInput.value;
+        optionEl.classList.toggle('active', isActive);
+        optionEl.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+}
+
+function renderGeminiVoicePickerOptions() {
+    if (!geminiVoicePickerMenu || !geminiVoiceNameInput) return;
+
+    const fragment = document.createDocumentFragment();
+    Array.from(geminiVoiceNameInput.options || []).forEach((option) => {
+        const { name, description } = splitGeminiVoiceOptionLabel(option.textContent || option.label || option.value);
+        const optionButton = document.createElement('button');
+        optionButton.type = 'button';
+        optionButton.className = 'voice-picker-option';
+        optionButton.dataset.value = option.value;
+        optionButton.setAttribute('role', 'option');
+        optionButton.innerHTML = `
+            <span class="voice-picker-option-label">
+                <span class="voice-picker-option-name">${escapeHtml(name || option.value)}</span>
+                ${description ? `<span class="voice-picker-option-description">${escapeHtml(description)}</span>` : ''}
+            </span>
+            <span class="voice-picker-option-check" aria-hidden="true">●</span>
+        `;
+        optionButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (geminiVoiceNameInput.value !== option.value) {
+                geminiVoiceNameInput.value = option.value;
+                geminiVoiceNameInput.dispatchEvent(new Event('change', { bubbles: true }));
+            } else {
+                syncGeminiVoicePickerFromSelect();
+            }
+            setGeminiVoicePickerOpen(false);
+        });
+        optionButton.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                setGeminiVoicePickerOpen(false);
+                geminiVoicePickerTrigger?.focus();
+                return;
+            }
+            if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+            event.preventDefault();
+            const voiceOptions = Array.from(geminiVoicePickerMenu.querySelectorAll('.voice-picker-option'));
+            const currentIndex = voiceOptions.indexOf(optionButton);
+            const nextIndex = event.key === 'ArrowDown'
+                ? Math.min(voiceOptions.length - 1, currentIndex + 1)
+                : Math.max(0, currentIndex - 1);
+            voiceOptions[nextIndex]?.focus();
+        });
+        fragment.appendChild(optionButton);
+    });
+
+    geminiVoicePickerMenu.replaceChildren(fragment);
+    syncGeminiVoicePickerFromSelect();
+}
+
 function populateVoiceConfigFields() {
     if (geminiApiKeyInput) {
         removeCachedStorageValue(LEGACY_GEMINI_LIVE_API_KEY_STORAGE_KEY);
@@ -12182,6 +12269,7 @@ function populateVoiceConfigFields() {
         const hasOption = options && Array.from(options).some((option) => option.value === desired);
         geminiVoiceNameInput.value = hasOption ? desired : GEMINI_LIVE_DEFAULT_VOICE;
     }
+    renderGeminiVoicePickerOptions();
 }
 
 function populateHiddenClientPromptField() {
@@ -14870,10 +14958,36 @@ bindEvent(clearVoiceConfigBtn, 'click', () => {
 });
 
 bindEvent(geminiVoiceNameInput, 'change', () => {
+    syncGeminiVoicePickerFromSelect();
     saveVoiceModeConfigFromInputs().catch((error) => {
         console.error('Failed to save voice config:', error);
         showCopyNotification(getVoiceConfigErrorMessage(error));
     });
+});
+
+bindEvent(geminiVoicePickerTrigger, 'click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    renderGeminiVoicePickerOptions();
+    setGeminiVoicePickerOpen(!geminiVoicePicker?.classList.contains('active'));
+});
+
+bindEvent(geminiVoicePickerTrigger, 'keydown', (event) => {
+    if (!['ArrowDown', 'Enter', ' '].includes(event.key)) {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            setGeminiVoicePickerOpen(false);
+        }
+        return;
+    }
+    event.preventDefault();
+    renderGeminiVoicePickerOptions();
+    setGeminiVoicePickerOpen(true);
+    geminiVoicePickerMenu?.querySelector('.voice-picker-option.active')?.focus();
+});
+
+bindEvent(geminiVoicePickerMenu, 'click', (event) => {
+    event.stopPropagation();
 });
 
 bindEvent(adminHiddenClientPromptSaveBtn, 'click', () => {
@@ -17403,6 +17517,7 @@ document.addEventListener('click', () => {
     exportPromptMenu?.classList.remove('show');
     exportChatSettingsMenu?.classList.remove('show');
     exportPromptSettingsMenu?.classList.remove('show');
+    setGeminiVoicePickerOpen(false);
 });
 
 document.querySelectorAll('.dropdown-item[data-format]').forEach(item => {

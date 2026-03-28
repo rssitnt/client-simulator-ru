@@ -3301,24 +3301,157 @@ body.light-theme .btn-icon:hover {
     max-width: 620px;
 }
 
-.voice-config-actions {
+.voice-select-native {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.voice-picker {
+    position: relative;
+    width: 100%;
+}
+
+.voice-picker-trigger {
+    width: 100%;
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 14px 16px;
+    border: 1px solid #2f2f2f;
+    border-radius: 14px;
+    background: #262626;
+    color: #f5f5f5;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
-.voice-config-hint {
+.voice-picker-trigger:hover {
+    background: #2b2b2b;
+    border-color: #3b3b3b;
+}
+
+.voice-picker.active .voice-picker-trigger,
+.voice-picker-trigger:focus-visible {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 55%, transparent), 0 14px 30px rgba(0, 0, 0, 0.28);
+}
+
+.voice-picker-current {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.voice-picker-current-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #f3f3f3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.voice-picker-current-description {
     font-size: 12px;
-    color: #666;
+    color: #8e8e8e;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.voice-select {
-    appearance: none;
-    background-image: linear-gradient(45deg, transparent 50%, #666 50%), linear-gradient(135deg, #666 50%, transparent 50%);
-    background-position: calc(100% - 18px) 50%, calc(100% - 12px) 50%;
-    background-size: 6px 6px, 6px 6px;
-    background-repeat: no-repeat;
-    padding-right: 32px;
+.voice-picker-arrow {
+    flex: 0 0 auto;
+    color: #8a8a8a;
+    transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.voice-picker.active .voice-picker-arrow {
+    transform: rotate(180deg);
+    color: #f2f2f2;
+}
+
+.voice-picker-menu {
+    display: none;
+    width: 100%;
+    max-height: min(360px, 45vh);
+    overflow-y: auto;
+    margin-top: 8px;
+    padding: 8px;
+    border: 1px solid #2f2f2f;
+    border-radius: 16px;
+    background: #171717;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.42);
+}
+
+.voice-picker.active .voice-picker-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.voice-picker-option {
+    width: 100%;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    background: transparent;
+    color: #e7e7e7;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.voice-picker-option:hover {
+    background: #232323;
+    border-color: #343434;
+}
+
+.voice-picker-option.active {
+    background: color-mix(in srgb, var(--color-accent) 18%, #1c1c1c);
+    border-color: color-mix(in srgb, var(--color-accent) 55%, transparent);
+}
+
+.voice-picker-option-label {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.voice-picker-option-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #f4f4f4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.voice-picker-option-description {
+    font-size: 12px;
+    color: #8d8d8d;
+}
+
+.voice-picker-option-check {
+    flex: 0 0 auto;
+    align-self: center;
+    font-size: 14px;
+    color: transparent;
+}
+
+.voice-picker-option.active .voice-picker-option-check {
+    color: var(--color-accent);
 }
 
 .settings-section {
@@ -3605,15 +3738,6 @@ body.light-theme input:checked + .toggle-slider .sun {
 
 body.light-theme .btn-change:hover {
     color: #333;
-}
-
-body.light-theme .voice-config-actions .btn-cancel {
-    background: #e6e6e6;
-    color: #555;
-}
-
-body.light-theme .voice-config-actions .btn-cancel:hover {
-    background: #d7d7d7;
 }
 
 body.light-theme .btn-danger-subtle {
@@ -4449,12 +4573,55 @@ body.light-theme .settings-label {
     color: #666;
 }
 
-body.light-theme .voice-config-hint {
-    color: #888;
+body.light-theme .voice-picker-trigger {
+    background: #f5f7fb;
+    border-color: #e1e5eb;
+    color: #1c1c1c;
 }
 
-body.light-theme .voice-select {
-    background-image: linear-gradient(45deg, transparent 50%, #777 50%), linear-gradient(135deg, #777 50%, transparent 50%);
+body.light-theme .voice-picker-trigger:hover {
+    background: #ffffff;
+    border-color: #d7dce4;
+}
+
+body.light-theme .voice-picker-current-name {
+    color: #202020;
+}
+
+body.light-theme .voice-picker-current-description {
+    color: #6f7782;
+}
+
+body.light-theme .voice-picker-arrow {
+    color: #7c8590;
+}
+
+body.light-theme .voice-picker-menu {
+    background: #ffffff;
+    border-color: #e1e5eb;
+    box-shadow: 0 18px 34px rgba(15, 23, 42, 0.14);
+}
+
+body.light-theme .voice-picker-option {
+    color: #202020;
+}
+
+body.light-theme .voice-picker-option:hover {
+    background: #f6f8fb;
+    border-color: #e3e8f0;
+}
+
+body.light-theme .voice-picker-option.active {
+    background: color-mix(in srgb, var(--color-accent) 14%, #ffffff);
+    border-color: color-mix(in srgb, var(--color-accent) 40%, #d5ddea);
+}
+
+body.light-theme .voice-picker-option-name {
+    color: #202020;
+}
+
+body.light-theme .voice-picker-option-description {
+    color: #707782;
 }
 
 body.light-theme .theme-icon-svg {
