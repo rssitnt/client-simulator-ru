@@ -1522,6 +1522,8 @@ let geminiVoiceAudioReady = false;
 let geminiVoiceFirstTurnTimerId = 0;
 let geminiVoiceUserTurnFinalized = false;
 let geminiVoiceCallNotice = null;
+let geminiVoiceAutoStopTimerId = 0;
+let geminiVoiceAutoStopRequested = false;
 let geminiVoiceConversationFinished = false;
 let geminiVoiceSessionConfig = null;
 let geminiDialToneTimerId = 0;
@@ -12723,6 +12725,54 @@ function normalizeVoiceDialogForCompare(text) {
     return normalizeVoiceDialogText(text).toLowerCase();
 }
 
+function shouldAutoEndGeminiVoiceCall(text) {
+    const normalized = normalizeVoiceDialogForCompare(text);
+    if (!normalized) return false;
+    if (normalized.includes('end_conversation') || normalized.includes('go_silent')) return true;
+    const endPatterns = [
+        /(^|\s)(до свидания|всего доброго|прощайте)([.!?]|$)/i,
+        /(^|\s)(на этом\s+все|на этом\s+всё|разговор окончен|завершаю разговор|заканчиваем разговор)([.!?]|$)/i,
+        /(^|\s)(я не буду продолжать|я больше не буду продолжать|мне больше не интересно|мне не интересно)([.!?]|$)/i
+    ];
+    return endPatterns.some((pattern) => pattern.test(normalized));
+}
+
+function getGeminiVoiceAutoStopDelayMs() {
+    if (!geminiVoiceAudioContext) return 400;
+    const now = geminiVoiceAudioContext.currentTime || 0;
+    const remaining = Math.max(0, (geminiVoicePlaybackCursor || 0) - now);
+    return Math.min(4000, Math.round(remaining * 1000) + 250);
+}
+
+function cancelGeminiVoiceAutoStop() {
+    if (geminiVoiceAutoStopTimerId) {
+        clearTimeout(geminiVoiceAutoStopTimerId);
+        geminiVoiceAutoStopTimerId = 0;
+    }
+    geminiVoiceAutoStopRequested = false;
+}
+
+function scheduleGeminiVoiceAutoStop(reasonText = '') {
+    if (geminiVoiceAutoStopRequested) return;
+    if (!isGeminiVoiceActive && !isGeminiVoiceConnecting) return;
+    if (!shouldAutoEndGeminiVoiceCall(reasonText)) return;
+    geminiVoiceAutoStopRequested = true;
+    const delayMs = getGeminiVoiceAutoStopDelayMs();
+    if (geminiVoiceAutoStopTimerId) {
+        clearTimeout(geminiVoiceAutoStopTimerId);
+    }
+    geminiVoiceAutoStopTimerId = setTimeout(() => {
+        geminiVoiceAutoStopTimerId = 0;
+        if (!isGeminiVoiceActive && !isGeminiVoiceConnecting) return;
+        stopGeminiVoiceMode({ silent: true, expectedClose: true, preserveDialogForRating: true })
+            .then(() => {
+                setVoiceModeStatus('Клиент завершил разговор. Можно оценить звонок.', 'ready');
+                showVoiceCallNotice('Клиент завершил разговор.');
+            })
+            .catch(() => {});
+    }, delayMs);
+}
+
 function normalizeVoiceDialogCompact(text) {
     return normalizeVoiceDialogForCompare(text).replace(/[^a-zа-яё0-9]+/gi, '');
 }
@@ -12996,6 +13046,7 @@ function resetGeminiVoiceDialogBuffer() {
         clearTimeout(geminiVoiceFirstTurnTimerId);
         geminiVoiceFirstTurnTimerId = 0;
     }
+    cancelGeminiVoiceAutoStop();
     geminiVoiceDialogLines = [];
     geminiVoiceDialogSyncedCount = 0;
     geminiVoiceUserDraft = '';
@@ -13436,6 +13487,7 @@ async function handleGeminiLiveMessage(message) {
                 );
                 flushGeminiVoiceDraftLine('assistant');
                 appendGeminiVoiceDialogToChat();
+                scheduleGeminiVoiceAutoStop(completedAssistantText);
                 if (isGeminiVoiceActive) {
                     setVoiceModeStatus('Слушаю вас… Говорите.', 'listening');
                 }
@@ -13478,11 +13530,17 @@ async function handleGeminiLiveMessage(message) {
                 mergeVoiceStreamingText(geminiVoiceAssistantDraft, geminiVoiceAssistantPreview)
             );
         }
+        const finalAssistantText = sanitizeAssistantCompletedTranscript(
+            geminiVoiceAssistantDraft.trim() ? geminiVoiceAssistantDraft : geminiVoiceAssistantPreview
+        );
         geminiVoiceAssistantPreview = '';
         if (geminiVoiceAssistantDraft.trim()) {
             flushGeminiVoiceDraftLine('assistant');
         }
         appendGeminiVoiceDialogToChat();
+        if (finalAssistantText) {
+            scheduleGeminiVoiceAutoStop(finalAssistantText);
+        }
         if (isGeminiVoiceActive) {
             setVoiceModeStatus('Слушаю вас… Говорите.', 'listening');
         }
@@ -13614,6 +13672,7 @@ async function stopGeminiVoiceMode(options = {}) {
         preserveDialogForRating = false
     } = options;
     stopGeminiDialTone();
+    cancelGeminiVoiceAutoStop();
     cancelGeminiVoiceStartAttempt();
     geminiVoiceCloseExpected = !!expectedClose;
     const shouldPreserveDialog = !!preserveDialogForRating && hasBufferedVoiceDialog();

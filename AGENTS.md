@@ -25,6 +25,8 @@
   - new turns reset the “finalized” flag when fresh input starts, so multiple user messages appear.
 - As of `2026-03-28`, a call-start notice is appended to chat when Gemini connects:
   - “Звонок начался. Говорите.”
+- As of `2026-03-28`, Gemini voice calls can auto-end when the client says a clear goodbye:
+  - detects explicit “до свидания / разговор окончен / завершаю разговор” phrases and stops after playback, preserving dialog for rating.
 - As of `2026-03-28`, a “Идёт подключение…” status is shown during ringing:
   - start buttons are hidden while the voice connection is in progress.
 - As of `2026-03-28`, tooltips are force-hidden on primary action click:
