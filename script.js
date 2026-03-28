@@ -13590,7 +13590,13 @@ async function handleGeminiLiveMessage(message) {
     }
 
     if (serverContent?.interrupted) {
-        resetGeminiPlaybackCursor();
+        if (geminiVoiceHasAudioOutput) {
+            resetGeminiPlaybackCursor();
+        } else if (geminiVoiceAudioContext) {
+            geminiVoicePlaybackCursor = geminiVoiceAudioContext.currentTime;
+        } else {
+            geminiVoicePlaybackCursor = 0;
+        }
     }
 
     if (serverContent?.turnComplete || serverContent?.generationComplete) {

@@ -37,6 +37,8 @@
   - buffer sources are tracked/stopped on reset, and chunks are queued to avoid overlapping voices.
 - As of `2026-03-28`, voice chat append no longer dedupes against full history:
   - prevents the first assistant line from being skipped when it matches earlier history text.
+- As of `2026-03-28`, Gemini `interrupted` events no longer kill the very first audio:
+  - playback reset only stops sources after the first audio has actually played.
 - As of `2026-03-28`, a “Идёт подключение…” status is shown during ringing:
   - start buttons are hidden while the voice connection is in progress.
 - As of `2026-03-28`, tooltips are force-hidden on primary action click:
