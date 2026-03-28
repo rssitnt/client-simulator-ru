@@ -65,6 +65,7 @@ const TRUSTED_VOICE_TOKEN_ENDPOINT_ORIGINS = new Set([
     'https://client-simulator-gemini-token.onrender.com'
 ]);
 const GEMINI_FIRST_REPLY_HINT_DELAY_MS = 1800;
+const GEMINI_VOICE_FIRST_AUDIO_DELAY_MS = 200;
 const GEMINI_LIVE_DEFAULT_VOICE = 'Enceladus';
 const GEMINI_LIVE_MEDIA_RESOLUTION = 'MEDIA_RESOLUTION_LOW';
 const GEMINI_LIVE_THINKING_BUDGET = 0;
@@ -12544,6 +12545,22 @@ function resetGeminiPlaybackCursor() {
     geminiVoicePlaybackCursor = geminiVoiceAudioContext.currentTime;
 }
 
+async function primeGeminiVoiceAudioOutput(delayMs = GEMINI_VOICE_FIRST_AUDIO_DELAY_MS) {
+    if (!geminiVoiceAudioContext) return;
+    try {
+        if (geminiVoiceAudioContext.state === 'suspended') {
+            await geminiVoiceAudioContext.resume();
+        }
+    } catch (error) {
+        console.warn('Failed to resume Gemini audio context:', error);
+    }
+    const safeDelay = Math.max(0, Number(delayMs) || 0);
+    if (!safeDelay) return;
+    const now = geminiVoiceAudioContext.currentTime;
+    geminiVoicePlaybackCursor = Math.max(geminiVoicePlaybackCursor || 0, now + safeDelay / 1000);
+    await new Promise((resolve) => setTimeout(resolve, safeDelay));
+}
+
 function getShortStatusText(prefix, text, maxLength = 140) {
     const clean = String(text || '').replace(/\s+/g, ' ').trim();
     if (!clean) return prefix;
@@ -13464,6 +13481,7 @@ async function startGeminiVoiceMode() {
         });
         throwIfGeminiVoiceStartAttemptStale(startAttempt.id);
         await initGeminiVoiceCapture();
+        await primeGeminiVoiceAudioOutput();
         throwIfGeminiVoiceStartAttemptStale(startAttempt.id);
 
         isGeminiVoiceConnecting = false;
