@@ -3396,9 +3396,8 @@ body.light-theme .btn-icon:hover {
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
-    scrollbar-gutter: stable;
     scrollbar-width: thin;
-    scrollbar-color: #4a4a4a transparent;
+    scrollbar-color: #444 transparent;
     padding: 8px;
 }
 
@@ -3412,12 +3411,12 @@ body.light-theme .btn-icon:hover {
 }
 
 .voice-picker-menu-scroll::-webkit-scrollbar-thumb {
-    background-color: #4a4a4a;
-    border-radius: 999px;
+    background-color: #333;
+    border-radius: 3px;
 }
 
 .voice-picker-menu-scroll::-webkit-scrollbar-thumb:hover {
-    background-color: #666;
+    background-color: #555;
 }
 
 .voice-picker-menu-scroll::-webkit-scrollbar-button,
@@ -4640,15 +4639,15 @@ body.light-theme .voice-picker-menu {
 }
 
 body.light-theme .voice-picker-menu-scroll {
-    scrollbar-color: #c6ccd6 transparent;
+    scrollbar-color: #ccc transparent;
 }
 
 body.light-theme .voice-picker-menu-scroll::-webkit-scrollbar-thumb {
-    background-color: #c6ccd6;
+    background-color: #ccc;
 }
 
 body.light-theme .voice-picker-menu-scroll::-webkit-scrollbar-thumb:hover {
-    background-color: #aeb7c4;
+    background-color: #aaa;
 }
 
 body.light-theme .voice-picker-option {
