@@ -17,7 +17,7 @@
         integrity="sha384-oaMLBGEzBOJx3UHwac0cVndtX5fxGQIfnAeFZ35RTgqPcYlbprH9o9PUV/F8Le07"
         crossorigin="anonymous"
     >
-    <link rel="stylesheet" href="style.css?v=20260325-23">
+    <link rel="stylesheet" href="style.css?v=20260328-01">
     
     <!-- Favicon -->
     <link rel="apple-touch-icon" sizes="180x180" href="favicon/apple-touch-icon.png">
@@ -437,6 +437,25 @@
                             <button class="dropdown-item" data-format="rtf">RTF</button>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Голос Gemini -->
+            <div class="settings-row voice-row">
+                <span class="settings-label">Голос:</span>
+                <div class="voice-config-block">
+                    <input
+                        type="text"
+                        id="geminiVoiceNameInput"
+                        class="name-input"
+                        placeholder="Например: Enceladus"
+                        maxlength="80"
+                    >
+                    <div class="voice-config-actions">
+                        <button id="saveVoiceConfigBtn" class="btn-change">Сохранить</button>
+                        <button id="clearVoiceConfigBtn" class="btn-change btn-danger-subtle">Сбросить</button>
+                    </div>
+                    <div class="voice-config-hint">Можно указать имя голоса из Google AI Studio.</div>
                 </div>
             </div>
             <div id="chatMessages" class="chat-messages">
