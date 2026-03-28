@@ -256,6 +256,7 @@ const CHAT_WEBHOOK_TIMEOUT_MS = 45000;
 const AI_HELPER_WEBHOOK_TIMEOUT_MS = 30000;
 const RATING_WEBHOOK_TIMEOUT_MS = 45000;
 const ATTESTATION_WEBHOOK_TIMEOUT_MS = 30000;
+const VOICE_TOKEN_ENDPOINT_TIMEOUT_MS = 45000;
 const AUTH_SESSION_RESTORE_TIMEOUT_MS = 10000;
 const AUTH_FLOW_STEP_TIMEOUT_MS = 12000;
 const AUTH_MAGIC_LINK_SEND_TIMEOUT_MS = 20000;
@@ -12366,25 +12367,34 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
         headers['X-Firebase-AppCheck'] = appCheckToken;
     }
 
-    const tokenResponse = await fetchWithTimeout(tokenEndpoint, {
-        method: 'POST',
-        headers,
-        credentials: 'omit',
-        body: JSON.stringify({
-            source: 'client-simulator-web',
-            login: normalizeLogin(
-                currentUser?.login
-                || auth?.currentUser?.email
-                || getAuthSession()?.login
-                || getCachedStorageValue(USER_LOGIN_KEY)
-                || ''
-            ),
-            model: sessionConfig?.model || GEMINI_LIVE_MODEL,
-            voice: sessionConfig?.voice || getConfiguredGeminiVoiceName(),
-            instructions: String(sessionConfig?.instructions || '').trim()
-        }),
-        signal: options?.signal
-    }, 20000);
+    let tokenResponse;
+    try {
+        tokenResponse = await fetchWithTimeout(tokenEndpoint, {
+            method: 'POST',
+            headers,
+            credentials: 'omit',
+            body: JSON.stringify({
+                source: 'client-simulator-web',
+                login: normalizeLogin(
+                    currentUser?.login
+                    || auth?.currentUser?.email
+                    || getAuthSession()?.login
+                    || getCachedStorageValue(USER_LOGIN_KEY)
+                    || ''
+                ),
+                model: sessionConfig?.model || GEMINI_LIVE_MODEL,
+                voice: sessionConfig?.voice || getConfiguredGeminiVoiceName(),
+                instructions: String(sessionConfig?.instructions || '').trim()
+            }),
+            signal: options?.signal
+        }, VOICE_TOKEN_ENDPOINT_TIMEOUT_MS);
+    } catch (error) {
+        const message = String(error?.message || '').toLowerCase();
+        if (message.includes('таймаут') || message.includes('timeout')) {
+            throw new Error(`Таймаут token endpoint (${VOICE_TOKEN_ENDPOINT_TIMEOUT_MS / 1000}с). Сервер может просыпаться после простоя — попробуйте ещё раз.`);
+        }
+        throw error;
+    }
     if (!tokenResponse.ok) {
         const tokenErrorPayload = await readResponseJsonWithTimeout(
             tokenResponse,
