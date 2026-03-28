@@ -1503,6 +1503,8 @@ let geminiVoiceProcessorNode = null;
 let geminiVoiceSilenceGain = null;
 let geminiVoicePlaybackCursor = 0;
 let geminiVoiceHasAudioOutput = false;
+let geminiVoicePlaybackQueue = Promise.resolve();
+let geminiVoiceActiveSources = new Set();
 let isGeminiVoiceConnecting = false;
 let isGeminiVoiceActive = false;
 let geminiVoiceCloseExpected = false;
@@ -12592,61 +12594,79 @@ async function ensureGeminiVoiceAudioContext() {
 
 async function enqueueGeminiAudioPlayback(base64Data, mimeType = 'audio/pcm;rate=24000') {
     if (!base64Data) return;
-    const audioContext = await ensureGeminiVoiceAudioContext();
-    if (!audioContext) return;
+    const playbackTask = async () => {
+        const audioContext = await ensureGeminiVoiceAudioContext();
+        if (!audioContext) return;
 
-    const bytes = base64ToUint8(base64Data);
-    if (!bytes.length) return;
-    let byteView = bytes;
-    if (byteView.length % 2 !== 0) {
-        const evenLength = byteView.length - 1;
-        if (evenLength <= 0) return;
-        byteView = byteView.subarray(0, evenLength);
-    }
-    const normalizedMime = String(mimeType || '').toLowerCase();
-    const shouldTryDecode = !normalizedMime || (!normalizedMime.includes('pcm') && !normalizedMime.includes('l16'));
-    if (shouldTryDecode) {
-        const rawBuffer = byteView.buffer.slice(byteView.byteOffset, byteView.byteOffset + byteView.byteLength);
-        try {
-            const decoded = await audioContext.decodeAudioData(rawBuffer.slice(0));
-            const source = audioContext.createBufferSource();
-            source.buffer = decoded;
-            source.connect(audioContext.destination);
-            const now = audioContext.currentTime;
-            let startAt = Math.max(now + 0.01, geminiVoicePlaybackCursor || 0);
-            if (!geminiVoiceHasAudioOutput || startAt - now > 1.5) {
-                startAt = now + 0.01;
-            }
-            source.start(startAt);
-            geminiVoicePlaybackCursor = startAt + decoded.duration;
-            geminiVoiceHasAudioOutput = true;
-            return;
-        } catch (error) {
-            console.warn('Failed to decode Gemini Live audio chunk, falling back to PCM:', error);
+        const bytes = base64ToUint8(base64Data);
+        if (!bytes.length) return;
+        let byteView = bytes;
+        if (byteView.length % 2 !== 0) {
+            const evenLength = byteView.length - 1;
+            if (evenLength <= 0) return;
+            byteView = byteView.subarray(0, evenLength);
         }
-    }
-    const int16 = new Int16Array(byteView.buffer, byteView.byteOffset, byteView.byteLength / 2);
-    const sampleRate = getMimeRate(mimeType, 24000);
-    const audioBuffer = audioContext.createBuffer(1, int16.length, sampleRate);
-    const channel = audioBuffer.getChannelData(0);
-    for (let i = 0; i < int16.length; i += 1) {
-        channel[i] = int16[i] / 32768;
-    }
+        const normalizedMime = String(mimeType || '').toLowerCase();
+        const shouldTryDecode = !normalizedMime || (!normalizedMime.includes('pcm') && !normalizedMime.includes('l16'));
+        if (shouldTryDecode) {
+            const rawBuffer = byteView.buffer.slice(byteView.byteOffset, byteView.byteOffset + byteView.byteLength);
+            try {
+                const decoded = await audioContext.decodeAudioData(rawBuffer.slice(0));
+                const source = audioContext.createBufferSource();
+                source.buffer = decoded;
+                source.connect(audioContext.destination);
+                source.onended = () => geminiVoiceActiveSources.delete(source);
+                geminiVoiceActiveSources.add(source);
+                const now = audioContext.currentTime;
+                let startAt = Math.max(now + 0.01, geminiVoicePlaybackCursor || 0);
+                if (!geminiVoiceHasAudioOutput) {
+                    startAt = now + 0.01;
+                }
+                source.start(startAt);
+                geminiVoicePlaybackCursor = startAt + decoded.duration;
+                geminiVoiceHasAudioOutput = true;
+                return;
+            } catch (error) {
+                console.warn('Failed to decode Gemini Live audio chunk, falling back to PCM:', error);
+            }
+        }
 
-    const source = audioContext.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(audioContext.destination);
-    const now = audioContext.currentTime;
-    let startAt = Math.max(now + 0.01, geminiVoicePlaybackCursor || 0);
-    if (!geminiVoiceHasAudioOutput || startAt - now > 1.5) {
-        startAt = now + 0.01;
-    }
-    source.start(startAt);
-    geminiVoicePlaybackCursor = startAt + audioBuffer.duration;
-    geminiVoiceHasAudioOutput = true;
+        const int16 = new Int16Array(byteView.buffer, byteView.byteOffset, byteView.byteLength / 2);
+        const sampleRate = getMimeRate(mimeType, 24000);
+        const audioBuffer = audioContext.createBuffer(1, int16.length, sampleRate);
+        const channel = audioBuffer.getChannelData(0);
+        for (let i = 0; i < int16.length; i += 1) {
+            channel[i] = int16[i] / 32768;
+        }
+
+        const source = audioContext.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioContext.destination);
+        source.onended = () => geminiVoiceActiveSources.delete(source);
+        geminiVoiceActiveSources.add(source);
+        const now = audioContext.currentTime;
+        let startAt = Math.max(now + 0.01, geminiVoicePlaybackCursor || 0);
+        if (!geminiVoiceHasAudioOutput) {
+            startAt = now + 0.01;
+        }
+        source.start(startAt);
+        geminiVoicePlaybackCursor = startAt + audioBuffer.duration;
+        geminiVoiceHasAudioOutput = true;
+    };
+
+    const queued = geminiVoicePlaybackQueue.then(playbackTask, playbackTask);
+    geminiVoicePlaybackQueue = queued.catch(() => {});
+    return queued;
 }
 
 function resetGeminiPlaybackCursor() {
+    if (geminiVoiceActiveSources.size) {
+        geminiVoiceActiveSources.forEach((source) => {
+            try { source.stop(); } catch (error) {}
+        });
+        geminiVoiceActiveSources.clear();
+    }
+    geminiVoicePlaybackQueue = Promise.resolve();
     if (!geminiVoiceAudioContext) {
         geminiVoicePlaybackCursor = 0;
         geminiVoiceHasAudioOutput = false;
@@ -13723,6 +13743,7 @@ async function stopGeminiVoiceMode(options = {}) {
     stopGeminiDialTone();
     cancelGeminiVoiceAutoStop();
     cancelGeminiVoiceStartAttempt();
+    resetGeminiPlaybackCursor();
     geminiVoiceCloseExpected = !!expectedClose;
     const shouldPreserveDialog = !!preserveDialogForRating && hasBufferedVoiceDialog();
     const shouldRenderDialog = !silent && !shouldPreserveDialog;
@@ -13837,6 +13858,7 @@ async function startGeminiVoiceMode() {
         });
         throwIfGeminiVoiceStartAttemptStale(startAttempt.id);
         await initGeminiVoiceCapture();
+        resetGeminiPlaybackCursor();
         await primeGeminiVoiceAudioOutput();
         geminiVoiceAudioReady = true;
         if (geminiVoiceFirstTurnPending || geminiVoiceSetupComplete) {
