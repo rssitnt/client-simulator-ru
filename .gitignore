@@ -7,3 +7,4 @@ output/playwright/
 output/runtime/
 
 .vercel
+client-simulator-firebase-adminsdk-*.json
