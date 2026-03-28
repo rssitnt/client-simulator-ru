@@ -1,8 +1,26 @@
 # PROJECT_CONTEXT.md
 
+## 2026-03-29 — `waitingForInput` теперь финализирует первую реплику клиента как отдельный bubble
+- Выяснился ещё один отдельный path потери первой реплики:
+  - Gemini уже успевал прислать первую короткую `outputTranscription` (например `Привет.`),
+  - затем шёл `waitingForInput`,
+  - но если не было `turnComplete/outputFinished`, фронт не считал этот текст завершённым ходом и не коммитил его в чат.
+- Что происходило дальше:
+  - первая реплика оставалась в `geminiVoiceAssistantPreview`,
+  - следующий ответ клиента мог слиться с ней в один bubble (`Привет. Сказал же...`) или вообще вытеснить её.
+- Исправление в `script.js`:
+  - в ветке `serverContent.waitingForInput` теперь берётся `pendingAssistantTranscript`,
+  - если он уже есть, вызывается `finalizeGeminiAssistantTurn(..., { restoreListeningState: false })`,
+  - и первая реплика сразу фиксируется как отдельное сообщение в истории.
+  - grace-window для поздней транскрипции остаётся только для случаев, когда на `waitingForInput` текста ещё нет вообще.
+- Регрессия закрыта в `scripts/smoke-e2e.mjs` сценарием `waiting-for-input-finalizes-first-reply`:
+  - сначала приходит короткий первый `outputTranscription`,
+  - потом `waitingForInput`,
+  - smoke проверяет, что `Привет.` появляется в чате отдельным assistant bubble.
+
 ## 2026-03-29 — Добавлено окно ожидания поздней транскрипции первого ответа Gemini Live
 - После half-duplex фикса остался ещё один реальный path потери первой реплики в чате:
-  - Gemini мог прислать первый аудиоответ,
+- Gemini мог прислать первый аудиоответ,
   - затем `waitingForInput`,
   - а `outputTranscription` для этого же ответа приходил позже.
 - Старое поведение:

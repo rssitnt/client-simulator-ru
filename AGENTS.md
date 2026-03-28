@@ -21,6 +21,10 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-29`, `serverContent.waitingForInput` is treated as an implicit turn boundary for Gemini Live assistant text:
+  - root cause: the first assistant phrase could already exist in `geminiVoiceAssistantPreview`, but without `turnComplete/outputFinished` it stayed uncommitted and got merged into the next reply.
+  - fix: on `waitingForInput`, any pending assistant preview/draft is immediately finalized into chat as its own bubble; only truly transcript-less audio turns still enter the late-transcript grace window.
+  - expected effect: short first replies like `Привет.` should stop disappearing or gluing themselves to the next assistant turn.
 - As of `2026-03-29`, Gemini Live now waits briefly for late assistant transcripts before unlocking the manager mic:
   - root cause: Gemini can emit first assistant audio and `waitingForInput` before the corresponding `outputTranscription`; the old code unlocked the manager mic too early and the first reply never became a visible chat line.
   - fix: added a short late-transcript grace window (`GEMINI_VOICE_LATE_TRANSCRIPT_GRACE_MS`) and immediate finalization when delayed assistant text arrives after `waitingForInput`.

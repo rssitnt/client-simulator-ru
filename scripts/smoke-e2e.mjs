@@ -333,6 +333,62 @@ class StubLiveSession {
         }, 410);
         return;
       }
+      if (scenario === 'waiting-for-input-finalizes-first-reply') {
+        this.emit({
+          serverContent: {
+            outputTranscription: {
+              text: 'Привет.',
+              finished: false
+            }
+          }
+        }, 230);
+        this.emit({
+          serverContent: {
+            modelTurn: {
+              parts: [
+                {
+                  inlineData: {
+                    data: assistantAudioBase64,
+                    mimeType: 'audio/pcm;rate=24000'
+                  }
+                }
+              ]
+            }
+          }
+        }, 250);
+        this.emit({
+          serverContent: {
+            waitingForInput: true
+          }
+        }, 320);
+        this.emit({
+          serverContent: {
+            inputTranscription: {
+              text: 'Сказал же, гидробур нужен.',
+              finished: true
+            }
+          }
+        }, 470);
+        this.emit({
+          serverContent: {
+            outputTranscription: {
+              text: 'Что скажешь по задаче?',
+              finished: true
+            },
+            modelTurn: {
+              parts: [
+                {
+                  inlineData: {
+                    data: assistantAudioBase64,
+                    mimeType: 'audio/pcm;rate=24000'
+                  }
+                }
+              ]
+            }
+          }
+        }, 620);
+        return;
+      }
       this.emit({
         serverContent: {
           outputTranscription: {
@@ -1384,10 +1440,20 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
         expect(dialogState.bodyVoiceCallActive, 'Voice call active body state was not enabled');
         expect(dialogState.audioStartCount > 0, 'Assistant audio playback never started');
         expect(dialogState.userMessages.some((text) => text.includes('CASE CX260C')), 'Voice user transcript was not appended to chat');
-        expect(
-            dialogState.assistantMessages.some((text) => text.includes(expectedAssistantNeedle) || text.includes('сервису')),
-            'Voice assistant reply was not appended to chat'
-        );
+        if (voiceScenario === 'waiting-for-input-finalizes-first-reply') {
+            expect(
+                dialogState.assistantMessages.some((text) => text.trim() === 'Привет.'),
+                'First assistant voice reply was not finalized as a separate chat bubble'
+            );
+        } else {
+            expect(
+                dialogState.assistantMessages.some((text) => text.includes(expectedAssistantNeedle) || text.includes('сервису')),
+                'Voice assistant reply was not appended to chat'
+            );
+        }
+        if (voiceScenario === 'waiting-for-input-finalizes-first-reply') {
+            expect(dialogState.assistantMessages.length >= 1, 'Assistant messages must contain the finalized first reply');
+        }
         expect(dialogState.errorMessages.length === 0, `Voice mode rendered an error: ${dialogState.errorMessages.join(' | ')}`);
 
         await page.click('#sendBtn');
@@ -1624,6 +1690,10 @@ async function main() {
         await runGeminiVoiceModeSmokeFlow(browser, baseUrl, {
             voiceScenario: 'late-first-transcript',
             expectedAssistantNeedle: 'срокам и сервису'
+        });
+        await runGeminiVoiceModeSmokeFlow(browser, baseUrl, {
+            voiceScenario: 'waiting-for-input-finalizes-first-reply',
+            expectedAssistantNeedle: 'Что скажешь по задаче?'
         });
         await runEndConversationFlow(browser, baseUrl);
         await runGoSilentFlow(browser, baseUrl);

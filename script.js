@@ -14661,10 +14661,17 @@ async function handleGeminiLiveMessage(message) {
     }
 
     if (serverContent?.waitingForInput && isGeminiVoiceActive) {
-        const hasPendingAssistantTranscript = !!normalizeVoiceDialogText(
+        const pendingAssistantTranscript = normalizeVoiceDialogText(
             geminiVoiceAssistantDraft.trim() ? geminiVoiceAssistantDraft : geminiVoiceAssistantPreview
         );
-        if (geminiVoiceAssistantTurnInProgress && geminiVoiceHasAudioOutput && !hasPendingAssistantTranscript) {
+        const hasPendingAssistantTranscript = !!pendingAssistantTranscript;
+        if (hasPendingAssistantTranscript) {
+            finalizeGeminiAssistantTurn(pendingAssistantTranscript, {
+                restoreListeningState: false
+            });
+            clearGeminiVoiceLateTranscriptWait();
+            geminiVoiceAssistantTurnInProgress = false;
+        } else if (geminiVoiceAssistantTurnInProgress && geminiVoiceHasAudioOutput) {
             scheduleGeminiVoiceLateTranscriptWait('waiting_for_input');
         } else {
             clearGeminiVoiceLateTranscriptWait();
