@@ -1517,6 +1517,10 @@ let geminiVoiceFirstReplyHintTimer = null;
 let geminiVoiceSetupComplete = false;
 let geminiVoiceFirstTurnRequested = false;
 let geminiVoiceConversationFinished = false;
+let geminiVoiceSessionConfig = null;
+let geminiDialToneTimerId = 0;
+let geminiDialToneOscillators = [];
+let geminiDialToneGain = null;
 let openAiVoicePeerConnection = null;
 let openAiVoiceDataChannel = null;
 let openAiVoiceRemoteAudio = null;
@@ -12506,32 +12510,38 @@ function getMimeRate(mimeType, fallback = 24000) {
     return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
-async function enqueueGeminiAudioPlayback(base64Data, mimeType = 'audio/pcm;rate=24000') {
-    if (!base64Data) return;
+async function ensureGeminiVoiceAudioContext() {
     if (!geminiVoiceAudioContext) {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (!AudioCtx) return;
+        if (!AudioCtx) return null;
         geminiVoiceAudioContext = new AudioCtx();
     }
     if (geminiVoiceAudioContext.state === 'suspended') {
         await geminiVoiceAudioContext.resume();
     }
+    return geminiVoiceAudioContext;
+}
+
+async function enqueueGeminiAudioPlayback(base64Data, mimeType = 'audio/pcm;rate=24000') {
+    if (!base64Data) return;
+    const audioContext = await ensureGeminiVoiceAudioContext();
+    if (!audioContext) return;
 
     const bytes = base64ToUint8(base64Data);
     if (!bytes.length || bytes.length % 2 !== 0) return;
 
     const int16 = new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2);
     const sampleRate = getMimeRate(mimeType, 24000);
-    const audioBuffer = geminiVoiceAudioContext.createBuffer(1, int16.length, sampleRate);
+    const audioBuffer = audioContext.createBuffer(1, int16.length, sampleRate);
     const channel = audioBuffer.getChannelData(0);
     for (let i = 0; i < int16.length; i += 1) {
         channel[i] = int16[i] / 32768;
     }
 
-    const source = geminiVoiceAudioContext.createBufferSource();
+    const source = audioContext.createBufferSource();
     source.buffer = audioBuffer;
-    source.connect(geminiVoiceAudioContext.destination);
-    const now = geminiVoiceAudioContext.currentTime;
+    source.connect(audioContext.destination);
+    const now = audioContext.currentTime;
     const startAt = Math.max(now + 0.01, geminiVoicePlaybackCursor || 0);
     source.start(startAt);
     geminiVoicePlaybackCursor = startAt + audioBuffer.duration;
@@ -12546,19 +12556,72 @@ function resetGeminiPlaybackCursor() {
 }
 
 async function primeGeminiVoiceAudioOutput(delayMs = GEMINI_VOICE_FIRST_AUDIO_DELAY_MS) {
-    if (!geminiVoiceAudioContext) return;
-    try {
-        if (geminiVoiceAudioContext.state === 'suspended') {
-            await geminiVoiceAudioContext.resume();
-        }
-    } catch (error) {
-        console.warn('Failed to resume Gemini audio context:', error);
-    }
+    const audioContext = await ensureGeminiVoiceAudioContext();
+    if (!audioContext) return;
     const safeDelay = Math.max(0, Number(delayMs) || 0);
     if (!safeDelay) return;
-    const now = geminiVoiceAudioContext.currentTime;
+    const now = audioContext.currentTime;
     geminiVoicePlaybackCursor = Math.max(geminiVoicePlaybackCursor || 0, now + safeDelay / 1000);
     await new Promise((resolve) => setTimeout(resolve, safeDelay));
+}
+
+async function startGeminiDialTone() {
+    if (geminiDialToneTimerId) return;
+    const audioContext = await ensureGeminiVoiceAudioContext();
+    if (!audioContext) return;
+    const gain = audioContext.createGain();
+    gain.gain.value = 0;
+    gain.connect(audioContext.destination);
+
+    const osc1 = audioContext.createOscillator();
+    osc1.type = 'sine';
+    osc1.frequency.value = 440;
+    osc1.connect(gain);
+
+    const osc2 = audioContext.createOscillator();
+    osc2.type = 'sine';
+    osc2.frequency.value = 480;
+    osc2.connect(gain);
+
+    osc1.start();
+    osc2.start();
+
+    geminiDialToneGain = gain;
+    geminiDialToneOscillators = [osc1, osc2];
+
+    const ringOnce = () => {
+        if (!geminiDialToneGain) return;
+        const now = audioContext.currentTime;
+        geminiDialToneGain.gain.cancelScheduledValues(now);
+        geminiDialToneGain.gain.setValueAtTime(0, now);
+        geminiDialToneGain.gain.linearRampToValueAtTime(0.08, now + 0.02);
+        geminiDialToneGain.gain.setValueAtTime(0.08, now + 1.1);
+        geminiDialToneGain.gain.linearRampToValueAtTime(0, now + 1.2);
+    };
+
+    ringOnce();
+    geminiDialToneTimerId = setInterval(ringOnce, 3000);
+}
+
+function stopGeminiDialTone() {
+    if (geminiDialToneTimerId) {
+        clearInterval(geminiDialToneTimerId);
+        geminiDialToneTimerId = 0;
+    }
+    if (geminiDialToneGain) {
+        try {
+            geminiDialToneGain.gain.setValueAtTime(0, geminiVoiceAudioContext?.currentTime || 0);
+        } catch (error) {}
+        try { geminiDialToneGain.disconnect(); } catch (error) {}
+        geminiDialToneGain = null;
+    }
+    if (geminiDialToneOscillators.length) {
+        geminiDialToneOscillators.forEach((osc) => {
+            try { osc.stop(); } catch (error) {}
+            try { osc.disconnect(); } catch (error) {}
+        });
+        geminiDialToneOscillators = [];
+    }
 }
 
 function getShortStatusText(prefix, text, maxLength = 140) {
@@ -12879,6 +12942,7 @@ function resetGeminiVoiceDialogBuffer() {
     openAiLastUserTurnCompact = '';
     openAiLastUserTurnAt = 0;
     openAiUserTranscriptByItemId = new Map();
+    geminiVoiceSessionConfig = null;
 }
 
 function appendGeminiVoiceDialogToChat() {
@@ -12968,6 +13032,23 @@ function buildVoiceFirstTurnInstructions(sessionInstructions) {
     return `${base}\n\n${opener}`;
 }
 
+function requestGeminiFirstTurn() {
+    if (geminiVoiceFirstTurnRequested || !geminiLiveSession) return false;
+    const instructions = String(geminiVoiceSessionConfig?.instructions || '').trim();
+    geminiVoiceFirstTurnRequested = true;
+    try {
+        geminiLiveSession.sendRealtimeInput({
+            text: buildVoiceFirstTurnInstructions(instructions)
+        });
+        scheduleGeminiFirstReplyHint();
+        return true;
+    } catch (error) {
+        console.warn('Failed to request Gemini first turn:', error);
+        geminiVoiceFirstTurnRequested = false;
+        return false;
+    }
+}
+
 function sendOpenAiRealtimeEvent(payload) {
     if (!openAiVoiceDataChannel || openAiVoiceDataChannel.readyState !== 'open') return false;
     try {
@@ -13011,6 +13092,7 @@ function handleGeminiVoiceTransportFailure(message = 'Соединение го�
     if (geminiVoiceCloseExpected || (!isGeminiVoiceActive && !isGeminiVoiceConnecting)) {
         return false;
     }
+    stopGeminiDialTone();
     geminiVoiceCloseExpected = true;
     const preserveDialogForRating = hasBufferedVoiceDialog();
     stopGeminiVoiceMode({
@@ -13164,8 +13246,12 @@ async function handleGeminiLiveMessage(message) {
 
     if (message.setupComplete) {
         geminiVoiceSetupComplete = true;
+        stopGeminiDialTone();
+        requestGeminiFirstTurn();
         if (!geminiVoiceHasAssistantReply) {
-            setVoiceModeStatus('Соединение установлено. ИИ-клиент начинает разговор…', 'waiting');
+            setVoiceModeStatus('Клиент на линии. ИИ-клиент начинает разговор…', 'waiting');
+        } else {
+            setVoiceModeStatus('Клиент на линии.', 'ready');
         }
     }
 
@@ -13194,6 +13280,7 @@ async function handleGeminiLiveMessage(message) {
     const outputText = normalizeVoiceDialogText(serverContent?.outputTranscription?.text || '');
     const outputFinished = !!serverContent?.outputTranscription?.finished;
     if (outputText) {
+        stopGeminiDialTone();
         if (!geminiVoiceHasAssistantReply) {
             geminiVoiceHasAssistantReply = true;
             clearGeminiFirstReplyHintTimer();
@@ -13371,6 +13458,7 @@ async function stopGeminiVoiceMode(options = {}) {
         expectedClose = true,
         preserveDialogForRating = false
     } = options;
+    stopGeminiDialTone();
     cancelGeminiVoiceStartAttempt();
     geminiVoiceCloseExpected = !!expectedClose;
     const shouldPreserveDialog = !!preserveDialogForRating && hasBufferedVoiceDialog();
@@ -13434,13 +13522,15 @@ async function startGeminiVoiceMode() {
     geminiVoiceFirstTurnRequested = false;
     isGeminiVoiceConnecting = true;
     updateVoiceModeControls();
-    setVoiceModeStatus('Подключаюсь к Gemini Live…', 'idle');
+    setVoiceModeStatus('Звоним клиенту…', 'waiting');
+    startGeminiDialTone();
     const startAttempt = beginGeminiVoiceStartAttempt();
 
     try {
         const sdk = await loadGeminiSdkModule();
         throwIfGeminiVoiceStartAttemptStale(startAttempt.id);
         const sessionConfig = buildGeminiVoiceSessionConfig(sdk);
+        geminiVoiceSessionConfig = sessionConfig;
         const clientSecret = await resolveGeminiLiveApiKey(sessionConfig, {
             signal: startAttempt.signal
         });
@@ -13458,7 +13548,7 @@ async function startGeminiVoiceMode() {
             callbacks: {
                 onopen: () => {
                     if (startAttempt.id !== geminiVoiceStartAttemptId) return;
-                    setVoiceModeStatus('Соединение с Gemini Live открыто…', 'waiting');
+                    setVoiceModeStatus('Соединяем клиента…', 'waiting');
                 },
                 onmessage: (message) => {
                     handleGeminiLiveMessage(message).catch((error) => {
@@ -13487,12 +13577,6 @@ async function startGeminiVoiceMode() {
         isGeminiVoiceConnecting = false;
         isGeminiVoiceActive = true;
         updateVoiceModeControls();
-        setVoiceModeStatus('Запрашиваю первое сообщение от ИИ-клиента…', 'waiting');
-        scheduleGeminiFirstReplyHint();
-        geminiVoiceFirstTurnRequested = true;
-        geminiLiveSession.sendRealtimeInput({
-            text: buildVoiceFirstTurnInstructions(sessionConfig.instructions)
-        });
     } catch (error) {
         console.error('Failed to start voice mode:', error);
         isGeminiVoiceConnecting = false;
@@ -13574,7 +13658,7 @@ function updateVoiceModeRateButtonState() {
         return;
     }
     if (isGeminiVoiceConnecting) {
-        setVoiceModeStatus('Подключаюсь к Gemini Live…', 'waiting');
+        setVoiceModeStatus('Звоним клиенту…', 'waiting');
         return;
     }
     if (isGeminiVoiceActive) {

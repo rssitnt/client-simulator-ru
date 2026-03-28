@@ -32,6 +32,9 @@
   - the main send button becomes the stop/hangup button during a call.
   - inline status badge removed on request (no extra UI during a call).
 - As of `2026-03-28`, Gemini Live start adds a short audio warmup delay so the first sentence is not clipped.
+- As of `2026-03-28`, voice call UX improved:
+  - added a dial tone + “Звоним клиенту…” indicator during connection.
+  - first turn is sent after `setupComplete` to avoid losing the first audio phrase.
 - As of `2026-03-28`, роли и App Check усилены без изменения UX:
   - админ‑доступ на фронте и в правилах RTDB теперь читается из Firebase Custom Claims (`auth.token.admin/role`), а не из RTDB роли (кроме localhost preview).
   - REST‑fallback в браузере отключён для `client-simulator.ru` (остался для localhost/preview), чтобы убрать канал с токеном в URL.
