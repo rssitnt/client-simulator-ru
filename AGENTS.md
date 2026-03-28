@@ -21,6 +21,13 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-29`, the missing first Gemini Live client reply is now handled through a turn-centric audio fallback path:
+  - assistant turns now get a real turn id on first assistant output instead of relying only on `geminiVoiceAssistantPreview/draft`.
+  - assistant audio chunks are buffered per turn from `modelTurn.parts.inlineData` and `outputAudio`.
+  - if a turn reaches `waitingForInput`, `turnComplete`, `interrupted`, or a new manager input without any finalized assistant transcript, the frontend requests one fallback transcription from `/api/gemini-live-transcribe` using the buffered assistant audio.
+  - normal transcript arrivals still win; fallback only fills the audio-only / too-late-transcript gap for the same turn.
+  - orphan late assistant events are ignored when the previous turn is already finalized and the manager has not started a new turn yet, which prevents stale duplicate bubbles after fallback.
+  - `scripts/smoke-e2e.mjs` now includes `audio-only-first-reply-fallback`, which verifies that an assistant first reply with audio but no native transcript still appears in chat.
 - As of `2026-03-29`, `serverContent.waitingForInput` is treated as an implicit turn boundary for Gemini Live assistant text:
   - root cause: the first assistant phrase could already exist in `geminiVoiceAssistantPreview`, but without `turnComplete/outputFinished` it stayed uncommitted and got merged into the next reply.
   - fix: on `waitingForInput`, any pending assistant preview/draft is immediately finalized into chat as its own bubble; only truly transcript-less audio turns still enter the late-transcript grace window.

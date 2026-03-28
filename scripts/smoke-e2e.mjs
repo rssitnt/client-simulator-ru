@@ -389,6 +389,54 @@ class StubLiveSession {
         }, 620);
         return;
       }
+      if (scenario === 'audio-only-first-reply-fallback') {
+        this.emit({
+          serverContent: {
+            modelTurn: {
+              parts: [
+                {
+                  inlineData: {
+                    data: assistantAudioBase64,
+                    mimeType: 'audio/pcm;rate=24000'
+                  }
+                }
+              ]
+            }
+          }
+        }, 230);
+        this.emit({
+          serverContent: {
+            waitingForInput: true
+          }
+        }, 320);
+        this.emit({
+          serverContent: {
+            inputTranscription: {
+              text: 'Привет. Сказал же, гидробур нужен.',
+              finished: true
+            }
+          }
+        }, 470);
+        this.emit({
+          serverContent: {
+            outputTranscription: {
+              text: 'Что скажешь по задаче?',
+              finished: true
+            },
+            modelTurn: {
+              parts: [
+                {
+                  inlineData: {
+                    data: assistantAudioBase64,
+                    mimeType: 'audio/pcm;rate=24000'
+                  }
+                }
+              ]
+            }
+          }
+        }, 620);
+        return;
+      }
       this.emit({
         serverContent: {
           outputTranscription: {
@@ -648,7 +696,8 @@ async function installCommonRoutes(context, scenario) {
     });
 }
 
-async function installGeminiVoiceSmokeRoutes(context, bucket) {
+async function installGeminiVoiceSmokeRoutes(context, tokenBucket, transcribeBucket, options = {}) {
+    const voiceScenario = String(options?.voiceScenario || 'default');
     await context.route('https://cdn.jsdelivr.net/npm/@google/genai@1.40.0/+esm', async (route) => {
         await route.fulfill({
             status: 200,
@@ -663,7 +712,7 @@ async function installGeminiVoiceSmokeRoutes(context, bucket) {
         try {
             payload = JSON.parse(rawBody);
         } catch {}
-        bucket.push({
+        tokenBucket.push({
             url: request.url(),
             payload
         });
@@ -675,6 +724,26 @@ async function installGeminiVoiceSmokeRoutes(context, bucket) {
                     value: 'smoke-gemini-session-token'
                 }
             })
+        });
+    });
+    await context.route('**/api/gemini-live-transcribe', async (route) => {
+        const request = route.request();
+        const rawBody = request.postData() || '{}';
+        let payload = {};
+        try {
+            payload = JSON.parse(rawBody);
+        } catch {}
+        transcribeBucket.push({
+            url: request.url(),
+            payload
+        });
+        const transcript = voiceScenario === 'audio-only-first-reply-fallback'
+            ? 'Здравствуйте. Под задачу есть вариант, могу коротко по срокам и сервису.'
+            : '';
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json; charset=utf-8',
+            body: JSON.stringify({ transcript })
         });
     });
 }
@@ -1373,9 +1442,10 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
     const voiceScenario = String(options?.voiceScenario || 'default');
     const scenario = createIdleScenario();
     const capturedVoiceRequests = [];
+    const capturedTranscribeRequests = [];
     const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
     await installCommonRoutes(context, scenario);
-    await installGeminiVoiceSmokeRoutes(context, capturedVoiceRequests);
+    await installGeminiVoiceSmokeRoutes(context, capturedVoiceRequests, capturedTranscribeRequests, { voiceScenario });
     await seedLocalState(context);
     await seedVoiceModeRuntime(context, { voiceScenario });
     const page = await context.newPage();
@@ -1445,6 +1515,11 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
                 dialogState.assistantMessages.some((text) => text.trim() === 'Привет.'),
                 'First assistant voice reply was not finalized as a separate chat bubble'
             );
+        } else if (voiceScenario === 'audio-only-first-reply-fallback') {
+            expect(
+                dialogState.assistantMessages.some((text) => text.includes('вариант') && text.includes('срокам и сервису')),
+                'Audio-only first assistant reply was not restored via fallback transcription'
+            );
         } else {
             expect(
                 dialogState.assistantMessages.some((text) => text.includes(expectedAssistantNeedle) || text.includes('сервису')),
@@ -1453,6 +1528,9 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
         }
         if (voiceScenario === 'waiting-for-input-finalizes-first-reply') {
             expect(dialogState.assistantMessages.length >= 1, 'Assistant messages must contain the finalized first reply');
+        }
+        if (voiceScenario === 'audio-only-first-reply-fallback') {
+            expect(capturedTranscribeRequests.length > 0, 'Voice transcript fallback endpoint was not called');
         }
         expect(dialogState.errorMessages.length === 0, `Voice mode rendered an error: ${dialogState.errorMessages.join(' | ')}`);
 
@@ -1694,6 +1772,10 @@ async function main() {
         await runGeminiVoiceModeSmokeFlow(browser, baseUrl, {
             voiceScenario: 'waiting-for-input-finalizes-first-reply',
             expectedAssistantNeedle: 'Что скажешь по задаче?'
+        });
+        await runGeminiVoiceModeSmokeFlow(browser, baseUrl, {
+            voiceScenario: 'audio-only-first-reply-fallback',
+            expectedAssistantNeedle: 'срокам и сервису'
         });
         await runEndConversationFlow(browser, baseUrl);
         await runGoSilentFlow(browser, baseUrl);

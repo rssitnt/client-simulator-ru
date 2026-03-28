@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { pathToFileURL } from 'node:url';
 import fs from 'node:fs';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, createPartFromBase64 } from '@google/genai';
 import { initializeApp as initializeAdminApp, cert, getApps as getAdminApps } from 'firebase-admin/app';
 import { getAppCheck } from 'firebase-admin/app-check';
 import { getDatabase as getAdminDatabase } from 'firebase-admin/database';
@@ -31,7 +31,9 @@ const GEMINI_LIVE_VOICE = String(process.env.GEMINI_LIVE_VOICE || 'Enceladus').t
 const GEMINI_LIVE_MEDIA_RESOLUTION = 'MEDIA_RESOLUTION_LOW';
 const GEMINI_LIVE_THINKING_BUDGET = 0;
 const TOKEN_PATH = '/api/gemini-live-token';
+const TRANSCRIBE_PATH = '/api/gemini-live-transcribe';
 const OPENAI_TOKEN_PATH = '/api/openai-realtime-session';
+const GEMINI_TRANSCRIBE_MODEL = String(process.env.GEMINI_TRANSCRIBE_MODEL || 'gemini-2.5-flash').trim();
 const OPENAI_REALTIME_MODEL = String(process.env.OPENAI_REALTIME_MODEL || 'gpt-4o-realtime-preview-2025-06-03').trim();
 const OPENAI_DEFAULT_VOICE = String(process.env.OPENAI_DEFAULT_VOICE || 'alloy').trim().toLowerCase();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
@@ -45,9 +47,17 @@ const OPENAI_REQUEST_TIMEOUT_MS = (() => {
     const configuredValue = Number.parseInt(String(process.env.OPENAI_REQUEST_TIMEOUT_MS || ''), 10);
     return Number.isFinite(configuredValue) && configuredValue > 0 ? configuredValue : 15000;
 })();
+const GEMINI_TRANSCRIBE_TIMEOUT_MS = (() => {
+    const configuredValue = Number.parseInt(String(process.env.GEMINI_TRANSCRIBE_TIMEOUT_MS || ''), 10);
+    return Number.isFinite(configuredValue) && configuredValue > 0 ? configuredValue : 15000;
+})();
 const MAX_JSON_BODY_BYTES = (() => {
     const configuredValue = Number.parseInt(String(process.env.MAX_JSON_BODY_BYTES || ''), 10);
     return Number.isFinite(configuredValue) && configuredValue > 0 ? configuredValue : 64 * 1024;
+})();
+const MAX_TRANSCRIBE_JSON_BODY_BYTES = (() => {
+    const configuredValue = Number.parseInt(String(process.env.MAX_TRANSCRIBE_JSON_BODY_BYTES || ''), 10);
+    return Number.isFinite(configuredValue) && configuredValue > 0 ? configuredValue : 3 * 1024 * 1024;
 })();
 const rateLimitBuckets = new Map();
 let nextRateLimitCleanupAt = 0;
@@ -193,18 +203,19 @@ async function verifyAppCheckToken(appCheckToken) {
     }
 }
 
-async function readJsonBody(req) {
+async function readJsonBody(req, maxBytes = MAX_JSON_BODY_BYTES) {
+    const safeMaxBytes = Number.isFinite(maxBytes) && maxBytes > 0 ? maxBytes : MAX_JSON_BODY_BYTES;
     const declaredLength = Number.parseInt(String(req.headers['content-length'] || ''), 10);
-    if (Number.isFinite(declaredLength) && declaredLength > MAX_JSON_BODY_BYTES) {
-        throw createHttpError(413, `Request body too large. Limit is ${MAX_JSON_BODY_BYTES} bytes.`);
+    if (Number.isFinite(declaredLength) && declaredLength > safeMaxBytes) {
+        throw createHttpError(413, `Request body too large. Limit is ${safeMaxBytes} bytes.`);
     }
 
     const chunks = [];
     let totalBytes = 0;
     for await (const chunk of req) {
         totalBytes += chunk.length;
-        if (totalBytes > MAX_JSON_BODY_BYTES) {
-            throw createHttpError(413, `Request body too large. Limit is ${MAX_JSON_BODY_BYTES} bytes.`);
+        if (totalBytes > safeMaxBytes) {
+            throw createHttpError(413, `Request body too large. Limit is ${safeMaxBytes} bytes.`);
         }
         chunks.push(chunk);
     }
@@ -584,6 +595,57 @@ async function createGeminiEphemeralToken() {
     });
 }
 
+async function createGeminiAudioTranscription(requestBody = {}) {
+    if (!ai) {
+        throw new Error('GEMINI_API_KEY is not configured');
+    }
+
+    const audioBase64 = String(requestBody?.audioBase64 || requestBody?.data || '').trim();
+    const mimeType = String(requestBody?.mimeType || 'audio/wav').trim().toLowerCase();
+    if (!audioBase64) {
+        throw createHttpError(400, 'audioBase64 is required');
+    }
+    if (!mimeType.startsWith('audio/')) {
+        throw createHttpError(400, 'mimeType must be an audio/* value');
+    }
+
+    const prompt = 'Сделай дословную транскрипцию речи на аудио. Верни только сам текст без комментариев, без кавычек, без форматирования. Если речи нет или она неразборчива, верни пустую строку.';
+    let timeoutId = null;
+    const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+            reject(createHttpError(504, 'Gemini audio transcription timed out'));
+        }, GEMINI_TRANSCRIBE_TIMEOUT_MS);
+        timeoutId.unref?.();
+    });
+
+    const requestPromise = ai.models.generateContent({
+        model: GEMINI_TRANSCRIBE_MODEL,
+        contents: [{
+            role: 'user',
+            parts: [
+                { text: prompt },
+                createPartFromBase64(audioBase64, mimeType)
+            ]
+        }],
+        config: {
+            responseMimeType: 'text/plain',
+            temperature: 0
+        }
+    });
+
+    try {
+        const response = await Promise.race([requestPromise, timeoutPromise]);
+        const transcript = String(response?.text || '').trim();
+        return {
+            transcript
+        };
+    } finally {
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+        }
+    }
+}
+
 function sanitizeOpenAiVoiceName(value) {
     const normalized = String(value || '').trim().toLowerCase();
     if (!normalized) return OPENAI_DEFAULT_VOICE;
@@ -654,9 +716,10 @@ export async function handleTokenServerRequest(req, res) {
     const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
     const requestOrigin = String(req.headers.origin || '');
     const isGeminiTokenRequest = url.pathname === TOKEN_PATH;
+    const isGeminiTranscribeRequest = url.pathname === TRANSCRIBE_PATH;
     const isOpenAiTokenRequest = url.pathname === OPENAI_TOKEN_PATH;
 
-    if (!isGeminiTokenRequest && !isOpenAiTokenRequest) {
+    if (!isGeminiTokenRequest && !isGeminiTranscribeRequest && !isOpenAiTokenRequest) {
         res.statusCode = 404;
         res.end('Not found');
         return;
@@ -692,7 +755,10 @@ export async function handleTokenServerRequest(req, res) {
         if (FIREBASE_APP_CHECK_ENFORCE) {
             await verifyAppCheckToken(appCheckToken);
         }
-        const requestBody = await readJsonBody(req);
+        const requestBody = await readJsonBody(
+            req,
+            isGeminiTranscribeRequest ? MAX_TRANSCRIBE_JSON_BODY_BYTES : MAX_JSON_BODY_BYTES
+        );
         let authIdentity = null;
 
         if (idToken) {
@@ -747,6 +813,24 @@ export async function handleTokenServerRequest(req, res) {
             return;
         }
 
+        if (isGeminiTranscribeRequest) {
+            const result = await createGeminiAudioTranscription(requestBody);
+            sendJson(res, 200, {
+                transcript: result.transcript,
+                model: GEMINI_TRANSCRIBE_MODEL,
+                issuedFor: {
+                    uid: authIdentity.uid || null,
+                    email: authIdentity.email || null
+                },
+                requestContext: {
+                    source: requestBody?.source || null,
+                    authSource: authIdentity.source,
+                    accessSource: authIdentity.accessSource || null
+                }
+            }, requestOrigin);
+            return;
+        }
+
         const token = await createGeminiEphemeralToken();
         const tokenName = String(token?.name || '').trim();
         if (!tokenName) {
@@ -787,6 +871,6 @@ if (isDirectRun) {
 
     const server = createServer(handleTokenServerRequest);
     server.listen(PORT, () => {
-        console.log(`[gemini-token-server] listening on http://localhost:${PORT} (paths: ${TOKEN_PATH}, ${OPENAI_TOKEN_PATH})`);
+        console.log(`[gemini-token-server] listening on http://localhost:${PORT} (paths: ${TOKEN_PATH}, ${TRANSCRIBE_PATH}, ${OPENAI_TOKEN_PATH})`);
     });
 }

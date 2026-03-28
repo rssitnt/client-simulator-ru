@@ -1,5 +1,39 @@
 # PROJECT_CONTEXT.md
 
+## 2026-03-29 — Первая реплика Gemini Live доведена до turn-centric fallback по audio
+- Доведён принципиальный фикс вместо очередного локального `if`:
+  - assistant turn теперь не опирается только на текст в `geminiVoiceAssistantPreview/draft`;
+  - на первом assistant output создаётся turn id, а audio chunks реально буферизуются по turn;
+  - если на границе turn (`waitingForInput`, `turnComplete`, `interrupted`, новый user input`) у assistant turn есть audio, но нет финализированного текста, фронт делает один fallback-запрос на `api/gemini-live-transcribe` и восстанавливает реплику в чат.
+- Важные детали реализации:
+  - fallback работает только для текущего незавершённого assistant turn, через `geminiVoiceAssistantCurrentTurnId` / `geminiVoiceAssistantLastFinalizedTurnId`;
+  - обычные `outputTranscription` / `part.text` по-прежнему приоритетны; fallback не должен дублировать уже закрытый turn;
+  - добавлена защита от orphan late assistant events после уже закрытого turn, чтобы поздняя служебная транскрипция не создавала лишний bubble.
+- Сервер:
+  - `server/gemini-token-server.mjs` уже обслуживает `/api/gemini-live-transcribe`; timeout cleanup доведён.
+- Регрессия закреплена:
+  - в `scripts/smoke-e2e.mjs` добавлен сценарий `audio-only-first-reply-fallback`, где первая реплика assistant приходит только аудио-чанками без нативной транскрипции и всё равно обязана появиться в чате.
+
+## 2026-03-29 — Корень пропажи первой реплики Gemini Live: state machine тексто-центричная, а не turn-центричная
+- Проведён отдельный разбор фронтенд-логики `script.js` только по первой assistant-реплике Gemini Live.
+- Вывод:
+  - текущая машина состояний считает, что assistant turn "существует" только если успел появиться текст в `geminiVoiceAssistantPreview` / `geminiVoiceAssistantDraft`;
+  - `outputAudio`, `waitingForInput`, `turnComplete` и `interrupted` сами по себе не создают отдельный assistant bubble и не несут собственного `turnId`;
+  - поэтому первая реплика, которая уже слышна как аудио, но ещё не имеет вовремя пришедшей транскрипции, может:
+    - вообще не попасть в чат;
+    - или слиться со следующей assistant-репликой в один bubble, если текст доедет уже после `waitingForInput` / начала следующего user turn.
+- Критические места текущего кода:
+  - `handleGeminiLiveMessage(...)` в ветках `outputTranscription` / `outputAudio` / `interrupted` / `turnComplete` / `waitingForInput` работает через один общий глобальный `preview/draft`, без идентичности конкретного assistant turn.
+  - `finalizeGeminiAssistantTurn(...)` умеет финализировать только текст (`sourceText || draft || preview`); если у хода есть только audio, финализировать нечего.
+  - уже существующие локальные фиксы (`waitingForInput`, late transcript grace, finalize on interrupted) лечат только частные случаи, где текст всё-таки успел появиться, но не закрывают audio-only / too-late-transcript path.
+- В текущем незакоммиченном diff уже начато движение в правильную сторону:
+  - добавлены `geminiVoiceAssistantCurrentTurnId`, `geminiVoiceAssistantLastFinalizedTurnId`, буфер audio-chunks и `requestGeminiAssistantFallbackTranscriptForCurrentTurn(...)`;
+  - но это пока WIP: в текущем файле эти сущности ещё не встроены в реальный state machine (`turnId` нигде не повышается, audio chunks не собираются, fallback-транскрипция не вызывается из боевых веток).
+- Принципиальный фикс должен быть turn-центричным:
+  - завести реальный assistant turn object/id с привязкой всех `outputAudio/outputTranscription/text_part`;
+  - финализировать по границе хода (`waitingForInput`, `turnComplete`, `interrupted`, новый user input`), а не по факту наличия текста;
+  - если на границе хода текст не успел прийти, держать turn pending и дотягивать его через позднюю транскрипцию или fallback STT из накопленного assistant audio.
+
 ## 2026-03-29 — `waitingForInput` теперь финализирует первую реплику клиента как отдельный bubble
 - Выяснился ещё один отдельный path потери первой реплики:
   - Gemini уже успевал прислать первую короткую `outputTranscription` (например `Привет.`),
