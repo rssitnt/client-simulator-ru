@@ -1501,6 +1501,7 @@ let geminiVoiceStartTimestamp = 0;
 let geminiVoiceStartAttemptId = 0;
 let geminiVoiceStartAbortController = null;
 let geminiVoiceDialogLines = [];
+let geminiVoiceDialogSyncedCount = 0;
 let geminiVoiceUserDraft = '';
 let geminiVoiceAssistantDraft = '';
 let geminiVoiceUserPreview = '';
@@ -12843,6 +12844,7 @@ function flushGeminiVoiceDraftLine(role) {
 function resetGeminiVoiceDialogBuffer() {
     clearGeminiFirstReplyHintTimer();
     geminiVoiceDialogLines = [];
+    geminiVoiceDialogSyncedCount = 0;
     geminiVoiceUserDraft = '';
     geminiVoiceAssistantDraft = '';
     geminiVoiceUserPreview = '';
@@ -12869,7 +12871,9 @@ function appendGeminiVoiceDialogToChat() {
     if (startDiv) startDiv.style.display = 'none';
 
     let appendedCount = 0;
-    for (const line of geminiVoiceDialogLines) {
+    const startIndex = Math.min(geminiVoiceDialogSyncedCount, geminiVoiceDialogLines.length);
+    for (let index = startIndex; index < geminiVoiceDialogLines.length; index += 1) {
+        const line = geminiVoiceDialogLines[index];
         const text = normalizeVoiceDialogText(line.text);
         const role = line.role;
         if (!text) continue;
@@ -12887,6 +12891,8 @@ function appendGeminiVoiceDialogToChat() {
         appendConversationHistoryEntry({ role, content: text });
         appendedCount += 1;
     }
+
+    geminiVoiceDialogSyncedCount = Math.max(geminiVoiceDialogSyncedCount, geminiVoiceDialogLines.length);
 
     if (appendedCount > 0) {
         updatePromptLock();
@@ -13157,6 +13163,7 @@ async function handleGeminiLiveMessage(message) {
                     mergeVoiceStreamingText(geminiVoiceUserDraft, completedUserText)
                 );
                 flushGeminiVoiceDraftLine('user');
+                appendGeminiVoiceDialogToChat();
                 geminiVoiceConversationFinished = false;
             }
         }
@@ -13178,6 +13185,8 @@ async function handleGeminiLiveMessage(message) {
                 geminiVoiceAssistantDraft = normalizeVoiceDialogText(
                     mergeVoiceStreamingText(geminiVoiceAssistantDraft, completedAssistantText)
                 );
+                flushGeminiVoiceDraftLine('assistant');
+                appendGeminiVoiceDialogToChat();
             }
         }
     }
@@ -13218,6 +13227,7 @@ async function handleGeminiLiveMessage(message) {
         if (geminiVoiceAssistantDraft.trim()) {
             flushGeminiVoiceDraftLine('assistant');
         }
+        appendGeminiVoiceDialogToChat();
         if (isGeminiVoiceActive) {
             setVoiceModeStatus('Слушаю вас… Говорите.', 'listening');
         }
