@@ -21,6 +21,10 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-28`, `scripts/smoke-e2e.mjs` now covers Gemini voice mode with stable end-to-end mocks:
+  - stubs Firebase App Check, Gemini Live SDK, token endpoint, fake microphone input, and Web Audio playback.
+  - verifies the user-visible flow rather than a hidden internal status node: the main send button switches into stop mode, the call notice appears, both sides append chat messages, assistant audio playback actually starts, and stopping the call exposes rating.
+  - voice smoke failures now dump a compact debug snapshot (`sendMode`, call notice text, voice status text, audioStartCount, rate visibility), so future regressions are diagnosable quickly.
 - As of `2026-03-28`, the real Gemini Live startup root cause is confirmed and the startup path was changed:
   - direct runtime checks against `gemini-3.1-flash-live-preview` showed that the session itself opens normally, but the very first `sendClientContent(...)` closes it with WebSocket `1007` / `Request contains an invalid argument.`
   - the same session accepts realtime audio input (`sendRealtimeInput({ audio: ... })`) without closing, so the transport/UI were not the primary cause.

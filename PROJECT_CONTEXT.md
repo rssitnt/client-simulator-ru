@@ -1,5 +1,22 @@
 # PROJECT_CONTEXT.md
 
+## 2026-03-28 — Добавлен стабильный smoke на Gemini voice mode
+- В `C:\projects\sites\client-simulator\scripts\smoke-e2e.mjs` добавлен полноценный mocked smoke-сценарий для голосового режима Gemini.
+- Внутри smoke теперь подменяются:
+  - `firebase-app-check.js`,
+  - Gemini Live SDK,
+  - `/api/gemini-live-token`,
+  - `getUserMedia`,
+  - `AudioContext`/Web Audio playback.
+- Проверяется именно реальный пользовательский контур, а не скрытый служебный статус:
+  - кнопка отправки переходит в `voice-stop`,
+  - показывается call notice,
+  - в чат попадают обе стороны диалога,
+  - у помощника реально стартует аудио (`audioStartCount > 0`),
+  - после остановки звонка появляется возможность оценки.
+- Во время отладки выяснилось, что предыдущий smoke ждал не тот DOM-сигнал: на экране пользователь видел `voice-call-note`, а тест ждал скрытый `voiceModeStatus`, из-за чего были ложные таймауты при рабочем звонке.
+- В case падения сценарий теперь пишет debug snapshot состояния (`sendMode`, `callNoticeText`, `voiceStatus`, `audioStartCount`, `rateVisible`), чтобы дальше не диагностировать такие сбои вслепую.
+
 ## 2026-03-28 — Найден реальный корень сброса Gemini Live и убран неверный стартовый путь
 - Проведена живая проверка напрямую против `gemini-3.1-flash-live-preview` с тем же voice/config, что и на фронте.
 - Результат:

@@ -198,6 +198,128 @@ export async function signOut() {
 }
 `.trim();
 
+const firebaseAppCheckStub = `
+export function initializeAppCheck() {
+  return { appCheck: true };
+}
+export class ReCaptchaV3Provider {
+  constructor(siteKey = '') {
+    this.siteKey = siteKey;
+  }
+}
+export async function getToken() {
+  return { token: 'smoke-app-check-token' };
+}
+`.trim();
+
+const geminiLiveSdkStub = `
+export const Modality = { AUDIO: 'AUDIO' };
+export const MediaResolution = { MEDIA_RESOLUTION_LOW: 'MEDIA_RESOLUTION_LOW' };
+
+function createSilentPcmBase64(durationMs = 280, sampleRate = 24000) {
+  const sampleCount = Math.max(1, Math.floor(sampleRate * durationMs / 1000));
+  const bytes = new Uint8Array(sampleCount * 2);
+  let binary = '';
+  for (let index = 0; index < bytes.length; index += 1) {
+    binary += String.fromCharCode(bytes[index]);
+  }
+  return btoa(binary);
+}
+
+const assistantAudioBase64 = createSilentPcmBase64();
+
+class StubLiveSession {
+  constructor(callbacks = {}) {
+    this.callbacks = callbacks;
+    this.closed = false;
+    this.handledFirstAudio = false;
+  }
+
+  emit(message, delayMs = 0) {
+    setTimeout(() => {
+      if (this.closed) return;
+      this.callbacks.onmessage?.(message);
+    }, Math.max(0, Number(delayMs) || 0));
+  }
+
+  sendRealtimeInput(params = {}) {
+    if (this.closed) return;
+    if (params?.audio && !this.handledFirstAudio) {
+      this.handledFirstAudio = true;
+      this.emit({
+        serverContent: {
+          inputTranscription: {
+            text: 'Здравствуйте, нужен гидробур на CASE CX260C.',
+            finished: false
+          }
+        }
+      }, 70);
+      this.emit({
+        serverContent: {
+          inputTranscription: {
+            text: 'Здравствуйте, нужен гидробур на CASE CX260C. Что есть по срокам и сервису?',
+            finished: true
+          }
+        }
+      }, 130);
+      this.emit({
+        serverContent: {
+          outputTranscription: {
+            text: 'Здравствуйте. Есть рабочий вариант под вашу задачу, могу пройтись по срокам и сервису.',
+            finished: true
+          },
+          modelTurn: {
+            parts: [
+              {
+                inlineData: {
+                  data: assistantAudioBase64,
+                  mimeType: 'audio/pcm;rate=24000'
+                }
+              }
+            ]
+          },
+          turnComplete: true
+        }
+      }, 230);
+      this.emit({
+        serverContent: {
+          waitingForInput: true
+        }
+      }, 420);
+    }
+  }
+
+  sendClientContent() {
+    if (this.closed) return;
+  }
+
+  close() {
+    if (this.closed) return;
+    this.closed = true;
+    this.callbacks.onclose?.({ code: 1000, reason: '' });
+  }
+}
+
+export class GoogleGenAI {
+  constructor(_options = {}) {
+    this.live = {
+      connect: async ({ callbacks = {} } = {}) => {
+        const session = new StubLiveSession(callbacks);
+        setTimeout(() => {
+          if (session.closed) return;
+          callbacks.onopen?.();
+        }, 10);
+        setTimeout(() => {
+          if (session.closed) return;
+          callbacks.onmessage?.({ setupComplete: {} });
+        }, 80);
+        return session;
+      }
+    };
+  }
+}
+`.trim();
+
 function expect(condition, message) {
     if (!condition) {
         throw new Error(message);
@@ -334,6 +456,9 @@ async function installCommonRoutes(context, scenario) {
     await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js', async (route) => {
         await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAuthStub });
     });
+    await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js', async (route) => {
+        await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAppCheckStub });
+    });
     await context.route('http://127.0.0.1:7243/**', async (route) => {
         await route.fulfill({ status: 204, body: '' });
     });
@@ -395,6 +520,37 @@ async function installCommonRoutes(context, scenario) {
     });
 }
 
+async function installGeminiVoiceSmokeRoutes(context, bucket) {
+    await context.route('https://cdn.jsdelivr.net/npm/@google/genai@1.40.0/+esm', async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/javascript; charset=utf-8',
+            body: geminiLiveSdkStub
+        });
+    });
+    await context.route('**/api/gemini-live-token', async (route) => {
+        const request = route.request();
+        const rawBody = request.postData() || '{}';
+        let payload = {};
+        try {
+            payload = JSON.parse(rawBody);
+        } catch {}
+        bucket.push({
+            url: request.url(),
+            payload
+        });
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json; charset=utf-8',
+            body: JSON.stringify({
+                client_secret: {
+                    value: 'smoke-gemini-session-token'
+                }
+            })
+        });
+    });
+}
+
 async function seedLocalState(context) {
     const seed = buildSeedPayload();
     await context.addInitScript((payload) => {
@@ -410,6 +566,190 @@ async function seedLocalState(context) {
         localStorage.setItem('raterPrompt', payload.prompts.raterPrompt);
         localStorage.setItem('promptPublicSnapshot:v1', payload.publicPromptSnapshot);
     }, seed);
+}
+
+async function seedVoiceModeRuntime(context) {
+    await context.addInitScript(() => {
+        class FakeAudioBuffer {
+            constructor(channels, length, sampleRate) {
+                this.numberOfChannels = channels;
+                this.length = length;
+                this.sampleRate = sampleRate;
+                this.duration = length / sampleRate;
+                this._channels = Array.from({ length: channels }, () => new Float32Array(length));
+            }
+
+            getChannelData(index) {
+                return this._channels[index];
+            }
+        }
+
+        class FakeNode {
+            connect(target) {
+                if (target && typeof target.__startProcessing === 'function') {
+                    target.__startProcessing();
+                }
+                return target;
+            }
+
+            disconnect() {}
+        }
+
+        class FakeMediaStreamSource extends FakeNode {}
+
+        class FakeScriptProcessor extends FakeNode {
+            constructor() {
+                super();
+                this.onaudioprocess = null;
+                this._intervalId = 0;
+            }
+
+            __startProcessing() {
+                if (this._intervalId) return;
+                this._intervalId = setInterval(() => {
+                    if (typeof this.onaudioprocess !== 'function') return;
+                    const inputChannel = new Float32Array(4096);
+                    this.onaudioprocess({
+                        inputBuffer: {
+                            sampleRate: 48000,
+                            getChannelData() {
+                                return inputChannel;
+                            }
+                        }
+                    });
+                }, 120);
+            }
+
+            disconnect() {
+                if (this._intervalId) {
+                    clearInterval(this._intervalId);
+                    this._intervalId = 0;
+                }
+            }
+        }
+
+        class FakeGainNode extends FakeNode {
+            constructor() {
+                super();
+                this.gain = {
+                    value: 0,
+                    cancelScheduledValues() {},
+                    setValueAtTime() {},
+                    linearRampToValueAtTime() {}
+                };
+            }
+        }
+
+        class FakeOscillator extends FakeNode {
+            constructor() {
+                super();
+                this.type = 'sine';
+                this.frequency = { value: 0 };
+            }
+            start() {}
+            stop() {}
+        }
+
+        class FakeBufferSource extends FakeNode {
+            constructor(context) {
+                super();
+                this.context = context;
+                this.buffer = null;
+                this.onended = null;
+            }
+
+            start(when = 0) {
+                const tracker = globalThis.__codexVoiceSmoke || (globalThis.__codexVoiceSmoke = { audioStartCount: 0 });
+                const now = this.context.currentTime;
+                const delayMs = Math.max(0, (Number(when) - now) * 1000);
+                const durationMs = Math.max(40, ((this.buffer?.duration || 0.08) * 1000));
+                setTimeout(() => {
+                    tracker.audioStartCount += 1;
+                }, delayMs);
+                setTimeout(() => {
+                    try {
+                        this.onended?.();
+                    } catch {}
+                }, delayMs + durationMs);
+            }
+
+            stop() {
+                try {
+                    this.onended?.();
+                } catch {}
+            }
+        }
+
+        class FakeAudioContext {
+            constructor() {
+                this.state = 'running';
+                this.destination = {};
+                this._startedAt = performance.now();
+            }
+
+            get currentTime() {
+                return (performance.now() - this._startedAt) / 1000;
+            }
+
+            async resume() {
+                this.state = 'running';
+            }
+
+            createMediaStreamSource() {
+                return new FakeMediaStreamSource();
+            }
+
+            createScriptProcessor() {
+                return new FakeScriptProcessor();
+            }
+
+            createGain() {
+                return new FakeGainNode();
+            }
+
+            createOscillator() {
+                return new FakeOscillator();
+            }
+
+            createBuffer(channels, length, sampleRate) {
+                return new FakeAudioBuffer(channels, length, sampleRate);
+            }
+
+            createBufferSource() {
+                return new FakeBufferSource(this);
+            }
+
+            async decodeAudioData(buffer) {
+                const byteLength = Number(buffer?.byteLength || 0);
+                const sampleRate = 24000;
+                const frameCount = Math.max(1, Math.floor(byteLength / 2));
+                return this.createBuffer(1, frameCount, sampleRate);
+            }
+        }
+
+        const fakeStream = {
+            getTracks() {
+                return [{
+                    stop() {}
+                }];
+            }
+        };
+
+        const mediaDevices = navigator.mediaDevices || {};
+        mediaDevices.getUserMedia = async () => fakeStream;
+        try {
+            Object.defineProperty(navigator, 'mediaDevices', {
+                configurable: true,
+                value: mediaDevices
+            });
+        } catch {
+            navigator.mediaDevices = mediaDevices;
+        }
+
+        globalThis.AudioContext = FakeAudioContext;
+        globalThis.webkitAudioContext = FakeAudioContext;
+        globalThis.__codexVoiceSmoke = { audioStartCount: 0 };
+    });
 }
 
 async function seedAuthFlowState(context, options = {}) {
@@ -897,6 +1237,125 @@ async function runPromptConflictRecoveryFlow(browser, baseUrl) {
     }
 }
 
+async function runGeminiVoiceModeSmokeFlow(browser, baseUrl) {
+    const scenario = createIdleScenario();
+    const capturedVoiceRequests = [];
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
+    await installCommonRoutes(context, scenario);
+    await installGeminiVoiceSmokeRoutes(context, capturedVoiceRequests);
+    await seedLocalState(context);
+    await seedVoiceModeRuntime(context);
+    const page = await context.newPage();
+    const pageErrors = [];
+    const consoleErrors = [];
+
+    page.on('pageerror', (error) => {
+        pageErrors.push(String(error?.message || error));
+    });
+    page.on('console', (message) => {
+        if (message.type() === 'error') {
+            consoleErrors.push(message.text());
+        }
+    });
+
+    const readVoiceSmokeState = async () => page.evaluate(() => ({
+        sendMode: String(document.getElementById('sendBtn')?.dataset?.mode || '').trim(),
+        voiceStatus: String(document.getElementById('voiceModeStatus')?.textContent || '').trim(),
+        callNoticeText: String(document.querySelector('.voice-call-note .conversation-action-note-text')?.textContent || '').trim(),
+        audioStartCount: Number(globalThis.__codexVoiceSmoke?.audioStartCount || 0),
+        rateVisible: !document.getElementById('voiceModeRateBtn')?.hidden,
+        bodyVoiceCallActive: document.body?.classList?.contains('voice-call-active') === true,
+        userMessages: Array.from(document.querySelectorAll('.message.user')).map((node) => String(node.textContent || '').trim()),
+        assistantMessages: Array.from(document.querySelectorAll('.message.assistant')).map((node) => String(node.textContent || '').trim()),
+        errorMessages: Array.from(document.querySelectorAll('.message.error')).map((node) => String(node.textContent || '').trim())
+    }));
+
+    try {
+        logStep('run gemini voice mode smoke scenario');
+        await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+        await waitForChatReady(page);
+
+        await page.click('#sendBtn');
+
+        await page.waitForFunction(() => {
+            const sendMode = String(document.getElementById('sendBtn')?.dataset?.mode || '').trim();
+            const statusText = String(document.getElementById('voiceModeStatus')?.textContent || '').trim();
+            const callNoticeText = String(document.querySelector('.voice-call-note .conversation-action-note-text')?.textContent || '').trim();
+            const combinedText = `${statusText}\n${callNoticeText}`;
+            return sendMode === 'voice-stop' && (
+                combinedText.includes('Клиент на линии. Начинайте разговор.') ||
+                combinedText.includes('Клиент на линии. Подготавливаем микрофон…') ||
+                combinedText.includes('Слушаю вас') ||
+                combinedText.includes('Клиент отвечает')
+            );
+        }, null, { timeout: 12000 });
+
+        await page.waitForFunction(() => {
+            const userMessages = document.querySelectorAll('.message.user').length;
+            const assistantMessages = document.querySelectorAll('.message.assistant').length;
+            return userMessages > 0 && assistantMessages > 0;
+        }, null, { timeout: 12000 });
+
+        await page.waitForFunction(() => {
+            return Number(globalThis.__codexVoiceSmoke?.audioStartCount || 0) > 0;
+        }, null, { timeout: 12000 });
+
+        const dialogState = await readVoiceSmokeState();
+
+        expect(capturedVoiceRequests.length > 0, 'Voice token endpoint was not called');
+        expect(dialogState.sendMode === 'voice-stop', 'Voice call did not switch send button into stop mode');
+        expect(dialogState.bodyVoiceCallActive, 'Voice call active body state was not enabled');
+        expect(dialogState.audioStartCount > 0, 'Assistant audio playback never started');
+        expect(dialogState.userMessages.some((text) => text.includes('CASE CX260C')), 'Voice user transcript was not appended to chat');
+        expect(dialogState.assistantMessages.some((text) => text.includes('срокам') || text.includes('сервису')), 'Voice assistant reply was not appended to chat');
+        expect(dialogState.errorMessages.length === 0, `Voice mode rendered an error: ${dialogState.errorMessages.join(' | ')}`);
+
+        await page.click('#sendBtn');
+
+        await page.waitForFunction(() => {
+            const sendMode = String(document.getElementById('sendBtn')?.dataset?.mode || '').trim();
+            const statusText = String(document.getElementById('voiceModeStatus')?.textContent || '').trim();
+            const rateVisible = !document.getElementById('voiceModeRateBtn')?.hidden;
+            return sendMode !== 'voice-stop' && (
+                rateVisible ||
+                statusText.includes('Диалог остановлен. Можно оценить звонок.') ||
+                statusText.includes('Звонок завершён. Нажмите «Оценить диалог».')
+            );
+        }, null, { timeout: 8000 });
+
+        const stopState = await readVoiceSmokeState();
+
+        expect(stopState.rateVisible, 'Voice rate button must become visible after stopping a buffered call');
+        expect(stopState.sendMode !== 'voice-stop', 'Voice call did not leave stop mode after ending');
+        expect(!stopState.bodyVoiceCallActive, 'Voice call active body state did not clear after ending');
+        expect(
+            !stopState.voiceStatus
+                || stopState.voiceStatus.includes('Диалог остановлен. Можно оценить звонок.')
+                || stopState.voiceStatus.includes('Звонок завершён. Нажмите «Оценить диалог».'),
+            'Voice stop left an unexpected status string'
+        );
+    } catch (error) {
+        await ensureOutputDir();
+        await page.screenshot({ path: path.join(outputDir, 'smoke-gemini-voice-failure.png'), fullPage: true });
+        let debugState = null;
+        try {
+            debugState = await readVoiceSmokeState();
+        } catch {}
+        if (pageErrors.length || consoleErrors.length) {
+            throw new Error(
+                `${error.message}\npageErrors=${JSON.stringify(pageErrors)}\nconsoleErrors=${JSON.stringify(consoleErrors)}\ndebugState=${JSON.stringify(debugState)}`,
+                { cause: error }
+            );
+        }
+        if (debugState) {
+            throw new Error(`${error.message}\ndebugState=${JSON.stringify(debugState)}`, { cause: error });
+        }
+        throw error;
+    } finally {
+        await context.close();
+    }
+}
+
 async function runEndConversationFlow(browser, baseUrl) {
     const scenario = createEndConversationScenario();
     const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
@@ -1077,6 +1536,7 @@ async function main() {
         await runRolePreviewVisibilityFlow(browser, baseUrl);
         await runPromptConflictRecoveryFlow(browser, baseUrl);
         await runPromptWorkflowFlow(browser, baseUrl);
+        await runGeminiVoiceModeSmokeFlow(browser, baseUrl);
         await runEndConversationFlow(browser, baseUrl);
         await runGoSilentFlow(browser, baseUrl);
         await runEmailAuthVerificationFlow(browser, baseUrl);
