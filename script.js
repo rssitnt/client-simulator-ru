@@ -1502,6 +1502,7 @@ let geminiVoiceSourceNode = null;
 let geminiVoiceProcessorNode = null;
 let geminiVoiceSilenceGain = null;
 let geminiVoicePlaybackCursor = 0;
+let geminiVoiceHasAudioOutput = false;
 let isGeminiVoiceConnecting = false;
 let isGeminiVoiceActive = false;
 let geminiVoiceCloseExpected = false;
@@ -12612,9 +12613,13 @@ async function enqueueGeminiAudioPlayback(base64Data, mimeType = 'audio/pcm;rate
             source.buffer = decoded;
             source.connect(audioContext.destination);
             const now = audioContext.currentTime;
-            const startAt = Math.max(now + 0.01, geminiVoicePlaybackCursor || 0);
+            let startAt = Math.max(now + 0.01, geminiVoicePlaybackCursor || 0);
+            if (!geminiVoiceHasAudioOutput || startAt - now > 1.5) {
+                startAt = now + 0.01;
+            }
             source.start(startAt);
             geminiVoicePlaybackCursor = startAt + decoded.duration;
+            geminiVoiceHasAudioOutput = true;
             return;
         } catch (error) {
             console.warn('Failed to decode Gemini Live audio chunk, falling back to PCM:', error);
@@ -12632,17 +12637,23 @@ async function enqueueGeminiAudioPlayback(base64Data, mimeType = 'audio/pcm;rate
     source.buffer = audioBuffer;
     source.connect(audioContext.destination);
     const now = audioContext.currentTime;
-    const startAt = Math.max(now + 0.01, geminiVoicePlaybackCursor || 0);
+    let startAt = Math.max(now + 0.01, geminiVoicePlaybackCursor || 0);
+    if (!geminiVoiceHasAudioOutput || startAt - now > 1.5) {
+        startAt = now + 0.01;
+    }
     source.start(startAt);
     geminiVoicePlaybackCursor = startAt + audioBuffer.duration;
+    geminiVoiceHasAudioOutput = true;
 }
 
 function resetGeminiPlaybackCursor() {
     if (!geminiVoiceAudioContext) {
         geminiVoicePlaybackCursor = 0;
+        geminiVoiceHasAudioOutput = false;
         return;
     }
     geminiVoicePlaybackCursor = geminiVoiceAudioContext.currentTime;
+    geminiVoiceHasAudioOutput = false;
 }
 
 async function primeGeminiVoiceAudioOutput(delayMs = GEMINI_VOICE_FIRST_AUDIO_DELAY_MS) {
@@ -13078,6 +13089,7 @@ function resetGeminiVoiceDialogBuffer() {
     geminiVoiceUserPreview = '';
     geminiVoiceAssistantPreview = '';
     geminiVoiceHasAssistantReply = false;
+    geminiVoiceHasAudioOutput = false;
     geminiVoiceFirstTurnPending = false;
     geminiVoiceAudioReady = false;
     geminiVoiceUserTurnFinalized = false;
