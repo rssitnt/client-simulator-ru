@@ -4824,9 +4824,6 @@ body.light-theme .voice-mode-rate-btn {
     line-height: 1.35;
 }
 
-.voice-mode-status-inline {
-    margin: 8px 16px 0;
-}
 
 .voice-mode-status[data-state="ready"] {
     color: var(--color-accent);
