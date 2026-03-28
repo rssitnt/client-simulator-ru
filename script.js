@@ -1516,6 +1516,8 @@ let geminiVoiceHasAssistantReply = false;
 let geminiVoiceFirstReplyHintTimer = null;
 let geminiVoiceSetupComplete = false;
 let geminiVoiceFirstTurnRequested = false;
+let geminiVoiceFirstTurnPending = false;
+let geminiVoiceAudioReady = false;
 let geminiVoiceConversationFinished = false;
 let geminiVoiceSessionConfig = null;
 let geminiDialToneTimerId = 0;
@@ -12972,6 +12974,8 @@ function resetGeminiVoiceDialogBuffer() {
     geminiVoiceUserPreview = '';
     geminiVoiceAssistantPreview = '';
     geminiVoiceHasAssistantReply = false;
+    geminiVoiceFirstTurnPending = false;
+    geminiVoiceAudioReady = false;
     openAiPendingUserTurn = '';
     openAiResponsePending = false;
     openAiResponseQueued = false;
@@ -13084,6 +13088,16 @@ function requestGeminiFirstTurn() {
         geminiVoiceFirstTurnRequested = false;
         return false;
     }
+}
+
+function maybeRequestGeminiFirstTurn() {
+    if (geminiVoiceFirstTurnRequested) return false;
+    if (!geminiVoiceSetupComplete || !geminiVoiceAudioReady) {
+        geminiVoiceFirstTurnPending = true;
+        return false;
+    }
+    geminiVoiceFirstTurnPending = false;
+    return requestGeminiFirstTurn();
 }
 
 function sendOpenAiRealtimeEvent(payload) {
@@ -13284,7 +13298,7 @@ async function handleGeminiLiveMessage(message) {
     if (message.setupComplete) {
         geminiVoiceSetupComplete = true;
         stopGeminiDialTone();
-        requestGeminiFirstTurn();
+        maybeRequestGeminiFirstTurn();
         if (!geminiVoiceHasAssistantReply) {
             setVoiceModeStatus('Клиент на линии. ИИ-клиент начинает разговор…', 'waiting');
         } else {
@@ -13333,6 +13347,9 @@ async function handleGeminiLiveMessage(message) {
                 );
                 flushGeminiVoiceDraftLine('assistant');
                 appendGeminiVoiceDialogToChat();
+                if (isGeminiVoiceActive) {
+                    setVoiceModeStatus('Слушаю вас… Говорите.', 'listening');
+                }
             }
         }
     }
@@ -13486,6 +13503,8 @@ function teardownGeminiVoiceCapture() {
     geminiLiveApiClient = null;
     geminiVoiceSetupComplete = false;
     geminiVoiceFirstTurnRequested = false;
+    geminiVoiceFirstTurnPending = false;
+    geminiVoiceAudioReady = false;
     resetGeminiPlaybackCursor();
 }
 
@@ -13557,6 +13576,8 @@ async function startGeminiVoiceMode() {
     geminiVoiceConversationFinished = false;
     geminiVoiceSetupComplete = false;
     geminiVoiceFirstTurnRequested = false;
+    geminiVoiceFirstTurnPending = false;
+    geminiVoiceAudioReady = false;
     isGeminiVoiceConnecting = true;
     updateVoiceModeControls();
     setVoiceModeStatus('Звоним клиенту…', 'waiting');
@@ -13609,6 +13630,10 @@ async function startGeminiVoiceMode() {
         throwIfGeminiVoiceStartAttemptStale(startAttempt.id);
         await initGeminiVoiceCapture();
         await primeGeminiVoiceAudioOutput();
+        geminiVoiceAudioReady = true;
+        if (geminiVoiceFirstTurnPending || geminiVoiceSetupComplete) {
+            maybeRequestGeminiFirstTurn();
+        }
         throwIfGeminiVoiceStartAttemptStale(startAttempt.id);
 
         isGeminiVoiceConnecting = false;
