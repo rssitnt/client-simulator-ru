@@ -279,6 +279,48 @@
                 </div>
             </div>
 
+            <div class="settings-row voice-row">
+                <span class="settings-label">Голос:</span>
+                <div class="voice-config-block">
+                    <select id="geminiVoiceNameInput" class="name-input voice-select">
+                        <option value="Zephyr">Zephyr — Яркий, высокий тон</option>
+                        <option value="Puck">Puck — Бодрый, средний тон</option>
+                        <option value="Charon">Charon — Информативный, низкий тон</option>
+                        <option value="Kore">Kore — Уверенный, средний тон</option>
+                        <option value="Fenrir">Fenrir — Эмоциональный, ниже среднего тон</option>
+                        <option value="Leda">Leda — Молодой, высокий тон</option>
+                        <option value="Orus">Orus — Уверенный, ниже среднего тон</option>
+                        <option value="Aoede">Aoede — Лёгкий, средний тон</option>
+                        <option value="Callirrhoe">Callirrhoe — Непринуждённый, средний тон</option>
+                        <option value="Enceladus">Enceladus — С придыханием, низкий тон</option>
+                        <option value="Iapetus">Iapetus — Чёткий, ниже среднего тон</option>
+                        <option value="Umbriel">Umbriel — Непринуждённый, ниже среднего тон</option>
+                        <option value="Algieba">Algieba — Плавный, низкий тон</option>
+                        <option value="Despina">Despina — Плавный, средний тон</option>
+                        <option value="Erinome">Erinome — Чёткий, средний тон</option>
+                        <option value="Algenib">Algenib — Хриплый, низкий тон</option>
+                        <option value="Rasalgethi">Rasalgethi — Информативный, средний тон</option>
+                        <option value="Laomedeia">Laomedeia — Бодрый, высокий тон</option>
+                        <option value="Achernar">Achernar — Мягкий, высокий тон</option>
+                        <option value="Alnilam">Alnilam — Уверенный, ниже среднего тон</option>
+                        <option value="Schedar">Schedar — Ровный, ниже среднего тон</option>
+                        <option value="Gacrux">Gacrux — Зрелый, средний тон</option>
+                        <option value="Pulcherrima">Pulcherrima — Напористый, средний тон</option>
+                        <option value="Achird">Achird — Дружелюбный, ниже среднего тон</option>
+                        <option value="Zubenelgenubi">Zubenelgenubi — Неформальный, ниже среднего тон</option>
+                        <option value="Vindemiatrix">Vindemiatrix — Нежный, средний тон</option>
+                        <option value="Sadachbia">Sadachbia — Живой, низкий тон</option>
+                        <option value="Sadaltager">Sadaltager — Осведомлённый, средний тон</option>
+                        <option value="Sulafat">Sulafat — Тёплый, средний тон</option>
+                    </select>
+                    <div class="voice-config-actions">
+                        <button id="saveVoiceConfigBtn" class="btn-change">Сохранить</button>
+                        <button id="clearVoiceConfigBtn" class="btn-change btn-danger-subtle">Сбросить</button>
+                    </div>
+                    <div class="voice-config-hint">Голос применяется к новым звонкам.</div>
+                </div>
+            </div>
+
             <!-- Панель администратора -->
             <details id="adminPanelAccordion" class="admin-accordion" style="display: none;">
                 <summary class="admin-accordion-trigger">Панель администратора</summary>
@@ -437,49 +479,6 @@
                             <button class="dropdown-item" data-format="rtf">RTF</button>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <!-- Голос Gemini -->
-            <div class="settings-row voice-row">
-                <span class="settings-label">Голос:</span>
-                <div class="voice-config-block">
-                    <select id="geminiVoiceNameInput" class="name-input voice-select">
-                        <option value="Zephyr">Zephyr — Яркий, высокий тон</option>
-                        <option value="Puck">Puck — Бодрый, средний тон</option>
-                        <option value="Charon">Charon — Информативный, низкий тон</option>
-                        <option value="Kore">Kore — Уверенный, средний тон</option>
-                        <option value="Fenrir">Fenrir — Эмоциональный, ниже среднего тон</option>
-                        <option value="Leda">Leda — Молодой, высокий тон</option>
-                        <option value="Orus">Orus — Уверенный, ниже среднего тон</option>
-                        <option value="Aoede">Aoede — Лёгкий, средний тон</option>
-                        <option value="Callirrhoe">Callirrhoe — Непринуждённый, средний тон</option>
-                        <option value="Enceladus">Enceladus — С придыханием, низкий тон</option>
-                        <option value="Iapetus">Iapetus — Чёткий, ниже среднего тон</option>
-                        <option value="Umbriel">Umbriel — Непринуждённый, ниже среднего тон</option>
-                        <option value="Algieba">Algieba — Плавный, низкий тон</option>
-                        <option value="Despina">Despina — Плавный, средний тон</option>
-                        <option value="Erinome">Erinome — Чёткий, средний тон</option>
-                        <option value="Algenib">Algenib — Хриплый, низкий тон</option>
-                        <option value="Rasalgethi">Rasalgethi — Информативный, средний тон</option>
-                        <option value="Laomedeia">Laomedeia — Бодрый, высокий тон</option>
-                        <option value="Achernar">Achernar — Мягкий, высокий тон</option>
-                        <option value="Alnilam">Alnilam — Уверенный, ниже среднего тон</option>
-                        <option value="Schedar">Schedar — Ровный, ниже среднего тон</option>
-                        <option value="Gacrux">Gacrux — Зрелый, средний тон</option>
-                        <option value="Pulcherrima">Pulcherrima — Напористый, средний тон</option>
-                        <option value="Achird">Achird — Дружелюбный, ниже среднего тон</option>
-                        <option value="Zubenelgenubi">Zubenelgenubi — Неформальный, ниже среднего тон</option>
-                        <option value="Vindemiatrix">Vindemiatrix — Нежный, средний тон</option>
-                        <option value="Sadachbia">Sadachbia — Живой, низкий тон</option>
-                        <option value="Sadaltager">Sadaltager — Осведомлённый, средний тон</option>
-                        <option value="Sulafat">Sulafat — Тёплый, средний тон</option>
-                    </select>
-                    <div class="voice-config-actions">
-                        <button id="saveVoiceConfigBtn" class="btn-change">Сохранить</button>
-                        <button id="clearVoiceConfigBtn" class="btn-change btn-danger-subtle">Сбросить</button>
-                    </div>
-                    <div class="voice-config-hint">Голос применяется к новым звонкам.</div>
                 </div>
             </div>
 
