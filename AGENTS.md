@@ -21,6 +21,10 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-28`, finalized Gemini Live transcripts now pass through a short-noise filter before appending to chat:
+  - streaming status text is untouched; only finalized chat lines are filtered.
+  - ultra-short foreign/non-Cyrillic fragments in a Russian dialog context (for example stray `Sí.`) are dropped instead of being written as full chat bubbles.
+  - short valid replies like `да`, `нет`, `ок`, `алло` and equipment brands like `CASE`, `CAT`, `JCB`, `XCMG` remain allowed.
 - As of `2026-03-28`, Gemini first-turn voice flow was simplified around the real root cause:
   - removed the first-audio auto-repeat watchdog, because it could inject a competing prompt before the original first reply audio arrived.
   - microphone streaming now stays blocked until the client’s first turn has finished playing, so the manager cannot interrupt the opening phrase by speaking too early.

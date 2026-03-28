@@ -69,6 +69,30 @@ const GEMINI_VOICE_FIRST_AUDIO_DELAY_MS = 200;
 const GEMINI_LIVE_DEFAULT_VOICE = 'Enceladus';
 const GEMINI_LIVE_MEDIA_RESOLUTION = 'MEDIA_RESOLUTION_LOW';
 const GEMINI_LIVE_THINKING_BUDGET = 0;
+const VOICE_COMPLETED_SHORT_REPLY_ALLOWLIST = new Set([
+    'да',
+    'нет',
+    'ок',
+    'ага',
+    'угу',
+    'алло',
+    'алё',
+    'ясно',
+    'понял',
+    'поняла',
+    'привет'
+]);
+const VOICE_COMPLETED_SHORT_LATIN_ALLOWLIST = new Set([
+    'ok',
+    'case',
+    'cat',
+    'jcb',
+    'xcmg',
+    'sany',
+    'bobcat',
+    'volvo',
+    'komatsu'
+]);
 const VOICE_FAST_PACE_INSTRUCTIONS = 'Говори максимально быстро и энергично, но разборчиво. Отвечай кратко: 1-2 предложения без повторов.';
 const VOICE_END_CALL_INSTRUCTIONS = 'Если хочешь завершить разговор, скажи "до свидания" — система завершит звонок. Это можно использовать, если менеджер плохо отрабатывает.';
 const ATTESTATION_QUEUE_STORAGE_KEY = 'attestationQueue:v1';
@@ -13058,8 +13082,79 @@ function getRecentAssistantTranscriptForEchoGuard() {
     return '';
 }
 
-function sanitizeUserCompletedTranscript(rawText) {
+function hasRecentRussianVoiceContext() {
+    const directCandidates = [
+        openAiPendingUserTurn,
+        geminiVoiceUserPreview,
+        geminiVoiceAssistantPreview,
+        geminiVoiceUserDraft,
+        geminiVoiceAssistantDraft
+    ];
+    for (const candidate of directCandidates) {
+        if (/[а-яё]/i.test(normalizeVoiceDialogText(candidate))) {
+            return true;
+        }
+    }
+
+    let inspected = 0;
+    for (let i = geminiVoiceDialogLines.length - 1; i >= 0 && inspected < 6; i -= 1) {
+        inspected += 1;
+        if (/[а-яё]/i.test(normalizeVoiceDialogText(geminiVoiceDialogLines[i]?.text || ''))) {
+            return true;
+        }
+    }
+
+    inspected = 0;
+    for (let i = conversationHistory.length - 1; i >= 0 && inspected < 6; i -= 1) {
+        inspected += 1;
+        if (/[а-яё]/i.test(normalizeVoiceDialogText(conversationHistory[i]?.content || ''))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function filterCompletedVoiceNoise(rawText) {
     const source = normalizeVoiceDialogText(rawText);
+    if (!source) return '';
+
+    const compact = normalizeVoiceDialogCompact(source);
+    if (!compact) return '';
+
+    const normalized = normalizeVoiceDialogForCompare(source);
+    const asciiCompact = normalized.replace(/[^a-z0-9]+/g, '');
+    const tokenCount = normalized.split(/\s+/).filter(Boolean).length;
+    const hasCyrillic = /[а-яё]/i.test(source);
+    const hasDigits = /\d/.test(source);
+
+    if (
+        VOICE_COMPLETED_SHORT_REPLY_ALLOWLIST.has(compact) ||
+        VOICE_COMPLETED_SHORT_REPLY_ALLOWLIST.has(asciiCompact) ||
+        VOICE_COMPLETED_SHORT_LATIN_ALLOWLIST.has(compact) ||
+        VOICE_COMPLETED_SHORT_LATIN_ALLOWLIST.has(asciiCompact)
+    ) {
+        return source;
+    }
+
+    if (!hasDigits && compact.length <= 1 && tokenCount <= 1) {
+        return '';
+    }
+
+    if (
+        !hasCyrillic &&
+        !hasDigits &&
+        tokenCount <= 1 &&
+        compact.length <= 4 &&
+        hasRecentRussianVoiceContext()
+    ) {
+        return '';
+    }
+
+    return source;
+}
+
+function sanitizeUserCompletedTranscript(rawText) {
+    const source = filterCompletedVoiceNoise(rawText);
     if (!source) return '';
 
     const assistantText = getRecentAssistantTranscriptForEchoGuard();
@@ -13079,7 +13174,7 @@ function sanitizeUserCompletedTranscript(rawText) {
     if (idx === -1) return source;
 
     const before = normalizeVoiceDialogText(source.slice(0, idx));
-    return before;
+    return filterCompletedVoiceNoise(before);
 }
 
 function getRecentUserTranscriptForEchoGuard() {
@@ -13109,7 +13204,7 @@ function getRecentUserTranscriptForEchoGuard() {
 }
 
 function sanitizeAssistantCompletedTranscript(rawText) {
-    const source = normalizeVoiceDialogText(rawText);
+    const source = filterCompletedVoiceNoise(rawText);
     if (!source) return '';
 
     const userText = getRecentUserTranscriptForEchoGuard();
@@ -13129,7 +13224,7 @@ function sanitizeAssistantCompletedTranscript(rawText) {
 
     if (sourceNorm.startsWith(userNorm)) {
         const tail = normalizeVoiceDialogText(source.slice(userText.length));
-        return tail || source;
+        return filterCompletedVoiceNoise(tail || source);
     }
 
     const userIdx = sourceNorm.indexOf(userNorm);
@@ -13138,7 +13233,7 @@ function sanitizeAssistantCompletedTranscript(rawText) {
 
     const before = normalizeVoiceDialogText(source.slice(0, userIdx));
     const after = normalizeVoiceDialogText(source.slice(userIdx + userText.length));
-    if (!before && after) return after;
+    if (!before && after) return filterCompletedVoiceNoise(after);
     return source;
 }
 
