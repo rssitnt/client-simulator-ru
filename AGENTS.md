@@ -21,6 +21,8 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-28`, voice status pill respects the `hidden` attribute:
+  - CSS now keeps it fully hidden unless explicitly shown, preventing the empty bar.
 - As of `2026-03-28`, voice call stop works even when input is disabled:
   - primary action now stops the call before checking input state.
 - As of `2026-03-28`, Gemini Live first turn waits for audio pipeline readiness and active state:

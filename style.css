@@ -4819,7 +4819,7 @@ body.light-theme .voice-mode-rate-btn {
 }
 
 .voice-mode-status {
-    display: inline-flex;
+    display: none;
     align-items: center;
     gap: 6px;
     max-width: min(86vw, 640px);
@@ -4834,6 +4834,10 @@ body.light-theme .voice-mode-rate-btn {
 
 .voice-call-indicator {
     margin: 8px 16px 0;
+}
+
+.voice-mode-status:not([hidden]) {
+    display: inline-flex;
 }
 
 
