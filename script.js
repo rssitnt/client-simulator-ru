@@ -14869,6 +14869,13 @@ bindEvent(clearVoiceConfigBtn, 'click', () => {
     });
 });
 
+bindEvent(geminiVoiceNameInput, 'change', () => {
+    saveVoiceModeConfigFromInputs().catch((error) => {
+        console.error('Failed to save voice config:', error);
+        showCopyNotification(getVoiceConfigErrorMessage(error));
+    });
+});
+
 bindEvent(adminHiddenClientPromptSaveBtn, 'click', () => {
     saveHiddenClientPromptFromInput().catch((error) => {
         console.error('Failed to save hidden client prompt:', error);

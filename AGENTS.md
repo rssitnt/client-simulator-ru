@@ -44,6 +44,7 @@
 - As of `2026-03-28`, settings include a Gemini voice picker:
   - dropdown lists Google AI Studio voices; selection stored locally via `geminiLiveVoiceName` and used for new calls.
   - duplicate voice picker row was removed from the main chat screen and kept only in the settings modal, directly after the export buttons.
+  - save/reset buttons and helper caption were removed; voice selection now saves automatically on change.
 - As of `2026-03-28`, a “Идёт подключение…” status is shown during ringing:
   - start buttons are hidden while the voice connection is in progress.
 - As of `2026-03-28`, tooltips are force-hidden on primary action click:
