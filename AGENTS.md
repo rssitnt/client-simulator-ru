@@ -35,6 +35,8 @@
   - first audio chunk now forces immediate playback if the queue is too far ahead to avoid missing the first reply.
 - As of `2026-03-28`, Gemini audio playback is serialized and cancellable:
   - buffer sources are tracked/stopped on reset, and chunks are queued to avoid overlapping voices.
+- As of `2026-03-28`, voice chat append no longer dedupes against full history:
+  - prevents the first assistant line from being skipped when it matches earlier history text.
 - As of `2026-03-28`, a “Идёт подключение…” status is shown during ringing:
   - start buttons are hidden while the voice connection is in progress.
 - As of `2026-03-28`, tooltips are force-hidden on primary action click:

@@ -13143,11 +13143,11 @@ function appendGeminiVoiceDialogToChat() {
         const role = line.role;
         if (!text) continue;
 
-        const lastHistoryItem = conversationHistory[conversationHistory.length - 1];
+        const prevLine = geminiVoiceDialogLines[index - 1];
         if (
-            lastHistoryItem &&
-            lastHistoryItem.role === role &&
-            normalizeVoiceDialogCompact(lastHistoryItem.content || '') === normalizeVoiceDialogCompact(text)
+            prevLine &&
+            prevLine.role === role &&
+            normalizeVoiceDialogCompact(prevLine.text || '') === normalizeVoiceDialogCompact(text)
         ) {
             continue;
         }
