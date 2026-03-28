@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { GoogleGenAI } from '@google/genai';
 import { initializeApp as initializeAdminApp, cert, getApps as getAdminApps } from 'firebase-admin/app';
 import { getAppCheck } from 'firebase-admin/app-check';
+import { getDatabase as getAdminDatabase } from 'firebase-admin/database';
 
 const PORT = Number.parseInt(process.env.PORT || '8787', 10);
 const GEMINI_API_KEY = String(process.env.GEMINI_API_KEY || '').trim();
@@ -141,6 +142,7 @@ function loadServiceAccountConfig() {
 }
 
 let firebaseAdminApp = null;
+let firebaseAdminDatabase = null;
 
 function getFirebaseAdminApp() {
     if (firebaseAdminApp) return firebaseAdminApp;
@@ -152,10 +154,21 @@ function getFirebaseAdminApp() {
     if (!credentials) {
         throw createHttpError(500, 'Firebase service account credentials are missing.');
     }
-    firebaseAdminApp = initializeAdminApp({
+    const appOptions = {
         credential: cert(credentials)
-    });
+    };
+    if (FIREBASE_DATABASE_URL) {
+        appOptions.databaseURL = FIREBASE_DATABASE_URL;
+    }
+    firebaseAdminApp = initializeAdminApp(appOptions);
     return firebaseAdminApp;
+}
+
+function getFirebaseAdminDatabase() {
+    if (firebaseAdminDatabase) return firebaseAdminDatabase;
+    const app = getFirebaseAdminApp();
+    firebaseAdminDatabase = getAdminDatabase(app);
+    return firebaseAdminDatabase;
 }
 
 function extractAppCheckToken(req) {
@@ -344,6 +357,15 @@ async function readJsonWithTimeout(response, timeoutMs, timeoutMessage, fallback
 
 async function readDbJson(path, authToken = '') {
     if (!FIREBASE_DATABASE_URL) return null;
+    if (FIREBASE_APP_CHECK_ENFORCE) {
+        try {
+            const db = getFirebaseAdminDatabase();
+            const snapshot = await db.ref(path).get();
+            return snapshot.exists() ? snapshot.val() : null;
+        } catch (error) {
+            console.warn('Admin RTDB read failed, falling back to REST:', error);
+        }
+    }
     const authSuffix = authToken ? `?auth=${encodeURIComponent(authToken)}` : '';
     const response = await fetchWithTimeout(
         `${FIREBASE_DATABASE_URL}/${path}.json${authSuffix}`,

@@ -39,6 +39,7 @@
 - As of `2026-03-28`, Render blueprint (`render.yaml`) includes App Check env vars; `server/.env.example` updated for local setup.
 - As of `2026-03-28`, voice token endpoint allowlist updated to include Render host; default token endpoint now points to Render.
 - As of `2026-03-28`, CSP `connect-src` updated to allow Render token server origin.
+- As of `2026-03-28`, token server reads RTDB via Firebase Admin SDK when App Check enforcement is enabled (avoids App Check blocking REST reads).
 - As of `2026-03-28`, realtime listener recovery hardened:
   - exponential backoff (2s → 4s → 8s → … capped at 30s) added for presence/admin/prompt overrides/protected listeners.
   - backoff resets on successful recovery to avoid long delays after a stable reconnect.
