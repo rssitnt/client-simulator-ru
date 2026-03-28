@@ -21,6 +21,8 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-28`, voice status pill is hidden when there's no active/connecting call or error:
+  - prevents the empty rounded bar from showing above the chat when idle.
 - As of `2026-03-28`, voice-mode preview text spacing fixed:
   - streaming transcript fragments now insert missing spaces between words/punctuation.
   - prevents “тебеужевсёсказал.Либодавай...” in voice status line.
@@ -36,6 +38,7 @@
   - added a dial tone + “Звоним клиенту…” indicator during connection.
   - first turn is sent after `setupComplete` to avoid losing the first audio phrase.
 - As of `2026-03-28`, voice call hides the text input and centers the call/stop button while the call is active.
+- As of `2026-03-28`, voice call indicator is forcibly hidden when not in a call to avoid empty placeholder pills.
 - As of `2026-03-28`, роли и App Check усилены без изменения UX:
   - админ‑доступ на фронте и в правилах RTDB теперь читается из Firebase Custom Claims (`auth.token.admin/role`), а не из RTDB роли (кроме localhost preview).
   - REST‑fallback в браузере отключён для `client-simulator.ru` (остался для localhost/preview), чтобы убрать канал с токеном в URL.

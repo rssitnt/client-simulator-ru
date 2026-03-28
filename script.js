@@ -9953,6 +9953,12 @@ function setPrimaryActionMode(mode) {
 
 function setVoiceCallUiActive(active) {
     document.body?.classList.toggle('voice-call-active', !!active);
+    if (!active && voiceModeStatus) {
+        voiceModeStatus.hidden = true;
+        voiceModeStatus.setAttribute('aria-hidden', 'true');
+        voiceModeStatus.textContent = '';
+        voiceModeStatus.dataset.state = 'idle';
+    }
     if (!userInput) return;
     if (active) {
         userInput.disabled = true;
@@ -11726,11 +11732,27 @@ let voiceModeStatusLockUntil = 0;
 
 function setVoiceModeStatus(text, state = 'idle', options = {}) {
     if (!voiceModeStatus) return;
+    const normalizedText = String(text ?? '');
+    const trimmedText = normalizedText.trim();
+    const forceShow = options?.forceShow === true;
+    const shouldShow =
+        forceShow ||
+        state === 'error' ||
+        isGeminiVoiceConnecting ||
+        isGeminiVoiceActive ||
+        geminiVoiceConversationFinished;
+    if (!trimmedText || !shouldShow) {
+        voiceModeStatus.hidden = true;
+        voiceModeStatus.setAttribute('aria-hidden', 'true');
+        voiceModeStatus.textContent = '';
+        voiceModeStatus.dataset.state = 'idle';
+        return;
+    }
     const lockMs = Math.max(0, Number(options?.lockMs) || 0);
     if (lockMs) {
         voiceModeStatusLockUntil = Math.max(voiceModeStatusLockUntil, Date.now() + lockMs);
     }
-    voiceModeStatus.textContent = text;
+    voiceModeStatus.textContent = normalizedText;
     voiceModeStatus.dataset.state = state;
     voiceModeStatus.hidden = false;
     voiceModeStatus.setAttribute('aria-hidden', 'false');
@@ -13680,7 +13702,6 @@ function updateVoiceModeRateButtonState() {
         setVoiceModeStatus('Идёт диалог…', 'listening');
         return;
     }
-    setVoiceModeStatus('Голосовой режим готов к запуску.', 'idle');
 }
 
 function resetVoiceModeSessionState() {
@@ -13894,8 +13915,16 @@ function setElevenLabsWidgetHidden(hidden) {
 
 function setVoiceModeScreenActive(active) {
     if (voiceModeStatus) {
-        voiceModeStatus.hidden = !active;
-        voiceModeStatus.setAttribute('aria-hidden', active ? 'false' : 'true');
+        if (!active) {
+            voiceModeStatus.hidden = true;
+            voiceModeStatus.setAttribute('aria-hidden', 'true');
+        } else if (voiceModeStatus.textContent.trim()) {
+            voiceModeStatus.hidden = false;
+            voiceModeStatus.setAttribute('aria-hidden', 'false');
+        } else {
+            voiceModeStatus.hidden = true;
+            voiceModeStatus.setAttribute('aria-hidden', 'true');
+        }
     }
     if (!active) {
         setVoiceModeRateButtonVisible(false);
