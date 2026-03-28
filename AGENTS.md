@@ -43,7 +43,7 @@
   - after the first reply text appears, the client asks Gemini to repeat it once for audio.
 - As of `2026-03-28`, settings include a Gemini voice picker:
   - dropdown lists Google AI Studio voices; selection stored locally via `geminiLiveVoiceName` and used for new calls.
-  - voice picker row is placed directly after export buttons inside settings.
+  - voice picker row is placed directly after export buttons inside settings modal.
 - As of `2026-03-28`, a “Идёт подключение…” status is shown during ringing:
   - start buttons are hidden while the voice connection is in progress.
 - As of `2026-03-28`, tooltips are force-hidden on primary action click:
