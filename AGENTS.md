@@ -33,6 +33,7 @@
   - добавлен скрипт `scripts/set-custom-claims.mjs` и зависимость `firebase-admin` для проставления ролей в claims.
 - As of `2026-03-28`, service-account JSON for `set-custom-claims.mjs` not found locally; need to download a new key from Firebase Console to proceed.
 - As of `2026-03-28`, custom claims set for `qwertaf134@gmail.com`; service-account JSON moved out of repo to `C:\Users\qwert\Downloads\firebase-service-accounts\`.
+- As of `2026-03-28`, RTDB export shows `app_config.geminiTokenEndpoint` set to `https://client-simulator-gemini-token.onrender.com/api/gemini-live-token` (token server on Render).
 - As of `2026-03-28`, realtime listener recovery hardened:
   - exponential backoff (2s → 4s → 8s → … capped at 30s) added for presence/admin/prompt overrides/protected listeners.
   - backoff resets on successful recovery to avoid long delays after a stable reconnect.
