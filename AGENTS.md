@@ -28,6 +28,8 @@
 - As of `2026-03-28`, Gemini voice calls can auto-end when the client says a clear goodbye:
   - detects explicit “до свидания / разговор окончен / завершаю разговор” phrases and stops after playback, preserving dialog for rating.
   - voice system prompt explains that “до свидания” ends the call and can be used as a controlled exit.
+- As of `2026-03-28`, Gemini Live audio playback is more robust:
+  - non‑PCM audio is decoded via `decodeAudioData`, with a PCM fallback; also checks `outputAudio` when `modelTurn.parts` has no audio.
 - As of `2026-03-28`, a “Идёт подключение…” status is shown during ringing:
   - start buttons are hidden while the voice connection is in progress.
 - As of `2026-03-28`, tooltips are force-hidden on primary action click:

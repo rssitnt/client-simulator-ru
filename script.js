@@ -12595,7 +12595,25 @@ async function enqueueGeminiAudioPlayback(base64Data, mimeType = 'audio/pcm;rate
     if (!audioContext) return;
 
     const bytes = base64ToUint8(base64Data);
-    if (!bytes.length || bytes.length % 2 !== 0) return;
+    if (!bytes.length) return;
+    const normalizedMime = String(mimeType || '').toLowerCase();
+    if (normalizedMime && !normalizedMime.includes('pcm') && !normalizedMime.includes('l16')) {
+        const rawBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+        try {
+            const decoded = await audioContext.decodeAudioData(rawBuffer.slice(0));
+            const source = audioContext.createBufferSource();
+            source.buffer = decoded;
+            source.connect(audioContext.destination);
+            const now = audioContext.currentTime;
+            const startAt = Math.max(now + 0.01, geminiVoicePlaybackCursor || 0);
+            source.start(startAt);
+            geminiVoicePlaybackCursor = startAt + decoded.duration;
+            return;
+        } catch (error) {
+            console.warn('Failed to decode Gemini Live audio chunk, falling back to PCM:', error);
+        }
+    }
+    if (bytes.length % 2 !== 0) return;
 
     const int16 = new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2);
     const sampleRate = getMimeRate(mimeType, 24000);
@@ -13497,6 +13515,7 @@ async function handleGeminiLiveMessage(message) {
     }
 
     const parts = Array.isArray(serverContent?.modelTurn?.parts) ? serverContent.modelTurn.parts : [];
+    let hasAudioChunk = false;
     for (const part of parts) {
         const inlineData = part?.inlineData;
         const mimeType = String(inlineData?.mimeType || inlineData?.mime_type || '').trim();
@@ -13505,6 +13524,7 @@ async function handleGeminiLiveMessage(message) {
             await enqueueGeminiAudioPlayback(audioBase64, mimeType).catch((error) => {
                 console.warn('Failed to play Gemini Live audio chunk:', error);
             });
+            hasAudioChunk = true;
             continue;
         }
         const partText = normalizeVoiceDialogText(part?.text || '');
@@ -13518,6 +13538,17 @@ async function handleGeminiLiveMessage(message) {
             }
             geminiVoiceAssistantPreview = mergeVoiceStreamingText(geminiVoiceAssistantPreview, partText);
             setVoiceModeStatus(getShortStatusText('ИИ-клиент:', geminiVoiceAssistantPreview), 'ready', { lockMs: 3000 });
+        }
+    }
+
+    if (!hasAudioChunk) {
+        const outputAudio = serverContent?.outputAudio || serverContent?.audio || serverContent?.audioChunk;
+        const audioBase64 = String(outputAudio?.data || outputAudio?.audio || outputAudio?.audioData || '').trim();
+        const mimeType = String(outputAudio?.mimeType || outputAudio?.mime_type || outputAudio?.contentType || '').trim();
+        if (audioBase64 && (!mimeType || /^audio\//i.test(mimeType))) {
+            await enqueueGeminiAudioPlayback(audioBase64, mimeType || 'audio/pcm;rate=24000').catch((error) => {
+                console.warn('Failed to play Gemini Live audio chunk:', error);
+            });
         }
     }
 
