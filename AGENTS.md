@@ -21,6 +21,11 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-28`, Gemini first-turn voice flow was simplified around the real root cause:
+  - removed the first-audio auto-repeat watchdog, because it could inject a competing prompt before the original first reply audio arrived.
+  - microphone streaming now stays blocked until the client’s first turn has finished playing, so the manager cannot interrupt the opening phrase by speaking too early.
+  - audio reset now invalidates stale queued chunks via a playback generation counter, which prevents late old chunks from playing over the current reply after interrupts/resets.
+  - the initial “client starts first” request now uses `sendClientContent(..., turnComplete: true)` and sends only the short opener instruction, instead of resending the whole client prompt as realtime text.
 - As of `2026-03-28`, voice user turns now append reliably:
   - new turns reset the “finalized” flag when fresh input starts, so multiple user messages appear.
 - As of `2026-03-28`, a call-start notice is appended to chat when Gemini connects:
@@ -47,6 +52,9 @@
   - save/reset buttons and helper caption were removed; voice selection now saves automatically on change.
   - native browser `select` was replaced with a custom dropdown styled like the rest of the dark UI; selected voice is shown as name + short description.
   - voice picker menu scrollbar now reuses the same thin scrollbar styling as the site prompt editors/tables, without `scrollbar-gutter`, to avoid the thick Windows gutter and stray corner/buttons in the popup.
+- As of `2026-03-28`, first Gemini voice turn no longer injects the full client prompt as realtime text:
+  - the opener now sends only a short “start first” trigger.
+  - first turn uses `sendClientContent(..., turnComplete: true)` when available, which matches the SDK guidance for text turns without VAD and should remove missing/delayed first-reply audio.
 - As of `2026-03-28`, a “Идёт подключение…” status is shown during ringing:
   - start buttons are hidden while the voice connection is in progress.
 - As of `2026-03-28`, tooltips are force-hidden on primary action click:
