@@ -24,6 +24,7 @@
 - As of `2026-03-28`, Gemini first-turn voice flow was simplified around the real root cause:
   - removed the first-audio auto-repeat watchdog, because it could inject a competing prompt before the original first reply audio arrived.
   - microphone streaming now stays blocked until the client’s first turn has finished playing, so the manager cannot interrupt the opening phrase by speaking too early.
+  - mic unlock no longer relies on `turnComplete` alone: if the first reply text arrived before its audio, input stays blocked until an actual audio chunk is queued and finishes playback.
   - audio reset now invalidates stale queued chunks via a playback generation counter, which prevents late old chunks from playing over the current reply after interrupts/resets.
   - the initial “client starts first” request now uses `sendClientContent(..., turnComplete: true)` and sends only the short opener instruction, instead of resending the whole client prompt as realtime text.
 - As of `2026-03-28`, voice user turns now append reliably:
