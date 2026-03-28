@@ -13920,6 +13920,12 @@ function rollbackPublicPrompt(role = getActiveRole()) {
 
 function showSettingsModal() {
     hideTooltip(true);
+    if (document?.body) {
+        document.body.classList.add('settings-modal-open');
+    }
+    if (settingsBtn && typeof settingsBtn.blur === 'function') {
+        settingsBtn.blur();
+    }
     const savedName = currentUser?.fio || getCachedStorageValue(USER_NAME_KEY) || '';
     const userRole = syncSelectedRole(selectedRole || getCachedStorageValue(USER_ROLE_KEY, currentUser?.role || 'user'));
     const loginValue = currentUser?.login || getCachedStorageValue(USER_LOGIN_KEY) || '-';
@@ -13971,6 +13977,9 @@ function autoResizeNameInput() {
 
 function hideSettingsModal() {
     stopAdminRealtimeSync();
+    if (document?.body) {
+        document.body.classList.remove('settings-modal-open');
+    }
     settingsModal.classList.remove('active');
 }
 

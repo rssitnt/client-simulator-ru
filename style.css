@@ -540,6 +540,12 @@ body {
     opacity: 1;
 }
 
+body.settings-modal-open .custom-tooltip-layer {
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
 .custom-tooltip-layer.placement-bottom {
     transform: none;
 }
@@ -3085,6 +3091,13 @@ body.light-theme .btn-clear-floating:hover {
     border-radius: 8px;
     cursor: pointer;
     transition: color 0.2s;
+}
+
+.btn-settings-floating:focus,
+.btn-settings-floating:focus-visible,
+.btn-settings-floating:active {
+    outline: none !important;
+    box-shadow: none !important;
 }
 
 .btn-settings-floating:hover {
