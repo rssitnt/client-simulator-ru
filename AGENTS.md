@@ -21,6 +21,10 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-29`, Gemini Live calls now switch to half-duplex as soon as the AI-client starts replying:
+  - root cause: the manager microphone stayed open while the first client reply was arriving, so Gemini could interrupt its own first audio turn before it became audible.
+  - fix: new `beginGeminiAssistantVoiceOutput(...)` immediately mutes manager mic input on the first assistant transcript/audio chunk and restores it only after playback finishes.
+  - expected effect: the first AI-client phrase should no longer be silently lost due to self-interruption/echo while the manager mic is still streaming.
 - As of `2026-03-29`, interrupted Gemini client turns are now finalized before they can be lost:
   - root cause: the first client reply could remain only in `geminiVoiceAssistantPreview` and never reach chat if the manager started speaking early or Gemini emitted `interrupted` before `outputFinished/turnComplete`.
   - fix: new `finalizeGeminiAssistantTurn(...)` commits assistant preview/draft on normal completion, on the first new manager `inputTranscription`, and on `serverContent.interrupted`.

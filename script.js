@@ -1591,6 +1591,7 @@ let geminiVoiceFirstAudioChunkLogged = false;
 let geminiVoiceFirstPlaybackLogged = false;
 let geminiVoiceMicInputEnabled = false;
 let geminiVoiceMicUnlockTimerId = 0;
+let geminiVoiceAssistantTurnInProgress = false;
 let geminiVoiceMicLevelNormalized = 0;
 let geminiVoiceMicMeterReady = false;
 let geminiAudioInputRefreshPromise = null;
@@ -13506,6 +13507,27 @@ function setGeminiVoiceMicInputEnabled(enabled) {
     }
 }
 
+function beginGeminiAssistantVoiceOutput(trigger = 'transcript') {
+    if (!isGeminiVoiceActive && !isGeminiVoiceConnecting) return;
+    const wasInProgress = geminiVoiceAssistantTurnInProgress;
+    geminiVoiceAssistantTurnInProgress = true;
+    clearGeminiVoiceMicUnlockTimer();
+    if (geminiVoiceMicInputEnabled) {
+        setGeminiVoiceMicInputEnabled(false);
+        recordVoiceDebugEvent('mic_blocked_for_assistant', {
+            status: 'info',
+            trigger
+        });
+    } else if (!wasInProgress) {
+        recordVoiceDebugEvent('assistant_turn_started', {
+            status: 'info',
+            trigger
+        });
+    }
+    showVoiceCallNotice('Клиент отвечает…');
+    setVoiceModeStatus('Клиент отвечает…', 'waiting', { lockMs: 1800 });
+}
+
 function getGeminiVoicePlaybackRemainingMs(extraMs = 120) {
     if (!geminiVoiceAudioContext || !geminiVoiceHasAudioOutput) {
         return Math.max(0, Number(extraMs) || 0);
@@ -13531,7 +13553,12 @@ function scheduleGeminiVoiceMicUnlockAfterPlayback(delayMs = null) {
     geminiVoiceMicUnlockTimerId = setTimeout(() => {
         geminiVoiceMicUnlockTimerId = 0;
         if (!isGeminiVoiceActive) return;
+        geminiVoiceAssistantTurnInProgress = false;
         setGeminiVoiceMicInputEnabled(true);
+        recordVoiceDebugEvent('mic_restored_after_assistant', {
+            status: 'ok',
+            delayMs: effectiveDelay
+        });
         showVoiceCallNotice('Клиент ответил. Теперь можно говорить.');
         setVoiceModeStatus('Клиент ответил. Теперь говорите.', 'listening');
     }, effectiveDelay);
@@ -13926,6 +13953,7 @@ function maybeActivateGeminiVoiceManagerInput() {
     if (!isGeminiVoiceActive || !geminiVoiceSetupComplete || !geminiVoiceAudioReady) {
         return false;
     }
+    geminiVoiceAssistantTurnInProgress = false;
     setGeminiVoiceMicInputEnabled(true);
     showVoiceCallNotice('Клиент на линии. Начинайте разговор.');
     setVoiceModeStatus('Клиент на линии. Начинайте разговор.', 'listening');
@@ -14034,6 +14062,7 @@ function resetGeminiVoiceDialogBuffer() {
     geminiVoiceHasAudioOutput = false;
     geminiVoiceAudioReady = false;
     geminiVoiceUserTurnFinalized = false;
+    geminiVoiceAssistantTurnInProgress = false;
     setGeminiVoiceMicInputEnabled(false);
     clearGeminiVoiceMicUnlockTimer();
     clearVoiceCallNotice();
@@ -14157,6 +14186,7 @@ function finalizeGeminiAssistantTurn(sourceText, options = {}) {
     );
     geminiVoiceAssistantPreview = '';
     geminiVoiceAssistantDraft = '';
+    geminiVoiceAssistantTurnInProgress = false;
     if (!completedAssistantText) return false;
     pushGeminiVoiceDialogLine('assistant', completedAssistantText);
     appendGeminiVoiceDialogToChat();
@@ -14486,6 +14516,7 @@ async function handleGeminiLiveMessage(message) {
     const outputFinished = !!serverContent?.outputTranscription?.finished;
     if (outputText) {
         stopGeminiDialTone();
+        beginGeminiAssistantVoiceOutput('output_transcription');
         recordGeminiFirstAssistantTextIfNeeded(outputText);
         if (!geminiVoiceUserTurnFinalized && geminiVoiceUserPreview.trim()) {
             finalizeGeminiUserTurn(geminiVoiceUserPreview);
@@ -14507,6 +14538,7 @@ async function handleGeminiLiveMessage(message) {
         const mimeType = String(inlineData?.mimeType || inlineData?.mime_type || '').trim();
         const audioBase64 = String(inlineData?.data || '').trim();
         if (audioBase64 && (!mimeType || /^audio\//i.test(mimeType))) {
+            beginGeminiAssistantVoiceOutput('audio_part');
             recordGeminiFirstAudioChunkIfNeeded(audioBase64, mimeType);
             await enqueueGeminiAudioPlayback(audioBase64, mimeType).catch((error) => {
                 console.warn('Failed to play Gemini Live audio chunk:', error);
@@ -14516,6 +14548,7 @@ async function handleGeminiLiveMessage(message) {
         }
         const partText = normalizeVoiceDialogText(part?.text || '');
         if (partText && !outputText) {
+            beginGeminiAssistantVoiceOutput('text_part');
             recordGeminiFirstAssistantTextIfNeeded(partText);
             if (!geminiVoiceUserTurnFinalized && geminiVoiceUserPreview.trim()) {
                 finalizeGeminiUserTurn(geminiVoiceUserPreview);
@@ -14533,6 +14566,7 @@ async function handleGeminiLiveMessage(message) {
         const audioBase64 = String(outputAudio?.data || outputAudio?.audio || outputAudio?.audioData || '').trim();
         const mimeType = String(outputAudio?.mimeType || outputAudio?.mime_type || outputAudio?.contentType || '').trim();
         if (audioBase64 && (!mimeType || /^audio\//i.test(mimeType))) {
+            beginGeminiAssistantVoiceOutput('output_audio');
             recordGeminiFirstAudioChunkIfNeeded(audioBase64, mimeType || 'audio/pcm;rate=24000');
             await enqueueGeminiAudioPlayback(audioBase64, mimeType || 'audio/pcm;rate=24000').catch((error) => {
                 console.warn('Failed to play Gemini Live audio chunk:', error);
@@ -14541,6 +14575,7 @@ async function handleGeminiLiveMessage(message) {
     }
 
     if (serverContent?.interrupted) {
+        geminiVoiceAssistantTurnInProgress = false;
         finalizeGeminiAssistantTurn(
             geminiVoiceAssistantDraft.trim() ? geminiVoiceAssistantDraft : geminiVoiceAssistantPreview,
             {
@@ -14579,6 +14614,7 @@ async function handleGeminiLiveMessage(message) {
     }
 
     if (serverContent?.waitingForInput && isGeminiVoiceActive) {
+        geminiVoiceAssistantTurnInProgress = false;
         geminiVoiceUserTurnFinalized = false;
         geminiVoiceUserPreview = '';
         if (!geminiVoiceMicInputEnabled && geminiVoiceHasAssistantReply) {
