@@ -70,6 +70,8 @@ const GEMINI_LIVE_DEFAULT_VOICE = 'Enceladus';
 const GEMINI_LIVE_MEDIA_RESOLUTION = 'MEDIA_RESOLUTION_LOW';
 const GEMINI_LIVE_THINKING_BUDGET = 0;
 const VOICE_FAST_PACE_INSTRUCTIONS = 'Говори максимально быстро и энергично, но разборчиво. Отвечай кратко: 1-2 предложения без повторов.';
+const VOICE_END_CALL_TOKEN = 'end_conversation';
+const VOICE_END_CALL_INSTRUCTIONS = `Если ты хочешь завершить разговор, в конце своей последней реплики скажи "${VOICE_END_CALL_TOKEN}".`;
 const ATTESTATION_QUEUE_STORAGE_KEY = 'attestationQueue:v1';
 const ATTESTATION_SEND_ATTEMPTS = 3;
 const ATTESTATION_QUEUE_MAX_FAILURES = 8;
@@ -12728,7 +12730,7 @@ function normalizeVoiceDialogForCompare(text) {
 function shouldAutoEndGeminiVoiceCall(text) {
     const normalized = normalizeVoiceDialogForCompare(text);
     if (!normalized) return false;
-    if (normalized.includes('end_conversation') || normalized.includes('go_silent')) return true;
+    if (normalized.includes(VOICE_END_CALL_TOKEN) || normalized.includes('go_silent')) return true;
     const endPatterns = [
         /(^|\s)(до свидания|всего доброго|прощайте)([.!?]|$)/i,
         /(^|\s)(на этом\s+все|на этом\s+всё|разговор окончен|завершаю разговор|заканчиваем разговор)([.!?]|$)/i,
@@ -13119,7 +13121,7 @@ function buildGeminiVoiceSystemInstruction(baseInstructions = '') {
     const cleanInstructions = normalizeVoiceDialogText(baseInstructions);
     const defaultInstruction = 'Ты вежливый клиент, веди естественный разговор голосом на русском языке.';
     const effectiveInstructions = cleanInstructions || defaultInstruction;
-    return `${effectiveInstructions}\n\n${VOICE_FAST_PACE_INSTRUCTIONS}`;
+    return `${effectiveInstructions}\n\n${VOICE_FAST_PACE_INSTRUCTIONS}\n\n${VOICE_END_CALL_INSTRUCTIONS}`;
 }
 
 function buildGeminiVoiceSessionConfig(sdk) {
