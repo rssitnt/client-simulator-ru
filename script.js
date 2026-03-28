@@ -66,6 +66,7 @@ const TRUSTED_VOICE_TOKEN_ENDPOINT_ORIGINS = new Set([
 ]);
 const GEMINI_FIRST_REPLY_HINT_DELAY_MS = 1800;
 const GEMINI_VOICE_FIRST_AUDIO_DELAY_MS = 200;
+const GEMINI_VOICE_CONNECT_STOP_GUARD_MS = 1200;
 const GEMINI_LIVE_DEFAULT_VOICE = 'Enceladus';
 const GEMINI_LIVE_MEDIA_RESOLUTION = 'MEDIA_RESOLUTION_LOW';
 const GEMINI_LIVE_THINKING_BUDGET = 0;
@@ -14419,8 +14420,19 @@ async function handleVoiceModeRateClick() {
     });
 }
 
+function shouldIgnoreEarlyGeminiStopRequest() {
+    if (!isGeminiVoiceConnecting) return false;
+    if (geminiVoiceSetupComplete || geminiVoiceHasAssistantReply) return false;
+    const elapsedMs = Date.now() - Number(geminiVoiceStartTimestamp || 0);
+    return elapsedMs >= 0 && elapsedMs < GEMINI_VOICE_CONNECT_STOP_GUARD_MS;
+}
+
 async function handleVoiceModeStopClick() {
     if (!isGeminiVoiceConnecting && !isGeminiVoiceActive) return;
+    if (shouldIgnoreEarlyGeminiStopRequest()) {
+        setVoiceModeStatus('Идёт подключение клиента…', 'waiting');
+        return;
+    }
     await stopGeminiVoiceMode({
         silent: false,
         expectedClose: true,

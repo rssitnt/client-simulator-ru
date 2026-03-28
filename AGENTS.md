@@ -21,6 +21,9 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-28`, Gemini Live ignores stop/hangup clicks during the first ~1.2s of connection setup:
+  - this protects against accidental double-click / repeated tap on the main call button while it is morphing from “start call” into “stop”.
+  - the guard only applies before `setupComplete` / first assistant reply; after that normal hangup works as usual.
 - As of `2026-03-28`, stale Gemini Live callbacks no longer abort a fresh call start:
   - `onmessage`, `onerror`, and `onclose` now ignore events from old start attempts, not only `onopen`.
   - this closes a race where a late `close` from the previous session could reset a brand new outgoing call before it actually started.
