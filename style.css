@@ -868,13 +868,87 @@ body.attestation-mode .btn-attestation-exit {
 .voice-connect-status {
     align-self: center;
     margin: 16px 0 0;
-    padding: 10px 16px;
-    border-radius: 999px;
+    width: min(100%, 420px);
+    padding: 12px 14px;
+    border-radius: 18px;
     border: 1px solid rgba(255, 255, 255, 0.18);
     background: rgba(18, 18, 18, 0.92);
     color: var(--color-text-secondary);
     font-size: 13px;
     line-height: 1.35;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.voice-connect-status-text {
+    color: inherit;
+    text-align: center;
+}
+
+.voice-connect-meter {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.voice-connect-meter[hidden] {
+    display: none !important;
+}
+
+.voice-connect-meter-track {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    height: 10px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.voice-connect-meter-fill {
+    width: 0%;
+    min-width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: #ff6b6b;
+    transition: width 0.12s linear, background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.voice-connect-meter-label {
+    flex: 0 0 auto;
+    min-width: 160px;
+    text-align: right;
+    font-size: 12px;
+    color: #9c9c9c;
+}
+
+.voice-connect-status[data-mic-state="low"] .voice-connect-meter-fill {
+    background: #ff6b6b;
+    box-shadow: 0 0 0 1px rgba(255, 107, 107, 0.18);
+}
+
+.voice-connect-status[data-mic-state="medium"] .voice-connect-meter-fill {
+    background: #ffcf5a;
+    box-shadow: 0 0 0 1px rgba(255, 207, 90, 0.16);
+}
+
+.voice-connect-status[data-mic-state="good"] .voice-connect-meter-fill {
+    background: #46d98a;
+    box-shadow: 0 0 0 1px rgba(70, 217, 138, 0.16);
+}
+
+.voice-connect-status[data-mic-state="low"] .voice-connect-meter-label {
+    color: #ff9b9b;
+}
+
+.voice-connect-status[data-mic-state="medium"] .voice-connect-meter-label {
+    color: #ffd680;
+}
+
+.voice-connect-status[data-mic-state="good"] .voice-connect-meter-label {
+    color: #86e9b6;
 }
 
 .btn-start {
@@ -3335,6 +3409,16 @@ body.light-theme .btn-icon:hover {
     border-color: #3b3b3b;
 }
 
+.voice-picker-trigger:disabled {
+    cursor: default;
+    opacity: 0.72;
+}
+
+.voice-picker-trigger:disabled:hover {
+    background: #262626;
+    border-color: #2f2f2f;
+}
+
 .voice-picker.active .voice-picker-trigger,
 .voice-picker-trigger:focus-visible {
     outline: none;
@@ -3488,6 +3572,16 @@ body.light-theme .btn-icon:hover {
 
 .voice-picker-option.active .voice-picker-option-check {
     color: var(--color-accent);
+}
+
+.voice-picker-option:disabled {
+    cursor: default;
+    opacity: 0.62;
+}
+
+.voice-picker-option:disabled:hover {
+    background: transparent;
+    border-color: transparent;
 }
 
 .settings-section {
@@ -4620,6 +4714,11 @@ body.light-theme .voice-picker-trigger:hover {
     border-color: #d7dce4;
 }
 
+body.light-theme .voice-picker-trigger:disabled:hover {
+    background: #f5f7fb;
+    border-color: #e1e5eb;
+}
+
 body.light-theme .voice-picker-current-name {
     color: #202020;
 }
@@ -4670,6 +4769,21 @@ body.light-theme .voice-picker-option-name {
 
 body.light-theme .voice-picker-option-description {
     color: #707782;
+}
+
+body.light-theme .voice-connect-status {
+    background: rgba(255, 255, 255, 0.96);
+    border-color: rgba(32, 32, 32, 0.12);
+    color: #5f6671;
+}
+
+body.light-theme .voice-connect-meter-track {
+    background: rgba(0, 0, 0, 0.06);
+    border-color: rgba(0, 0, 0, 0.08);
+}
+
+body.light-theme .voice-connect-meter-label {
+    color: #6f7782;
 }
 
 body.light-theme .theme-icon-svg {

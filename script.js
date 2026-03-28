@@ -55,6 +55,7 @@ const GEMINI_LIVE_MODEL = 'gemini-3.1-flash-live-preview';
 const GEMINI_LIVE_REMOTE_TOKEN_ENDPOINT = 'https://client-simulator-gemini-token.onrender.com/api/gemini-live-token';
 const GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY = 'geminiLiveTokenEndpoint';
 const GEMINI_LIVE_VOICE_NAME_STORAGE_KEY = 'geminiLiveVoiceName';
+const GEMINI_LIVE_AUDIO_INPUT_DEVICE_STORAGE_KEY = 'geminiLiveAudioInputDeviceId';
 const LEGACY_GEMINI_LIVE_API_KEY_STORAGE_KEY = 'geminiLiveApiKey';
 const GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT = '/api/gemini-live-token';
 const GEMINI_LIVE_ALLOWED_TOKEN_ENDPOINT_PATH = '/api/gemini-live-token';
@@ -70,6 +71,8 @@ const GEMINI_VOICE_EARLY_RECONNECT_WINDOW_MS = 7000;
 const GEMINI_VOICE_EARLY_RECONNECT_DELAY_MS = 450;
 const GEMINI_VOICE_EARLY_RECONNECT_MAX_ATTEMPTS = 1;
 const GEMINI_LIVE_DEFAULT_VOICE = 'Enceladus';
+const GEMINI_LIVE_AUDIO_INPUT_LEVEL_LOW_THRESHOLD = 0.18;
+const GEMINI_LIVE_AUDIO_INPUT_LEVEL_GOOD_THRESHOLD = 0.45;
 const GEMINI_LIVE_MEDIA_RESOLUTION = 'MEDIA_RESOLUTION_LOW';
 const GEMINI_LIVE_THINKING_BUDGET = 0;
 const VOICE_COMPLETED_SHORT_REPLY_ALLOWLIST = new Set([
@@ -1281,6 +1284,10 @@ const rateChatBtn = document.getElementById('rateChat');
 const startBtn = document.getElementById('startBtn');
 const startConversation = document.getElementById('startConversation');
 const voiceConnectStatus = document.getElementById('voiceConnectStatus');
+const voiceConnectStatusText = document.getElementById('voiceConnectStatusText');
+const voiceConnectMeter = document.getElementById('voiceConnectMeter');
+const voiceConnectMeterFill = document.getElementById('voiceConnectMeterFill');
+const voiceConnectMeterLabel = document.getElementById('voiceConnectMeterLabel');
 const managerNameInput = document.getElementById('managerName');
 const exitAttestationBtn = document.getElementById('exitAttestationBtn');
 const startAttestationBtn = document.getElementById('startAttestationBtn');
@@ -1378,6 +1385,13 @@ const geminiVoicePickerMenu = document.getElementById('geminiVoicePickerMenu');
 const geminiVoicePickerScroll = document.getElementById('geminiVoicePickerScroll');
 const geminiVoicePickerName = document.getElementById('geminiVoicePickerName');
 const geminiVoicePickerDescription = document.getElementById('geminiVoicePickerDescription');
+const geminiAudioInputDeviceInput = document.getElementById('geminiAudioInputDeviceInput');
+const geminiAudioInputPicker = document.getElementById('geminiAudioInputPicker');
+const geminiAudioInputPickerTrigger = document.getElementById('geminiAudioInputPickerTrigger');
+const geminiAudioInputPickerMenu = document.getElementById('geminiAudioInputPickerMenu');
+const geminiAudioInputPickerScroll = document.getElementById('geminiAudioInputPickerScroll');
+const geminiAudioInputPickerName = document.getElementById('geminiAudioInputPickerName');
+const geminiAudioInputPickerDescription = document.getElementById('geminiAudioInputPickerDescription');
 const saveVoiceConfigBtn = document.getElementById('saveVoiceConfigBtn');
 const clearVoiceConfigBtn = document.getElementById('clearVoiceConfigBtn');
 const adminHiddenClientPromptAccordion = document.getElementById('adminHiddenClientPromptAccordion');
@@ -1563,6 +1577,10 @@ let geminiVoiceConversationFinished = false;
 let geminiVoiceSessionConfig = null;
 let geminiVoiceMicInputEnabled = false;
 let geminiVoiceMicUnlockTimerId = 0;
+let geminiVoiceMicLevelNormalized = 0;
+let geminiVoiceMicMeterReady = false;
+let geminiAudioInputRefreshPromise = null;
+let geminiAudioInputDevices = [];
 let geminiDialToneTimerId = 0;
 let geminiDialToneOscillators = [];
 let geminiDialToneGain = null;
@@ -10016,6 +10034,72 @@ function setVoiceCallUiActive(active) {
     userInput.disabled = false;
 }
 
+function getGeminiVoiceMicLevelState(level = 0) {
+    const normalizedLevel = Math.max(0, Math.min(1, Number(level) || 0));
+    if (normalizedLevel >= GEMINI_LIVE_AUDIO_INPUT_LEVEL_GOOD_THRESHOLD) return 'good';
+    if (normalizedLevel >= GEMINI_LIVE_AUDIO_INPUT_LEVEL_LOW_THRESHOLD) return 'medium';
+    return 'low';
+}
+
+function getGeminiVoiceMicLevelLabel(state = 'low') {
+    if (state === 'good') return 'Микрофон: хорошо';
+    if (state === 'medium') return 'Микрофон: достаточно';
+    return 'Микрофон: недостаточно';
+}
+
+function resetGeminiVoiceMicMeter() {
+    geminiVoiceMicLevelNormalized = 0;
+    geminiVoiceMicMeterReady = false;
+    if (voiceConnectMeterFill) {
+        voiceConnectMeterFill.style.width = '0%';
+    }
+    if (voiceConnectMeterLabel) {
+        voiceConnectMeterLabel.textContent = getGeminiVoiceMicLevelLabel('low');
+    }
+    if (voiceConnectMeter) {
+        voiceConnectMeter.hidden = true;
+    }
+    if (voiceConnectStatus) {
+        delete voiceConnectStatus.dataset.micState;
+    }
+}
+
+function updateVoiceConnectMeterUi() {
+    if (!voiceConnectMeter || !voiceConnectStatus) return;
+    const shouldShow = isGeminiVoiceConnecting && geminiVoiceMicMeterReady;
+    voiceConnectMeter.hidden = !shouldShow;
+    if (!shouldShow) {
+        delete voiceConnectStatus.dataset.micState;
+        return;
+    }
+    const normalizedLevel = Math.max(0, Math.min(1, Number(geminiVoiceMicLevelNormalized) || 0));
+    const state = getGeminiVoiceMicLevelState(normalizedLevel);
+    const widthPercent = normalizedLevel > 0 ? Math.max(6, Math.round(normalizedLevel * 100)) : 0;
+    voiceConnectStatus.dataset.micState = state;
+    if (voiceConnectMeterFill) {
+        voiceConnectMeterFill.style.width = `${widthPercent}%`;
+    }
+    if (voiceConnectMeterLabel) {
+        voiceConnectMeterLabel.textContent = getGeminiVoiceMicLevelLabel(state);
+    }
+}
+
+function updateGeminiVoiceMicMeterFromSamples(inputChannel) {
+    if (!inputChannel?.length) return;
+    let sumSquares = 0;
+    for (let index = 0; index < inputChannel.length; index += 1) {
+        const sample = Number(inputChannel[index]) || 0;
+        sumSquares += sample * sample;
+    }
+    const rms = Math.sqrt(sumSquares / inputChannel.length);
+    const normalizedLevel = Math.max(0, Math.min(1, rms * 24));
+    geminiVoiceMicLevelNormalized = geminiVoiceMicMeterReady
+        ? (geminiVoiceMicLevelNormalized * 0.72) + (normalizedLevel * 0.28)
+        : normalizedLevel;
+    geminiVoiceMicMeterReady = true;
+    updateVoiceConnectMeterUi();
+}
+
 function updateVoiceConnectingUi() {
     const startDiv = document.getElementById('startConversation');
     const shouldHideStart = isGeminiVoiceConnecting || isGeminiVoiceActive;
@@ -10028,10 +10112,18 @@ function updateVoiceConnectingUi() {
     }
     if (voiceConnectStatus) {
         if (isGeminiVoiceConnecting) {
-            voiceConnectStatus.textContent = 'Идёт подключение…';
+            if (voiceConnectStatusText) {
+                voiceConnectStatusText.textContent = 'Идёт подключение…';
+            } else {
+                voiceConnectStatus.textContent = 'Идёт подключение…';
+            }
             voiceConnectStatus.hidden = false;
+            updateVoiceConnectMeterUi();
         } else {
             voiceConnectStatus.hidden = true;
+            if (voiceConnectMeter) {
+                voiceConnectMeter.hidden = true;
+            }
         }
     }
 }
@@ -12207,6 +12299,23 @@ function splitGeminiVoiceOptionLabel(label = '') {
     };
 }
 
+function getSettingsPickerOptionMeta(option, fallbackDescription = '') {
+    const rawLabel = String(option?.textContent || option?.label || option?.value || '').trim();
+    const pickerName = String(option?.dataset?.pickerName || '').trim();
+    const pickerDescription = String(option?.dataset?.pickerDescription || '').trim();
+    if (pickerName || pickerDescription) {
+        return {
+            name: pickerName || rawLabel || String(option?.value || '').trim(),
+            description: pickerDescription || fallbackDescription
+        };
+    }
+    const { name, description } = splitGeminiVoiceOptionLabel(rawLabel);
+    return {
+        name: name || String(option?.value || '').trim(),
+        description: description || fallbackDescription
+    };
+}
+
 function setGeminiVoicePickerOpen(isOpen) {
     if (!geminiVoicePicker || !geminiVoicePickerTrigger) return;
     geminiVoicePicker.classList.toggle('active', !!isOpen);
@@ -12216,7 +12325,7 @@ function setGeminiVoicePickerOpen(isOpen) {
 function syncGeminiVoicePickerFromSelect() {
     if (!geminiVoiceNameInput || !geminiVoicePickerName || !geminiVoicePickerDescription) return;
     const selectedOption = geminiVoiceNameInput.selectedOptions?.[0] || geminiVoiceNameInput.options?.[geminiVoiceNameInput.selectedIndex] || null;
-    const { name, description } = splitGeminiVoiceOptionLabel(selectedOption?.textContent || selectedOption?.label || geminiVoiceNameInput.value || '');
+    const { name, description } = getSettingsPickerOptionMeta(selectedOption, 'Голос Gemini Live');
     geminiVoicePickerName.textContent = name || geminiVoiceNameInput.value || GEMINI_LIVE_DEFAULT_VOICE;
     geminiVoicePickerDescription.textContent = description || 'Голос Gemini Live';
     geminiVoicePickerDescription.hidden = !description;
@@ -12234,7 +12343,7 @@ function renderGeminiVoicePickerOptions() {
 
     const fragment = document.createDocumentFragment();
     Array.from(geminiVoiceNameInput.options || []).forEach((option) => {
-        const { name, description } = splitGeminiVoiceOptionLabel(option.textContent || option.label || option.value);
+        const { name, description } = getSettingsPickerOptionMeta(option);
         const optionButton = document.createElement('button');
         optionButton.type = 'button';
         optionButton.className = 'voice-picker-option';
@@ -12281,6 +12390,238 @@ function renderGeminiVoicePickerOptions() {
     syncGeminiVoicePickerFromSelect();
 }
 
+function getConfiguredGeminiAudioInputDeviceId() {
+    return String(getCachedStorageValue(GEMINI_LIVE_AUDIO_INPUT_DEVICE_STORAGE_KEY) || '').trim();
+}
+
+function normalizeGeminiAudioInputLabel(label = '') {
+    return String(label || '').replace(/\s+/g, ' ').trim();
+}
+
+function setGeminiAudioInputPickerOpen(isOpen) {
+    if (!geminiAudioInputPicker || !geminiAudioInputPickerTrigger) return;
+    geminiAudioInputPicker.classList.toggle('active', !!isOpen);
+    geminiAudioInputPickerTrigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+}
+
+function syncGeminiAudioInputPickerFromSelect() {
+    if (!geminiAudioInputDeviceInput || !geminiAudioInputPickerName || !geminiAudioInputPickerDescription) return;
+    const selectedOption = geminiAudioInputDeviceInput.selectedOptions?.[0] || geminiAudioInputDeviceInput.options?.[geminiAudioInputDeviceInput.selectedIndex] || null;
+    const hasRealOption = Array.from(geminiAudioInputDeviceInput.options || []).some((option) => !option.disabled);
+    const { name, description } = getSettingsPickerOptionMeta(
+        selectedOption,
+        hasRealOption ? 'Реальный вход для звонков Gemini Live' : 'Разрешите доступ к микрофону, чтобы увидеть реальные устройства'
+    );
+    geminiAudioInputPickerName.textContent = name || 'Микрофон не выбран';
+    geminiAudioInputPickerDescription.textContent = description || '';
+    geminiAudioInputPickerDescription.hidden = !description;
+    if (geminiAudioInputPickerTrigger) {
+        geminiAudioInputPickerTrigger.disabled = !navigator.mediaDevices?.getUserMedia || !navigator.mediaDevices?.enumerateDevices;
+    }
+
+    if (!geminiAudioInputPickerScroll) return;
+    Array.from(geminiAudioInputPickerScroll.querySelectorAll('.voice-picker-option')).forEach((optionEl) => {
+        const isActive = optionEl.dataset.value === geminiAudioInputDeviceInput.value;
+        optionEl.classList.toggle('active', isActive);
+        optionEl.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+}
+
+function renderGeminiAudioInputPickerOptions() {
+    if (!geminiAudioInputPickerScroll || !geminiAudioInputDeviceInput) return;
+
+    const fragment = document.createDocumentFragment();
+    Array.from(geminiAudioInputDeviceInput.options || []).forEach((option) => {
+        const { name, description } = getSettingsPickerOptionMeta(option);
+        const optionButton = document.createElement('button');
+        optionButton.type = 'button';
+        optionButton.className = 'voice-picker-option';
+        optionButton.dataset.value = option.value;
+        optionButton.setAttribute('role', 'option');
+        optionButton.disabled = !!option.disabled;
+        optionButton.innerHTML = `
+            <span class="voice-picker-option-label">
+                <span class="voice-picker-option-name">${escapeHtml(name || option.value || 'Микрофон')}</span>
+                ${description ? `<span class="voice-picker-option-description">${escapeHtml(description)}</span>` : ''}
+            </span>
+            <span class="voice-picker-option-check" aria-hidden="true">●</span>
+        `;
+        if (!option.disabled) {
+            optionButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (geminiAudioInputDeviceInput.value !== option.value) {
+                    geminiAudioInputDeviceInput.value = option.value;
+                    geminiAudioInputDeviceInput.dispatchEvent(new Event('change', { bubbles: true }));
+                } else {
+                    syncGeminiAudioInputPickerFromSelect();
+                }
+                setGeminiAudioInputPickerOpen(false);
+            });
+            optionButton.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    setGeminiAudioInputPickerOpen(false);
+                    geminiAudioInputPickerTrigger?.focus();
+                    return;
+                }
+                if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+                event.preventDefault();
+                const options = Array.from(geminiAudioInputPickerScroll.querySelectorAll('.voice-picker-option:not(:disabled)'));
+                const currentIndex = options.indexOf(optionButton);
+                const nextIndex = event.key === 'ArrowDown'
+                    ? Math.min(options.length - 1, currentIndex + 1)
+                    : Math.max(0, currentIndex - 1);
+                options[nextIndex]?.focus();
+            });
+        }
+        fragment.appendChild(optionButton);
+    });
+
+    geminiAudioInputPickerScroll.replaceChildren(fragment);
+    syncGeminiAudioInputPickerFromSelect();
+}
+
+function setGeminiAudioInputOptions(devices = [], options = {}) {
+    if (!geminiAudioInputDeviceInput) return [];
+    const nextDevices = Array.isArray(devices) ? devices : [];
+    geminiAudioInputDevices = nextDevices;
+    const fragment = document.createDocumentFragment();
+    if (nextDevices.length) {
+        nextDevices.forEach((device) => {
+            const option = document.createElement('option');
+            option.value = device.deviceId;
+            option.textContent = device.label;
+            option.dataset.pickerName = device.label;
+            fragment.appendChild(option);
+        });
+        const configured = getConfiguredGeminiAudioInputDeviceId();
+        const selectedValue = nextDevices.some((device) => device.deviceId === configured)
+            ? configured
+            : nextDevices[0].deviceId;
+        geminiAudioInputDeviceInput.replaceChildren(fragment);
+        geminiAudioInputDeviceInput.value = selectedValue;
+        if (configured && selectedValue !== configured) {
+            removeCachedStorageValue(GEMINI_LIVE_AUDIO_INPUT_DEVICE_STORAGE_KEY);
+        }
+    } else {
+        const placeholder = document.createElement('option');
+        const name = String(options.placeholderName || 'Микрофон не найден').trim() || 'Микрофон не найден';
+        const description = String(options.placeholderDescription || 'Разрешите доступ к микрофону, чтобы увидеть реальные устройства').trim();
+        placeholder.value = '';
+        placeholder.textContent = name;
+        placeholder.dataset.pickerName = name;
+        placeholder.dataset.pickerDescription = description;
+        placeholder.disabled = true;
+        fragment.appendChild(placeholder);
+        geminiAudioInputDeviceInput.replaceChildren(fragment);
+        geminiAudioInputDeviceInput.selectedIndex = 0;
+    }
+    renderGeminiAudioInputPickerOptions();
+    return nextDevices;
+}
+
+function normalizeGeminiAudioInputDevices(devices = []) {
+    const normalized = [];
+    const seen = new Set();
+    Array.from(devices || []).forEach((device) => {
+        if (String(device?.kind || '') !== 'audioinput') return;
+        const deviceId = String(device?.deviceId || '').trim();
+        if (!deviceId || deviceId === 'default' || deviceId === 'communications') return;
+        const label = normalizeGeminiAudioInputLabel(device?.label || '');
+        if (!label) return;
+        const groupId = String(device?.groupId || '').trim();
+        const dedupeKey = `${label.toLowerCase()}::${groupId || deviceId}`;
+        if (seen.has(dedupeKey)) return;
+        seen.add(dedupeKey);
+        normalized.push({ deviceId, label, groupId });
+    });
+    normalized.sort((a, b) => a.label.localeCompare(b.label, 'ru', { sensitivity: 'base' }));
+    return normalized;
+}
+
+async function ensureGeminiAudioInputPermissionForEnumeration() {
+    const mediaDevices = navigator.mediaDevices;
+    if (!mediaDevices?.getUserMedia) return false;
+    if (geminiVoiceInputStream?.getTracks?.().length) return true;
+    let tempStream = null;
+    try {
+        tempStream = await mediaDevices.getUserMedia({
+            audio: {
+                channelCount: 1,
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            }
+        });
+        return true;
+    } catch (error) {
+        console.warn('Failed to prime microphone permission for device list:', error);
+        return false;
+    } finally {
+        try {
+            tempStream?.getTracks?.().forEach((track) => track.stop());
+        } catch {}
+    }
+}
+
+async function refreshGeminiAudioInputOptions(options = {}) {
+    if (!geminiAudioInputDeviceInput) return [];
+    const { requestPermission = false, force = false } = options || {};
+    if (geminiAudioInputRefreshPromise && !force) {
+        return geminiAudioInputRefreshPromise;
+    }
+    const runRefresh = async () => {
+        const mediaDevices = navigator.mediaDevices;
+        if (!mediaDevices?.enumerateDevices) {
+            return setGeminiAudioInputOptions([], {
+                placeholderName: 'Список микрофонов недоступен',
+                placeholderDescription: 'Этот браузер не отдаёт список входных аудиоустройств'
+            });
+        }
+        if (requestPermission) {
+            await ensureGeminiAudioInputPermissionForEnumeration();
+        }
+        let devices = [];
+        try {
+            devices = await mediaDevices.enumerateDevices();
+        } catch (error) {
+            console.warn('Failed to enumerate audio input devices:', error);
+            return setGeminiAudioInputOptions([], {
+                placeholderName: 'Не удалось прочитать микрофоны',
+                placeholderDescription: 'Проверьте доступ к микрофону и попробуйте ещё раз'
+            });
+        }
+        const normalizedDevices = normalizeGeminiAudioInputDevices(devices);
+        if (!normalizedDevices.length) {
+            const hasAudioInputWithoutLabels = devices.some((device) => {
+                return String(device?.kind || '') === 'audioinput'
+                    && String(device?.deviceId || '').trim()
+                    && !normalizeGeminiAudioInputLabel(device?.label || '');
+            });
+            return setGeminiAudioInputOptions([], {
+                placeholderName: hasAudioInputWithoutLabels ? 'Откройте список после доступа к микрофону' : 'Реальные микрофоны не найдены',
+                placeholderDescription: hasAudioInputWithoutLabels
+                    ? 'Браузер ещё не раскрыл названия устройств'
+                    : 'Подключите устройство и откройте список ещё раз'
+            });
+        }
+        return setGeminiAudioInputOptions(normalizedDevices);
+    };
+    geminiAudioInputRefreshPromise = runRefresh().finally(() => {
+        geminiAudioInputRefreshPromise = null;
+    });
+    return geminiAudioInputRefreshPromise;
+}
+
+function getSelectedGeminiAudioInputDeviceId() {
+    const selectedOption = geminiAudioInputDeviceInput?.selectedOptions?.[0] || null;
+    if (selectedOption && !selectedOption.disabled) {
+        return String(geminiAudioInputDeviceInput.value || '').trim();
+    }
+    return getConfiguredGeminiAudioInputDeviceId();
+}
+
 function populateVoiceConfigFields() {
     if (geminiApiKeyInput) {
         removeCachedStorageValue(LEGACY_GEMINI_LIVE_API_KEY_STORAGE_KEY);
@@ -12296,6 +12637,20 @@ function populateVoiceConfigFields() {
         geminiVoiceNameInput.value = hasOption ? desired : GEMINI_LIVE_DEFAULT_VOICE;
     }
     renderGeminiVoicePickerOptions();
+    if (geminiAudioInputDeviceInput) {
+        const configuredDeviceId = getConfiguredGeminiAudioInputDeviceId();
+        if (configuredDeviceId) {
+            setGeminiAudioInputOptions([{ deviceId: configuredDeviceId, label: 'Сохранённый микрофон' }]);
+            if (geminiAudioInputDeviceInput.options?.[0]) {
+                geminiAudioInputDeviceInput.options[0].dataset.pickerDescription = 'Сейчас перепроверю, доступен ли он';
+            }
+        } else {
+            setGeminiAudioInputOptions([], {
+                placeholderName: 'Откройте список микрофонов',
+                placeholderDescription: 'Покажу только реальные входы без дублей'
+            });
+        }
+    }
 }
 
 function populateHiddenClientPromptField() {
@@ -12398,6 +12753,10 @@ async function saveVoiceModeConfigFromInputs() {
     });
     const voiceNameRaw = String(geminiVoiceNameInput?.value || '').trim();
     const voiceName = voiceNameRaw || GEMINI_LIVE_DEFAULT_VOICE;
+    const selectedAudioInputOption = geminiAudioInputDeviceInput?.selectedOptions?.[0] || null;
+    const audioInputDeviceId = selectedAudioInputOption && !selectedAudioInputOption.disabled
+        ? String(geminiAudioInputDeviceInput?.value || '').trim()
+        : '';
 
     removeCachedStorageValue(LEGACY_GEMINI_LIVE_API_KEY_STORAGE_KEY);
 
@@ -12411,6 +12770,12 @@ async function saveVoiceModeConfigFromInputs() {
         setCachedStorageValue(GEMINI_LIVE_VOICE_NAME_STORAGE_KEY, voiceName);
     } else {
         removeCachedStorageValue(GEMINI_LIVE_VOICE_NAME_STORAGE_KEY);
+    }
+
+    if (audioInputDeviceId) {
+        setCachedStorageValue(GEMINI_LIVE_AUDIO_INPUT_DEVICE_STORAGE_KEY, audioInputDeviceId);
+    } else {
+        removeCachedStorageValue(GEMINI_LIVE_AUDIO_INPUT_DEVICE_STORAGE_KEY);
     }
 
     let sharedSaved = false;
@@ -12437,6 +12802,7 @@ async function clearVoiceModeConfig() {
     removeCachedStorageValue(LEGACY_GEMINI_LIVE_API_KEY_STORAGE_KEY);
     removeCachedStorageValue(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY);
     removeCachedStorageValue(GEMINI_LIVE_VOICE_NAME_STORAGE_KEY);
+    removeCachedStorageValue(GEMINI_LIVE_AUDIO_INPUT_DEVICE_STORAGE_KEY);
 
     if (db && selectedRole === 'admin') {
         try {
@@ -12451,6 +12817,9 @@ async function clearVoiceModeConfig() {
     if (geminiApiKeyInput) geminiApiKeyInput.value = '';
     if (geminiTokenEndpointInput) geminiTokenEndpointInput.value = getConfiguredGeminiTokenEndpoint();
     if (geminiVoiceNameInput) geminiVoiceNameInput.value = GEMINI_LIVE_DEFAULT_VOICE;
+    refreshGeminiAudioInputOptions({ force: true }).catch((error) => {
+        console.warn('Failed to refresh audio inputs after clearing voice config:', error);
+    });
     showCopyNotification('Данные голосового режима удалены на этом устройстве');
 }
 
@@ -13874,14 +14243,40 @@ async function initGeminiVoiceCapture() {
         throw new Error('Браузер не поддерживает доступ к микрофону');
     }
 
-    geminiVoiceInputStream = await mediaDevices.getUserMedia({
-        audio: {
-            channelCount: 1,
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
+    const selectedAudioInputDeviceId = getSelectedGeminiAudioInputDeviceId();
+    const baseAudioConstraints = {
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+    };
+    const requestedAudioConstraints = selectedAudioInputDeviceId
+        ? {
+            ...baseAudioConstraints,
+            deviceId: { exact: selectedAudioInputDeviceId }
         }
-    });
+        : baseAudioConstraints;
+
+    try {
+        geminiVoiceInputStream = await mediaDevices.getUserMedia({
+            audio: requestedAudioConstraints
+        });
+    } catch (error) {
+        const shouldFallbackToDefaultInput = !!selectedAudioInputDeviceId
+            && ['OverconstrainedError', 'NotFoundError', 'DevicesNotFoundError'].includes(String(error?.name || ''));
+        if (!shouldFallbackToDefaultInput) {
+            throw error;
+        }
+        console.warn('Selected microphone is unavailable, falling back to the current real input:', error);
+        removeCachedStorageValue(GEMINI_LIVE_AUDIO_INPUT_DEVICE_STORAGE_KEY);
+        refreshGeminiAudioInputOptions({ force: true }).catch((refreshError) => {
+            console.warn('Failed to refresh audio input picker after microphone fallback:', refreshError);
+        });
+        showCopyNotification('Выбранный микрофон недоступен. Переключил звонок на доступный вход.');
+        geminiVoiceInputStream = await mediaDevices.getUserMedia({
+            audio: baseAudioConstraints
+        });
+    }
 
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (typeof AudioCtx !== 'function') {
@@ -13897,8 +14292,13 @@ async function initGeminiVoiceCapture() {
     geminiVoiceProcessorNode = geminiVoiceAudioContext.createScriptProcessor(4096, 1, 1);
     geminiVoiceSilenceGain = geminiVoiceAudioContext.createGain();
     geminiVoiceSilenceGain.gain.value = 0;
+    resetGeminiVoiceMicMeter();
 
     geminiVoiceProcessorNode.onaudioprocess = (event) => {
+        const inputChannel = event.inputBuffer?.getChannelData?.(0);
+        if (inputChannel?.length) {
+            updateGeminiVoiceMicMeterFromSamples(inputChannel);
+        }
         if (
             !isGeminiVoiceActive ||
             !geminiVoiceMicInputEnabled ||
@@ -13908,7 +14308,6 @@ async function initGeminiVoiceCapture() {
             return;
         }
         try {
-            const inputChannel = event.inputBuffer?.getChannelData?.(0);
             if (!inputChannel?.length) return;
             const downsampled = downsampleAudioBuffer(inputChannel, event.inputBuffer.sampleRate, 16000);
             if (!downsampled.length) return;
@@ -13931,6 +14330,7 @@ async function initGeminiVoiceCapture() {
 }
 
 function teardownGeminiVoiceCapture() {
+    resetGeminiVoiceMicMeter();
     if (geminiVoiceProcessorNode) {
         try {
             geminiVoiceProcessorNode.onaudioprocess = null;
@@ -14053,6 +14453,7 @@ async function startGeminiVoiceMode() {
     }
     setGeminiVoiceMicInputEnabled(false);
     clearGeminiVoiceMicUnlockTimer();
+    resetGeminiVoiceMicMeter();
     isGeminiVoiceConnecting = true;
     updateVoiceModeControls();
     setVoiceModeStatus('Звоним клиенту…', 'waiting');
@@ -14632,6 +15033,9 @@ function showSettingsModal() {
     roleChangePasswordInput.value = '';
     roleChangeError.style.display = 'none';
     populateVoiceConfigFields();
+    refreshGeminiAudioInputOptions().catch((error) => {
+        console.warn('Failed to refresh audio input devices for settings:', error);
+    });
     populateHiddenClientPromptField();
     populateHiddenRaterPromptField();
     settingsModal.classList.add('active');
@@ -15113,6 +15517,55 @@ bindEvent(geminiVoicePickerScroll, 'click', (event) => {
     event.stopPropagation();
 });
 
+bindEvent(geminiAudioInputDeviceInput, 'change', () => {
+    syncGeminiAudioInputPickerFromSelect();
+    saveVoiceModeConfigFromInputs().catch((error) => {
+        console.error('Failed to save audio input config:', error);
+        showCopyNotification(getVoiceConfigErrorMessage(error));
+    });
+});
+
+bindEvent(geminiAudioInputPickerTrigger, 'click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    refreshGeminiAudioInputOptions({ requestPermission: true, force: true })
+        .catch((error) => {
+            console.warn('Failed to refresh audio input picker options:', error);
+        })
+        .finally(() => {
+            renderGeminiAudioInputPickerOptions();
+            setGeminiAudioInputPickerOpen(!geminiAudioInputPicker?.classList.contains('active'));
+        });
+});
+
+bindEvent(geminiAudioInputPickerTrigger, 'keydown', (event) => {
+    if (!['ArrowDown', 'Enter', ' '].includes(event.key)) {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            setGeminiAudioInputPickerOpen(false);
+        }
+        return;
+    }
+    event.preventDefault();
+    refreshGeminiAudioInputOptions({ requestPermission: true, force: true })
+        .catch((error) => {
+            console.warn('Failed to refresh audio input picker options:', error);
+        })
+        .finally(() => {
+            renderGeminiAudioInputPickerOptions();
+            setGeminiAudioInputPickerOpen(true);
+            geminiAudioInputPickerScroll?.querySelector('.voice-picker-option.active')?.focus();
+        });
+});
+
+bindEvent(geminiAudioInputPickerMenu, 'click', (event) => {
+    event.stopPropagation();
+});
+
+bindEvent(geminiAudioInputPickerScroll, 'click', (event) => {
+    event.stopPropagation();
+});
+
 bindEvent(adminHiddenClientPromptSaveBtn, 'click', () => {
     saveHiddenClientPromptFromInput().catch((error) => {
         console.error('Failed to save hidden client prompt:', error);
@@ -15164,7 +15617,7 @@ bindEvent(adminWebhookDebugClearBtn, 'click', () => {
     showCopyNotification('Лог webhook очищен');
 });
 
-[geminiApiKeyInput, geminiTokenEndpointInput, geminiVoiceNameInput].forEach((input) => {
+[geminiApiKeyInput, geminiTokenEndpointInput, geminiVoiceNameInput, geminiAudioInputDeviceInput].forEach((input) => {
     bindEvent(input, 'keydown', (e) => {
         if (e.key !== 'Enter') return;
         e.preventDefault();
@@ -15174,6 +15627,14 @@ bindEvent(adminWebhookDebugClearBtn, 'click', () => {
         });
     });
 });
+
+if (navigator.mediaDevices && typeof navigator.mediaDevices.addEventListener === 'function') {
+    navigator.mediaDevices.addEventListener('devicechange', () => {
+        refreshGeminiAudioInputOptions({ force: true }).catch((error) => {
+            console.warn('Failed to refresh audio input devices after devicechange:', error);
+        });
+    });
+}
 
 // Theme toggle
 bindEvent(themeToggle, 'change', () => {
@@ -17641,6 +18102,7 @@ document.addEventListener('click', () => {
     exportChatSettingsMenu?.classList.remove('show');
     exportPromptSettingsMenu?.classList.remove('show');
     setGeminiVoicePickerOpen(false);
+    setGeminiAudioInputPickerOpen(false);
 });
 
 document.querySelectorAll('.dropdown-item[data-format]').forEach(item => {

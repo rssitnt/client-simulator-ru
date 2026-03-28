@@ -21,6 +21,14 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-28`, Gemini voice settings now include real microphone input selection:
+  - settings modal has a dedicated microphone picker next to voice selection.
+  - picker requests/refreshes `enumerateDevices()`, filters only `audioinput`, removes `default` / `communications`, drops unlabeled phantom entries, and deduplicates same label+groupId combinations.
+  - selected input device is stored locally and used in `getUserMedia({ audio: { deviceId: { exact }}})` for the next calls; if the saved device disappears, the app falls back to a working input and refreshes the picker.
+- As of `2026-03-28`, ringing state now shows live microphone loudness:
+  - `voiceConnectStatus` includes a real-time level bar during connection.
+  - level is sampled from the live mic stream before the call is fully active.
+  - thresholds: low = red, medium = yellow, good = green.
 - As of `2026-03-28`, `scripts/smoke-e2e.mjs` now covers Gemini voice mode with stable end-to-end mocks:
   - stubs Firebase App Check, Gemini Live SDK, token endpoint, fake microphone input, and Web Audio playback.
   - verifies the user-visible flow rather than a hidden internal status node: the main send button switches into stop mode, the call notice appears, both sides append chat messages, assistant audio playback actually starts, and stopping the call exposes rating.

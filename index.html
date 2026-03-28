@@ -337,6 +337,36 @@
                 </div>
             </div>
 
+            <div class="settings-row voice-row">
+                <span class="settings-label">Микрофон:</span>
+                <div class="voice-config-block">
+                    <select id="geminiAudioInputDeviceInput" class="voice-select-native" tabindex="-1" aria-hidden="true">
+                        <option value="" data-picker-description="Открываю список реальных устройств">Ищу микрофоны…</option>
+                    </select>
+                    <div class="voice-picker" id="geminiAudioInputPicker">
+                        <button
+                            type="button"
+                            id="geminiAudioInputPickerTrigger"
+                            class="voice-picker-trigger"
+                            aria-haspopup="listbox"
+                            aria-expanded="false"
+                            aria-controls="geminiAudioInputPickerMenu"
+                        >
+                            <span class="voice-picker-current">
+                                <span id="geminiAudioInputPickerName" class="voice-picker-current-name">Ищу микрофоны…</span>
+                                <span id="geminiAudioInputPickerDescription" class="voice-picker-current-description">Покажу только реальные входы без дублей</span>
+                            </span>
+                            <svg class="voice-picker-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </button>
+                        <div id="geminiAudioInputPickerMenu" class="voice-picker-menu">
+                            <div id="geminiAudioInputPickerScroll" class="voice-picker-menu-scroll" role="listbox" aria-labelledby="geminiAudioInputPickerTrigger"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Панель администратора -->
             <details id="adminPanelAccordion" class="admin-accordion" style="display: none;">
                 <summary class="admin-accordion-trigger">Панель администратора</summary>
@@ -503,7 +533,15 @@
                     <button id="startBtn" class="btn-start">Начать диалог</button>
                     <button id="startAttestationBtn" class="btn-start btn-start-attestation">Начать аттестацию</button>
                 </div>
-                <div id="voiceConnectStatus" class="voice-connect-status" hidden>Идёт подключение…</div>
+                <div id="voiceConnectStatus" class="voice-connect-status" hidden>
+                    <div id="voiceConnectStatusText" class="voice-connect-status-text">Идёт подключение…</div>
+                    <div id="voiceConnectMeter" class="voice-connect-meter" hidden>
+                        <div class="voice-connect-meter-track" aria-hidden="true">
+                            <div id="voiceConnectMeterFill" class="voice-connect-meter-fill"></div>
+                        </div>
+                        <div id="voiceConnectMeterLabel" class="voice-connect-meter-label">Микрофон: недостаточно</div>
+                    </div>
+                </div>
             </div>
             <div class="chat-input-container">
                 <div class="input-wrapper">
