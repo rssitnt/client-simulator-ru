@@ -1748,7 +1748,9 @@ async function syncAuthClaimsForCurrentUser(options = {}) {
     const roleFromClaims = normalizeRoleFromClaims(claims);
     if (!roleFromClaims) return false;
     const currentRole = normalizeRole(currentUser.role || 'user');
-    if (currentRole === roleFromClaims) return false;
+    const selectedRoleBefore = normalizeRole(selectedRole || 'user');
+    const shouldForceAdminView = roleFromClaims === 'admin' && selectedRoleBefore !== 'admin';
+    if (currentRole === roleFromClaims && !shouldForceAdminView) return false;
     currentUser.role = roleFromClaims;
     syncSelectedRole(roleFromClaims);
     applyRoleRestrictions();
