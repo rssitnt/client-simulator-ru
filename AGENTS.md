@@ -21,10 +21,12 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
-- As of `2026-03-28`, Gemini Live first turn waits for audio pipeline readiness:
-  - first turn is now gated on both `setupComplete` and audio-ready to avoid missing the first spoken reply.
-- As of `2026-03-28`, voice status no longer repeats assistant text after it is finalized in chat:
-  - once a reply is appended, the status switches back to “Слушаю вас…”.
+- As of `2026-03-28`, voice call stop works even when input is disabled:
+  - primary action now stops the call before checking input state.
+- As of `2026-03-28`, Gemini Live first turn waits for audio pipeline readiness and active state:
+  - first turn now gated on `setupComplete` + audio ready + voice active to avoid missing the first spoken reply.
+- As of `2026-03-28`, assistant text no longer lingers in the voice status pill after it’s appended to chat:
+  - status snaps back to “Слушаю вас…” when new lines are added during an active call.
 - As of `2026-03-28`, voice status pill is hidden when there's no active/connecting call or error:
   - prevents the empty rounded bar from showing above the chat when idle.
 - As of `2026-03-28`, voice-mode preview text spacing fixed:

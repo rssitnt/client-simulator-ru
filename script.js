@@ -13026,6 +13026,10 @@ function appendGeminiVoiceDialogToChat() {
         updateSendBtnState();
     }
 
+    if (appendedCount > 0 && isGeminiVoiceActive) {
+        setVoiceModeStatus('Слушаю вас… Говорите.', 'listening');
+    }
+
     return appendedCount;
 }
 
@@ -13092,7 +13096,7 @@ function requestGeminiFirstTurn() {
 
 function maybeRequestGeminiFirstTurn() {
     if (geminiVoiceFirstTurnRequested) return false;
-    if (!geminiVoiceSetupComplete || !geminiVoiceAudioReady) {
+    if (!geminiVoiceSetupComplete || !geminiVoiceAudioReady || !isGeminiVoiceActive) {
         geminiVoiceFirstTurnPending = true;
         return false;
     }
@@ -13639,6 +13643,9 @@ async function startGeminiVoiceMode() {
         isGeminiVoiceConnecting = false;
         isGeminiVoiceActive = true;
         updateVoiceModeControls();
+        if (geminiVoiceFirstTurnPending || geminiVoiceSetupComplete) {
+            maybeRequestGeminiFirstTurn();
+        }
     } catch (error) {
         console.error('Failed to start voice mode:', error);
         isGeminiVoiceConnecting = false;
@@ -17037,12 +17044,12 @@ function setupDragAndDropForPreview(previewElement, textarea) {
 // ============ EVENT LISTENERS ============
 
 function handlePrimaryActionClick() {
-    if (userInput.disabled || isProcessing || isDialogRated || isConversationClosed()) {
+    if (isGeminiVoiceConnecting || isGeminiVoiceActive) {
+        handleVoiceModeStopClick();
         return;
     }
 
-    if (isGeminiVoiceConnecting || isGeminiVoiceActive) {
-        handleVoiceModeStopClick();
+    if (userInput.disabled || isProcessing || isDialogRated || isConversationClosed()) {
         return;
     }
 
