@@ -21,6 +21,10 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-28`, voice user turns now append reliably:
+  - new turns reset the “finalized” flag when fresh input starts, so multiple user messages appear.
+- As of `2026-03-28`, a call-start notice is appended to chat when Gemini connects:
+  - “Звонок начался. Говорите.”
 - As of `2026-03-28`, a “Идёт подключение…” status is shown during ringing:
   - start buttons are hidden while the voice connection is in progress.
 - As of `2026-03-28`, tooltips are force-hidden on primary action click:

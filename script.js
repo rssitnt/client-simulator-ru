@@ -1521,6 +1521,7 @@ let geminiVoiceFirstTurnPending = false;
 let geminiVoiceAudioReady = false;
 let geminiVoiceFirstTurnTimerId = 0;
 let geminiVoiceUserTurnFinalized = false;
+let geminiVoiceCallNotice = null;
 let geminiVoiceConversationFinished = false;
 let geminiVoiceSessionConfig = null;
 let geminiDialToneTimerId = 0;
@@ -13005,6 +13006,7 @@ function resetGeminiVoiceDialogBuffer() {
     geminiVoiceFirstTurnPending = false;
     geminiVoiceAudioReady = false;
     geminiVoiceUserTurnFinalized = false;
+    clearVoiceCallNotice();
     openAiPendingUserTurn = '';
     openAiResponsePending = false;
     openAiResponseQueued = false;
@@ -13160,6 +13162,34 @@ function finalizeGeminiUserTurn(sourceText) {
     geminiVoiceConversationFinished = false;
     geminiVoiceUserTurnFinalized = true;
     return true;
+}
+
+function showVoiceCallNotice(text) {
+    const safeText = String(text || '').trim();
+    if (!safeText || !chatMessages) return;
+    if (!geminiVoiceCallNotice) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'message conversation-action-note voice-call-note';
+        wrapper.innerHTML = `
+            <div class="conversation-action-note-box">
+                <div class="conversation-action-note-text"></div>
+            </div>
+        `;
+        geminiVoiceCallNotice = wrapper;
+        chatMessages.appendChild(wrapper);
+    }
+    const textEl = geminiVoiceCallNotice.querySelector('.conversation-action-note-text');
+    if (textEl) {
+        textEl.textContent = safeText;
+    }
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function clearVoiceCallNotice() {
+    if (geminiVoiceCallNotice?.parentNode) {
+        geminiVoiceCallNotice.parentNode.removeChild(geminiVoiceCallNotice);
+    }
+    geminiVoiceCallNotice = null;
 }
 
 function sendOpenAiRealtimeEvent(payload) {
@@ -13374,6 +13404,9 @@ async function handleGeminiLiveMessage(message) {
     const inputText = normalizeVoiceDialogText(serverContent?.inputTranscription?.text || '');
     const inputFinished = !!serverContent?.inputTranscription?.finished;
     if (inputText) {
+        if (!geminiVoiceUserPreview.trim()) {
+            geminiVoiceUserTurnFinalized = false;
+        }
         geminiVoiceUserPreview = mergeVoiceStreamingText(geminiVoiceUserPreview, inputText);
         setVoiceModeStatus(getShortStatusText('Вы:', geminiVoiceUserPreview), 'listening', { lockMs: 3000 });
         if (inputFinished) {
@@ -13570,6 +13603,7 @@ function teardownGeminiVoiceCapture() {
         clearTimeout(geminiVoiceFirstTurnTimerId);
         geminiVoiceFirstTurnTimerId = 0;
     }
+    clearVoiceCallNotice();
     resetGeminiPlaybackCursor();
 }
 
@@ -13596,6 +13630,7 @@ async function stopGeminiVoiceMode(options = {}) {
     isGeminiVoiceConnecting = false;
     isGeminiVoiceActive = false;
     updateVoiceModeControls();
+    updateVoiceConnectingUi();
 
     teardownGeminiVoiceCapture();
     updateVoiceModeControls();
@@ -13707,6 +13742,8 @@ async function startGeminiVoiceMode() {
         if (geminiVoiceFirstTurnPending || geminiVoiceSetupComplete) {
             maybeRequestGeminiFirstTurn();
         }
+        updateVoiceConnectingUi();
+        showVoiceCallNotice('Звонок начался. Говорите.');
     } catch (error) {
         console.error('Failed to start voice mode:', error);
         isGeminiVoiceConnecting = false;
