@@ -21,6 +21,10 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-29`, Gemini Live now waits briefly for late assistant transcripts before unlocking the manager mic:
+  - root cause: Gemini can emit first assistant audio and `waitingForInput` before the corresponding `outputTranscription`; the old code unlocked the manager mic too early and the first reply never became a visible chat line.
+  - fix: added a short late-transcript grace window (`GEMINI_VOICE_LATE_TRANSCRIPT_GRACE_MS`) and immediate finalization when delayed assistant text arrives after `waitingForInput`.
+  - expected effect: the first AI-client reply should still be appended to chat even when its transcript is delayed relative to audio/playback events.
 - As of `2026-03-29`, Gemini Live calls now switch to half-duplex as soon as the AI-client starts replying:
   - root cause: the manager microphone stayed open while the first client reply was arriving, so Gemini could interrupt its own first audio turn before it became audible.
   - fix: new `beginGeminiAssistantVoiceOutput(...)` immediately mutes manager mic input on the first assistant transcript/audio chunk and restores it only after playback finishes.

@@ -295,6 +295,44 @@ class StubLiveSession {
         }, 420);
         return;
       }
+      if (scenario === 'late-first-transcript') {
+        this.emit({
+          serverContent: {
+            modelTurn: {
+              parts: [
+                {
+                  inlineData: {
+                    data: assistantAudioBase64,
+                    mimeType: 'audio/pcm;rate=24000'
+                  }
+                }
+              ]
+            }
+          }
+        }, 230);
+        this.emit({
+          serverContent: {
+            waitingForInput: true
+          }
+        }, 320);
+        this.emit({
+          serverContent: {
+            outputTranscription: {
+              text: 'Здравствуйте. Есть рабочий вариант под вашу задачу, могу пройтись по срокам и сервису.',
+              finished: false
+            }
+          }
+        }, 360);
+        this.emit({
+          serverContent: {
+            outputTranscription: {
+              text: 'Здравствуйте. Есть рабочий вариант под вашу задачу, могу пройтись по срокам и сервису.',
+              finished: true
+            }
+          }
+        }, 410);
+        return;
+      }
       this.emit({
         serverContent: {
           outputTranscription: {
@@ -1582,6 +1620,10 @@ async function main() {
         await runGeminiVoiceModeSmokeFlow(browser, baseUrl, {
             voiceScenario: 'assistant-interrupted-first-reply',
             expectedAssistantNeedle: 'вариант'
+        });
+        await runGeminiVoiceModeSmokeFlow(browser, baseUrl, {
+            voiceScenario: 'late-first-transcript',
+            expectedAssistantNeedle: 'срокам и сервису'
         });
         await runEndConversationFlow(browser, baseUrl);
         await runGoSilentFlow(browser, baseUrl);
