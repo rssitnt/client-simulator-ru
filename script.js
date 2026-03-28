@@ -12603,7 +12603,8 @@ async function enqueueGeminiAudioPlayback(base64Data, mimeType = 'audio/pcm;rate
         byteView = byteView.subarray(0, evenLength);
     }
     const normalizedMime = String(mimeType || '').toLowerCase();
-    if (normalizedMime && !normalizedMime.includes('pcm') && !normalizedMime.includes('l16')) {
+    const shouldTryDecode = !normalizedMime || (!normalizedMime.includes('pcm') && !normalizedMime.includes('l16'));
+    if (shouldTryDecode) {
         const rawBuffer = byteView.buffer.slice(byteView.byteOffset, byteView.byteOffset + byteView.byteLength);
         try {
             const decoded = await audioContext.decodeAudioData(rawBuffer.slice(0));

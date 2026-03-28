@@ -31,6 +31,7 @@
 - As of `2026-03-28`, Gemini Live audio playback is more robust:
   - non‑PCM audio is decoded via `decodeAudioData`, with a PCM fallback; also checks `outputAudio` when `modelTurn.parts` has no audio.
   - odd-length PCM chunks are now trimmed instead of dropped; audio parts without mimeType are treated as audio.
+  - decoder now runs even when mimeType is missing, then falls back to PCM if decode fails.
 - As of `2026-03-28`, a “Идёт подключение…” status is shown during ringing:
   - start buttons are hidden while the voice connection is in progress.
 - As of `2026-03-28`, tooltips are force-hidden on primary action click:
