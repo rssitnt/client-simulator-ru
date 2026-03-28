@@ -1348,6 +1348,7 @@ const geminiVoiceNameInput = document.getElementById('geminiVoiceNameInput');
 const geminiVoicePicker = document.getElementById('geminiVoicePicker');
 const geminiVoicePickerTrigger = document.getElementById('geminiVoicePickerTrigger');
 const geminiVoicePickerMenu = document.getElementById('geminiVoicePickerMenu');
+const geminiVoicePickerScroll = document.getElementById('geminiVoicePickerScroll');
 const geminiVoicePickerName = document.getElementById('geminiVoicePickerName');
 const geminiVoicePickerDescription = document.getElementById('geminiVoicePickerDescription');
 const saveVoiceConfigBtn = document.getElementById('saveVoiceConfigBtn');
@@ -12195,8 +12196,8 @@ function syncGeminiVoicePickerFromSelect() {
     geminiVoicePickerDescription.textContent = description || 'Голос Gemini Live';
     geminiVoicePickerDescription.hidden = !description;
 
-    if (!geminiVoicePickerMenu) return;
-    Array.from(geminiVoicePickerMenu.querySelectorAll('.voice-picker-option')).forEach((optionEl) => {
+    if (!geminiVoicePickerScroll) return;
+    Array.from(geminiVoicePickerScroll.querySelectorAll('.voice-picker-option')).forEach((optionEl) => {
         const isActive = optionEl.dataset.value === geminiVoiceNameInput.value;
         optionEl.classList.toggle('active', isActive);
         optionEl.setAttribute('aria-selected', isActive ? 'true' : 'false');
@@ -12204,7 +12205,7 @@ function syncGeminiVoicePickerFromSelect() {
 }
 
 function renderGeminiVoicePickerOptions() {
-    if (!geminiVoicePickerMenu || !geminiVoiceNameInput) return;
+    if (!geminiVoicePickerScroll || !geminiVoiceNameInput) return;
 
     const fragment = document.createDocumentFragment();
     Array.from(geminiVoiceNameInput.options || []).forEach((option) => {
@@ -12241,7 +12242,7 @@ function renderGeminiVoicePickerOptions() {
             }
             if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
             event.preventDefault();
-            const voiceOptions = Array.from(geminiVoicePickerMenu.querySelectorAll('.voice-picker-option'));
+            const voiceOptions = Array.from(geminiVoicePickerScroll.querySelectorAll('.voice-picker-option'));
             const currentIndex = voiceOptions.indexOf(optionButton);
             const nextIndex = event.key === 'ArrowDown'
                 ? Math.min(voiceOptions.length - 1, currentIndex + 1)
@@ -12251,7 +12252,7 @@ function renderGeminiVoicePickerOptions() {
         fragment.appendChild(optionButton);
     });
 
-    geminiVoicePickerMenu.replaceChildren(fragment);
+    geminiVoicePickerScroll.replaceChildren(fragment);
     syncGeminiVoicePickerFromSelect();
 }
 
@@ -14983,10 +14984,14 @@ bindEvent(geminiVoicePickerTrigger, 'keydown', (event) => {
     event.preventDefault();
     renderGeminiVoicePickerOptions();
     setGeminiVoicePickerOpen(true);
-    geminiVoicePickerMenu?.querySelector('.voice-picker-option.active')?.focus();
+    geminiVoicePickerScroll?.querySelector('.voice-picker-option.active')?.focus();
 });
 
 bindEvent(geminiVoicePickerMenu, 'click', (event) => {
+    event.stopPropagation();
+});
+
+bindEvent(geminiVoicePickerScroll, 'click', (event) => {
     event.stopPropagation();
 });
 
