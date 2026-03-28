@@ -14146,6 +14146,33 @@ function finalizeGeminiUserTurn(sourceText) {
     return true;
 }
 
+function finalizeGeminiAssistantTurn(sourceText, options = {}) {
+    const {
+        interrupted = false,
+        scheduleAutoStop: shouldScheduleAutoStop = !interrupted,
+        restoreListeningState = !interrupted
+    } = options;
+    const completedAssistantText = sanitizeAssistantCompletedTranscript(
+        normalizeVoiceDialogText(sourceText || geminiVoiceAssistantDraft || geminiVoiceAssistantPreview)
+    );
+    geminiVoiceAssistantPreview = '';
+    geminiVoiceAssistantDraft = '';
+    if (!completedAssistantText) return false;
+    pushGeminiVoiceDialogLine('assistant', completedAssistantText);
+    appendGeminiVoiceDialogToChat();
+    if (shouldScheduleAutoStop) {
+        scheduleGeminiVoiceAutoStop(completedAssistantText);
+    }
+    if (restoreListeningState && isGeminiVoiceActive) {
+        if (!geminiVoiceMicInputEnabled && geminiVoiceHasAssistantReply) {
+            scheduleGeminiVoiceMicUnlockAfterPlayback();
+        } else {
+            setVoiceModeStatus('Слушаю вас… Говорите.', 'listening');
+        }
+    }
+    return true;
+}
+
 function showVoiceCallNotice(text) {
     const safeText = String(text || '').trim();
     if (!safeText || !chatMessages) return;
@@ -14435,6 +14462,16 @@ async function handleGeminiLiveMessage(message) {
     const inputText = normalizeVoiceDialogText(serverContent?.inputTranscription?.text || '');
     const inputFinished = !!serverContent?.inputTranscription?.finished;
     if (inputText) {
+        if (geminiVoiceAssistantPreview.trim() || geminiVoiceAssistantDraft.trim()) {
+            finalizeGeminiAssistantTurn(
+                geminiVoiceAssistantDraft.trim() ? geminiVoiceAssistantDraft : geminiVoiceAssistantPreview,
+                {
+                    interrupted: true,
+                    scheduleAutoStop: false,
+                    restoreListeningState: false
+                }
+            );
+        }
         if (!geminiVoiceUserPreview.trim()) {
             geminiVoiceUserTurnFinalized = false;
         }
@@ -14447,35 +14484,19 @@ async function handleGeminiLiveMessage(message) {
 
     const outputText = normalizeVoiceDialogText(serverContent?.outputTranscription?.text || '');
     const outputFinished = !!serverContent?.outputTranscription?.finished;
-        if (outputText) {
-            stopGeminiDialTone();
-            recordGeminiFirstAssistantTextIfNeeded(outputText);
-            if (!geminiVoiceUserTurnFinalized && geminiVoiceUserPreview.trim()) {
-                finalizeGeminiUserTurn(geminiVoiceUserPreview);
-            }
-            if (!geminiVoiceHasAssistantReply) {
-                geminiVoiceHasAssistantReply = true;
-            }
-            geminiVoiceAssistantPreview = mergeVoiceStreamingText(geminiVoiceAssistantPreview, outputText);
-            setVoiceModeStatus(getShortStatusText('ИИ-клиент:', geminiVoiceAssistantPreview), 'ready', { lockMs: 3000 });
-            if (outputFinished) {
-            const completedAssistantText = sanitizeAssistantCompletedTranscript(geminiVoiceAssistantPreview || outputText);
-            geminiVoiceAssistantPreview = '';
-            if (completedAssistantText) {
-                geminiVoiceAssistantDraft = normalizeVoiceDialogText(
-                    mergeVoiceStreamingText(geminiVoiceAssistantDraft, completedAssistantText)
-                );
-                flushGeminiVoiceDraftLine('assistant');
-                appendGeminiVoiceDialogToChat();
-                scheduleGeminiVoiceAutoStop(completedAssistantText);
-                if (isGeminiVoiceActive) {
-                    if (!geminiVoiceMicInputEnabled && geminiVoiceHasAssistantReply) {
-                        scheduleGeminiVoiceMicUnlockAfterPlayback();
-                    } else {
-                        setVoiceModeStatus('Слушаю вас… Говорите.', 'listening');
-                    }
-                }
-            }
+    if (outputText) {
+        stopGeminiDialTone();
+        recordGeminiFirstAssistantTextIfNeeded(outputText);
+        if (!geminiVoiceUserTurnFinalized && geminiVoiceUserPreview.trim()) {
+            finalizeGeminiUserTurn(geminiVoiceUserPreview);
+        }
+        if (!geminiVoiceHasAssistantReply) {
+            geminiVoiceHasAssistantReply = true;
+        }
+        geminiVoiceAssistantPreview = mergeVoiceStreamingText(geminiVoiceAssistantPreview, outputText);
+        setVoiceModeStatus(getShortStatusText('ИИ-клиент:', geminiVoiceAssistantPreview), 'ready', { lockMs: 3000 });
+        if (outputFinished) {
+            finalizeGeminiAssistantTurn(geminiVoiceAssistantPreview || outputText);
         }
     }
 
@@ -14520,6 +14541,14 @@ async function handleGeminiLiveMessage(message) {
     }
 
     if (serverContent?.interrupted) {
+        finalizeGeminiAssistantTurn(
+            geminiVoiceAssistantDraft.trim() ? geminiVoiceAssistantDraft : geminiVoiceAssistantPreview,
+            {
+                interrupted: true,
+                scheduleAutoStop: false,
+                restoreListeningState: false
+            }
+        );
         recordVoiceDebugEvent('transport_failure', {
             message: 'Gemini прислал interrupted'
         });
@@ -14533,27 +14562,17 @@ async function handleGeminiLiveMessage(message) {
     }
 
     if (serverContent?.turnComplete || serverContent?.generationComplete) {
-        if (!geminiVoiceAssistantDraft.trim() && geminiVoiceAssistantPreview.trim()) {
-            geminiVoiceAssistantDraft = normalizeVoiceDialogText(
-                mergeVoiceStreamingText(geminiVoiceAssistantDraft, geminiVoiceAssistantPreview)
-            );
-        }
-        const finalAssistantText = sanitizeAssistantCompletedTranscript(
+        const completedAssistant = finalizeGeminiAssistantTurn(
             geminiVoiceAssistantDraft.trim() ? geminiVoiceAssistantDraft : geminiVoiceAssistantPreview
         );
-        geminiVoiceAssistantPreview = '';
-        if (geminiVoiceAssistantDraft.trim()) {
-            flushGeminiVoiceDraftLine('assistant');
-        }
-        appendGeminiVoiceDialogToChat();
-        if (finalAssistantText) {
-            scheduleGeminiVoiceAutoStop(finalAssistantText);
-        }
-        if (isGeminiVoiceActive) {
-            if (!geminiVoiceMicInputEnabled && geminiVoiceHasAssistantReply) {
-                scheduleGeminiVoiceMicUnlockAfterPlayback();
-            } else {
-                setVoiceModeStatus('Слушаю вас… Говорите.', 'listening');
+        if (!completedAssistant) {
+            appendGeminiVoiceDialogToChat();
+            if (isGeminiVoiceActive) {
+                if (!geminiVoiceMicInputEnabled && geminiVoiceHasAssistantReply) {
+                    scheduleGeminiVoiceMicUnlockAfterPlayback();
+                } else {
+                    setVoiceModeStatus('Слушаю вас… Говорите.', 'listening');
+                }
             }
         }
         return;

@@ -21,6 +21,11 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-29`, interrupted Gemini client turns are now finalized before they can be lost:
+  - root cause: the first client reply could remain only in `geminiVoiceAssistantPreview` and never reach chat if the manager started speaking early or Gemini emitted `interrupted` before `outputFinished/turnComplete`.
+  - fix: new `finalizeGeminiAssistantTurn(...)` commits assistant preview/draft on normal completion, on the first new manager `inputTranscription`, and on `serverContent.interrupted`.
+  - expected effect: the first AI-client utterance should no longer disappear from the visible chat when the reply was cut short or overlapped by the next turn.
+  - `scripts/smoke-e2e.mjs` now also has an `assistant-interrupted-first-reply` Gemini voice scenario to guard this regression.
 - As of `2026-03-28`, admin settings now include a local Gemini Live tech log:
   - logs recent voice-session events from this browser: start request, token endpoint, `setupComplete`, first manager audio, first assistant text, first assistant audio chunk, first playback, transport close/error, reconnect scheduling, and stop/start failures.
   - stored locally in browser storage and exposed via an admin accordion with `Скопировать техлог` / `Очистить`.

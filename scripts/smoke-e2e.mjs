@@ -212,7 +212,8 @@ export async function getToken() {
 }
 `.trim();
 
-const geminiLiveSdkStub = `
+function buildGeminiLiveSdkStub() {
+    return `
 export const Modality = { AUDIO: 'AUDIO' };
 export const MediaResolution = { MEDIA_RESOLUTION_LOW: 'MEDIA_RESOLUTION_LOW' };
 
@@ -246,6 +247,7 @@ class StubLiveSession {
     if (this.closed) return;
     if (params?.audio && !this.handledFirstAudio) {
       this.handledFirstAudio = true;
+      const scenario = String(globalThis.__codexGeminiVoiceScenario || 'default');
       this.emit({
         serverContent: {
           inputTranscription: {
@@ -262,6 +264,37 @@ class StubLiveSession {
           }
         }
       }, 130);
+      if (scenario === 'assistant-interrupted-first-reply') {
+        this.emit({
+          serverContent: {
+            outputTranscription: {
+              text: 'Здравствуйте. Есть вариант под вашу задачу, могу быстро обозначить решение.',
+              finished: false
+            },
+            modelTurn: {
+              parts: [
+                {
+                  inlineData: {
+                    data: assistantAudioBase64,
+                    mimeType: 'audio/pcm;rate=24000'
+                  }
+                }
+              ]
+            }
+          }
+        }, 230);
+        this.emit({
+          serverContent: {
+            interrupted: true
+          }
+        }, 320);
+        this.emit({
+          serverContent: {
+            waitingForInput: true
+          }
+        }, 420);
+        return;
+      }
       this.emit({
         serverContent: {
           outputTranscription: {
@@ -319,6 +352,7 @@ export class GoogleGenAI {
   }
 }
 `.trim();
+}
 
 function expect(condition, message) {
     if (!condition) {
@@ -525,7 +559,7 @@ async function installGeminiVoiceSmokeRoutes(context, bucket) {
         await route.fulfill({
             status: 200,
             contentType: 'application/javascript; charset=utf-8',
-            body: geminiLiveSdkStub
+            body: buildGeminiLiveSdkStub()
         });
     });
     await context.route('**/api/gemini-live-token', async (route) => {
@@ -568,8 +602,8 @@ async function seedLocalState(context) {
     }, seed);
 }
 
-async function seedVoiceModeRuntime(context) {
-    await context.addInitScript(() => {
+async function seedVoiceModeRuntime(context, options = {}) {
+    await context.addInitScript((payload) => {
         class FakeAudioBuffer {
             constructor(channels, length, sampleRate) {
                 this.numberOfChannels = channels;
@@ -749,6 +783,9 @@ async function seedVoiceModeRuntime(context) {
         globalThis.AudioContext = FakeAudioContext;
         globalThis.webkitAudioContext = FakeAudioContext;
         globalThis.__codexVoiceSmoke = { audioStartCount: 0 };
+        globalThis.__codexGeminiVoiceScenario = String(payload?.voiceScenario || 'default');
+    }, {
+        voiceScenario: String(options?.voiceScenario || 'default')
     });
 }
 
@@ -1237,14 +1274,16 @@ async function runPromptConflictRecoveryFlow(browser, baseUrl) {
     }
 }
 
-async function runGeminiVoiceModeSmokeFlow(browser, baseUrl) {
+async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
+    const expectedAssistantNeedle = String(options?.expectedAssistantNeedle || 'срокам');
+    const voiceScenario = String(options?.voiceScenario || 'default');
     const scenario = createIdleScenario();
     const capturedVoiceRequests = [];
     const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
     await installCommonRoutes(context, scenario);
     await installGeminiVoiceSmokeRoutes(context, capturedVoiceRequests);
     await seedLocalState(context);
-    await seedVoiceModeRuntime(context);
+    await seedVoiceModeRuntime(context, { voiceScenario });
     const page = await context.newPage();
     const pageErrors = [];
     const consoleErrors = [];
@@ -1271,7 +1310,7 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl) {
     }));
 
     try {
-        logStep('run gemini voice mode smoke scenario');
+        logStep(`run gemini voice mode smoke scenario (${voiceScenario})`);
         await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
         await waitForChatReady(page);
 
@@ -1307,7 +1346,10 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl) {
         expect(dialogState.bodyVoiceCallActive, 'Voice call active body state was not enabled');
         expect(dialogState.audioStartCount > 0, 'Assistant audio playback never started');
         expect(dialogState.userMessages.some((text) => text.includes('CASE CX260C')), 'Voice user transcript was not appended to chat');
-        expect(dialogState.assistantMessages.some((text) => text.includes('срокам') || text.includes('сервису')), 'Voice assistant reply was not appended to chat');
+        expect(
+            dialogState.assistantMessages.some((text) => text.includes(expectedAssistantNeedle) || text.includes('сервису')),
+            'Voice assistant reply was not appended to chat'
+        );
         expect(dialogState.errorMessages.length === 0, `Voice mode rendered an error: ${dialogState.errorMessages.join(' | ')}`);
 
         await page.click('#sendBtn');
@@ -1537,6 +1579,10 @@ async function main() {
         await runPromptConflictRecoveryFlow(browser, baseUrl);
         await runPromptWorkflowFlow(browser, baseUrl);
         await runGeminiVoiceModeSmokeFlow(browser, baseUrl);
+        await runGeminiVoiceModeSmokeFlow(browser, baseUrl, {
+            voiceScenario: 'assistant-interrupted-first-reply',
+            expectedAssistantNeedle: 'вариант'
+        });
         await runEndConversationFlow(browser, baseUrl);
         await runGoSilentFlow(browser, baseUrl);
         await runEmailAuthVerificationFlow(browser, baseUrl);
