@@ -1505,6 +1505,9 @@ let geminiVoicePlaybackCursor = 0;
 let geminiVoiceHasAudioOutput = false;
 let geminiVoicePlaybackQueue = Promise.resolve();
 let geminiVoiceActiveSources = new Set();
+let geminiVoiceFirstAudioWatchdogId = 0;
+let geminiVoiceFirstAssistantText = '';
+let geminiVoiceFirstAssistantRetryRequested = false;
 let isGeminiVoiceConnecting = false;
 let isGeminiVoiceActive = false;
 let geminiVoiceCloseExpected = false;
@@ -12625,6 +12628,7 @@ async function enqueueGeminiAudioPlayback(base64Data, mimeType = 'audio/pcm;rate
                 source.start(startAt);
                 geminiVoicePlaybackCursor = startAt + decoded.duration;
                 geminiVoiceHasAudioOutput = true;
+                clearGeminiFirstAudioWatchdog();
                 return;
             } catch (error) {
                 console.warn('Failed to decode Gemini Live audio chunk, falling back to PCM:', error);
@@ -12652,6 +12656,7 @@ async function enqueueGeminiAudioPlayback(base64Data, mimeType = 'audio/pcm;rate
         source.start(startAt);
         geminiVoicePlaybackCursor = startAt + audioBuffer.duration;
         geminiVoiceHasAudioOutput = true;
+        clearGeminiFirstAudioWatchdog();
     };
 
     const queued = geminiVoicePlaybackQueue.then(playbackTask, playbackTask);
@@ -12674,6 +12679,33 @@ function resetGeminiPlaybackCursor() {
     }
     geminiVoicePlaybackCursor = geminiVoiceAudioContext.currentTime;
     geminiVoiceHasAudioOutput = false;
+}
+
+function clearGeminiFirstAudioWatchdog() {
+    if (geminiVoiceFirstAudioWatchdogId) {
+        clearTimeout(geminiVoiceFirstAudioWatchdogId);
+        geminiVoiceFirstAudioWatchdogId = 0;
+    }
+}
+
+function scheduleGeminiFirstAudioWatchdog(text) {
+    if (geminiVoiceFirstAssistantRetryRequested) return;
+    if (!text) return;
+    geminiVoiceFirstAssistantText = text;
+    clearGeminiFirstAudioWatchdog();
+    geminiVoiceFirstAudioWatchdogId = setTimeout(() => {
+        geminiVoiceFirstAudioWatchdogId = 0;
+        if (geminiVoiceHasAudioOutput || geminiVoiceFirstAssistantRetryRequested) return;
+        if (!geminiLiveSession || typeof geminiLiveSession.sendRealtimeInput !== 'function') return;
+        geminiVoiceFirstAssistantRetryRequested = true;
+        try {
+            geminiLiveSession.sendRealtimeInput({
+                text: 'Повтори последнюю реплику дословно, без добавлений.'
+            });
+        } catch (error) {
+            console.warn('Failed to request first audio retry:', error);
+        }
+    }, 700);
 }
 
 async function primeGeminiVoiceAudioOutput(delayMs = GEMINI_VOICE_FIRST_AUDIO_DELAY_MS) {
@@ -13110,6 +13142,9 @@ function resetGeminiVoiceDialogBuffer() {
     geminiVoiceAssistantPreview = '';
     geminiVoiceHasAssistantReply = false;
     geminiVoiceHasAudioOutput = false;
+    geminiVoiceFirstAssistantText = '';
+    geminiVoiceFirstAssistantRetryRequested = false;
+    clearGeminiFirstAudioWatchdog();
     geminiVoiceFirstTurnPending = false;
     geminiVoiceAudioReady = false;
     geminiVoiceUserTurnFinalized = false;
@@ -13523,18 +13558,21 @@ async function handleGeminiLiveMessage(message) {
 
     const outputText = normalizeVoiceDialogText(serverContent?.outputTranscription?.text || '');
     const outputFinished = !!serverContent?.outputTranscription?.finished;
-    if (outputText) {
-        stopGeminiDialTone();
-        if (!geminiVoiceUserTurnFinalized && geminiVoiceUserPreview.trim()) {
-            finalizeGeminiUserTurn(geminiVoiceUserPreview);
-        }
-        if (!geminiVoiceHasAssistantReply) {
-            geminiVoiceHasAssistantReply = true;
-            clearGeminiFirstReplyHintTimer();
-        }
-        geminiVoiceAssistantPreview = mergeVoiceStreamingText(geminiVoiceAssistantPreview, outputText);
-        setVoiceModeStatus(getShortStatusText('ИИ-клиент:', geminiVoiceAssistantPreview), 'ready', { lockMs: 3000 });
-        if (outputFinished) {
+        if (outputText) {
+            stopGeminiDialTone();
+            if (!geminiVoiceUserTurnFinalized && geminiVoiceUserPreview.trim()) {
+                finalizeGeminiUserTurn(geminiVoiceUserPreview);
+            }
+            if (!geminiVoiceHasAssistantReply) {
+                geminiVoiceHasAssistantReply = true;
+                clearGeminiFirstReplyHintTimer();
+                if (!geminiVoiceHasAudioOutput) {
+                    scheduleGeminiFirstAudioWatchdog(outputText);
+                }
+            }
+            geminiVoiceAssistantPreview = mergeVoiceStreamingText(geminiVoiceAssistantPreview, outputText);
+            setVoiceModeStatus(getShortStatusText('ИИ-клиент:', geminiVoiceAssistantPreview), 'ready', { lockMs: 3000 });
+            if (outputFinished) {
             const completedAssistantText = sanitizeAssistantCompletedTranscript(geminiVoiceAssistantPreview || outputText);
             geminiVoiceAssistantPreview = '';
             if (completedAssistantText) {
@@ -13572,6 +13610,9 @@ async function handleGeminiLiveMessage(message) {
             if (!geminiVoiceHasAssistantReply) {
                 geminiVoiceHasAssistantReply = true;
                 clearGeminiFirstReplyHintTimer();
+                if (!geminiVoiceHasAudioOutput) {
+                    scheduleGeminiFirstAudioWatchdog(partText);
+                }
             }
             geminiVoiceAssistantPreview = mergeVoiceStreamingText(geminiVoiceAssistantPreview, partText);
             setVoiceModeStatus(getShortStatusText('ИИ-клиент:', geminiVoiceAssistantPreview), 'ready', { lockMs: 3000 });
