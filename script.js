@@ -9951,9 +9951,24 @@ function setPrimaryActionMode(mode) {
     }
 }
 
+function setVoiceCallUiActive(active) {
+    document.body?.classList.toggle('voice-call-active', !!active);
+    if (!userInput) return;
+    if (active) {
+        userInput.disabled = true;
+        userInput.blur();
+        return;
+    }
+    if (userInput.classList.contains('locked-dialog')) return;
+    if (isProcessing || isDialogRated || isConversationClosed()) return;
+    userInput.disabled = false;
+}
+
 function updateSendBtnState() {
     const hasText = !!userInput.value.trim();
     const voiceCallActive = isGeminiVoiceConnecting || isGeminiVoiceActive;
+
+    setVoiceCallUiActive(voiceCallActive);
 
     if (voiceCallActive) {
         setPrimaryActionMode('voice-stop');

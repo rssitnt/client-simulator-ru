@@ -1504,6 +1504,14 @@ body.light-theme .rating-section-list {
     align-items: flex-end;
 }
 
+body.voice-call-active .chat-input-container {
+    justify-content: center;
+}
+
+body.voice-call-active .input-wrapper {
+    display: none;
+}
+
 .input-wrapper {
     flex: 1;
     position: relative;
