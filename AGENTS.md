@@ -36,6 +36,7 @@
 - As of `2026-03-28`, RTDB export shows `app_config.geminiTokenEndpoint` set to `https://client-simulator-gemini-token.onrender.com/api/gemini-live-token` (token server on Render).
 - As of `2026-03-28`, settings modal open now hides tooltips and removes focus outline from the floating settings button.
 - As of `2026-03-28`, admin accounts now force admin view on login (claims sync overrides any stored user-preview mode).
+- As of `2026-03-28`, Render blueprint (`render.yaml`) includes App Check env vars; `server/.env.example` updated for local setup.
 - As of `2026-03-28`, realtime listener recovery hardened:
   - exponential backoff (2s → 4s → 8s → … capped at 30s) added for presence/admin/prompt overrides/protected listeners.
   - backoff resets on successful recovery to avoid long delays after a stable reconnect.
