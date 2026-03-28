@@ -64,7 +64,6 @@ const TRUSTED_VOICE_TOKEN_ENDPOINT_ORIGINS = new Set([
     'https://ti-client-simulator-studio.vercel.app',
     'https://client-simulator-gemini-token.onrender.com'
 ]);
-const GEMINI_FIRST_REPLY_HINT_DELAY_MS = 1800;
 const GEMINI_VOICE_FIRST_AUDIO_DELAY_MS = 200;
 const GEMINI_VOICE_CONNECT_STOP_GUARD_MS = 1200;
 const GEMINI_VOICE_EARLY_RECONNECT_WINDOW_MS = 7000;
@@ -1554,12 +1553,8 @@ let geminiVoiceAssistantDraft = '';
 let geminiVoiceUserPreview = '';
 let geminiVoiceAssistantPreview = '';
 let geminiVoiceHasAssistantReply = false;
-let geminiVoiceFirstReplyHintTimer = null;
 let geminiVoiceSetupComplete = false;
-let geminiVoiceFirstTurnRequested = false;
-let geminiVoiceFirstTurnPending = false;
 let geminiVoiceAudioReady = false;
-let geminiVoiceFirstTurnTimerId = 0;
 let geminiVoiceUserTurnFinalized = false;
 let geminiVoiceCallNotice = null;
 let geminiVoiceAutoStopTimerId = 0;
@@ -13243,19 +13238,14 @@ function sanitizeAssistantCompletedTranscript(rawText) {
     return source;
 }
 
-function clearGeminiFirstReplyHintTimer() {
-    if (!geminiVoiceFirstReplyHintTimer) return;
-    clearTimeout(geminiVoiceFirstReplyHintTimer);
-    geminiVoiceFirstReplyHintTimer = null;
-}
-
-function scheduleGeminiFirstReplyHint() {
-    clearGeminiFirstReplyHintTimer();
-    geminiVoiceFirstReplyHintTimer = setTimeout(() => {
-        geminiVoiceFirstReplyHintTimer = null;
-        if (!isGeminiVoiceActive || geminiVoiceHasAssistantReply) return;
-        setVoiceModeStatus('ИИ-клиент формирует первый ответ…', 'waiting');
-    }, GEMINI_FIRST_REPLY_HINT_DELAY_MS);
+function maybeActivateGeminiVoiceManagerInput() {
+    if (!isGeminiVoiceActive || !geminiVoiceSetupComplete || !geminiVoiceAudioReady) {
+        return false;
+    }
+    setGeminiVoiceMicInputEnabled(true);
+    showVoiceCallNotice('Клиент на линии. Начинайте разговор.');
+    setVoiceModeStatus('Клиент на линии. Начинайте разговор.', 'listening');
+    return true;
 }
 
 function mergeVoiceStreamingText(prevText, nextText) {
@@ -13349,11 +13339,6 @@ function flushGeminiVoiceDraftLine(role) {
 }
 
 function resetGeminiVoiceDialogBuffer() {
-    clearGeminiFirstReplyHintTimer();
-    if (geminiVoiceFirstTurnTimerId) {
-        clearTimeout(geminiVoiceFirstTurnTimerId);
-        geminiVoiceFirstTurnTimerId = 0;
-    }
     cancelGeminiVoiceAutoStop();
     geminiVoiceDialogLines = [];
     geminiVoiceDialogSyncedCount = 0;
@@ -13363,7 +13348,6 @@ function resetGeminiVoiceDialogBuffer() {
     geminiVoiceAssistantPreview = '';
     geminiVoiceHasAssistantReply = false;
     geminiVoiceHasAudioOutput = false;
-    geminiVoiceFirstTurnPending = false;
     geminiVoiceAudioReady = false;
     geminiVoiceUserTurnFinalized = false;
     setGeminiVoiceMicInputEnabled(false);
@@ -13461,59 +13445,6 @@ function buildGeminiVoiceSessionConfig(sdk) {
             systemInstruction: buildGeminiVoiceSystemInstruction(effectivePrompt)
         }
     };
-}
-
-function buildVoiceFirstTurnInstructions() {
-    const opener = 'Начни разговор первым: коротко поздоровайся и задай один уточняющий вопрос менеджеру. Говори максимально быстрым темпом, но разборчиво.';
-    return opener;
-}
-
-function requestGeminiFirstTurn() {
-    if (geminiVoiceFirstTurnRequested || !geminiLiveSession) return false;
-    geminiVoiceFirstTurnRequested = true;
-    try {
-        const firstTurnText = buildVoiceFirstTurnInstructions();
-        if (typeof geminiLiveSession.sendClientContent === 'function') {
-            geminiLiveSession.sendClientContent({
-                turns: firstTurnText,
-                turnComplete: true
-            });
-        } else {
-            geminiLiveSession.sendRealtimeInput({
-                text: firstTurnText
-            });
-        }
-        scheduleGeminiFirstReplyHint();
-        return true;
-    } catch (error) {
-        console.warn('Failed to request Gemini first turn:', error);
-        geminiVoiceFirstTurnRequested = false;
-        return false;
-    }
-}
-
-function scheduleGeminiFirstTurnRequest(delayMs = 250) {
-    if (geminiVoiceFirstTurnRequested || geminiVoiceFirstTurnTimerId) return false;
-    const safeDelay = Math.max(0, Number(delayMs) || 0);
-    geminiVoiceFirstTurnTimerId = setTimeout(() => {
-        geminiVoiceFirstTurnTimerId = 0;
-        if (!geminiVoiceSetupComplete || !geminiVoiceAudioReady || !isGeminiVoiceActive) {
-            geminiVoiceFirstTurnPending = true;
-            return;
-        }
-        requestGeminiFirstTurn();
-    }, safeDelay);
-    return true;
-}
-
-function maybeRequestGeminiFirstTurn() {
-    if (geminiVoiceFirstTurnRequested) return false;
-    if (!geminiVoiceSetupComplete || !geminiVoiceAudioReady || !isGeminiVoiceActive) {
-        geminiVoiceFirstTurnPending = true;
-        return false;
-    }
-    geminiVoiceFirstTurnPending = false;
-    return scheduleGeminiFirstTurnRequest();
 }
 
 function finalizeGeminiUserTurn(sourceText) {
@@ -13793,10 +13724,9 @@ async function handleGeminiLiveMessage(message) {
     if (message.setupComplete) {
         geminiVoiceSetupComplete = true;
         stopGeminiDialTone();
-        maybeRequestGeminiFirstTurn();
-        if (!geminiVoiceHasAssistantReply) {
-            setVoiceModeStatus('Клиент на линии. ИИ-клиент начинает разговор…', 'waiting');
-        } else {
+        if (!maybeActivateGeminiVoiceManagerInput()) {
+            setVoiceModeStatus('Клиент на линии. Подготавливаем микрофон…', 'waiting');
+        } else if (geminiVoiceHasAssistantReply) {
             setVoiceModeStatus('Клиент на линии.', 'ready');
         }
     }
@@ -13826,7 +13756,6 @@ async function handleGeminiLiveMessage(message) {
             }
             if (!geminiVoiceHasAssistantReply) {
                 geminiVoiceHasAssistantReply = true;
-                clearGeminiFirstReplyHintTimer();
             }
             geminiVoiceAssistantPreview = mergeVoiceStreamingText(geminiVoiceAssistantPreview, outputText);
             setVoiceModeStatus(getShortStatusText('ИИ-клиент:', geminiVoiceAssistantPreview), 'ready', { lockMs: 3000 });
@@ -13871,7 +13800,6 @@ async function handleGeminiLiveMessage(message) {
             }
             if (!geminiVoiceHasAssistantReply) {
                 geminiVoiceHasAssistantReply = true;
-                clearGeminiFirstReplyHintTimer();
             }
             geminiVoiceAssistantPreview = mergeVoiceStreamingText(geminiVoiceAssistantPreview, partText);
             setVoiceModeStatus(getShortStatusText('ИИ-клиент:', geminiVoiceAssistantPreview), 'ready', { lockMs: 3000 });
@@ -14042,13 +13970,7 @@ function teardownGeminiVoiceCapture() {
     geminiLiveSession = null;
     geminiLiveApiClient = null;
     geminiVoiceSetupComplete = false;
-    geminiVoiceFirstTurnRequested = false;
-    geminiVoiceFirstTurnPending = false;
     geminiVoiceAudioReady = false;
-    if (geminiVoiceFirstTurnTimerId) {
-        clearTimeout(geminiVoiceFirstTurnTimerId);
-        geminiVoiceFirstTurnTimerId = 0;
-    }
     clearVoiceCallNotice();
     resetGeminiPlaybackCursor();
 }
@@ -14125,8 +14047,6 @@ async function startGeminiVoiceMode() {
     resetGeminiVoiceDialogBuffer();
     geminiVoiceConversationFinished = false;
     geminiVoiceSetupComplete = false;
-    geminiVoiceFirstTurnRequested = false;
-    geminiVoiceFirstTurnPending = false;
     geminiVoiceAudioReady = false;
     if (!geminiVoiceCloseExpected) {
         geminiVoiceEarlyReconnectAttempts = 0;
@@ -14190,19 +14110,16 @@ async function startGeminiVoiceMode() {
         resetGeminiPlaybackCursor();
         await primeGeminiVoiceAudioOutput();
         geminiVoiceAudioReady = true;
-        if (geminiVoiceFirstTurnPending || geminiVoiceSetupComplete) {
-            maybeRequestGeminiFirstTurn();
-        }
         throwIfGeminiVoiceStartAttemptStale(startAttempt.id);
 
         isGeminiVoiceConnecting = false;
         isGeminiVoiceActive = true;
         updateVoiceModeControls();
-        if (geminiVoiceFirstTurnPending || geminiVoiceSetupComplete) {
-            maybeRequestGeminiFirstTurn();
-        }
+        maybeActivateGeminiVoiceManagerInput();
         updateVoiceConnectingUi();
-        showVoiceCallNotice('Клиент на линии. Ждём первую реплику клиента…');
+        if (!geminiVoiceSetupComplete) {
+            showVoiceCallNotice('Клиент на линии. Подготавливаем микрофон…');
+        }
     } catch (error) {
         console.error('Failed to start voice mode:', error);
         isGeminiVoiceConnecting = false;
@@ -14296,7 +14213,6 @@ function updateVoiceModeRateButtonState() {
 function resetVoiceModeSessionState() {
     geminiVoiceConversationFinished = false;
     geminiVoiceSetupComplete = false;
-    geminiVoiceFirstTurnRequested = false;
     resetGeminiVoiceDialogBuffer();
     setVoiceModeRateButtonVisible(false);
     setVoiceModeStatus('Открываю голосовой режим…', 'idle');
