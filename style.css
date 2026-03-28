@@ -881,6 +881,10 @@ body.attestation-mode .btn-attestation-exit {
     gap: 10px;
 }
 
+.voice-connect-status[hidden] {
+    display: none !important;
+}
+
 .voice-connect-status-text {
     color: inherit;
     text-align: center;

@@ -21,6 +21,9 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-28`, the idle voice connect pill no longer leaks onto the main screen:
+  - root cause was CSS overriding the native `hidden` attribute on `.voice-connect-status` with `display:flex`.
+  - added `.voice-connect-status[hidden] { display: none !important; }`, so “Идёт подключение…” only appears during a real voice start.
 - As of `2026-03-28`, Gemini voice settings now include real microphone input selection:
   - settings modal has a dedicated microphone picker next to voice selection.
   - picker requests/refreshes `enumerateDevices()`, filters only `audioinput`, removes `default` / `communications`, drops unlabeled phantom entries, and deduplicates same label+groupId combinations.
