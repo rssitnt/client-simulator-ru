@@ -67,6 +67,9 @@ const TRUSTED_VOICE_TOKEN_ENDPOINT_ORIGINS = new Set([
 const GEMINI_FIRST_REPLY_HINT_DELAY_MS = 1800;
 const GEMINI_VOICE_FIRST_AUDIO_DELAY_MS = 200;
 const GEMINI_VOICE_CONNECT_STOP_GUARD_MS = 1200;
+const GEMINI_VOICE_EARLY_RECONNECT_WINDOW_MS = 7000;
+const GEMINI_VOICE_EARLY_RECONNECT_DELAY_MS = 450;
+const GEMINI_VOICE_EARLY_RECONNECT_MAX_ATTEMPTS = 1;
 const GEMINI_LIVE_DEFAULT_VOICE = 'Enceladus';
 const GEMINI_LIVE_MEDIA_RESOLUTION = 'MEDIA_RESOLUTION_LOW';
 const GEMINI_LIVE_THINKING_BUDGET = 0;
@@ -1543,6 +1546,7 @@ let geminiVoiceCloseExpected = false;
 let geminiVoiceStartTimestamp = 0;
 let geminiVoiceStartAttemptId = 0;
 let geminiVoiceStartAbortController = null;
+let geminiVoiceEarlyReconnectAttempts = 0;
 let geminiVoiceDialogLines = [];
 let geminiVoiceDialogSyncedCount = 0;
 let geminiVoiceUserDraft = '';
@@ -1567,6 +1571,7 @@ let geminiVoiceMicUnlockTimerId = 0;
 let geminiDialToneTimerId = 0;
 let geminiDialToneOscillators = [];
 let geminiDialToneGain = null;
+let isVoiceModeScreenActive = false;
 let openAiVoicePeerConnection = null;
 let openAiVoiceDataChannel = null;
 let openAiVoiceRemoteAudio = null;
@@ -13597,7 +13602,43 @@ function handleGeminiVoiceTransportFailure(message = 'Соединение го�
     if (geminiVoiceCloseExpected || (!isGeminiVoiceActive && !isGeminiVoiceConnecting)) {
         return false;
     }
+    const elapsedMs = Date.now() - Number(geminiVoiceStartTimestamp || 0);
+    const shouldRetryEarlyClose =
+        geminiVoiceEarlyReconnectAttempts < GEMINI_VOICE_EARLY_RECONNECT_MAX_ATTEMPTS &&
+        elapsedMs >= 0 &&
+        elapsedMs < GEMINI_VOICE_EARLY_RECONNECT_WINDOW_MS &&
+        !geminiVoiceSetupComplete &&
+        !geminiVoiceHasAssistantReply &&
+        !geminiVoiceHasAudioOutput &&
+        !hasBufferedVoiceDialog();
+
     stopGeminiDialTone();
+    if (shouldRetryEarlyClose) {
+        geminiVoiceEarlyReconnectAttempts += 1;
+        geminiVoiceCloseExpected = true;
+        stopGeminiVoiceMode({
+            silent: true,
+            expectedClose: true,
+            preserveDialogForRating: false
+        }).catch(() => {}).finally(() => {
+            geminiVoiceCloseExpected = false;
+            if (!isVoiceModeScreenActive) {
+                return;
+            }
+            setVoiceModeStatus('Соединение сорвалось. Переподключаем клиента…', 'waiting');
+            showVoiceCallNotice('Соединение сорвалось. Переподключаем клиента…');
+            setTimeout(() => {
+                if (!isVoiceModeScreenActive) {
+                    return;
+                }
+                startGeminiVoiceMode().catch((error) => {
+                    console.error('Gemini Live auto-reconnect failed:', error);
+                });
+            }, GEMINI_VOICE_EARLY_RECONNECT_DELAY_MS);
+        });
+        return true;
+    }
+
     geminiVoiceCloseExpected = true;
     const preserveDialogForRating = hasBufferedVoiceDialog();
     stopGeminiVoiceMode({
@@ -14087,6 +14128,9 @@ async function startGeminiVoiceMode() {
     geminiVoiceFirstTurnRequested = false;
     geminiVoiceFirstTurnPending = false;
     geminiVoiceAudioReady = false;
+    if (!geminiVoiceCloseExpected) {
+        geminiVoiceEarlyReconnectAttempts = 0;
+    }
     setGeminiVoiceMicInputEnabled(false);
     clearGeminiVoiceMicUnlockTimer();
     isGeminiVoiceConnecting = true;
@@ -14470,6 +14514,7 @@ function setElevenLabsWidgetHidden(hidden) {
 }
 
 function setVoiceModeScreenActive(active) {
+    isVoiceModeScreenActive = !!active;
     if (voiceModeStatus) {
         if (!active) {
             voiceModeStatus.hidden = true;
