@@ -149,15 +149,6 @@
         </div>
     </div>
 
-    <div id="voiceModeScreen" class="voice-mode-screen" hidden></div>
-    <div id="voiceModeActions" class="voice-mode-actions" hidden>
-        <div class="voice-mode-actions-row">
-            <button id="voiceModeExitBtn" type="button" class="voice-mode-exit-btn">Выход</button>
-            <button id="voiceModeStopBtn" type="button" class="voice-mode-stop-btn" hidden>Завершить</button>
-            <button id="voiceModeRateBtn" type="button" class="voice-mode-rate-btn" hidden>Оценить диалог</button>
-        </div>
-        <div id="voiceModeStatus" class="voice-mode-status" data-state="idle">Открываю голосовой режим…</div>
-    </div>
 
     <!-- Модальное окно настроек -->
     <div id="settingsModal" class="modal-overlay">
@@ -448,6 +439,7 @@
                     </div>
                 </div>
             </div>
+            <div id="voiceModeStatus" class="voice-mode-status voice-mode-status-inline" data-state="idle" aria-hidden="true" hidden></div>
             <div id="chatMessages" class="chat-messages">
                 <div id="startConversation" class="start-conversation">
                     <button id="startBtn" class="btn-start">Начать диалог</button>
@@ -619,7 +611,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js" integrity="sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3" crossorigin="anonymous" defer></script>
     <!-- Turndown for HTML to Markdown conversion (WYSIWYG editing) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js" integrity="sha384-m6AyXEhyWRg2s2wrkDV64LGkaManYgMSAjn2U+zymzSJ42WthRSjCu1AqZJhoQV0" crossorigin="anonymous" defer></script>
-    <script type="module" src="script.js?v=20260328-12"></script>
+    <script type="module" src="script.js?v=20260328-13"></script>
     <!-- Last deployment trigger: 2026-03-24 15:00 -->
 </body>
 </html>

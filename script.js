@@ -1408,6 +1408,11 @@ const VOICE_MODE_BUTTON_ICON = `
         <path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.86 19.86 0 0 1 11.19 18.7a19.5 19.5 0 0 1-5.9-5.9A19.86 19.86 0 0 1 2.08 4.18 2 2 0 0 1 4.06 2h3a2 2 0 0 1 2 1.72c.12.9.32 1.78.59 2.63a2 2 0 0 1-.45 2.11L8 9.67a16 16 0 0 0 6.33 6.33l1.21-1.2a2 2 0 0 1 2.11-.45c.85.27 1.73.47 2.63.59A2 2 0 0 1 22 16.92z"></path>
     </svg>
 `;
+const VOICE_MODE_STOP_ICON = `
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="6" y="6" width="12" height="12" rx="2" ry="2"></rect>
+    </svg>
+`;
 
 const EYE_OPEN_ICON = `
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -9919,16 +9924,23 @@ function isTextDialogStarted() {
 
 function setPrimaryActionMode(mode) {
     if (!sendBtn) return;
-    const nextMode = mode === 'voice' ? 'voice' : 'send';
+    const nextMode = mode === 'voice' ? 'voice' : mode === 'voice-stop' ? 'voice-stop' : 'send';
     if (sendBtn.dataset.mode === nextMode) return;
 
     sendBtn.dataset.mode = nextMode;
     if (nextMode === 'voice') {
         sendBtn.classList.add('voice-mode');
+        sendBtn.classList.remove('voice-stop');
         sendBtn.innerHTML = VOICE_MODE_BUTTON_ICON;
         setCustomTooltip(sendBtn, 'Использовать голосовой режим');
+    } else if (nextMode === 'voice-stop') {
+        sendBtn.classList.remove('voice-mode');
+        sendBtn.classList.add('voice-stop');
+        sendBtn.innerHTML = VOICE_MODE_STOP_ICON;
+        setCustomTooltip(sendBtn, 'Завершить звонок');
     } else {
         sendBtn.classList.remove('voice-mode');
+        sendBtn.classList.remove('voice-stop');
         sendBtn.innerHTML = SEND_BUTTON_ICON;
         setCustomTooltip(sendBtn, 'Отправить (Enter)');
     }
@@ -9936,6 +9948,14 @@ function setPrimaryActionMode(mode) {
 
 function updateSendBtnState() {
     const hasText = !!userInput.value.trim();
+    const voiceCallActive = isGeminiVoiceConnecting || isGeminiVoiceActive;
+
+    if (voiceCallActive) {
+        setPrimaryActionMode('voice-stop');
+        sendBtn.disabled = false;
+        updateRateChatButtonState();
+        return;
+    }
     const showVoiceModeAction = !hasText && !isTextDialogStarted() && !isProcessing && !isDialogRated && !isConversationClosed();
 
     if (showVoiceModeAction) {
@@ -11692,6 +11712,8 @@ function setVoiceModeStatus(text, state = 'idle', options = {}) {
     }
     voiceModeStatus.textContent = text;
     voiceModeStatus.dataset.state = state;
+    voiceModeStatus.hidden = false;
+    voiceModeStatus.setAttribute('aria-hidden', 'false');
 }
 
 function clearVoiceModeWidgetHideTimer() {
@@ -11848,24 +11870,7 @@ async function canReachElevenLabsNetwork(timeoutMs = 3200) {
 }
 
 function updateVoiceModeControls() {
-    if (voiceModeStartBtn) {
-        if (isGeminiVoiceConnecting) {
-            voiceModeStartBtn.textContent = 'Подключение...';
-            voiceModeStartBtn.disabled = true;
-        } else if (isGeminiVoiceActive) {
-            voiceModeStartBtn.textContent = 'Подключено';
-            voiceModeStartBtn.disabled = true;
-        } else {
-            voiceModeStartBtn.textContent = 'Начать';
-            voiceModeStartBtn.disabled = false;
-        }
-    }
-    if (voiceModeStopBtn) {
-        const shouldShowStop = isGeminiVoiceConnecting || isGeminiVoiceActive;
-        voiceModeStopBtn.hidden = !shouldShowStop;
-        voiceModeStopBtn.style.display = shouldShowStop ? '' : 'none';
-        voiceModeStopBtn.disabled = !shouldShowStop;
-    }
+    updateSendBtnState();
 }
 
 function normalizeGeminiTokenEndpoint(value) {
@@ -13515,14 +13520,20 @@ function buildVoiceDialogTextFromBufferedLines() {
 }
 
 function updateVoiceModeRateButtonState() {
-    const isVoiceScreenActive = !!voiceModeScreen && !voiceModeScreen.hidden;
-    const canShowRate = isVoiceScreenActive &&
+    const shouldShowStatus = isGeminiVoiceConnecting || isGeminiVoiceActive || geminiVoiceConversationFinished;
+    const canShowRate = shouldShowStatus &&
         geminiVoiceConversationFinished &&
         hasBufferedVoiceDialog() &&
         !isProcessing &&
         !isDialogRated;
     setVoiceModeRateButtonVisible(canShowRate);
-    if (!isVoiceScreenActive) return;
+    if (!shouldShowStatus) {
+        if (voiceModeStatus) {
+            voiceModeStatus.hidden = true;
+            voiceModeStatus.setAttribute('aria-hidden', 'true');
+        }
+        return;
+    }
     const now = Date.now();
     const isLocked = now < voiceModeStatusLockUntil;
     const statusState = voiceModeStatus?.dataset?.state;
@@ -13765,19 +13776,9 @@ function setElevenLabsWidgetHidden(hidden) {
 }
 
 function setVoiceModeScreenActive(active) {
-    document.body?.classList.toggle('voice-mode-active', !!active);
-    if (voiceModeScreen) {
-        if (active) {
-            voiceModeScreen.hidden = false;
-            voiceModeScreen.setAttribute('aria-hidden', 'false');
-        } else {
-            voiceModeScreen.hidden = true;
-            voiceModeScreen.setAttribute('aria-hidden', 'true');
-        }
-    }
-    if (voiceModeActions) {
-        voiceModeActions.hidden = !active;
-        voiceModeActions.setAttribute('aria-hidden', active ? 'false' : 'true');
+    if (voiceModeStatus) {
+        voiceModeStatus.hidden = !active;
+        voiceModeStatus.setAttribute('aria-hidden', active ? 'false' : 'true');
     }
     if (!active) {
         setVoiceModeRateButtonVisible(false);
@@ -13795,7 +13796,7 @@ async function showVoiceModeModal() {
         setVoiceModeStatus('Открываю голосовой режим…', 'idle');
         setVoiceModeScreenActive(true);
         await startGeminiVoiceMode();
-        if (openRequestId !== voiceModeOpenRequestId || !voiceModeScreen || voiceModeScreen.hidden) {
+        if (openRequestId !== voiceModeOpenRequestId) {
             await stopGeminiVoiceMode({ silent: true, expectedClose: true });
             return;
         }
@@ -16869,6 +16870,11 @@ function handlePrimaryActionClick() {
         return;
     }
 
+    if (isGeminiVoiceConnecting || isGeminiVoiceActive) {
+        handleVoiceModeStopClick();
+        return;
+    }
+
     const hasText = !!userInput.value.trim();
     if (!hasText) {
         showVoiceModeModal();
@@ -16884,12 +16890,17 @@ bindEvent(voiceModeStopBtn, 'click', handleVoiceModeStopClick);
 bindEvent(voiceModeRateBtn, 'click', handleVoiceModeRateClick);
 document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    if (!voiceModeScreen || voiceModeScreen.hidden) return;
+    if (!isGeminiVoiceConnecting && !isGeminiVoiceActive) return;
     hideVoiceModeModal();
 });
 
 bindEvent(sendBtn, 'click', handlePrimaryActionClick);
-bindEvent(userInput, 'keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+bindEvent(userInput, 'keydown', (e) => {
+    if (e.key !== 'Enter' || e.shiftKey) return;
+    if (isGeminiVoiceConnecting || isGeminiVoiceActive) return;
+    e.preventDefault();
+    sendMessage();
+});
 bindEvent(userInput, 'input', () => {
     autoResizeTextarea(userInput);
     updateSendBtnState();

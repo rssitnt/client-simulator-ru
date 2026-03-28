@@ -1643,6 +1643,17 @@ body.light-theme .rating-section-list {
     transform: none;
 }
 
+.btn-send.voice-stop {
+    border-color: rgba(255, 120, 120, 0.6);
+    background: color-mix(in srgb, rgba(255, 90, 90, 0.24) 40%, #1a1a1a);
+}
+
+.btn-send.voice-stop svg,
+.btn-send.voice-stop:hover svg {
+    transform: none;
+    stroke: #ff9a9a;
+}
+
 .btn-send:active {
     transform: scale(0.95);
 }
@@ -4813,6 +4824,10 @@ body.light-theme .voice-mode-rate-btn {
     line-height: 1.35;
 }
 
+.voice-mode-status-inline {
+    margin: 8px 16px 0;
+}
+
 .voice-mode-status[data-state="ready"] {
     color: var(--color-accent);
     border-color: color-mix(in srgb, var(--color-accent) 58%, var(--color-border-light));
@@ -4842,12 +4857,12 @@ body.light-theme .voice-mode-status[data-state="listening"] {
 }
 
 body.voice-mode-active {
-    overflow: hidden;
+    overflow: auto;
 }
 
 body.voice-mode-active > :not(#voiceModeScreen):not(#voiceModeActions) {
-    visibility: hidden !important;
-    pointer-events: none !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
 }
 
 /* AI Improve Modal */
