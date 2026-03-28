@@ -21,8 +21,12 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
-- As of `2026-03-28`, voice status pill respects the `hidden` attribute:
-  - CSS now keeps it fully hidden unless explicitly shown, preventing the empty bar.
+- As of `2026-03-28`, the voice status pill was removed from the DOM:
+  - live “Вы/ИИ” previews no longer render above the chat.
+- As of `2026-03-28`, user voice transcripts are appended to chat:
+  - a user turn is finalized on input-finish or when the assistant starts responding.
+- As of `2026-03-28`, Gemini first-turn request is delayed by ~250ms after readiness:
+  - helps avoid losing the first spoken reply.
 - As of `2026-03-28`, voice call stop works even when input is disabled:
   - primary action now stops the call before checking input state.
 - As of `2026-03-28`, Gemini Live first turn waits for audio pipeline readiness and active state:
