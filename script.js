@@ -12724,6 +12724,9 @@ async function enqueueGeminiAudioPlayback(base64Data, mimeType = 'audio/pcm;rate
                 source.start(startAt);
                 geminiVoicePlaybackCursor = startAt + decoded.duration;
                 geminiVoiceHasAudioOutput = true;
+                if (!geminiVoiceMicInputEnabled && geminiVoiceHasAssistantReply) {
+                    scheduleGeminiVoiceMicUnlockAfterPlayback();
+                }
                 return;
             } catch (error) {
                 console.warn('Failed to decode Gemini Live audio chunk, falling back to PCM:', error);
@@ -12752,6 +12755,9 @@ async function enqueueGeminiAudioPlayback(base64Data, mimeType = 'audio/pcm;rate
         source.start(startAt);
         geminiVoicePlaybackCursor = startAt + audioBuffer.duration;
         geminiVoiceHasAudioOutput = true;
+        if (!geminiVoiceMicInputEnabled && geminiVoiceHasAssistantReply) {
+            scheduleGeminiVoiceMicUnlockAfterPlayback();
+        }
     };
 
     const queued = geminiVoicePlaybackQueue.then(playbackTask, playbackTask);
@@ -12803,6 +12809,13 @@ function getGeminiVoicePlaybackRemainingMs(extraMs = 120) {
 function scheduleGeminiVoiceMicUnlockAfterPlayback(delayMs = null) {
     if (geminiVoiceMicInputEnabled) return;
     clearGeminiVoiceMicUnlockTimer();
+    if (!geminiVoiceHasAudioOutput) {
+        if (isGeminiVoiceActive) {
+            showVoiceCallNotice('Клиент отвечает…');
+            setVoiceModeStatus('Клиент отвечает…', 'waiting');
+        }
+        return;
+    }
     const effectiveDelay = Number.isFinite(delayMs)
         ? Math.max(0, Number(delayMs) || 0)
         : getGeminiVoicePlaybackRemainingMs();
