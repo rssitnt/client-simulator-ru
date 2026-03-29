@@ -19030,9 +19030,19 @@ async function rateChat(options = {}) {
         isDialogRated = true;
         lockDialogInput();
         rateChatBtn.classList.add('rated');
-        await saveCurrentDialogHistoryNow({ immediate: true, nowIso: currentDialogHistoryRatedAt });
+        try {
+            await saveCurrentDialogHistoryNow({ immediate: true, nowIso: currentDialogHistoryRatedAt });
+        } catch (historySaveError) {
+            console.error('Failed to save rated dialog into history:', historySaveError);
+            showCopyNotification(getDialogHistorySaveFailureMessage(historySaveError));
+        }
         if (isAttestationMode) {
-            sendAttestationResult(dialogText, ratingResult.exportText);
+            try {
+                await sendAttestationResult(dialogText, ratingResult.exportText);
+            } catch (attestationSendError) {
+                console.error('Failed to enqueue attestation result:', attestationSendError);
+                showCopyNotification('Оценка получена, но не удалось отправить отчет аттестации.');
+            }
         }
         if (isConversationClosed() && conversationTerminalAction) {
             showConversationActionNotice(conversationTerminalAction);
@@ -19157,6 +19167,20 @@ async function sendAttestationResult(dialogText, ratingText) {
         showCopyNotification('Отчет в очереди. Повторю отправку автоматически.');
         scheduleAttestationQueueRetry();
     }
+}
+
+function isDialogHistoryPermissionDeniedError(error) {
+    const code = String(error?.code || '').trim().toLowerCase();
+    const message = String(error?.message || '').trim().toLowerCase();
+    if (code.includes('permission-denied')) return true;
+    return message.includes('permission_denied') || message.includes('permission denied');
+}
+
+function getDialogHistorySaveFailureMessage(error) {
+    if (isDialogHistoryPermissionDeniedError(error)) {
+        return 'Оценка получена, но не сохранилась в историю. Нужно опубликовать новые Firebase rules.';
+    }
+    return 'Оценка получена, но не удалось сохранить её в историю.';
 }
 
 function textToDocxParagraphs(text) {

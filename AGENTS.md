@@ -21,6 +21,11 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-29`, rating no longer falsely fails when only dialog-history persistence is denied:
+  - root cause: after a successful rating webhook response, `rateChat(...)` immediately saved the new dialog-history snapshot, and any RTDB `PERMISSION_DENIED` from the new history paths fell into the shared rating `catch`.
+  - fix: history save is now wrapped in its own `try/catch`; the rating remains visible and the dialog stays rated even if history persistence fails.
+  - user now gets a separate notice that the rating was received but could not be saved into history, with a hint to publish the new Firebase rules.
+  - attestation report enqueue is also isolated so secondary post-rating failures do not masquerade as a rating failure.
 - As of `2026-03-29`, persistent dialog history is now implemented in Firebase RTDB without storing audio recordings:
   - dialog index lives under `dialog_history_index/{loginKey}/{dialogId}`;
   - full transcript payload lives under `dialog_history_messages/{loginKey}/{dialogId}`;
