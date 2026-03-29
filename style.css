@@ -3596,6 +3596,15 @@ body.light-theme .btn-icon:hover {
     gap: 14px;
 }
 
+.admin-hidden-prompt-section#dialogHistoryAccordion {
+    scroll-margin-top: 16px;
+}
+
+.dialog-history-accordion-highlight {
+    border-color: color-mix(in srgb, var(--color-accent) 60%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 45%, transparent);
+}
+
 .dialog-history-scope-meta {
     color: #9b9b9b;
     font-size: 12px;

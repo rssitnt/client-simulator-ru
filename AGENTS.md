@@ -21,6 +21,10 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-29`, admin `История` clicks now reveal the dialog-history block instead of silently opening it off-screen:
+  - root cause: the history accordion sits above `Панель администратора` in the settings modal, and the old click path only set `open` on the accordion without scrolling the modal to it.
+  - fix: added `revealDialogHistoryAccordion(...)` in `script.js`; it opens the accordion, scrolls it into view inside the settings modal, and briefly highlights the block so the user can see where it opened.
+  - this applies both when the settings modal is opened from a users-table `История` click and when the modal is already open.
 - As of `2026-03-29`, admin foreign dialog-history reads now retry once after a forced Firebase token refresh:
   - root cause: after publishing the new `dialog_history_*` rules, admins could still see raw `Permission denied` on foreign history reads because the browser was using a stale Firebase auth token / RTDB auth state.
   - fix: `fetchDialogHistoryScopeRecords(...)` and `fetchDialogHistoryPayload(...)` now catch the first permission-denied read, call `auth.currentUser.getIdToken(true)`, and retry once.

@@ -1567,6 +1567,7 @@ let dialogHistorySelectedId = '';
 let dialogHistorySelectedRecord = null;
 let dialogHistorySelectedPayload = null;
 let dialogHistoryViewerLoading = false;
+let dialogHistoryRevealTimer = 0;
 let isProcessing = false;
 let lastRating = null;
 let isDialogRated = false;
@@ -7139,6 +7140,34 @@ async function loadDialogHistoryScope(login = '', options = {}) {
     await loadDialogHistorySelection(nextSelectedId);
 }
 
+function revealDialogHistoryAccordion(options = {}) {
+    if (!dialogHistoryAccordion) return;
+    dialogHistoryAccordion.setAttribute('open', '');
+    dialogHistoryAccordion.classList.add('dialog-history-accordion-highlight');
+    if (dialogHistoryRevealTimer) {
+        clearTimeout(dialogHistoryRevealTimer);
+    }
+    dialogHistoryRevealTimer = setTimeout(() => {
+        dialogHistoryAccordion?.classList.remove('dialog-history-accordion-highlight');
+    }, 1800);
+    const behavior = options.behavior || 'smooth';
+    const scrollToAccordion = () => {
+        try {
+            dialogHistoryAccordion.scrollIntoView({
+                behavior,
+                block: 'start'
+            });
+        } catch (_) {
+            dialogHistoryAccordion.scrollIntoView(true);
+        }
+    };
+    if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => requestAnimationFrame(scrollToAccordion));
+    } else {
+        setTimeout(scrollToAccordion, 0);
+    }
+}
+
 async function openDialogHistoryScope(login = '', options = {}) {
     const normalizedLogin = normalizeLogin(login || currentUser?.login || '');
     if (!normalizedLogin) {
@@ -7158,7 +7187,9 @@ async function openDialogHistoryScope(login = '', options = {}) {
         return;
     }
     if (options.openAccordion && dialogHistoryAccordion) {
-        dialogHistoryAccordion.setAttribute('open', '');
+        revealDialogHistoryAccordion({
+            behavior: options.scrollBehavior || 'smooth'
+        });
     }
     await loadDialogHistoryScope(normalizedLogin, {
         selectCurrentDialog: options.selectCurrentDialog !== false,
@@ -17009,7 +17040,9 @@ function showSettingsModal(options = {}) {
     }
 
     if (options.historyOpenAccordion && dialogHistoryAccordion) {
-        dialogHistoryAccordion.setAttribute('open', '');
+        revealDialogHistoryAccordion({
+            behavior: options.historyScrollBehavior || 'smooth'
+        });
     }
 
     const historyLogin = normalizeLogin(options.historyLogin || currentUser?.login || '');
