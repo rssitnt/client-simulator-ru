@@ -6839,7 +6839,24 @@ async function fetchDialogHistoryScopeRecords(login = '') {
     if (!normalizedLogin) return [];
     const dbPath = getDialogHistoryIndexPath(normalizedLogin);
     if (!dbPath) return [];
-    const snapshot = await firebaseGetWithTimeout(dbPath);
+    let snapshot = null;
+    try {
+        snapshot = await firebaseGetWithTimeout(dbPath);
+    } catch (error) {
+        if (!isDialogHistoryPermissionDeniedError(error)) throw error;
+        const refreshed = await refreshFirebaseAuthTokenForProtectedRead();
+        if (!refreshed) {
+            throw buildDialogHistoryPermissionError();
+        }
+        try {
+            snapshot = await firebaseGetWithTimeout(dbPath);
+        } catch (retryError) {
+            if (isDialogHistoryPermissionDeniedError(retryError)) {
+                throw buildDialogHistoryPermissionError();
+            }
+            throw retryError;
+        }
+    }
     if (!snapshot?.exists()) return [];
     const raw = snapshot.val();
     const records = Object.entries(raw || {})
@@ -6854,7 +6871,24 @@ async function fetchDialogHistoryPayload(login = '', dialogId = '') {
     if (!normalizedLogin || !normalizedDialogId) return null;
     const dbPath = getDialogHistoryMessagesPath(normalizedLogin, normalizedDialogId);
     if (!dbPath) return null;
-    const snapshot = await firebaseGetWithTimeout(dbPath);
+    let snapshot = null;
+    try {
+        snapshot = await firebaseGetWithTimeout(dbPath);
+    } catch (error) {
+        if (!isDialogHistoryPermissionDeniedError(error)) throw error;
+        const refreshed = await refreshFirebaseAuthTokenForProtectedRead();
+        if (!refreshed) {
+            throw buildDialogHistoryPermissionError();
+        }
+        try {
+            snapshot = await firebaseGetWithTimeout(dbPath);
+        } catch (retryError) {
+            if (isDialogHistoryPermissionDeniedError(retryError)) {
+                throw buildDialogHistoryPermissionError();
+            }
+            throw retryError;
+        }
+    }
     if (!snapshot?.exists()) return null;
     return normalizeDialogHistoryMessagesPayload(snapshot.val(), normalizedLogin, normalizedDialogId);
 }
@@ -19181,6 +19215,21 @@ function getDialogHistorySaveFailureMessage(error) {
         return 'Оценка получена, но не сохранилась в историю. Нужно опубликовать новые Firebase rules.';
     }
     return 'Оценка получена, но не удалось сохранить её в историю.';
+}
+
+async function refreshFirebaseAuthTokenForProtectedRead() {
+    if (!auth?.currentUser) return false;
+    try {
+        await auth.currentUser.getIdToken(true);
+        return true;
+    } catch (error) {
+        console.warn('Failed to refresh Firebase token for protected read:', error);
+        return false;
+    }
+}
+
+function buildDialogHistoryPermissionError() {
+    return new Error('Нет доступа к истории. Обновите вход на сайте. Если rules только что меняли, подождите несколько секунд и попробуйте снова.');
 }
 
 function textToDocxParagraphs(text) {

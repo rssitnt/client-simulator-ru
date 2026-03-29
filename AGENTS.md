@@ -21,6 +21,11 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-29`, admin foreign dialog-history reads now retry once after a forced Firebase token refresh:
+  - root cause: after publishing the new `dialog_history_*` rules, admins could still see raw `Permission denied` on foreign history reads because the browser was using a stale Firebase auth token / RTDB auth state.
+  - fix: `fetchDialogHistoryScopeRecords(...)` and `fetchDialogHistoryPayload(...)` now catch the first permission-denied read, call `auth.currentUser.getIdToken(true)`, and retry once.
+  - if the second read is still denied, the UI now surfaces a human-readable message telling the user to refresh their login / wait briefly after rules publication.
+  - empty history is not the cause of this error; an empty branch should still open as an empty list.
 - As of `2026-03-29`, rating no longer falsely fails when only dialog-history persistence is denied:
   - root cause: after a successful rating webhook response, `rateChat(...)` immediately saved the new dialog-history snapshot, and any RTDB `PERMISSION_DENIED` from the new history paths fell into the shared rating `catch`.
   - fix: history save is now wrapped in its own `try/catch`; the rating remains visible and the dialog stays rated even if history persistence fails.
