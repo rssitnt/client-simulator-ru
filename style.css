@@ -3236,7 +3236,7 @@ body.light-theme .btn-settings-floating:hover {
 /* Мобильная версия - кнопки в одной линии с табами */
 @media (max-width: 768px) {
     .btn-clear-floating {
-        top: max(8px, env(safe-area-inset-top, 0px) + 4px);
+        top: max(4px, env(safe-area-inset-top, 0px));
         left: max(8px, env(safe-area-inset-left, 0px) + 4px);
         width: 56px;
         height: 56px;
@@ -3247,7 +3247,7 @@ body.light-theme .btn-settings-floating:hover {
         justify-content: center;
     }
     .btn-settings-floating {
-        top: max(8px, env(safe-area-inset-top, 0px) + 4px);
+        top: max(4px, env(safe-area-inset-top, 0px));
         right: max(8px, env(safe-area-inset-right, 0px) + 4px);
         width: 56px;
         height: 56px;

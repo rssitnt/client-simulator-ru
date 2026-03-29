@@ -21,6 +21,9 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-29`, mobile floating edge icons are raised slightly to align with the `Чат / Роль` tabs:
+  - on screens `<= 768px`, `btn-clear-floating` and `btn-settings-floating` now use a smaller `top` offset.
+  - goal: visually center the edge icons against the mobile tabs row instead of sitting a few pixels too low.
 - As of `2026-03-29`, admin `История` clicks now reveal the dialog-history block instead of silently opening it off-screen:
   - root cause: the history accordion sits above `Панель администратора` in the settings modal, and the old click path only set `open` on the accordion without scrolling the modal to it.
   - fix: added `revealDialogHistoryAccordion(...)` in `script.js`; it opens the accordion, scrolls it into view inside the settings modal, and briefly highlights the block so the user can see where it opened.
