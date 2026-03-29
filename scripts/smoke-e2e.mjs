@@ -1182,6 +1182,167 @@ async function runPromptWorkflowFlow(browser, baseUrl) {
     }
 }
 
+async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
+    const scenario = createIdleScenario();
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
+    await installCommonRoutes(context, scenario);
+    await seedLocalState(context);
+    await context.addInitScript(() => {
+        const foreignLogin = 'foreign.user@tradicia-k.ru';
+        const nowIso = new Date().toISOString();
+        const loginToStorageKey = (value) => Array.from(String(value || '').trim().toLowerCase())
+            .map((char) => char.codePointAt(0).toString(16))
+            .join('_');
+        const foreignKey = loginToStorageKey(foreignLogin);
+        const authUsers = JSON.parse(localStorage.getItem('authUsers:v1') || '{}');
+        authUsers[foreignKey] = {
+            uid: 'foreign-user-1',
+            login: foreignLogin,
+            fio: 'Чужой Пользователь',
+            role: 'user',
+            passwordHash: '',
+            passwordNeedsSetup: false,
+            emailVerifiedAt: nowIso,
+            emailVerificationSentAt: null,
+            failedLoginAttempts: 0,
+            isBlocked: false,
+            blockedReason: null,
+            failedLoginBackoffUntil: null,
+            blockedAt: null,
+            sessionRevokedAt: null,
+            passwordHashScheme: null,
+            createdAt: nowIso,
+            lastLoginAt: nowIso,
+            lastSeenAt: nowIso,
+            activeMs: 0
+        };
+        localStorage.setItem('authUsers:v1', JSON.stringify(authUsers));
+
+        const dbState = globalThis.__codexFirebaseDbState || (globalThis.__codexFirebaseDbState = {
+            data: {},
+            listeners: []
+        });
+        const foreignDialogId = 'dlg_foreign_1';
+        dbState.data.dialog_history_index = dbState.data.dialog_history_index || {};
+        dbState.data.dialog_history_messages = dbState.data.dialog_history_messages || {};
+        dbState.data.dialog_history_index[foreignKey] = {
+            [foreignDialogId]: {
+                id: foreignDialogId,
+                login: foreignLogin,
+                uid: 'foreign-user-1',
+                mode: 'voice',
+                title: 'Чужой диалог',
+                autoTitle: 'Чужой диалог',
+                titleEdited: false,
+                preview: 'Добрый день. Нужен гидробур.',
+                messageCount: 2,
+                hasRating: true,
+                createdAt: nowIso,
+                updatedAt: nowIso,
+                lastMessageAt: nowIso,
+                closedAt: nowIso,
+                ratedAt: nowIso
+            }
+        };
+        dbState.data.dialog_history_messages[foreignKey] = {
+            [foreignDialogId]: {
+                id: foreignDialogId,
+                login: foreignLogin,
+                uid: 'foreign-user-1',
+                mode: 'voice',
+                createdAt: nowIso,
+                updatedAt: nowIso,
+                closedAt: nowIso,
+                ratedAt: nowIso,
+                messages: {
+                    m_0001: {
+                        id: 'm_0001',
+                        seq: 1,
+                        role: 'assistant',
+                        content: 'Добрый день. Нужен гидробур.'
+                    },
+                    m_0002: {
+                        id: 'm_0002',
+                        seq: 2,
+                        role: 'user',
+                        content: 'Есть варианты под CASE 260.'
+                    }
+                },
+                rating: {
+                    text: 'Хороший звонок',
+                    createdAt: nowIso
+                }
+            }
+        };
+    });
+    const page = await context.newPage();
+
+    try {
+        logStep('run dialog history persistence scenario');
+        await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+        await waitForChatReady(page);
+
+        await page.click('#startBtn');
+        await page.waitForSelector('text=Готов обсудить задачу.');
+        await page.fill('#userInput', 'Нужен гидробур на CASE 260.');
+        await page.click('#sendBtn');
+        await page.waitForSelector('text=Ок.');
+
+        await openSettings(page);
+        await ensureDetailsOpen(page, '#dialogHistoryAccordion');
+        await page.waitForSelector('#dialogHistoryList .dialog-history-item');
+        await page.waitForFunction(() => {
+            const meta = document.getElementById('dialogHistoryScopeMeta');
+            return String(meta?.textContent || '').includes('Ваши диалоги');
+        });
+
+        await page.fill('#dialogHistoryTitleInput', 'Мой тестовый диалог');
+        await page.locator('#dialogHistoryTitleInput').blur();
+        await page.waitForFunction(() => {
+            const titleInput = document.getElementById('dialogHistoryTitleInput');
+            const listTitle = document.querySelector('#dialogHistoryList .dialog-history-item-title');
+            return String(titleInput?.value || '').includes('Мой тестовый диалог')
+                && String(listTitle?.textContent || '').includes('Мой тестовый диалог');
+        });
+
+        const ownHistoryState = await page.evaluate(() => {
+            const dbState = globalThis.__codexFirebaseDbState || { data: {} };
+            const loginToStorageKey = (value) => Array.from(String(value || '').trim().toLowerCase())
+                .map((char) => char.codePointAt(0).toString(16))
+                .join('_');
+            const ownKey = loginToStorageKey('smoke.admin@7271155.ru');
+            const ownIndex = Object.values((dbState.data.dialog_history_index || {})[ownKey] || {});
+            const ownMessages = Object.values((dbState.data.dialog_history_messages || {})[ownKey] || {});
+            return {
+                indexCount: ownIndex.length,
+                messagesCount: ownMessages.length,
+                title: ownIndex[0]?.title || '',
+                preview: ownIndex[0]?.preview || ''
+            };
+        });
+        expect(ownHistoryState.indexCount === 1, 'Own dialog history index must contain one saved dialog');
+        expect(ownHistoryState.messagesCount === 1, 'Own dialog history messages must contain one saved dialog');
+        expect(ownHistoryState.title.includes('Мой тестовый диалог'), 'Renamed dialog title must persist into RTDB state');
+        expect(ownHistoryState.preview.trim().length > 0, 'Dialog preview must persist into RTDB state');
+
+        await closeSettings(page);
+        await openSettings(page);
+        await ensureDetailsOpen(page, '#dialogHistoryAccordion');
+        await page.waitForFunction(() => {
+            const meta = document.getElementById('dialogHistoryScopeMeta');
+            const titleInput = document.getElementById('dialogHistoryTitleInput');
+            return String(meta?.textContent || '').includes('Ваши диалоги')
+                && String(titleInput?.value || '').includes('Мой тестовый диалог');
+        });
+    } catch (error) {
+        await ensureOutputDir();
+        await page.screenshot({ path: path.join(outputDir, 'smoke-dialog-history-failure.png'), fullPage: true });
+        throw error;
+    } finally {
+        await context.close();
+    }
+}
+
 async function runHiddenClientPromptFlow(browser, baseUrl) {
     const scenario = createIdleScenario();
     const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
@@ -1760,6 +1921,7 @@ async function main() {
         await runRolePreviewVisibilityFlow(browser, baseUrl);
         await runPromptConflictRecoveryFlow(browser, baseUrl);
         await runPromptWorkflowFlow(browser, baseUrl);
+        await runDialogHistoryPersistenceFlow(browser, baseUrl);
         await runGeminiVoiceModeSmokeFlow(browser, baseUrl);
         await runGeminiVoiceModeSmokeFlow(browser, baseUrl, {
             voiceScenario: 'assistant-interrupted-first-reply',

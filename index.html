@@ -367,6 +367,55 @@
                 </div>
             </div>
 
+            <details id="dialogHistoryAccordion" class="admin-hidden-prompt-section">
+                <summary class="admin-hidden-prompt-summary">История диалогов</summary>
+                <div class="dialog-history-body admin-hidden-prompt-body">
+                    <div id="dialogHistoryScopeMeta" class="dialog-history-scope-meta">
+                        Здесь будут ваши последние диалоги.
+                    </div>
+                    <div class="dialog-history-layout">
+                        <div class="dialog-history-list-wrap">
+                            <div id="dialogHistoryList" class="dialog-history-list">
+                                <div class="dialog-history-empty">Диалогов пока нет</div>
+                            </div>
+                            <button id="dialogHistoryLoadMoreBtn" class="btn-change dialog-history-load-more" type="button" hidden>
+                                Показать ещё
+                            </button>
+                        </div>
+                        <div id="dialogHistoryViewer" class="dialog-history-viewer">
+                            <div id="dialogHistoryViewerEmpty" class="dialog-history-empty dialog-history-empty-viewer">
+                                Выберите диалог из списка.
+                            </div>
+                            <div id="dialogHistoryViewerContent" class="dialog-history-viewer-content" hidden>
+                                <div class="dialog-history-viewer-header">
+                                    <div class="dialog-history-title-wrap">
+                                        <input
+                                            id="dialogHistoryTitleInput"
+                                            class="dialog-history-title-input"
+                                            type="text"
+                                            maxlength="140"
+                                            placeholder="Название диалога"
+                                            autocomplete="off"
+                                        >
+                                        <div id="dialogHistoryViewerMeta" class="dialog-history-viewer-meta"></div>
+                                    </div>
+                                    <div class="dialog-history-viewer-actions">
+                                        <button id="dialogHistoryDeleteBtn" class="btn-change btn-danger-subtle" type="button" hidden>
+                                            Удалить
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="dialogHistoryMessages" class="dialog-history-messages"></div>
+                                <div id="dialogHistoryRatingWrap" class="dialog-history-rating-wrap" hidden>
+                                    <div class="dialog-history-rating-title">Оценка</div>
+                                    <div id="dialogHistoryRatingText" class="dialog-history-rating-text"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </details>
+
             <!-- Панель администратора -->
             <details id="adminPanelAccordion" class="admin-accordion" style="display: none;">
                 <summary class="admin-accordion-trigger">Панель администратора</summary>

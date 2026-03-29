@@ -76,6 +76,22 @@
         ".write": "auth != null && (root.child('users').child($key).child('login').val() === auth.token.email || (auth.token.admin === true || auth.token.role === 'admin'))"
       }
     },
+    "dialog_history_index": {
+      "$loginKey": {
+        ".read": "auth != null && (root.child('users').child($loginKey).child('login').val() === auth.token.email || (auth.token.admin === true || auth.token.role === 'admin'))",
+        "$dialogId": {
+          ".write": "auth != null && (root.child('users').child($loginKey).child('login').val() === auth.token.email || ((auth.token.admin === true || auth.token.role === 'admin') && !newData.exists()))"
+        }
+      }
+    },
+    "dialog_history_messages": {
+      "$loginKey": {
+        ".read": "auth != null && (root.child('users').child($loginKey).child('login').val() === auth.token.email || (auth.token.admin === true || auth.token.role === 'admin'))",
+        "$dialogId": {
+          ".write": "auth != null && (root.child('users').child($loginKey).child('login').val() === auth.token.email || ((auth.token.admin === true || auth.token.role === 'admin') && !newData.exists()))"
+        }
+      }
+    },
     "app_config": {
       ".read": "auth != null",
       ".write": "auth != null && (auth.token.admin === true || auth.token.role === 'admin')"

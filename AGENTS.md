@@ -21,6 +21,21 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-29`, persistent dialog history is now implemented in Firebase RTDB without storing audio recordings:
+  - dialog index lives under `dialog_history_index/{loginKey}/{dialogId}`;
+  - full transcript payload lives under `dialog_history_messages/{loginKey}/{dialogId}`;
+  - only text messages/transcripts and optional rating text are stored; raw audio is explicitly not persisted.
+  - dialog history is created lazily on the first real message/voice transcript, auto-titled from the first meaningful client line, and updated with debounce during the conversation.
+  - settings modal now loads the current user's dialog history by default; owners can rename and delete their own dialogs inline.
+  - admin rows in `Пользователи и доступ` now include `История`, which opens the same history panel for that user; admins can view and delete foreign dialogs, but not rename them.
+- As of `2026-03-29`, active time tracking now counts only real focused activity:
+  - login, tab restore, and window focus no longer count as user activity by themselves;
+  - active time accrues only while the tab is visible, the window is focused, and there was a real action (`pointerdown`, `keydown`, `touchstart`, `input`, `change`, `paste`, `scroll`, `wheel`) in the last 60 seconds;
+  - blur/hidden immediately stop accumulation and require a fresh real action after return before time starts ticking again.
+- As of `2026-03-29`, Firebase RTDB rules were extended for dialog history:
+  - owners can read/write only their own history nodes;
+  - admins can read any history and delete any dialog node;
+  - admin foreign-history rename is intentionally blocked on the frontend.
 - As of `2026-03-29`, the missing first Gemini Live client reply is now handled through a turn-centric audio fallback path:
   - assistant turns now get a real turn id on first assistant output instead of relying only on `geminiVoiceAssistantPreview/draft`.
   - assistant audio chunks are buffered per turn from `modelTurn.parts.inlineData` and `outputAudio`.
