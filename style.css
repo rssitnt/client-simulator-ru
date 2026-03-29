@@ -4970,27 +4970,46 @@ body.light-theme .admin-hidden-prompt-textarea::-webkit-scrollbar-thumb:hover {
 
 @media (max-width: 768px) {
     #settingsModal {
-        align-items: center;
+        align-items: flex-start;
         justify-content: center;
-        padding: max(10px, env(safe-area-inset-top, 0px) + 6px) 10px max(10px, env(safe-area-inset-bottom, 0px) + 6px);
+        padding: max(8px, env(safe-area-inset-top, 0px) + 4px) 8px max(12px, env(safe-area-inset-bottom, 0px) + 8px);
     }
 
     .settings-panel {
-        width: calc(100vw - 20px);
+        width: calc(100vw - 16px);
         min-width: 0;
         max-width: none;
-        padding: 16px;
+        padding: 18px 14px 18px;
+        border-radius: 22px;
+        border: 1px solid #272727;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.42);
     }
 
     #settingsModal .settings-panel {
         margin: 0;
-        max-height: min(92dvh, calc(100dvh - 20px));
+        max-height: min(94dvh, calc(100dvh - 16px));
+    }
+
+    .theme-color-section {
+        margin-bottom: 18px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid #252525;
+    }
+
+    .theme-color-row {
+        align-items: flex-start;
+        gap: 12px;
     }
 
     .settings-row {
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-bottom: 16px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 10px;
+        margin-bottom: 12px;
+        padding: 14px;
+        border: 1px solid #252525;
+        border-radius: 18px;
+        background: #171717;
     }
 
     .dialog-history-layout {
@@ -5010,10 +5029,132 @@ body.light-theme .admin-hidden-prompt-textarea::-webkit-scrollbar-thumb:hover {
         flex: 0 0 auto;
         width: auto;
         margin-top: 0;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #7f7f7f;
     }
 
     .account-block {
         width: 100%;
+        gap: 10px;
+    }
+
+    .account-line {
+        font-size: 12px;
+        color: #8f8f8f;
+    }
+
+    .account-actions {
+        width: 100%;
+    }
+
+    .account-actions .btn-logout {
+        width: 100%;
+        min-height: 42px;
+        justify-content: center;
+        border-radius: 12px;
+    }
+
+    .name-input {
+        min-height: 48px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        font-size: 15px;
+        background: #242424;
+    }
+
+    .role-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+    }
+
+    .account-row .settings-label,
+    .role-row .settings-label,
+    .voice-row .settings-label {
+        grid-column: 1 / -1;
+    }
+
+    .role-text {
+        height: auto;
+        min-height: 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: #f2f2f2;
+    }
+
+    .role-row .btn-change {
+        margin-left: 0;
+        min-height: 36px;
+        padding: 0 12px;
+        border-radius: 10px;
+        background: #232323;
+        color: #d0d0d0;
+    }
+
+    .role-row .btn-change:hover {
+        background: #2b2b2b;
+    }
+
+    .export-row {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 10px;
+        margin-top: 0;
+        padding: 0;
+        border: none;
+        background: none;
+    }
+
+    .export-dropdown {
+        width: 100%;
+    }
+
+    .settings-panel .btn-export {
+        width: 100%;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 12px;
+        background: #232323;
+        color: #d8d8d8;
+    }
+
+    .settings-panel .btn-export:hover {
+        background: #2b2b2b;
+        color: #ffffff;
+    }
+
+    .voice-config-block {
+        max-width: none;
+        gap: 10px;
+    }
+
+    .voice-picker-trigger {
+        min-height: 74px;
+        padding: 16px;
+        border-radius: 16px;
+    }
+
+    .voice-picker-menu {
+        border-radius: 18px;
+    }
+
+    .admin-accordion {
+        margin-top: 16px;
+        padding-top: 14px;
+    }
+
+    .admin-accordion-trigger {
+        font-size: 15px;
+    }
+
+    .admin-invite-btn {
+        width: 100%;
+        min-height: 42px;
+        justify-content: center;
     }
 }
 
@@ -5427,6 +5568,42 @@ body.light-theme .admin-panel {
 
 body.light-theme .admin-panel-title {
     color: #666;
+}
+
+@media (max-width: 768px) {
+    body.light-theme .theme-color-section {
+        border-bottom-color: #ececec;
+    }
+
+    body.light-theme .settings-row {
+        background: #fafafa;
+        border-color: #e8e8e8;
+    }
+
+    body.light-theme .account-line {
+        color: #707070;
+    }
+
+    body.light-theme .name-input {
+        background: #ffffff;
+    }
+
+    body.light-theme .role-text {
+        color: #1f1f1f;
+    }
+
+    body.light-theme .role-row .btn-change,
+    body.light-theme .settings-panel .btn-export {
+        background: #ffffff;
+        border: 1px solid #e3e3e3;
+        color: #4b4b4b;
+    }
+
+    body.light-theme .role-row .btn-change:hover,
+    body.light-theme .settings-panel .btn-export:hover {
+        background: #f5f5f5;
+        color: #222222;
+    }
 }
 
 body.light-theme .admin-table-wrap {

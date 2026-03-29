@@ -21,6 +21,11 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-29`, the mobile settings modal is redesigned to behave like a proper phone sheet instead of a squeezed desktop form:
+  - the modal now sits closer to the viewport edges, uses a stronger rounded sheet surface, and top-aligns within the mobile safe area.
+  - core settings rows (`Аккаунт`, `Роль`, `Голос`, `Микрофон`) become stacked mobile cards with labels above content instead of cramped left labels.
+  - export buttons stack full-width on mobile, voice pickers get larger tap targets, and the role/account actions use clearer touch-friendly sizing.
+  - light theme gets matching mobile overrides so the redesign does not become dark-only.
 - As of `2026-03-29`, mobile floating edge icons are raised slightly to align with the `Чат / Роль` tabs:
   - on screens `<= 768px`, `btn-clear-floating` and `btn-settings-floating` now use a smaller `top` offset.
   - goal: visually center the edge icons against the mobile tabs row instead of sitting a few pixels too low.
