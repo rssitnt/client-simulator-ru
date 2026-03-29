@@ -6161,18 +6161,24 @@ function createAdminUsersTableRow(login) {
     row.dataset.login = login;
 
     const loginCell = document.createElement('td');
+    loginCell.dataset.label = 'Логин';
     const roleCell = document.createElement('td');
+    roleCell.dataset.label = 'Роль';
     const sourceCell = document.createElement('td');
+    sourceCell.dataset.label = 'Доступ';
     sourceCell.className = 'admin-access-source';
     const timeCell = document.createElement('td');
+    timeCell.dataset.label = 'Активное время';
     timeCell.className = 'admin-time';
     const statusCell = document.createElement('td');
+    statusCell.dataset.label = 'Статус';
     const statusMain = document.createElement('div');
     statusMain.className = 'admin-status-main';
     const presenceText = document.createElement('div');
     statusCell.appendChild(statusMain);
     statusCell.appendChild(presenceText);
     const actionCell = document.createElement('td');
+    actionCell.dataset.label = 'Действия';
     const actionGroup = document.createElement('div');
     actionGroup.className = 'admin-user-action-group';
     const actionBtn = document.createElement('button');
