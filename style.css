@@ -5001,6 +5001,51 @@ body.light-theme .admin-hidden-prompt-textarea::-webkit-scrollbar-thumb:hover {
         gap: 12px;
     }
 
+    .theme-toggle .toggle-switch {
+        width: 52px;
+        height: 28px;
+    }
+
+    .theme-toggle .toggle-slider {
+        border-radius: 999px;
+        padding: 0 7px;
+    }
+
+    .theme-toggle .toggle-slider:before {
+        width: 24px;
+        height: 24px;
+        top: 2px;
+        left: 2px;
+    }
+
+    .theme-toggle input:checked + .toggle-slider:before {
+        transform: translateX(24px);
+    }
+
+    .theme-toggle .slider-icon {
+        width: 22px;
+        height: 22px;
+    }
+
+    .theme-toggle .slider-icon svg {
+        width: 14px;
+        height: 14px;
+    }
+
+    .color-presets {
+        gap: 10px;
+    }
+
+    .color-preset,
+    .more-colors-btn {
+        width: 28px;
+        height: 28px;
+    }
+
+    .more-colors-btn {
+        font-size: 18px;
+    }
+
     .settings-row {
         display: grid;
         grid-template-columns: minmax(0, 1fr);
@@ -5029,7 +5074,7 @@ body.light-theme .admin-hidden-prompt-textarea::-webkit-scrollbar-thumb:hover {
         flex: 0 0 auto;
         width: auto;
         margin-top: 0;
-        font-size: 11px;
+        font-size: 12px;
         font-weight: 600;
         letter-spacing: 0.08em;
         text-transform: uppercase;
@@ -5042,7 +5087,7 @@ body.light-theme .admin-hidden-prompt-textarea::-webkit-scrollbar-thumb:hover {
     }
 
     .account-line {
-        font-size: 12px;
+        font-size: 13px;
         color: #8f8f8f;
     }
 
@@ -5052,16 +5097,17 @@ body.light-theme .admin-hidden-prompt-textarea::-webkit-scrollbar-thumb:hover {
 
     .account-actions .btn-logout {
         width: 100%;
-        min-height: 42px;
+        min-height: 46px;
         justify-content: center;
         border-radius: 12px;
+        font-size: 14px;
     }
 
     .name-input {
-        min-height: 48px;
+        min-height: 52px;
         padding: 12px 14px;
         border-radius: 14px;
-        font-size: 15px;
+        font-size: 16px;
         background: #242424;
     }
 
@@ -5086,11 +5132,12 @@ body.light-theme .admin-hidden-prompt-textarea::-webkit-scrollbar-thumb:hover {
 
     .role-row .btn-change {
         margin-left: 0;
-        min-height: 36px;
-        padding: 0 12px;
+        min-height: 40px;
+        padding: 0 14px;
         border-radius: 10px;
         background: #232323;
         color: #d0d0d0;
+        font-size: 14px;
     }
 
     .role-row .btn-change:hover {
@@ -5113,13 +5160,14 @@ body.light-theme .admin-hidden-prompt-textarea::-webkit-scrollbar-thumb:hover {
 
     .settings-panel .btn-export {
         width: 100%;
-        min-height: 44px;
+        min-height: 48px;
         display: flex;
         align-items: center;
         justify-content: center;
         border-radius: 12px;
         background: #232323;
         color: #d8d8d8;
+        font-size: 14px;
     }
 
     .settings-panel .btn-export:hover {
@@ -5133,9 +5181,43 @@ body.light-theme .admin-hidden-prompt-textarea::-webkit-scrollbar-thumb:hover {
     }
 
     .voice-picker-trigger {
-        min-height: 74px;
+        min-height: 82px;
         padding: 16px;
         border-radius: 16px;
+    }
+
+    .voice-picker-current-name {
+        font-size: 17px;
+    }
+
+    .voice-picker-current-description {
+        font-size: 13px;
+        line-height: 1.4;
+    }
+
+    .dialog-history-scope-meta,
+    .dialog-history-viewer-meta,
+    .dialog-history-empty,
+    .dialog-history-rating-text,
+    .dialog-history-item-preview {
+        font-size: 13px;
+    }
+
+    .dialog-history-item-title,
+    .dialog-history-title-input {
+        font-size: 15px;
+    }
+
+    .dialog-history-pill {
+        min-height: 22px;
+        padding: 0 10px;
+        font-size: 11px;
+    }
+
+    .dialog-history-message {
+        max-width: 88%;
+        font-size: 15px;
+        line-height: 1.58;
     }
 
     .voice-picker-menu {
@@ -5148,13 +5230,75 @@ body.light-theme .admin-hidden-prompt-textarea::-webkit-scrollbar-thumb:hover {
     }
 
     .admin-accordion-trigger {
-        font-size: 15px;
+        font-size: 16px;
+    }
+
+    .admin-panel-title {
+        font-size: 14px;
+    }
+
+    .admin-invite-form {
+        gap: 10px;
+    }
+
+    .admin-invite-input,
+    .admin-invite-days,
+    .admin-role-select {
+        min-height: 46px;
+        font-size: 14px;
+        border-radius: 12px;
+    }
+
+    .admin-invite-days {
+        width: 56px;
+    }
+
+    .admin-invite-days-wrap {
+        min-height: 46px;
+        border-radius: 12px;
+    }
+
+    .admin-invite-days-unit {
+        font-size: 13px;
     }
 
     .admin-invite-btn {
         width: 100%;
-        min-height: 42px;
+        min-height: 46px;
         justify-content: center;
+        font-size: 14px;
+    }
+
+    .admin-hidden-prompt-summary {
+        padding: 14px 16px;
+        font-size: 15px;
+    }
+
+    .admin-hidden-prompt-body {
+        padding: 0 16px 16px;
+        gap: 12px;
+    }
+
+    .admin-hidden-prompt-hint {
+        font-size: 13px;
+    }
+
+    .admin-hidden-prompt-textarea {
+        min-height: 200px;
+        font-size: 14px;
+        line-height: 1.6;
+    }
+
+    .btn-change,
+    .btn-cancel,
+    .btn-confirm {
+        font-size: 14px;
+    }
+
+    .password-input {
+        min-height: 46px;
+        font-size: 14px;
+        border-radius: 12px;
     }
 }
 

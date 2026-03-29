@@ -21,6 +21,11 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-29`, a second mobile settings pass enlarged controls that were still too small on phones:
+  - theme toggle, color presets, logout/export buttons, role actions, and name input were all increased for better touch accuracy.
+  - voice picker and microphone picker got larger trigger height and stronger typography so the selected value is readable without zooming.
+  - dialog-history titles/previews/messages and admin controls (`Доступ по ссылке`, hidden prompts, password/admin actions) were increased to stop tiny text/targets inside the settings sheet.
+  - scope: mobile breakpoint only; desktop layout/metrics were left unchanged.
 - As of `2026-03-29`, the mobile settings modal is redesigned to behave like a proper phone sheet instead of a squeezed desktop form:
   - the modal now sits closer to the viewport edges, uses a stronger rounded sheet surface, and top-aligns within the mobile safe area.
   - core settings rows (`Аккаунт`, `Роль`, `Голос`, `Микрофон`) become stacked mobile cards with labels above content instead of cramped left labels.
