@@ -1368,6 +1368,7 @@ const aiImproveApplyCurrent = document.getElementById('aiImproveApplyCurrent');
 const adminPreviewToggleBtn = document.getElementById('adminPreviewToggleBtn');
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsModal = document.getElementById('settingsModal');
+const settingsModalCloseBtn = document.getElementById('settingsModalCloseBtn');
 const currentUserName = document.getElementById('currentUserName');
 const settingsNameInput = document.getElementById('settingsNameInput');
 const accountLoginValue = document.getElementById('accountLoginValue');
@@ -17429,6 +17430,12 @@ bindEvent(settingsBtn, 'click', (e) => {
     e?.preventDefault?.();
     e?.stopPropagation?.();
     toggleSettingsModal();
+});
+
+bindEvent(settingsModalCloseBtn, 'click', (e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    hideSettingsModal();
 });
 
 // Close settings modal on overlay click

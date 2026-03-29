@@ -21,6 +21,10 @@
 - Preserve the testing workflow around system prompt editing, chat history, and export.
 
 ## Recent Context
+- As of `2026-03-29`, mobile settings now behave like a full-screen screen instead of a floating card:
+  - on phones the settings modal stretches to `100vw x 100dvh`, removes outer padding/radius, and uses safe-area padding inside the panel itself.
+  - the floating settings icon is hidden while `#settingsModal` is active, so it no longer overlaps the modal content.
+  - a dedicated in-panel close button (`X`) was added for mobile to close settings without relying on the floating icon.
 - As of `2026-03-29`, a second mobile settings pass enlarged controls that were still too small on phones:
   - theme toggle, color presets, logout/export buttons, role actions, and name input were all increased for better touch accuracy.
   - voice picker and microphone picker got larger trigger height and stronger typography so the selected value is readable without zooming.
