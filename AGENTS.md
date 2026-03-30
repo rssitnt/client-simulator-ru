@@ -23,6 +23,7 @@
 - Keep Gemini Live token/session creation server-side.
 - Keep project context compressed; do not accumulate stale step-by-step history.
 - Prefer updating `AGENTS.md` and `PROJECT_CONTEXT.md` with only current architecture, current constraints, and still-relevant fixes.
+- For this project, code changes should be committed and pushed by default unless the user explicitly says not to push.
 
 ## Current Context
 - Voice mode runs on Gemini Live (`gemini-3.1-flash-live-preview`) through the token server.
