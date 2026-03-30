@@ -14413,6 +14413,15 @@ function isGeminiVoiceTokenRetryableError(error) {
         || message.includes('network request failed');
 }
 
+function isGeminiVoiceTokenPayloadRetryableError(error) {
+    const message = String(error?.message || '').toLowerCase();
+    return message.includes('некорректный json')
+        || message.includes('пустой json')
+        || message.includes('пустой ответ')
+        || message.includes('empty')
+        || message.includes('invalid json');
+}
+
 function getGeminiVoiceTokenEndpointCandidates(preferredEndpoint = '') {
     const candidates = [];
     const seen = new Set();
@@ -14489,6 +14498,7 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
     const retryableHttpStatuses = new Set([404, 408, 502, 503, 504]);
     let lastError = null;
     let sawTimeoutLikeFailure = false;
+    let sawFallbackableFailure = false;
 
     for (let attemptIndex = 0; attemptIndex < endpointCandidates.length; attemptIndex += 1) {
         const endpoint = endpointCandidates[attemptIndex];
@@ -14531,6 +14541,7 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
 
             const timeoutLikeFailure = isGeminiVoiceTokenRetryableError(error);
             sawTimeoutLikeFailure = sawTimeoutLikeFailure || timeoutLikeFailure;
+            sawFallbackableFailure = sawFallbackableFailure || timeoutLikeFailure;
             lastError = error;
             recordVoiceDebugEvent('token_request_failed', {
                 status: 'error',
@@ -14564,46 +14575,59 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
             }
             if (retryableHttpStatuses.has(tokenResponse.status) && attemptIndex < endpointCandidates.length - 1) {
                 sawTimeoutLikeFailure = true;
+                sawFallbackableFailure = true;
                 lastError = new Error(tokenErrorText || `HTTP ${tokenResponse.status}`);
                 continue;
             }
             throw new Error(tokenErrorText || `Не удалось получить ключ сессии (HTTP ${tokenResponse.status})`);
         }
 
-        const tokenPayload = await readResponseJsonWithTimeout(
-            tokenResponse,
-            20000,
-            'Таймаут чтения ответа token endpoint.'
-        );
-        const token = String(
-            tokenPayload?.client_secret?.value ||
-            tokenPayload?.name ||
-            tokenPayload?.token ||
-            tokenPayload?.accessToken ||
-            tokenPayload?.apiKey ||
-            ''
-        ).trim();
-        if (token) {
-            recordVoiceDebugEvent('token_request_succeeded', {
-                status: 'ok',
+        try {
+            const tokenPayload = await readResponseJsonWithTimeout(
+                tokenResponse,
+                20000,
+                'Таймаут чтения ответа token endpoint.'
+            );
+            const token = String(
+                tokenPayload?.client_secret?.value ||
+                tokenPayload?.name ||
+                tokenPayload?.token ||
+                tokenPayload?.accessToken ||
+                tokenPayload?.apiKey ||
+                ''
+            ).trim();
+            if (token) {
+                recordVoiceDebugEvent('token_request_succeeded', {
+                    status: 'ok',
+                    httpStatus: tokenResponse.status,
+                    attempt: attemptNumber,
+                    totalAttempts: endpointCandidates.length
+                });
+                return token;
+            }
+            throw new Error('Эндпоинт ключа сессии вернул пустой ответ');
+        } catch (error) {
+            recordVoiceDebugEvent('token_request_failed', {
+                status: 'error',
                 httpStatus: tokenResponse.status,
+                message: error?.message || 'Token endpoint returned invalid payload',
                 attempt: attemptNumber,
                 totalAttempts: endpointCandidates.length
             });
-            return token;
+            if (isGeminiVoiceTokenPayloadRetryableError(error) && attemptIndex < endpointCandidates.length - 1) {
+                sawFallbackableFailure = true;
+                lastError = error;
+                continue;
+            }
+            throw error;
         }
-        recordVoiceDebugEvent('token_request_failed', {
-            status: 'error',
-            httpStatus: tokenResponse.status,
-            message: 'Пустой ответ token endpoint',
-            attempt: attemptNumber,
-            totalAttempts: endpointCandidates.length
-        });
-        throw new Error('Эндпоинт ключа сессии вернул пустой ответ');
     }
 
     if (sawTimeoutLikeFailure) {
         throw new Error('Token endpoint не ответил вовремя даже после повторной попытки. Сервер может просыпаться после простоя — подождите 10–20 секунд и попробуйте ещё раз.');
+    }
+    if (sawFallbackableFailure) {
+        throw new Error('Token endpoint вернул некорректный ответ на основном маршруте и не смог переключиться на рабочий запасной маршрут.');
     }
     if (lastError) {
         throw lastError;

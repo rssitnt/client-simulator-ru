@@ -29,7 +29,7 @@
 - Stable voice behavior is manager-first. The frontend no longer relies on a synthetic first text turn from the client.
 - Voice startup is now split into two phases:
   - before session key arrives, UI shows that the voice server is connecting and does not imitate an active call yet;
-  - if the main token endpoint stalls, the frontend can prewarm it with `OPTIONS` and retry through a trusted fallback route instead of failing after one blind 45-second wait.
+  - if the main token endpoint stalls or returns a non-API payload, the frontend can prewarm it with `OPTIONS` and retry through a trusted fallback route instead of failing after one blind 45-second wait.
 - First assistant reply recovery is turn-centric:
   - assistant audio is buffered per turn;
   - if text is missing or late, the frontend can request fallback transcription from `/api/gemini-live-transcribe`;
