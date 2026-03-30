@@ -248,6 +248,48 @@ class StubLiveSession {
     if (params?.audio && !this.handledFirstAudio) {
       this.handledFirstAudio = true;
       const scenario = String(globalThis.__codexGeminiVoiceScenario || 'default');
+      if (scenario === 'output-before-first-input-transcript') {
+        this.emit({
+          serverContent: {
+            outputTranscription: {
+              text: 'Привет.',
+              finished: false
+            },
+            modelTurn: {
+              parts: [
+                {
+                  inlineData: {
+                    data: assistantAudioBase64,
+                    mimeType: 'audio/pcm;rate=24000'
+                  }
+                }
+              ]
+            }
+          }
+        }, 40);
+        this.emit({
+          serverContent: {
+            inputTranscription: {
+              text: 'Здравствуйте, нужен гидробур на CASE CX260C.',
+              finished: false
+            }
+          }
+        }, 120);
+        this.emit({
+          serverContent: {
+            inputTranscription: {
+              text: 'Здравствуйте, нужен гидробур на CASE CX260C. Что есть по срокам и сервису?',
+              finished: true
+            }
+          }
+        }, 190);
+        this.emit({
+          serverContent: {
+            waitingForInput: true
+          }
+        }, 280);
+        return;
+      }
       this.emit({
         serverContent: {
           inputTranscription: {
@@ -806,6 +848,10 @@ async function seedVoiceModeRuntime(context, options = {}) {
                 this._intervalId = setInterval(() => {
                     if (typeof this.onaudioprocess !== 'function') return;
                     const inputChannel = new Float32Array(4096);
+                    const level = 0.03;
+                    for (let index = 0; index < inputChannel.length; index += 1) {
+                        inputChannel[index] = index % 2 === 0 ? level : -level;
+                    }
                     this.onaudioprocess({
                         inputBuffer: {
                             sampleRate: 48000,
@@ -1631,6 +1677,10 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
         bodyVoiceCallActive: document.body?.classList?.contains('voice-call-active') === true,
         userMessages: Array.from(document.querySelectorAll('.message.user')).map((node) => String(node.textContent || '').trim()),
         assistantMessages: Array.from(document.querySelectorAll('.message.assistant')).map((node) => String(node.textContent || '').trim()),
+        messageTimeline: Array.from(document.querySelectorAll('.message.user, .message.assistant')).map((node) => ({
+            role: node.classList.contains('assistant') ? 'assistant' : 'user',
+            text: String(node.textContent || '').trim()
+        })),
         errorMessages: Array.from(document.querySelectorAll('.message.error')).map((node) => String(node.textContent || '').trim())
     }));
 
@@ -1671,7 +1721,18 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
         expect(dialogState.bodyVoiceCallActive, 'Voice call active body state was not enabled');
         expect(dialogState.audioStartCount > 0, 'Assistant audio playback never started');
         expect(dialogState.userMessages.some((text) => text.includes('CASE CX260C')), 'Voice user transcript was not appended to chat');
-        if (voiceScenario === 'waiting-for-input-finalizes-first-reply') {
+        if (voiceScenario === 'output-before-first-input-transcript') {
+            expect(
+                dialogState.assistantMessages.some((text) => text.trim() === 'Привет.'),
+                'First assistant voice reply was lost when it arrived before user transcription'
+            );
+            const firstUserIndex = dialogState.messageTimeline.findIndex((item) => item.role === 'user' && item.text.includes('CASE CX260C'));
+            const firstAssistantIndex = dialogState.messageTimeline.findIndex((item) => item.role === 'assistant' && item.text.trim() === 'Привет.');
+            expect(
+                firstUserIndex !== -1 && firstAssistantIndex !== -1 && firstUserIndex < firstAssistantIndex,
+                'First assistant reply was rendered before the opening manager turn'
+            );
+        } else if (voiceScenario === 'waiting-for-input-finalizes-first-reply') {
             expect(
                 dialogState.assistantMessages.some((text) => text.trim() === 'Привет.'),
                 'First assistant voice reply was not finalized as a separate chat bubble'
@@ -1930,6 +1991,10 @@ async function main() {
         await runGeminiVoiceModeSmokeFlow(browser, baseUrl, {
             voiceScenario: 'late-first-transcript',
             expectedAssistantNeedle: 'срокам и сервису'
+        });
+        await runGeminiVoiceModeSmokeFlow(browser, baseUrl, {
+            voiceScenario: 'output-before-first-input-transcript',
+            expectedAssistantNeedle: 'Привет.'
         });
         await runGeminiVoiceModeSmokeFlow(browser, baseUrl, {
             voiceScenario: 'waiting-for-input-finalizes-first-reply',

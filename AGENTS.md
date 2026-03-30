@@ -31,6 +31,10 @@
   - assistant audio is buffered per turn;
   - if text is missing or late, the frontend can request fallback transcription from `/api/gemini-live-transcribe`;
   - half-duplex is enforced while the assistant is speaking.
+- Early first client reply is protected from frontend race conditions:
+  - if Gemini emits the first client reply before the first manager transcript arrives, the frontend no longer drops it as `orphan_*`;
+  - client audio can start immediately, but the first client text bubble is held briefly until the opening manager turn is restored, then shown in the correct order;
+  - covered by smoke scenario `output-before-first-input-transcript`.
 - Admin settings include a local Gemini Live tech log for debugging transport/startup issues.
 - Settings on mobile are a full-screen sheet with a fixed close button.
 - `Пользователи и доступ` has a dedicated mobile card layout; desktop table remains unchanged.
@@ -79,5 +83,6 @@
 
 ## Keep In Mind
 - If something starts failing in voice mode, check the admin tech log first before adding more heuristics.
+- If the first client reply disappears again, look in the admin tech log for `assistant_output_buffered_before_user_turn`, `assistant_output_waiting_for_user_turn`, and `assistant_output_released_after_user_turn`.
 - If dialog history acts like a permissions problem, verify both Firebase rules and fresh auth token state.
 - When updating context again, prefer replacing old bullets instead of appending another long timeline.
