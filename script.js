@@ -15838,6 +15838,9 @@ function finalizeGeminiUserTurn(sourceText) {
     appendGeminiVoiceDialogToChat();
     geminiVoiceConversationFinished = false;
     geminiVoiceUserTurnFinalized = true;
+    if (isGeminiVoiceConnecting || isGeminiVoiceActive) {
+        setVoiceModeStatus(getShortStatusText('Вы:', completedUserText), 'listening', { lockMs: 1200 });
+    }
     return true;
 }
 
@@ -16187,7 +16190,6 @@ async function handleGeminiLiveMessage(message) {
             geminiVoiceUserTurnFinalized = false;
         }
         geminiVoiceUserPreview = mergeVoiceStreamingText(geminiVoiceUserPreview, inputText);
-        setVoiceModeStatus(getShortStatusText('Вы:', geminiVoiceUserPreview), 'listening', { lockMs: 3000 });
         if (inputFinished) {
             const completedUserTurn = finalizeGeminiUserTurn(geminiVoiceUserPreview || inputText);
             if (

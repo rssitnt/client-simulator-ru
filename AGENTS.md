@@ -33,6 +33,7 @@
   - if the main token endpoint stalls or returns a non-API payload, the frontend can prewarm it with `OPTIONS` and retry through a trusted fallback route instead of failing after one blind 45-second wait.
   - on `client-simulator.ru` and `www.client-simulator.ru`, the frontend now prefers the dedicated remote token server before same-origin `/api/...` fallbacks.
   - before requesting a voice session key, the frontend now waits for Firebase auth readiness so the call does not fail instantly on a still-restoring session.
+- The manager-side top status no longer shows raw streaming ASR fragments; it updates only after the manager turn is finalized, so transient cross-language garbage is hidden.
 - First assistant reply recovery is turn-centric:
   - assistant audio is buffered per turn;
   - if text is missing or late, the frontend can request fallback transcription from `/api/gemini-live-transcribe`;

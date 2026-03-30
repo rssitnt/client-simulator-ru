@@ -29,6 +29,9 @@
   - on the production domains `client-simulator.ru` and `www.client-simulator.ru`, remote token routing is preferred before same-origin `/api/...` attempts;
   - before the token request starts, the frontend waits for Firebase auth readiness to avoid instant failures on partially restored sessions;
   - the UI no longer pretends the call already started before the session key is received.
+- Fixed noisy multilingual manager preview:
+  - the top manager status no longer mirrors raw `inputTranscription` chunks while Gemini is still streaming them;
+  - the manager-side status is shown only after `finalizeGeminiUserTurn(...)`, using the stabilized final transcript instead of the unstable preview text.
 
 ## Useful Debug Markers
 - `assistant_output_buffered_before_user_turn`
