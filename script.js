@@ -15898,7 +15898,7 @@ function showVoiceCallNotice(text) {
     if (textEl) {
         textEl.textContent = safeText;
     }
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+    scrollChatToMessage(geminiVoiceCallNotice);
 }
 
 function clearVoiceCallNotice() {
@@ -18305,6 +18305,21 @@ function autoResizeTextarea(textarea) {
     textarea.style.height = newHeight + 'px';
 }
 
+function scrollChatToMessage(messageEl, options = {}) {
+    if (!chatMessages || !messageEl) return;
+    const { alignStart = false } = options;
+    const viewportHeight = chatMessages.clientHeight || 0;
+    const messageHeight = messageEl.offsetHeight || 0;
+    const shouldAlignStart = alignStart || (viewportHeight > 0 && messageHeight > viewportHeight * 0.6);
+    if (shouldAlignStart) {
+        const topPadding = 12;
+        const targetTop = Math.max(0, messageEl.offsetTop - topPadding);
+        chatMessages.scrollTop = targetTop;
+        return;
+    }
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
 function addMessage(content, role, isMarkdown = false) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
@@ -18322,7 +18337,7 @@ function addMessage(content, role, isMarkdown = false) {
     
     messageDiv.appendChild(contentDiv);
     chatMessages.appendChild(messageDiv);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+    scrollChatToMessage(messageDiv);
     return messageDiv;
 }
 
@@ -18452,7 +18467,7 @@ function addRatingMessage(ratingResult) {
     contentDiv.appendChild(card);
     messageDiv.appendChild(contentDiv);
     chatMessages.appendChild(messageDiv);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+    scrollChatToMessage(messageDiv);
     return messageDiv;
 }
 
@@ -18999,7 +19014,7 @@ function showConversationActionNotice(action) {
     });
     if (!wrapper.isConnected) {
         chatMessages.appendChild(wrapper);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+        scrollChatToMessage(wrapper);
     }
     conversationActionNoticeElement = wrapper;
 }
@@ -19043,7 +19058,7 @@ function showReratePrompt() {
         rateChat({ force: true });
     });
     chatMessages.appendChild(wrapper);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+    scrollChatToMessage(wrapper);
     reratePromptElement = wrapper;
 }
 
@@ -19544,7 +19559,7 @@ function addImproveFromRatingButton(dialogText, ratingText) {
 
     messageDiv.appendChild(buttonContainer);
     chatMessages.appendChild(messageDiv);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+    scrollChatToMessage(messageDiv);
 }
 
 async function sendAttestationResult(dialogText, ratingText) {

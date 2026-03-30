@@ -32,6 +32,7 @@
 - Fixed noisy multilingual manager preview:
   - the top manager status no longer mirrors raw `inputTranscription` chunks while Gemini is still streaming them;
   - the manager-side status is shown only after `finalizeGeminiUserTurn(...)`, using the stabilized final transcript instead of the unstable preview text.
+- Chat autoscroll now aligns to the start of very tall messages so the first line is visible; shorter messages still scroll to the bottom.
 
 ## Useful Debug Markers
 - `assistant_output_buffered_before_user_turn`
