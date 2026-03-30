@@ -13702,6 +13702,10 @@ function getDefaultGeminiTokenEndpoint() {
         return `${protocol}//${window.location.hostname}:8787${GEMINI_LIVE_ALLOWED_TOKEN_ENDPOINT_PATH}`;
     }
 
+    if (typeof window !== 'undefined' && PRODUCTION_HOSTNAMES.has(String(window.location.hostname || '').trim().toLowerCase())) {
+        return String(GEMINI_LIVE_REMOTE_TOKEN_ENDPOINT || GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT || '').trim();
+    }
+
     if (typeof window !== 'undefined') {
         return String(GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT || GEMINI_LIVE_REMOTE_TOKEN_ENDPOINT || '').trim();
     }
@@ -14442,14 +14446,21 @@ function getGeminiVoiceTokenEndpointCandidates(preferredEndpoint = '') {
         candidates.push(sanitized);
     };
 
-    addCandidate(preferredEndpoint);
-
     let preferredIsSameOriginEndpoint = false;
     try {
         const parsed = new URL(preferredEndpoint || '', window.location.origin);
         preferredIsSameOriginEndpoint = parsed.origin === window.location.origin
             && ((normalizeGeminiTokenEndpoint(parsed.pathname || '').replace(/\/+$/, '')) || '/') === GEMINI_LIVE_ALLOWED_TOKEN_ENDPOINT_PATH;
     } catch (error) {}
+
+    const preferRemoteBeforeSameOrigin = preferredIsSameOriginEndpoint
+        && PRODUCTION_HOSTNAMES.has(String(window?.location?.hostname || '').trim().toLowerCase());
+
+    if (preferRemoteBeforeSameOrigin) {
+        addCandidate(GEMINI_LIVE_REMOTE_TOKEN_ENDPOINT);
+    }
+
+    addCandidate(preferredEndpoint);
 
     if (preferredIsSameOriginEndpoint) {
         addCandidate(GEMINI_LIVE_REMOTE_TOKEN_ENDPOINT);

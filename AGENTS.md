@@ -30,6 +30,7 @@
 - Voice startup is now split into two phases:
   - before session key arrives, UI shows that the voice server is connecting and does not imitate an active call yet;
   - if the main token endpoint stalls or returns a non-API payload, the frontend can prewarm it with `OPTIONS` and retry through a trusted fallback route instead of failing after one blind 45-second wait.
+  - on `client-simulator.ru` and `www.client-simulator.ru`, the frontend now prefers the dedicated remote token server before same-origin `/api/...` fallbacks.
 - First assistant reply recovery is turn-centric:
   - assistant audio is buffered per turn;
   - if text is missing or late, the frontend can request fallback transcription from `/api/gemini-live-transcribe`;

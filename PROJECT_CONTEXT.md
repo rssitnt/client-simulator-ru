@@ -26,6 +26,7 @@
   - voice mode now prewarms the token endpoint with `OPTIONS` in the background;
   - if the first token route is slow or unavailable, the frontend retries through trusted fallback candidates instead of failing after one attempt;
   - if the first token route returns HTML, empty payload, or other non-API content, the frontend treats that as a bad route and still falls through to the next trusted candidate;
+  - on the production domains `client-simulator.ru` and `www.client-simulator.ru`, remote token routing is preferred before same-origin `/api/...` attempts;
   - the UI no longer pretends the call already started before the session key is received.
 
 ## Useful Debug Markers
