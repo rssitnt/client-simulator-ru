@@ -3,282 +3,81 @@
 ## Project
 - Canonical name: `client-simulator-studio`
 - Type: site
-- Purpose: client simulator for testing AI agents through chat and webhook flows, with an optional token server for voice mode.
+- Purpose: simulator for testing AI agents in chat and voice scenarios, with Firebase-backed auth/admin flows and a separate Gemini token server.
 
 ## Entry Points
-- Frontend entry: `index.html`
-- Static assets and config: top-level files plus `favicon/`
-- Token server: `server/gemini-token-server.mjs`
-- Package metadata: `package.json`
+- Frontend: `C:\projects\sites\client-simulator\index.html`
+- Main frontend logic: `C:\projects\sites\client-simulator\script.js`
+- Styles: `C:\projects\sites\client-simulator\style.css`
+- Firebase rules: `C:\projects\sites\client-simulator\database.rules.json`
+- Token server: `C:\projects\sites\client-simulator\server\gemini-token-server.mjs`
+- Smoke tests: `C:\projects\sites\client-simulator\scripts\smoke-e2e.mjs`
 
 ## Commands
-- Frontend can be served as static files, for example with `npx http-server -p 3001`
+- Static frontend preview: `npx http-server -p 3001`
 - Token server: `npm run start:token-server`
+- Smoke tests: `npm run test:smoke`
 
 ## Working Rules
-- Do not put long-lived API keys in the browser.
-- Keep the safe voice flow server-side: the frontend should request ephemeral sessions from the token server.
-- Preserve the testing workflow around system prompt editing, chat history, and export.
+- Do not expose long-lived API keys in the browser.
+- Keep Gemini Live token/session creation server-side.
+- Keep project context compressed; do not accumulate stale step-by-step history.
+- Prefer updating `AGENTS.md` and `PROJECT_CONTEXT.md` with only current architecture, current constraints, and still-relevant fixes.
 
-## Recent Context
-- As of `2026-03-29`, the admin `Пользователи и доступ` table has a dedicated mobile layout:
-  - desktop table layout remains unchanged.
-  - on phones, sort controls stay available as a compact top row, while each user record becomes a stacked card with explicit field labels (`Логин`, `Роль`, `Доступ`, `Активное время`, `Статус`, `Действия`).
-  - goal: remove horizontal overflow/cropped columns inside the mobile settings screen and keep the admin panel readable without sideways scrolling.
-- As of `2026-03-29`, mobile settings now behave like a full-screen screen instead of a floating card:
-  - on phones the settings modal stretches to `100vw x 100dvh`, removes outer padding/radius, and uses safe-area padding inside the panel itself.
-  - the floating settings icon is hidden while `#settingsModal` is active, so it no longer overlaps the modal content.
-  - a dedicated in-panel close button (`X`) was added for mobile to close settings without relying on the floating icon.
-  - the mobile close button is now fixed to the top-right of the screen instead of living inside the first row, so it stays reachable even when the user scrolls deep into settings.
-- As of `2026-03-29`, a second mobile settings pass enlarged controls that were still too small on phones:
-  - theme toggle, color presets, logout/export buttons, role actions, and name input were all increased for better touch accuracy.
-  - voice picker and microphone picker got larger trigger height and stronger typography so the selected value is readable without zooming.
-  - dialog-history titles/previews/messages and admin controls (`Доступ по ссылке`, hidden prompts, password/admin actions) were increased to stop tiny text/targets inside the settings sheet.
-  - scope: mobile breakpoint only; desktop layout/metrics were left unchanged.
-- As of `2026-03-29`, the mobile settings modal is redesigned to behave like a proper phone sheet instead of a squeezed desktop form:
-  - the modal now sits closer to the viewport edges, uses a stronger rounded sheet surface, and top-aligns within the mobile safe area.
-  - core settings rows (`Аккаунт`, `Роль`, `Голос`, `Микрофон`) become stacked mobile cards with labels above content instead of cramped left labels.
-  - export buttons stack full-width on mobile, voice pickers get larger tap targets, and the role/account actions use clearer touch-friendly sizing.
-  - light theme gets matching mobile overrides so the redesign does not become dark-only.
-- As of `2026-03-29`, mobile floating edge icons are raised slightly to align with the `Чат / Роль` tabs:
-  - on screens `<= 768px`, `btn-clear-floating` and `btn-settings-floating` now use a smaller `top` offset.
-  - goal: visually center the edge icons against the mobile tabs row instead of sitting a few pixels too low.
-- As of `2026-03-29`, admin `История` clicks now reveal the dialog-history block instead of silently opening it off-screen:
-  - root cause: the history accordion sits above `Панель администратора` in the settings modal, and the old click path only set `open` on the accordion without scrolling the modal to it.
-  - fix: added `revealDialogHistoryAccordion(...)` in `script.js`; it opens the accordion, scrolls it into view inside the settings modal, and briefly highlights the block so the user can see where it opened.
-  - this applies both when the settings modal is opened from a users-table `История` click and when the modal is already open.
-- As of `2026-03-29`, admin foreign dialog-history reads now retry once after a forced Firebase token refresh:
-  - root cause: after publishing the new `dialog_history_*` rules, admins could still see raw `Permission denied` on foreign history reads because the browser was using a stale Firebase auth token / RTDB auth state.
-  - fix: `fetchDialogHistoryScopeRecords(...)` and `fetchDialogHistoryPayload(...)` now catch the first permission-denied read, call `auth.currentUser.getIdToken(true)`, and retry once.
-  - if the second read is still denied, the UI now surfaces a human-readable message telling the user to refresh their login / wait briefly after rules publication.
-  - empty history is not the cause of this error; an empty branch should still open as an empty list.
-- As of `2026-03-29`, rating no longer falsely fails when only dialog-history persistence is denied:
-  - root cause: after a successful rating webhook response, `rateChat(...)` immediately saved the new dialog-history snapshot, and any RTDB `PERMISSION_DENIED` from the new history paths fell into the shared rating `catch`.
-  - fix: history save is now wrapped in its own `try/catch`; the rating remains visible and the dialog stays rated even if history persistence fails.
-  - user now gets a separate notice that the rating was received but could not be saved into history, with a hint to publish the new Firebase rules.
-  - attestation report enqueue is also isolated so secondary post-rating failures do not masquerade as a rating failure.
-- As of `2026-03-29`, persistent dialog history is now implemented in Firebase RTDB without storing audio recordings:
-  - dialog index lives under `dialog_history_index/{loginKey}/{dialogId}`;
-  - full transcript payload lives under `dialog_history_messages/{loginKey}/{dialogId}`;
-  - only text messages/transcripts and optional rating text are stored; raw audio is explicitly not persisted.
-  - dialog history is created lazily on the first real message/voice transcript, auto-titled from the first meaningful client line, and updated with debounce during the conversation.
-  - settings modal now loads the current user's dialog history by default; owners can rename and delete their own dialogs inline.
-  - admin rows in `Пользователи и доступ` now include `История`, which opens the same history panel for that user; admins can view and delete foreign dialogs, but not rename them.
-- As of `2026-03-29`, active time tracking now counts only real focused activity:
-  - login, tab restore, and window focus no longer count as user activity by themselves;
-  - active time accrues only while the tab is visible, the window is focused, and there was a real action (`pointerdown`, `keydown`, `touchstart`, `input`, `change`, `paste`, `scroll`, `wheel`) in the last 60 seconds;
-  - blur/hidden immediately stop accumulation and require a fresh real action after return before time starts ticking again.
-- As of `2026-03-29`, Firebase RTDB rules were extended for dialog history:
-  - owners can read/write only their own history nodes;
-  - admins can read any history and delete any dialog node;
-  - admin foreign-history rename is intentionally blocked on the frontend.
-- As of `2026-03-29`, the missing first Gemini Live client reply is now handled through a turn-centric audio fallback path:
-  - assistant turns now get a real turn id on first assistant output instead of relying only on `geminiVoiceAssistantPreview/draft`.
-  - assistant audio chunks are buffered per turn from `modelTurn.parts.inlineData` and `outputAudio`.
-  - if a turn reaches `waitingForInput`, `turnComplete`, `interrupted`, or a new manager input without any finalized assistant transcript, the frontend requests one fallback transcription from `/api/gemini-live-transcribe` using the buffered assistant audio.
-  - normal transcript arrivals still win; fallback only fills the audio-only / too-late-transcript gap for the same turn.
-  - orphan late assistant events are ignored when the previous turn is already finalized and the manager has not started a new turn yet, which prevents stale duplicate bubbles after fallback.
-  - `scripts/smoke-e2e.mjs` now includes `audio-only-first-reply-fallback`, which verifies that an assistant first reply with audio but no native transcript still appears in chat.
-- As of `2026-03-29`, `serverContent.waitingForInput` is treated as an implicit turn boundary for Gemini Live assistant text:
-  - root cause: the first assistant phrase could already exist in `geminiVoiceAssistantPreview`, but without `turnComplete/outputFinished` it stayed uncommitted and got merged into the next reply.
-  - fix: on `waitingForInput`, any pending assistant preview/draft is immediately finalized into chat as its own bubble; only truly transcript-less audio turns still enter the late-transcript grace window.
-  - expected effect: short first replies like `Привет.` should stop disappearing or gluing themselves to the next assistant turn.
-- As of `2026-03-29`, Gemini Live now waits briefly for late assistant transcripts before unlocking the manager mic:
-  - root cause: Gemini can emit first assistant audio and `waitingForInput` before the corresponding `outputTranscription`; the old code unlocked the manager mic too early and the first reply never became a visible chat line.
-  - fix: added a short late-transcript grace window (`GEMINI_VOICE_LATE_TRANSCRIPT_GRACE_MS`) and immediate finalization when delayed assistant text arrives after `waitingForInput`.
-  - expected effect: the first AI-client reply should still be appended to chat even when its transcript is delayed relative to audio/playback events.
-- As of `2026-03-29`, Gemini Live calls now switch to half-duplex as soon as the AI-client starts replying:
-  - root cause: the manager microphone stayed open while the first client reply was arriving, so Gemini could interrupt its own first audio turn before it became audible.
-  - fix: new `beginGeminiAssistantVoiceOutput(...)` immediately mutes manager mic input on the first assistant transcript/audio chunk and restores it only after playback finishes.
-  - expected effect: the first AI-client phrase should no longer be silently lost due to self-interruption/echo while the manager mic is still streaming.
-- As of `2026-03-29`, interrupted Gemini client turns are now finalized before they can be lost:
-  - root cause: the first client reply could remain only in `geminiVoiceAssistantPreview` and never reach chat if the manager started speaking early or Gemini emitted `interrupted` before `outputFinished/turnComplete`.
-  - fix: new `finalizeGeminiAssistantTurn(...)` commits assistant preview/draft on normal completion, on the first new manager `inputTranscription`, and on `serverContent.interrupted`.
-  - expected effect: the first AI-client utterance should no longer disappear from the visible chat when the reply was cut short or overlapped by the next turn.
-  - `scripts/smoke-e2e.mjs` now also has an `assistant-interrupted-first-reply` Gemini voice scenario to guard this regression.
-- As of `2026-03-28`, admin settings now include a local Gemini Live tech log:
-  - logs recent voice-session events from this browser: start request, token endpoint, `setupComplete`, first manager audio, first assistant text, first assistant audio chunk, first playback, transport close/error, reconnect scheduling, and stop/start failures.
-  - stored locally in browser storage and exposed via an admin accordion with `Скопировать техлог` / `Очистить`.
-  - goal: debug real voice failures quickly without changing normal UX for regular users.
-- As of `2026-03-28`, the idle voice connect pill no longer leaks onto the main screen:
-  - root cause was CSS overriding the native `hidden` attribute on `.voice-connect-status` with `display:flex`.
-  - added `.voice-connect-status[hidden] { display: none !important; }`, so “Идёт подключение…” only appears during a real voice start.
-- As of `2026-03-28`, Gemini voice settings now include real microphone input selection:
-  - settings modal has a dedicated microphone picker next to voice selection.
-  - picker requests/refreshes `enumerateDevices()`, filters only `audioinput`, removes `default` / `communications`, drops unlabeled phantom entries, and deduplicates same label+groupId combinations.
-  - selected input device is stored locally and used in `getUserMedia({ audio: { deviceId: { exact }}})` for the next calls; if the saved device disappears, the app falls back to a working input and refreshes the picker.
-- As of `2026-03-28`, ringing state now shows live microphone loudness:
-  - `voiceConnectStatus` includes a real-time level bar during connection.
-  - level is sampled from the live mic stream before the call is fully active.
-  - thresholds: low = red, medium = yellow, good = green.
-- As of `2026-03-28`, `scripts/smoke-e2e.mjs` now covers Gemini voice mode with stable end-to-end mocks:
-  - stubs Firebase App Check, Gemini Live SDK, token endpoint, fake microphone input, and Web Audio playback.
-  - verifies the user-visible flow rather than a hidden internal status node: the main send button switches into stop mode, the call notice appears, both sides append chat messages, assistant audio playback actually starts, and stopping the call exposes rating.
-  - voice smoke failures now dump a compact debug snapshot (`sendMode`, call notice text, voice status text, audioStartCount, rate visibility), so future regressions are diagnosable quickly.
-- As of `2026-03-28`, the real Gemini Live startup root cause is confirmed and the startup path was changed:
-  - direct runtime checks against `gemini-3.1-flash-live-preview` showed that the session itself opens normally, but the very first `sendClientContent(...)` closes it with WebSocket `1007` / `Request contains an invalid argument.`
-  - the same session accepts realtime audio input (`sendRealtimeInput({ audio: ... })`) without closing, so the transport/UI were not the primary cause.
-  - frontend Gemini startup no longer forces a synthetic first text turn for the client.
-  - the stable product behavior is now: the call connects, the client is on the line, and the manager starts speaking first.
-  - UI notice/status now explicitly says `Клиент на линии. Начинайте разговор.`
-- As of `2026-03-28`, Gemini Live now auto-retries one unexpected early transport close:
-  - if the socket closes in the first few seconds before `setupComplete`, before first assistant reply/audio, and before any dialog is buffered, the frontend silently reconnects once instead of dropping the call immediately.
-  - this is a transport-level safety net for flaky early `onclose/onerror` cases during call startup.
-- As of `2026-03-28`, Gemini Live ignores stop/hangup clicks during the first ~1.2s of connection setup:
-  - this protects against accidental double-click / repeated tap on the main call button while it is morphing from “start call” into “stop”.
-  - the guard only applies before `setupComplete` / first assistant reply; after that normal hangup works as usual.
-- As of `2026-03-28`, stale Gemini Live callbacks no longer abort a fresh call start:
-  - `onmessage`, `onerror`, and `onclose` now ignore events from old start attempts, not only `onopen`.
-  - this closes a race where a late `close` from the previous session could reset a brand new outgoing call before it actually started.
-- As of `2026-03-28`, finalized Gemini Live transcripts now pass through a short-noise filter before appending to chat:
-  - streaming status text is untouched; only finalized chat lines are filtered.
-  - ultra-short foreign/non-Cyrillic fragments in a Russian dialog context (for example stray `Sí.`) are dropped instead of being written as full chat bubbles.
-  - short valid replies like `да`, `нет`, `ок`, `алло` and equipment brands like `CASE`, `CAT`, `JCB`, `XCMG` remain allowed.
-- As of `2026-03-28`, Gemini first-turn voice flow was simplified around the real root cause:
-  - removed the first-audio auto-repeat watchdog, because it could inject a competing prompt before the original first reply audio arrived.
-  - microphone streaming now stays blocked until the client’s first turn has finished playing, so the manager cannot interrupt the opening phrase by speaking too early.
-  - mic unlock no longer relies on `turnComplete` alone: if the first reply text arrived before its audio, input stays blocked until an actual audio chunk is queued and finishes playback.
-  - audio reset now invalidates stale queued chunks via a playback generation counter, which prevents late old chunks from playing over the current reply after interrupts/resets.
-  - the earlier theory that `sendClientContent(..., turnComplete: true)` was the correct way to trigger the first spoken client turn was disproven by direct runtime testing; that startup request is now removed from the Gemini path.
-- As of `2026-03-28`, voice user turns now append reliably:
-  - new turns reset the “finalized” flag when fresh input starts, so multiple user messages appear.
-- As of `2026-03-28`, a call-start notice is appended to chat when Gemini connects:
-  - “Звонок начался. Говорите.”
-- As of `2026-03-28`, Gemini voice calls can auto-end when the client says a clear goodbye:
-  - detects explicit “до свидания / разговор окончен / завершаю разговор” phrases and stops after playback, preserving dialog for rating.
-  - voice system prompt explains that “до свидания” ends the call and can be used as a controlled exit.
-- As of `2026-03-28`, Gemini Live audio playback is more robust:
-  - non‑PCM audio is decoded via `decodeAudioData`, with a PCM fallback; also checks `outputAudio` when `modelTurn.parts` has no audio.
-  - odd-length PCM chunks are now trimmed instead of dropped; audio parts without mimeType are treated as audio.
-  - decoder now runs even when mimeType is missing, then falls back to PCM if decode fails.
-  - first audio chunk now forces immediate playback if the queue is too far ahead to avoid missing the first reply.
-- As of `2026-03-28`, Gemini audio playback is serialized and cancellable:
-  - buffer sources are tracked/stopped on reset, and chunks are queued to avoid overlapping voices.
-- As of `2026-03-28`, voice chat append no longer dedupes against full history:
-  - prevents the first assistant line from being skipped when it matches earlier history text.
-- As of `2026-03-28`, Gemini `interrupted` events no longer kill the very first audio:
-  - playback reset only stops sources after the first audio has actually played.
-- As of `2026-03-28`, a watchdog retries the first assistant audio if no sound arrives:
-  - after the first reply text appears, the client asks Gemini to repeat it once for audio.
-- As of `2026-03-28`, settings include a Gemini voice picker:
-  - dropdown lists Google AI Studio voices; selection stored locally via `geminiLiveVoiceName` and used for new calls.
-  - duplicate voice picker row was removed from the main chat screen and kept only in the settings modal, directly after the export buttons.
-  - save/reset buttons and helper caption were removed; voice selection now saves automatically on change.
-  - native browser `select` was replaced with a custom dropdown styled like the rest of the dark UI; selected voice is shown as name + short description.
-  - voice picker menu scrollbar now reuses the same thin scrollbar styling as the site prompt editors/tables, without `scrollbar-gutter`, to avoid the thick Windows gutter and stray corner/buttons in the popup.
-- As of `2026-03-28`, the previous “client starts first via text trigger” approach is retired for Gemini Live:
-  - SDK typings/docs mention `sendClientContent`, but direct live runtime checks for this exact model/config show it closes the socket with `1007 invalid argument` right after `setupComplete`.
-  - keep Gemini startup manager-first unless a future native server-side/start-of-response mechanism is verified to work without killing the session.
-- As of `2026-03-28`, a “Идёт подключение…” status is shown during ringing:
-  - start buttons are hidden while the voice connection is in progress.
-- As of `2026-03-28`, tooltips are force-hidden on primary action click:
-  - prevents “Завершить звонок” tooltip from sticking after click.
-- As of `2026-03-28`, the voice status pill was removed from the DOM:
-  - live “Вы/ИИ” previews no longer render above the chat.
-- As of `2026-03-28`, user voice transcripts are appended to chat:
-  - a user turn is finalized on input-finish or when the assistant starts responding.
-- As of `2026-03-28`, Gemini first-turn request is delayed by ~250ms after readiness:
-  - helps avoid losing the first spoken reply.
-- As of `2026-03-28`, voice call stop works even when input is disabled:
-  - primary action now stops the call before checking input state.
-- As of `2026-03-28`, Gemini Live first turn waits for audio pipeline readiness and active state:
-  - first turn now gated on `setupComplete` + audio ready + voice active to avoid missing the first spoken reply.
-- As of `2026-03-28`, assistant text no longer lingers in the voice status pill after it’s appended to chat:
-  - status snaps back to “Слушаю вас…” when new lines are added during an active call.
-- As of `2026-03-28`, voice status pill is hidden when there's no active/connecting call or error:
-  - prevents the empty rounded bar from showing above the chat when idle.
-- As of `2026-03-28`, voice-mode preview text spacing fixed:
-  - streaming transcript fragments now insert missing spaces between words/punctuation.
-  - prevents “тебеужевсёсказал.Либодавай...” in voice status line.
-- As of `2026-03-28`, voice-mode status no longer disappears instantly:
-  - streaming status text now has a short lock to prevent generic “Идёт диалог…” from overwriting it.
-- As of `2026-03-28`, voice token endpoint timeout increased to 45s with clearer timeout error for cold starts.
-- As of `2026-03-28`, Gemini Live transcripts now append into the chat as soon as a phrase is finalized (not only after call end).
-- As of `2026-03-28`, voice mode no longer opens a full-screen overlay:
-  - the main send button becomes the stop/hangup button during a call.
-  - inline status badge removed on request (no extra UI during a call).
-- As of `2026-03-28`, Gemini Live start adds a short audio warmup delay so the first sentence is not clipped.
-- As of `2026-03-28`, voice call UX improved:
-  - added a dial tone + “Звоним клиенту…” indicator during connection.
-  - first turn is sent after `setupComplete` to avoid losing the first audio phrase.
-- As of `2026-03-28`, voice call hides the text input and centers the call/stop button while the call is active.
-- As of `2026-03-28`, voice call indicator is forcibly hidden when not in a call to avoid empty placeholder pills.
-- As of `2026-03-28`, роли и App Check усилены без изменения UX:
-  - админ‑доступ на фронте и в правилах RTDB теперь читается из Firebase Custom Claims (`auth.token.admin/role`), а не из RTDB роли (кроме localhost preview).
-  - REST‑fallback в браузере отключён для `client-simulator.ru` (остался для localhost/preview), чтобы убрать канал с токеном в URL.
-  - добавлен App Check (reCAPTCHA v3) на фронте; токен‑сервер умеет принудительно проверять App Check при `FIREBASE_APP_CHECK_ENFORCE=true` + service account.
-  - добавлен скрипт `scripts/set-custom-claims.mjs` и зависимость `firebase-admin` для проставления ролей в claims.
-- As of `2026-03-28`, service-account JSON for `set-custom-claims.mjs` not found locally; need to download a new key from Firebase Console to proceed.
-- As of `2026-03-28`, custom claims set for `qwertaf134@gmail.com`; service-account JSON moved out of repo to `C:\Users\qwert\Downloads\firebase-service-accounts\`.
-- As of `2026-03-28`, RTDB export shows `app_config.geminiTokenEndpoint` set to `https://client-simulator-gemini-token.onrender.com/api/gemini-live-token` (token server on Render).
-- As of `2026-03-28`, settings modal open now hides tooltips and removes focus outline from the floating settings button.
-- As of `2026-03-28`, admin accounts now force admin view on login (claims sync overrides any stored user-preview mode).
-- As of `2026-03-28`, Render blueprint (`render.yaml`) includes App Check env vars; `server/.env.example` updated for local setup.
-- As of `2026-03-28`, voice token endpoint allowlist updated to include Render host; default token endpoint now points to Render.
-- As of `2026-03-28`, CSP `connect-src` updated to allow Render token server origin.
-- As of `2026-03-28`, token server reads RTDB via Firebase Admin SDK when App Check enforcement is enabled (avoids App Check blocking REST reads).
-- As of `2026-03-28`, realtime listener recovery hardened:
-  - exponential backoff (2s → 4s → 8s → … capped at 30s) added for presence/admin/prompt overrides/protected listeners.
-  - backoff resets on successful recovery to avoid long delays after a stable reconnect.
-  - goal: stability + speed under flaky network, no UX changes.
-- As of `2026-03-28`, prompt_history sync was optimized without UX change:
-  - heavy `JSON.stringify` comparisons replaced with compact hash from `id/ts/role/variationId/kind`.
-  - reduces CPU/memory on every history update while keeping behavior identical.
-  - prompt_history realtime listener now runs only for admins to avoid unnecessary reads for non-admin users.
-- As of `2026-03-28`, Firebase REST fallback reads now back off on repeated failures:
-  - exponential cooldown per path (2s → 4s → 8s → … capped at 30s).
-  - avoids network storms when SDK reads fail or REST is flaky.
-  - cooldown resets after a successful REST read.
-- As of `2026-03-28`, `prompt_history` rules were tightened:
-  - read/write now admin-only to reduce exposure of internal history data.
-  - requires publishing updated `database.rules.json` in Firebase Console.
-- As of `2026-03-28`, rater prompt assembly verified in `script.js`:
-  - rating webhook uses `buildRaterPromptForWebhook()` which concatenates base rater prompt + hidden rater prompt + platform context (if any), and sends it as `systemPrompt` without extra text injection.
-- As of `2026-03-27`, settings modal scroll behavior adjusted:
-  - removed inner scrollbar on the admin users table so it scrolls with the settings panel.
-  - disabled overlay scroll on `#settingsModal` to avoid dual scrollbars.
-- As of `2026-03-27`, admin users table got sorting controls:
-  - sortable headers for role, access expiry, and active time with toggle direction.
-- As of `2026-03-27`, reviewed admin users table logic in `script.js` for missing users in RTDB:
-  - Table rendering prefers realtime `users` path snapshots when available and does not merge `users_by_uid` mirror, so extra users stored only in the mirror can be hidden.
-  - User normalization drops records without a valid email login; if RTDB keys are raw emails (not hex) and the value lacks `login`/`email`, `resolveNormalizedLogin` returns empty and the record is filtered out.
-  - If Firebase Security Rules or auth context only allow partial reads, the UI will show that subset without clear diagnostics.
-- As of `2026-03-24`, login-path check on current frontend build (`script.js?v=20260324-01`) showed emergency credentials routing to confirmation flow for new accounts (message: `Отправьте ссылку для подтверждения на почту ...`) instead of "wrong password", under clean local state.
-- User-visible "wrong password / remaining attempts" counter is likely from stale local auth cache (legacy `localStorage` state) or old cached frontend version, not from server-side password reject.
-- Immediate recovery steps (without code changes):
-  - hard-refresh after clearing cache (`Ctrl/Cmd + Shift + R`)
-  - clear session state: `localStorage.removeItem('authUsers:v1')`, `localStorage.removeItem('authSession:v1')`, `sessionStorage.clear()`
-  - if needed, test in Incognito/private window.
-- If this repeats, next code hardening is to auto-clear local failed-attempt counters for emergency credentials before policy check.
-- As of `2026-03-24`, hardening patch applied to `script.js`:
-  - emergency credentials now clear stale local/remote lock-state (`failedLoginAttempts`, `isBlocked`, `blockedAt`, `blockedReason`, `failedLoginBackoffUntil`) before login continues.
-  - this should stop the “неверный пароль, осталось попыток...” loop for `qwertaf134@gmail.com` + `MrIbraPro05` when only old counters were blocking it.
-- As of `2026-03-21`, a read-only follow-up on Windows sign-in forms for RDP/Windows App was run from the repo workspace:
-  - current session resolves as `ARTEMKIRILLOV\qwert`; `cmd /c whoami /upn` says the user is not a domain user
-  - `Get-LocalUser` shows `qwert` with `PrincipalSource=MicrosoftAccount`, while `Win32_UserAccount` still reports it as a local account/profile (`C:\Users\qwert`)
-  - registry under `HKCU\Software\Microsoft\IdentityCRL\UserExtendedProperties` exposes linked Microsoft account email `qwertaf134@gmail.com`
-  - practical username forms to try first in Windows App: `ARTEMKIRILLOV\qwert`, `.\qwert`, `qwert`, then `MicrosoftAccount\qwertaf134@gmail.com` or plain `qwertaf134@gmail.com` if Microsoft-account auth is required
-- As of `2026-03-20`, a read-only Windows remote-access sidecar check was run from the repo workspace:
-  - current user `ARTEMKIRILLOV\qwert`; local account in `Administrators`, current token non-elevated; Windows reports `PasswordRequired=True`, `PasswordLastSet=2025-11-20`
-  - active non-loopback IPv4s seen on `Беспроводная сеть` (`192.168.1.72`), `SetupVPN` (`172.16.9.2`), Hyper-V vSwitches (`172.31.128.1`, `172.26.112.1`), plus several APIPA interfaces
-  - no Tailscale install/service/binary detected via uninstall registry, `Get-Service`, or `where.exe`
-  - Windows Firewall profiles enabled; RDP disabled (`fDenyTSConnections=1`), `TermService` stopped/manual, no listener on `3389`, built-in Remote Desktop firewall rules present but disabled
-- As of `2026-03-19`, the latest completed pass focused on token-server robustness and frontend prompt-sync performance.
-- Already fixed in this codebase:
-  - client-side self-escalation to admin
-  - overly broad Firebase RTDB access
-  - token-server login/email fallback and fail-open CORS
-  - weak password fallback and password-hash leakage to local cache
-  - fail-open trust of localStorage when Firebase reads fail
-  - CDN supply-chain hardening with CSP, SRI, and loader checks
-  - sanitizer replacement with DOMPurify
-  - request-body size limit and invalid JSON handling in `server/gemini-token-server.mjs`
-  - prompt/history write amplification in `script.js`
-  - hidden prompt-history modal re-rendering on every Firebase history update
-- The next pending work from that pass is:
-  - frontend polling/write-loop performance cleanup in `script.js`
-  - review `active time` and session-revocation polling for event-driven simplification opportunities
+## Current Context
+- Voice mode runs on Gemini Live (`gemini-3.1-flash-live-preview`) through the token server.
+- Stable voice behavior is manager-first. The frontend no longer relies on a synthetic first text turn from the client.
+- First assistant reply recovery is turn-centric:
+  - assistant audio is buffered per turn;
+  - if text is missing or late, the frontend can request fallback transcription from `/api/gemini-live-transcribe`;
+  - half-duplex is enforced while the assistant is speaking.
+- Admin settings include a local Gemini Live tech log for debugging transport/startup issues.
+- Settings on mobile are a full-screen sheet with a fixed close button.
+- `Пользователи и доступ` has a dedicated mobile card layout; desktop table remains unchanged.
+- Persistent dialog history is stored in RTDB:
+  - index: `dialog_history_index/{loginKey}/{dialogId}`
+  - payload: `dialog_history_messages/{loginKey}/{dialogId}`
+  - only text/transcripts/rating are stored; audio is not stored.
+- Admins can view and delete foreign dialog history; users can manage only their own history.
+- Active time is now “real focused activity only”:
+  - visible tab
+  - focused window
+  - real action in the last 60 seconds
+- Roles are enforced via Firebase Custom Claims.
+- App Check is enabled in the frontend/token-server flow.
+- Default Gemini voice is `Enceladus` unless the user picked another voice locally.
 
-## References
-- `README.md`
-- `server/README.md`
+## Architecture Notes
+### Dialog History
+- Paths:
+  - `dialog_history_index/{loginKey}/{dialogId}`
+  - `dialog_history_messages/{loginKey}/{dialogId}`
+- Stored data:
+  - text chat messages
+  - voice transcripts
+  - optional rating text
+- Audio files are not stored.
+- Owners can rename/delete their own dialogs.
+- Admins can open and delete any user’s dialog history, but cannot rename чужие записи.
+
+### Auth / Security
+- Roles are enforced through Firebase Custom Claims, not just RTDB role fields.
+- App Check is part of the frontend + token-server flow.
+- Browser REST fallback was reduced/disabled for production-sensitive paths to avoid weaker client-side access patterns.
+
+### Activity Tracking
+- `activeMs` counts only real activity:
+  - tab visible
+  - window focused
+  - real action within the last 60 seconds
+- Focus/visibility restore alone does not count as activity.
+
+### Mobile UI
+- Settings on phones are full-screen.
+- Mobile settings have a fixed close button.
+- `Пользователи и доступ` has a mobile card layout instead of the wide desktop table.
+
+## Keep In Mind
+- If something starts failing in voice mode, check the admin tech log first before adding more heuristics.
+- If dialog history acts like a permissions problem, verify both Firebase rules and fresh auth token state.
+- When updating context again, prefer replacing old bullets instead of appending another long timeline.
