@@ -1528,6 +1528,10 @@ let pendingRatingImproveContext = null;
 let aiImproveMode = 'default';
 let aiImproveRequestVersion = 0;
 let aiImproveRequestController = null;
+let localJsonStorageCache = new Map();
+let localJsonStorageDirtyKeys = new Set();
+let localJsonStorageRemovedKeys = new Set();
+let localJsonStorageFlushTimer = null;
 let webhookDebugEntries = ENABLE_LOCAL_WEBHOOK_DEBUG ? loadWebhookDebugEntries() : [];
 let webhookDebugRenderQueued = false;
 let voiceDebugEntries = loadVoiceDebugEntries();
@@ -2168,10 +2172,6 @@ async function ensureCurrentUserAccessMirror(user = currentUser, options = {}) {
 }
 
 const LOCAL_JSON_STORAGE_FLUSH_MS = 160;
-const localJsonStorageCache = new Map();
-const localJsonStorageDirtyKeys = new Set();
-const localJsonStorageRemovedKeys = new Set();
-let localJsonStorageFlushTimer = null;
 
 function getSafeLocalStorageValue(key) {
     if (!isLocalStorageAccessible) return null;
@@ -8922,9 +8922,10 @@ function clearWebhookDebugEntries() {
 
 function loadVoiceDebugEntries() {
     try {
-        const raw = getCachedLocalStorageJson(VOICE_DEBUG_LOG_STORAGE_KEY);
-        return Array.isArray(raw)
-            ? raw.filter((entry) => entry && typeof entry === 'object').slice(0, VOICE_DEBUG_LOG_MAX_ENTRIES)
+        const rawValue = getSafeLocalStorageValue(VOICE_DEBUG_LOG_STORAGE_KEY);
+        const parsed = rawValue ? JSON.parse(rawValue) : [];
+        return Array.isArray(parsed)
+            ? parsed.filter((entry) => entry && typeof entry === 'object').slice(0, VOICE_DEBUG_LOG_MAX_ENTRIES)
             : [];
     } catch (error) {
         console.warn('Failed to load voice debug log:', error);
@@ -13701,6 +13702,10 @@ function getDefaultGeminiTokenEndpoint() {
         return `${protocol}//${window.location.hostname}:8787${GEMINI_LIVE_ALLOWED_TOKEN_ENDPOINT_PATH}`;
     }
 
+    if (typeof window !== 'undefined') {
+        return String(GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT || GEMINI_LIVE_REMOTE_TOKEN_ENDPOINT || '').trim();
+    }
+
     return String(GEMINI_LIVE_REMOTE_TOKEN_ENDPOINT || GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT || '').trim();
 }
 
@@ -14397,6 +14402,80 @@ async function buildGeminiVoiceServerRequestHeaders(tokenEndpoint = '') {
     return headers;
 }
 
+function isGeminiVoiceTokenRetryableError(error) {
+    const message = String(error?.message || '').toLowerCase();
+    return error?.name === 'AbortError'
+        || message.includes('таймаут')
+        || message.includes('timeout')
+        || message.includes('failed to fetch')
+        || message.includes('networkerror')
+        || message.includes('load failed')
+        || message.includes('network request failed');
+}
+
+function getGeminiVoiceTokenEndpointCandidates(preferredEndpoint = '') {
+    const candidates = [];
+    const seen = new Set();
+
+    const addCandidate = (value) => {
+        const sanitized = getTrustedGeminiTokenEndpointOrEmpty(value, {
+            source: 'Voice token endpoint candidate'
+        });
+        if (!sanitized) return;
+
+        let cacheKey = sanitized;
+        try {
+            cacheKey = new URL(sanitized, window.location.origin).toString();
+        } catch (error) {}
+
+        if (seen.has(cacheKey)) return;
+        seen.add(cacheKey);
+        candidates.push(sanitized);
+    };
+
+    addCandidate(preferredEndpoint);
+
+    let preferredIsSameOriginEndpoint = false;
+    try {
+        const parsed = new URL(preferredEndpoint || '', window.location.origin);
+        preferredIsSameOriginEndpoint = parsed.origin === window.location.origin
+            && ((normalizeGeminiTokenEndpoint(parsed.pathname || '').replace(/\/+$/, '')) || '/') === GEMINI_LIVE_ALLOWED_TOKEN_ENDPOINT_PATH;
+    } catch (error) {}
+
+    if (preferredIsSameOriginEndpoint) {
+        addCandidate(GEMINI_LIVE_REMOTE_TOKEN_ENDPOINT);
+    } else {
+        addCandidate(GEMINI_LIVE_ALLOWED_TOKEN_ENDPOINT_PATH);
+    }
+
+    addCandidate(getDefaultGeminiTokenEndpoint());
+    return candidates;
+}
+
+function warmupGeminiVoiceTokenEndpoint(timeoutMs = 4000) {
+    let tokenEndpoint = '';
+    try {
+        tokenEndpoint = sanitizeGeminiTokenEndpointOrThrow(getConfiguredGeminiTokenEndpoint(), {
+            source: 'Voice token endpoint warmup'
+        });
+    } catch (error) {
+        return Promise.resolve(false);
+    }
+    if (!tokenEndpoint) {
+        return Promise.resolve(false);
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    return fetch(tokenEndpoint, {
+        method: 'OPTIONS',
+        credentials: 'omit',
+        signal: controller.signal
+    }).then(() => true).catch(() => false).finally(() => {
+        clearTimeout(timeoutId);
+    });
+}
+
 async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
     const tokenEndpoint = sanitizeGeminiTokenEndpointOrThrow(getConfiguredGeminiTokenEndpoint(), {
         source: 'Voice token endpoint'
@@ -14406,82 +14485,130 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
     }
 
     const headers = await buildGeminiVoiceServerRequestHeaders(tokenEndpoint);
+    const endpointCandidates = getGeminiVoiceTokenEndpointCandidates(tokenEndpoint);
+    const retryableHttpStatuses = new Set([404, 408, 502, 503, 504]);
+    let lastError = null;
+    let sawTimeoutLikeFailure = false;
 
-    let tokenResponse;
-    try {
-        recordVoiceDebugEvent('token_request_started', {
-            message: tokenEndpoint,
-            voice: sessionConfig?.voice || getConfiguredGeminiVoiceName(),
-            model: sessionConfig?.model || GEMINI_LIVE_MODEL
-        });
-        tokenResponse = await fetchWithTimeout(tokenEndpoint, {
-            method: 'POST',
-            headers,
-            credentials: 'omit',
-            body: JSON.stringify({
-                source: 'client-simulator-web',
-                login: getGeminiVoiceRequestLogin(),
-                model: sessionConfig?.model || GEMINI_LIVE_MODEL,
-                voice: sessionConfig?.voice || getConfiguredGeminiVoiceName(),
-                instructions: String(sessionConfig?.instructions || '').trim()
-            }),
-            signal: options?.signal
-        }, VOICE_TOKEN_ENDPOINT_TIMEOUT_MS);
-    } catch (error) {
-        recordVoiceDebugEvent('token_request_failed', {
-            status: 'error',
-            message: error?.message || 'Token endpoint request failed'
-        });
-        const message = String(error?.message || '').toLowerCase();
-        if (message.includes('таймаут') || message.includes('timeout')) {
-            throw new Error(`Таймаут token endpoint (${VOICE_TOKEN_ENDPOINT_TIMEOUT_MS / 1000}с). Сервер может просыпаться после простоя — попробуйте ещё раз.`);
+    for (let attemptIndex = 0; attemptIndex < endpointCandidates.length; attemptIndex += 1) {
+        const endpoint = endpointCandidates[attemptIndex];
+        const attemptNumber = attemptIndex + 1;
+        const isFallbackAttempt = attemptIndex > 0;
+        const attemptTimeoutMs = isFallbackAttempt
+            ? Math.min(20000, VOICE_TOKEN_ENDPOINT_TIMEOUT_MS)
+            : VOICE_TOKEN_ENDPOINT_TIMEOUT_MS;
+
+        if (isFallbackAttempt) {
+            setVoiceModeStatus('Сервер голосового режима отвечает медленно. Пробуем запасной маршрут…', 'waiting');
         }
-        throw error;
-    }
-    if (!tokenResponse.ok) {
-        const tokenErrorPayload = await readResponseJsonWithTimeout(
+
+        let tokenResponse;
+        try {
+            recordVoiceDebugEvent('token_request_started', {
+                message: endpoint,
+                voice: sessionConfig?.voice || getConfiguredGeminiVoiceName(),
+                model: sessionConfig?.model || GEMINI_LIVE_MODEL,
+                attempt: attemptNumber,
+                totalAttempts: endpointCandidates.length
+            });
+            tokenResponse = await fetchWithTimeout(endpoint, {
+                method: 'POST',
+                headers,
+                credentials: 'omit',
+                body: JSON.stringify({
+                    source: 'client-simulator-web',
+                    login: getGeminiVoiceRequestLogin(),
+                    model: sessionConfig?.model || GEMINI_LIVE_MODEL,
+                    voice: sessionConfig?.voice || getConfiguredGeminiVoiceName(),
+                    instructions: String(sessionConfig?.instructions || '').trim()
+                }),
+                signal: options?.signal
+            }, attemptTimeoutMs);
+        } catch (error) {
+            if (options?.signal?.aborted) {
+                throw error;
+            }
+
+            const timeoutLikeFailure = isGeminiVoiceTokenRetryableError(error);
+            sawTimeoutLikeFailure = sawTimeoutLikeFailure || timeoutLikeFailure;
+            lastError = error;
+            recordVoiceDebugEvent('token_request_failed', {
+                status: 'error',
+                message: error?.message || 'Token endpoint request failed',
+                attempt: attemptNumber,
+                totalAttempts: endpointCandidates.length
+            });
+            if (timeoutLikeFailure && attemptIndex < endpointCandidates.length - 1) {
+                continue;
+            }
+            break;
+        }
+
+        if (!tokenResponse.ok) {
+            const tokenErrorPayload = await readResponseJsonWithTimeout(
+                tokenResponse,
+                10000,
+                'Таймаут чтения ошибки token endpoint.',
+                {}
+            );
+            const tokenErrorText = String(tokenErrorPayload?.error || '').trim();
+            recordVoiceDebugEvent('token_request_failed', {
+                status: 'error',
+                httpStatus: tokenResponse.status,
+                message: tokenErrorText || `HTTP ${tokenResponse.status}`,
+                attempt: attemptNumber,
+                totalAttempts: endpointCandidates.length
+            });
+            if (tokenResponse.status === 401 || tokenResponse.status === 403) {
+                throw new Error(tokenErrorText || 'Нет доступа к голосовому режиму');
+            }
+            if (retryableHttpStatuses.has(tokenResponse.status) && attemptIndex < endpointCandidates.length - 1) {
+                sawTimeoutLikeFailure = true;
+                lastError = new Error(tokenErrorText || `HTTP ${tokenResponse.status}`);
+                continue;
+            }
+            throw new Error(tokenErrorText || `Не удалось получить ключ сессии (HTTP ${tokenResponse.status})`);
+        }
+
+        const tokenPayload = await readResponseJsonWithTimeout(
             tokenResponse,
-            10000,
-            'Таймаут чтения ошибки token endpoint.',
-            {}
+            20000,
+            'Таймаут чтения ответа token endpoint.'
         );
-        const tokenErrorText = String(tokenErrorPayload?.error || '').trim();
+        const token = String(
+            tokenPayload?.client_secret?.value ||
+            tokenPayload?.name ||
+            tokenPayload?.token ||
+            tokenPayload?.accessToken ||
+            tokenPayload?.apiKey ||
+            ''
+        ).trim();
+        if (token) {
+            recordVoiceDebugEvent('token_request_succeeded', {
+                status: 'ok',
+                httpStatus: tokenResponse.status,
+                attempt: attemptNumber,
+                totalAttempts: endpointCandidates.length
+            });
+            return token;
+        }
         recordVoiceDebugEvent('token_request_failed', {
             status: 'error',
             httpStatus: tokenResponse.status,
-            message: tokenErrorText || `HTTP ${tokenResponse.status}`
+            message: 'Пустой ответ token endpoint',
+            attempt: attemptNumber,
+            totalAttempts: endpointCandidates.length
         });
-        if (tokenResponse.status === 401 || tokenResponse.status === 403) {
-            throw new Error(tokenErrorText || 'Нет доступа к голосовому режиму');
-        }
-        throw new Error(tokenErrorText || `Не удалось получить ключ сессии (HTTP ${tokenResponse.status})`);
+        throw new Error('Эндпоинт ключа сессии вернул пустой ответ');
     }
-    const tokenPayload = await readResponseJsonWithTimeout(
-        tokenResponse,
-        20000,
-        'Таймаут чтения ответа token endpoint.'
-    );
-    const token = String(
-        tokenPayload?.client_secret?.value ||
-        tokenPayload?.name ||
-        tokenPayload?.token ||
-        tokenPayload?.accessToken ||
-        tokenPayload?.apiKey ||
-        ''
-    ).trim();
-    if (token) {
-        recordVoiceDebugEvent('token_request_succeeded', {
-            status: 'ok',
-            httpStatus: tokenResponse.status
-        });
-        return token;
+
+    if (sawTimeoutLikeFailure) {
+        throw new Error('Token endpoint не ответил вовремя даже после повторной попытки. Сервер может просыпаться после простоя — подождите 10–20 секунд и попробуйте ещё раз.');
     }
-    recordVoiceDebugEvent('token_request_failed', {
-        status: 'error',
-        httpStatus: tokenResponse.status,
-        message: 'Пустой ответ token endpoint'
-    });
-    throw new Error('Эндпоинт ключа сессии вернул пустой ответ');
+    if (lastError) {
+        throw lastError;
+    }
+    throw new Error('Не удалось получить ключ сессии');
 }
 
 function uint8ToBase64(bytes) {
@@ -16581,9 +16708,9 @@ async function startGeminiVoiceMode() {
     });
     isGeminiVoiceConnecting = true;
     updateVoiceModeControls();
-    setVoiceModeStatus('Звоним клиенту…', 'waiting');
-    startGeminiDialTone();
+    setVoiceModeStatus('Подключаем голосовой сервер…', 'waiting');
     const startAttempt = beginGeminiVoiceStartAttempt();
+    void warmupGeminiVoiceTokenEndpoint();
 
     try {
         const sdk = await loadGeminiSdkModule();
@@ -16604,6 +16731,8 @@ async function startGeminiVoiceMode() {
             signal: startAttempt.signal
         });
         throwIfGeminiVoiceStartAttemptStale(startAttempt.id);
+        setVoiceModeStatus('Звоним клиенту…', 'waiting');
+        startGeminiDialTone();
 
         geminiLiveApiClient = new sdk.GoogleGenAI({
             apiKey: clientSecret,

@@ -27,6 +27,9 @@
 ## Current Context
 - Voice mode runs on Gemini Live (`gemini-3.1-flash-live-preview`) through the token server.
 - Stable voice behavior is manager-first. The frontend no longer relies on a synthetic first text turn from the client.
+- Voice startup is now split into two phases:
+  - before session key arrives, UI shows that the voice server is connecting and does not imitate an active call yet;
+  - if the main token endpoint stalls, the frontend can prewarm it with `OPTIONS` and retry through a trusted fallback route instead of failing after one blind 45-second wait.
 - First assistant reply recovery is turn-centric:
   - assistant audio is buffered per turn;
   - if text is missing or late, the frontend can request fallback transcription from `/api/gemini-live-transcribe`;
@@ -36,6 +39,7 @@
   - client audio can start immediately, but the first client text bubble is held briefly until the opening manager turn is restored, then shown in the correct order;
   - covered by smoke scenario `output-before-first-input-transcript`.
 - Admin settings include a local Gemini Live tech log for debugging transport/startup issues.
+- Voice debug log loading is intentionally independent from the local JSON cache bootstrap so startup diagnostics do not break on localStorage init order.
 - Settings on mobile are a full-screen sheet with a fixed close button.
 - `Пользователи и доступ` has a dedicated mobile card layout; desktop table remains unchanged.
 - Persistent dialog history is stored in RTDB:
@@ -83,6 +87,7 @@
 
 ## Keep In Mind
 - If something starts failing in voice mode, check the admin tech log first before adding more heuristics.
+- If the call seems to “drop” immediately, first verify whether session key fetch timed out before Gemini Live even opened.
 - If the first client reply disappears again, look in the admin tech log for `assistant_output_buffered_before_user_turn`, `assistant_output_waiting_for_user_turn`, and `assistant_output_released_after_user_turn`.
 - If dialog history acts like a permissions problem, verify both Firebase rules and fresh auth token state.
 - When updating context again, prefer replacing old bullets instead of appending another long timeline.

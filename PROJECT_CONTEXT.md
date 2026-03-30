@@ -21,13 +21,22 @@
 - Audio for that first client reply can still start immediately.
 - The first client text bubble is delayed briefly until the opening manager turn is restored, so chat order stays stable in the normal path.
 - Added smoke coverage for this exact case: `output-before-first-input-transcript`.
+- Fixed voice startup behavior around token-server cold starts:
+  - voice debug log loading no longer depends on the local JSON cache bootstrap order;
+  - voice mode now prewarms the token endpoint with `OPTIONS` in the background;
+  - if the first token route is slow or unavailable, the frontend retries through trusted fallback candidates instead of failing after one attempt;
+  - the UI no longer pretends the call already started before the session key is received.
 
 ## Useful Debug Markers
 - `assistant_output_buffered_before_user_turn`
 - `assistant_output_waiting_for_user_turn`
 - `assistant_output_released_after_user_turn`
 - `assistant_output_released_to_fallback`
+- `token_request_started`
+- `token_request_failed`
+- `token_request_succeeded`
 
 ## Verification
+- Passed: `node --check script.js`
 - Passed: `npm run test:smoke`
 - Date: 2026-03-30
