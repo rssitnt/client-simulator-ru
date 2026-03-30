@@ -27,6 +27,7 @@
   - if the first token route is slow or unavailable, the frontend retries through trusted fallback candidates instead of failing after one attempt;
   - if the first token route returns HTML, empty payload, or other non-API content, the frontend treats that as a bad route and still falls through to the next trusted candidate;
   - on the production domains `client-simulator.ru` and `www.client-simulator.ru`, remote token routing is preferred before same-origin `/api/...` attempts;
+  - before the token request starts, the frontend waits for Firebase auth readiness to avoid instant failures on partially restored sessions;
   - the UI no longer pretends the call already started before the session key is received.
 
 ## Useful Debug Markers
@@ -41,4 +42,7 @@
 ## Verification
 - Passed: `node --check script.js`
 - Passed: `npm run test:smoke`
+- Observed on 2026-03-30:
+  - `OPTIONS https://client-simulator.ru/api/gemini-live-token` => `405`
+  - `OPTIONS https://client-simulator-gemini-token.onrender.com/api/gemini-live-token` => `204`
 - Date: 2026-03-30

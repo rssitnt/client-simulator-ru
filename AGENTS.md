@@ -32,6 +32,7 @@
   - before session key arrives, UI shows that the voice server is connecting and does not imitate an active call yet;
   - if the main token endpoint stalls or returns a non-API payload, the frontend can prewarm it with `OPTIONS` and retry through a trusted fallback route instead of failing after one blind 45-second wait.
   - on `client-simulator.ru` and `www.client-simulator.ru`, the frontend now prefers the dedicated remote token server before same-origin `/api/...` fallbacks.
+  - before requesting a voice session key, the frontend now waits for Firebase auth readiness so the call does not fail instantly on a still-restoring session.
 - First assistant reply recovery is turn-centric:
   - assistant audio is buffered per turn;
   - if text is missing or late, the frontend can request fallback transcription from `/api/gemini-live-transcribe`;
@@ -90,6 +91,7 @@
 ## Keep In Mind
 - If something starts failing in voice mode, check the admin tech log first before adding more heuristics.
 - If the call seems to “drop” immediately, first verify whether session key fetch timed out before Gemini Live even opened.
+- The production site currently returns `405` on same-origin `OPTIONS /api/gemini-live-token`, so remote token routing is the only healthy warmup path right now.
 - If the first client reply disappears again, look in the admin tech log for `assistant_output_buffered_before_user_turn`, `assistant_output_waiting_for_user_turn`, and `assistant_output_released_after_user_turn`.
 - If dialog history acts like a permissions problem, verify both Firebase rules and fresh auth token state.
 - When updating context again, prefer replacing old bullets instead of appending another long timeline.

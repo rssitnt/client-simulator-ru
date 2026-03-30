@@ -14390,6 +14390,7 @@ async function loadGeminiSdkModule() {
 }
 
 async function buildGeminiVoiceServerRequestHeaders(tokenEndpoint = '') {
+    await waitForFirebaseAuthReady();
     const idToken = await getFirebaseAuthIdToken();
     const canUseLocalFallback = !idToken && canUseLocalhostDevVoiceTokenFallback(tokenEndpoint);
     if (!idToken && !canUseLocalFallback) {
@@ -14475,9 +14476,10 @@ function getGeminiVoiceTokenEndpointCandidates(preferredEndpoint = '') {
 function warmupGeminiVoiceTokenEndpoint(timeoutMs = 4000) {
     let tokenEndpoint = '';
     try {
-        tokenEndpoint = sanitizeGeminiTokenEndpointOrThrow(getConfiguredGeminiTokenEndpoint(), {
+        const preferredEndpoint = sanitizeGeminiTokenEndpointOrThrow(getConfiguredGeminiTokenEndpoint(), {
             source: 'Voice token endpoint warmup'
         });
+        tokenEndpoint = getGeminiVoiceTokenEndpointCandidates(preferredEndpoint)[0] || preferredEndpoint;
     } catch (error) {
         return Promise.resolve(false);
     }
