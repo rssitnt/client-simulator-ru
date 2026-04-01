@@ -303,6 +303,8 @@ const ATTESTATION_WEBHOOK_TIMEOUT_MS = 30000;
 const VOICE_TOKEN_ENDPOINT_TIMEOUT_MS = 45000;
 const VOICE_TRANSCRIBE_ENDPOINT_TIMEOUT_MS = 18000;
 const AUTH_SESSION_RESTORE_TIMEOUT_MS = 10000;
+const AUTH_SESSION_RESTORE_RETRY_TIMEOUT_MS = 25000;
+const AUTH_SESSION_MATCH_GRACE_TIMEOUT_MS = 6000;
 const AUTH_FLOW_STEP_TIMEOUT_MS = 12000;
 const AUTH_MAGIC_LINK_SEND_TIMEOUT_MS = 20000;
 const PROMPTS_REST_FALLBACK_TIMEOUT_MS = 5000;
@@ -663,6 +665,12 @@ async function withPromiseTimeout(promise, timeoutMs, timeoutMessage = 'Опер
             clearTimeout(timeoutId);
         }
     }
+}
+
+function waitForDelay(delayMs = 0) {
+    return new Promise((resolve) => {
+        setTimeout(resolve, Math.max(0, Number(delayMs) || 0));
+    });
 }
 
 function setAuthSubmitState(isLoading = false, label = AUTH_SUBMIT_DEFAULT_LABEL) {
@@ -1071,6 +1079,72 @@ async function waitForFirebaseAuthReady() {
     }
 }
 
+function isAuthRestoreTimeoutError(error) {
+    const message = String(error?.message || '').toLowerCase();
+    return message.includes('таймаут') || message.includes('timeout');
+}
+
+function cancelPendingAuthSessionRestore() {
+    activeAuthRestoreAttemptId += 1;
+    activeBackgroundAuthRestoreId += 1;
+    backgroundAuthRestorePromise = null;
+}
+
+function startBackgroundAuthSessionRestore(restorePromise, reason = '') {
+    const backgroundRestoreId = ++activeBackgroundAuthRestoreId;
+    const trackedPromise = Promise.resolve(restorePromise)
+        .then(async (restored) => {
+            if (backgroundRestoreId !== activeBackgroundAuthRestoreId) {
+                return restored;
+            }
+            if (restored) {
+                pendingAuthRestoreMessage = '';
+                hideNameModal();
+                if (auth?.currentUser) {
+                    try {
+                        await refreshProtectedFirebaseDataAfterAuth();
+                    } catch (error) {
+                        console.warn('Protected Firebase refresh after delayed auth restore failed:', error);
+                    }
+                }
+                debugLog('Delayed auth session restore completed', { reason });
+                return true;
+            }
+            if (!getAuthSession()?.login) {
+                selectedRole = 'user';
+                setCachedStorageValue(USER_ROLE_KEY, 'user');
+                showNameModal();
+                if (pendingAuthRestoreMessage) {
+                    setAuthError(pendingAuthRestoreMessage);
+                }
+            }
+            return false;
+        })
+        .catch((error) => {
+            if (backgroundRestoreId !== activeBackgroundAuthRestoreId) {
+                return false;
+            }
+            console.warn('Background auth session restore failed:', error);
+            if (!getAuthSession()?.login) {
+                pendingAuthRestoreMessage = getReadableFirebaseAuthError(error, 'login');
+                selectedRole = 'user';
+                setCachedStorageValue(USER_ROLE_KEY, 'user');
+                showNameModal();
+                if (pendingAuthRestoreMessage) {
+                    setAuthError(pendingAuthRestoreMessage);
+                }
+            }
+            return false;
+        })
+        .finally(() => {
+            if (backgroundAuthRestorePromise === trackedPromise) {
+                backgroundAuthRestorePromise = null;
+            }
+        });
+    backgroundAuthRestorePromise = trackedPromise;
+    return trackedPromise;
+}
+
 function getFirebaseAuthLogin() {
     return normalizeLogin(auth?.currentUser?.email || '');
 }
@@ -1079,6 +1153,34 @@ function hasFirebaseAuthSessionForLogin(login = '') {
     const normalizedLogin = normalizeLogin(login);
     if (!normalizedLogin) return false;
     return getFirebaseAuthLogin() === normalizedLogin;
+}
+
+async function waitForFirebaseAuthSessionForLogin(login = '', timeoutMs = AUTH_SESSION_MATCH_GRACE_TIMEOUT_MS) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!normalizedLogin) return false;
+    await waitForFirebaseAuthReady();
+    if (hasFirebaseAuthSessionForLogin(normalizedLogin)) {
+        return true;
+    }
+
+    const safeTimeoutMs = Math.max(0, Number(timeoutMs) || 0);
+    const startedAt = Date.now();
+    while ((Date.now() - startedAt) < safeTimeoutMs) {
+        const currentLogin = getFirebaseAuthLogin();
+        if (currentLogin === normalizedLogin) {
+            return true;
+        }
+        if (currentLogin && currentLogin !== normalizedLogin) {
+            return false;
+        }
+        const remainingMs = safeTimeoutMs - (Date.now() - startedAt);
+        if (remainingMs <= 0) {
+            break;
+        }
+        await waitForDelay(Math.min(250, remainingMs));
+    }
+
+    return hasFirebaseAuthSessionForLogin(normalizedLogin);
 }
 
 async function ensureFirebaseAuthPasswordSession(login, password) {
@@ -1588,6 +1690,8 @@ let lastPromptsFirebaseSnapshotState = null;
 let selectedRole = 'user';
 let currentUser = null;
 let activeAuthRestoreAttemptId = 0;
+let activeBackgroundAuthRestoreId = 0;
+let backgroundAuthRestorePromise = null;
 let pendingAuthRestoreMessage = '';
 let isAppBootstrapped = false;
 let isWindowLoaded = document.readyState !== 'loading';
@@ -3981,6 +4085,7 @@ function getLocalUserRecordByLogin(login) {
 
 async function saveUserRecord(record, options = {}) {
     const requireRemote = !!options.requireRemote;
+    const skipRemote = !!options.skipRemote;
     const normalized = normalizeUserRecord(record, record?.login);
     if (!normalized) throw new Error('Invalid user record');
     const key = loginToStorageKey(normalized.login);
@@ -4011,7 +4116,7 @@ async function saveUserRecord(record, options = {}) {
         throw new Error('Firebase RTDB недоступна для обязательной записи пользователя.');
     }
 
-    if (db) {
+    if (!skipRemote && db) {
         try {
             await firebaseWritePathWithFallback(
                 `${AUTH_USERS_DB_PATH}/${key}`,
@@ -4295,6 +4400,7 @@ function applyAuthenticatedUser(user) {
 }
 
 function resetCurrentSessionToAuth(message = '') {
+    cancelPendingAuthSessionRestore();
     stopActiveTimeTrackingLoop();
     stopUserActivityTrackingListeners();
     stopSessionRevocationListeners();
@@ -4358,6 +4464,7 @@ function syncLocalhostDevAuthActions() {
 
 async function handleLocalhostDevAuth() {
     if (!isLocalhostAdminPreviewHost()) return;
+    cancelPendingAuthSessionRestore();
     setAuthMailHelpVisible(false);
     const fio = normalizeFio(modalNameInput?.value || '');
     const login = normalizeLogin(modalLoginInput?.value || '');
@@ -5283,6 +5390,27 @@ function computeFailedLoginBackoffMs(failedAttempts) {
     const factor = normalizedAttempts - 1;
     const delay = FAILED_LOGIN_BACKOFF_BASE_MS * Math.pow(2, factor);
     return Math.min(FAILED_LOGIN_BACKOFF_MAX_MS, Math.max(FAILED_LOGIN_BACKOFF_BASE_MS, delay));
+}
+
+function shouldRequireRemoteUserSaveForAuth(existingUser, targetUser, accessPolicy = null) {
+    if (!targetUser) return true;
+    if (!existingUser) return true;
+
+    const existingVerifiedAt = String(existingUser.emailVerifiedAt || accessPolicy?.invite?.emailVerifiedAt || '').trim();
+    const targetVerifiedAt = String(targetUser.emailVerifiedAt || accessPolicy?.invite?.emailVerifiedAt || '').trim();
+
+    return normalizeRole(existingUser.role || 'user') !== normalizeRole(targetUser.role || 'user')
+        || String(existingUser.uid || '').trim() !== String(targetUser.uid || '').trim()
+        || String(existingUser.passwordHash || '').trim() !== String(targetUser.passwordHash || '').trim()
+        || String(existingUser.passwordHashScheme || '').trim() !== String(targetUser.passwordHashScheme || '').trim()
+        || !!existingUser.passwordNeedsSetup !== !!targetUser.passwordNeedsSetup
+        || (!existingVerifiedAt && !!targetVerifiedAt)
+        || !!existingUser.isBlocked !== !!targetUser.isBlocked
+        || Math.max(0, Number(existingUser.failedLoginAttempts) || 0) !== Math.max(0, Number(targetUser.failedLoginAttempts) || 0)
+        || String(existingUser.failedLoginBackoffUntil || '').trim() !== String(targetUser.failedLoginBackoffUntil || '').trim()
+        || String(existingUser.blockedAt || '').trim() !== String(targetUser.blockedAt || '').trim()
+        || String(existingUser.blockedReason || '').trim() !== String(targetUser.blockedReason || '').trim()
+        || String(existingUser.sessionRevokedAt || '').trim() !== String(targetUser.sessionRevokedAt || '').trim();
 }
 
 function clearAuthCachesForRevocation(login = '') {
@@ -7520,6 +7648,7 @@ async function handleCreatePartnerInvite() {
 
 async function handleAuthSubmit() {
     if (!modalNameSubmit) return;
+    cancelPendingAuthSessionRestore();
     setAuthMailHelpVisible(false);
     const fio = normalizeFio(modalNameInput?.value || '');
     const login = normalizeLogin(modalLoginInput?.value || '');
@@ -7722,12 +7851,23 @@ async function handleAuthSubmit() {
             'Не удалось открыть Firebase-сессию. Проверьте Email/Password в Firebase Authentication и повторите вход.'
         );
 
+        const requireRemoteUserSave = shouldRequireRemoteUserSaveForAuth(existingUser, targetUser, accessPolicy);
         let savedUser = await runAuthStep(
             'Сохраняем аккаунт...',
-            () => saveUserRecord(targetUser, { requireRemote: true }),
+            () => saveUserRecord(
+                targetUser,
+                requireRemoteUserSave
+                    ? { requireRemote: true }
+                    : { skipRemote: true }
+            ),
             AUTH_FLOW_STEP_TIMEOUT_MS,
             'Не удалось сохранить аккаунт в Firebase. Проверьте RTDB Rules и повторите вход.'
         );
+        if (!requireRemoteUserSave && db) {
+            void saveUserRecord(targetUser).catch((error) => {
+                console.warn('Deferred Firebase user sync after login failed:', error);
+            });
+        }
         if (shouldMarkInviteAsVerifiedFromHint && accessPolicy?.invite) {
             await runAuthStep(
                 'Обновляем приглашение...',
@@ -7769,12 +7909,18 @@ async function handleAuthSubmit() {
         );
         setAuthSession(savedUser.login);
         applyAuthenticatedUser(savedUser);
-        await runAuthStep(
-            'Синхронизируем доступ...',
-            () => ensureCurrentUserAccessMirror(savedUser, { requireRemote: true }),
-            AUTH_FLOW_STEP_TIMEOUT_MS,
-            'Firebase-сессия открыта, но не удалось записать access mirror. Проверьте RTDB Rules.'
-        );
+        if (!existingUser) {
+            await runAuthStep(
+                'Синхронизируем доступ...',
+                () => ensureCurrentUserAccessMirror(savedUser, { requireRemote: true }),
+                AUTH_FLOW_STEP_TIMEOUT_MS,
+                'Firebase-сессия открыта, но не удалось записать access mirror. Проверьте RTDB Rules.'
+            );
+        } else {
+            void ensureCurrentUserAccessMirror(savedUser).catch((error) => {
+                console.warn('Deferred access mirror sync after login failed:', error);
+            });
+        }
         await replayActiveTimeCarryover();
         clearEmailLinkAuthReady();
         clearEmailLinkHint();
@@ -7808,13 +7954,14 @@ async function restoreAuthSession() {
         return true;
     }
 
-    await waitForFirebaseAuthReady();
+    const hasMatchingFirebaseSession = await waitForFirebaseAuthSessionForLogin(
+        session.login,
+        AUTH_SESSION_MATCH_GRACE_TIMEOUT_MS
+    );
     if (isStaleRestoreAttempt()) return false;
-    if (!hasFirebaseAuthSessionForLogin(session.login)) {
+    if (!hasMatchingFirebaseSession) {
         stopProtectedRealtimeListeners();
-        clearAuthSession();
-        clearAuthCacheIdentity();
-        pendingAuthRestoreMessage = 'Сессия устарела после обновления. Войдите ещё раз, чтобы заново открыть доступ к промптам.';
+        pendingAuthRestoreMessage = 'Не удалось быстро подтянуть прошлую Firebase-сессию после обновления. Если доступ сам не вернётся, войдите ещё раз.';
         return false;
     }
 
@@ -12900,6 +13047,7 @@ async function loadPrompts() {
     await consumeEmailVerificationLinkIfPresent();
 
     let restored = false;
+    let restoreContinuesInBackground = false;
     try {
         restored = await withPromiseTimeout(
             restoreAuthSession(),
@@ -12907,23 +13055,25 @@ async function loadPrompts() {
             `Таймаут восстановления сессии (${AUTH_SESSION_RESTORE_TIMEOUT_MS / 1000}с).`
         );
     } catch (error) {
-        const message = String(error?.message || '').toLowerCase();
-        const isTimeout = message.includes('таймаут') || message.includes('timeout');
-        activeAuthRestoreAttemptId += 1;
-        stopProtectedRealtimeListeners();
-        clearAuthSession();
-        clearAuthCacheIdentity();
+        const isTimeout = isAuthRestoreTimeoutError(error);
         if (isTimeout) {
             console.warn('Auth session restore timed out:', error);
-            pendingAuthRestoreMessage = 'Не удалось восстановить прошлую сессию вовремя. Войдите ещё раз, чтобы заново открыть доступ к промптам.';
+            pendingAuthRestoreMessage = 'Восстанавливаем прошлую сессию дольше обычного. Доступ вернётся автоматически, как только Firebase догрузится.';
+            cancelPendingAuthSessionRestore();
+            restoreContinuesInBackground = true;
+            startBackgroundAuthSessionRestore(restoreAuthSession(), 'initial-timeout');
         } else {
             console.warn('Auth session restore failed:', error);
+            cancelPendingAuthSessionRestore();
+            stopProtectedRealtimeListeners();
+            clearAuthSession();
+            clearAuthCacheIdentity();
             pendingAuthRestoreMessage = getReadableFirebaseAuthError(error, 'login');
         }
         restored = false;
     }
 
-    if (!restored) {
+    if (!restored && !restoreContinuesInBackground) {
         const lateSession = getAuthSession();
         if (lateSession?.login) {
             try {
@@ -12933,17 +13083,19 @@ async function loadPrompts() {
                     `Таймаут повторного восстановления сессии (${AUTH_SESSION_RESTORE_TIMEOUT_MS / 1000}с).`
                 );
             } catch (error) {
-                const message = String(error?.message || '').toLowerCase();
-                const isTimeout = message.includes('таймаут') || message.includes('timeout');
-                activeAuthRestoreAttemptId += 1;
-                stopProtectedRealtimeListeners();
-                clearAuthSession();
-                clearAuthCacheIdentity();
+                const isTimeout = isAuthRestoreTimeoutError(error);
                 if (isTimeout) {
                     console.warn('Late auth session restore timed out:', error);
-                    pendingAuthRestoreMessage = 'Не удалось восстановить прошлую сессию вовремя. Войдите ещё раз, чтобы заново открыть доступ к промптам.';
+                    pendingAuthRestoreMessage = 'Восстанавливаем прошлую сессию дольше обычного. Доступ вернётся автоматически, как только Firebase догрузится.';
+                    cancelPendingAuthSessionRestore();
+                    restoreContinuesInBackground = true;
+                    startBackgroundAuthSessionRestore(restoreAuthSession(), 'late-timeout');
                 } else {
                     console.warn('Late auth session restore failed:', error);
+                    cancelPendingAuthSessionRestore();
+                    stopProtectedRealtimeListeners();
+                    clearAuthSession();
+                    clearAuthCacheIdentity();
                     pendingAuthRestoreMessage = getReadableFirebaseAuthError(error, 'login');
                 }
                 restored = false;
@@ -12952,11 +13104,16 @@ async function loadPrompts() {
     }
 
     if (!restored) {
-        selectedRole = 'user';
-        setCachedStorageValue(USER_ROLE_KEY, 'user');
-        showNameModal();
-        if (pendingAuthRestoreMessage) {
-            setAuthError(pendingAuthRestoreMessage);
+        if (restoreContinuesInBackground) {
+            hideNameModal();
+            debugLog('Saved auth session restore continues in background');
+        } else {
+            selectedRole = 'user';
+            setCachedStorageValue(USER_ROLE_KEY, 'user');
+            showNameModal();
+            if (pendingAuthRestoreMessage) {
+                setAuthError(pendingAuthRestoreMessage);
+            }
         }
     } else {
         hideNameModal();

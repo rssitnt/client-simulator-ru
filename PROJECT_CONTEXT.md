@@ -35,6 +35,11 @@
 - Fixed noisy multilingual manager preview:
   - the top manager status no longer mirrors raw `inputTranscription` chunks while Gemini is still streaming them;
   - the manager-side status is shown only after `finalizeGeminiUserTurn(...)`, using the stabilized final transcript instead of the unstable preview text.
+- Fixed false logout on hard refresh:
+  - a slow `restoreAuthSession()` / Firebase `authStateReady()` timeout no longer wipes the saved browser session after 10 seconds;
+  - on timeout, the timed-out restore attempt is cancelled safely and a fresh restore continues in the background;
+  - if Firebase finishes loading later, the app restores access automatically instead of forcing the user through the login modal;
+  - only a definitive invalid-session branch should clear auth state.
 - Chat autoscroll now aligns to the start of very tall messages so the first line is visible; shorter messages still scroll to the bottom.
 
 ## Useful Debug Markers
@@ -52,4 +57,4 @@
 - Observed on 2026-03-30:
   - `OPTIONS https://client-simulator.ru/api/gemini-live-token` => `405`
   - `OPTIONS https://client-simulator-gemini-token.onrender.com/api/gemini-live-token` => `204`
-- Date: 2026-03-30
+- Date: 2026-04-01
