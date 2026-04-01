@@ -37,9 +37,12 @@
   - the manager-side status is shown only after `finalizeGeminiUserTurn(...)`, using the stabilized final transcript instead of the unstable preview text.
 - Fixed false logout on hard refresh:
   - a slow `restoreAuthSession()` / Firebase `authStateReady()` timeout no longer wipes the saved browser session after 10 seconds;
-  - on timeout, the timed-out restore attempt is cancelled safely and a fresh restore continues in the background;
-  - if Firebase finishes loading later, the app restores access automatically instead of forcing the user through the login modal;
+  - auth restore now gets a longer second window before the UI falls back to the login form;
+  - lack of immediate Firebase Auth recovery is treated as a soft failure, not as proof that the session is invalid;
   - only a definitive invalid-session branch should clear auth state.
+- Softened repeat login for existing users:
+  - if Firebase Auth is already opened successfully, repeat login no longer hard-depends on a fresh RTDB write to `users/...` for ordinary last-login/profile sync;
+  - non-critical user/profile mirror sync can continue best-effort after login instead of blocking access on an 8-second RTDB write timeout.
 - Chat autoscroll now aligns to the start of very tall messages so the first line is visible; shorter messages still scroll to the bottom.
 
 ## Useful Debug Markers

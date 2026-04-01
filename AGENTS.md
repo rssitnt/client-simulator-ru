@@ -59,10 +59,11 @@
 - Roles are enforced via Firebase Custom Claims.
 - App Check is enabled in the frontend/token-server flow.
 - Default Gemini voice is `Enceladus` unless the user picked another voice locally.
-- Hard refresh auth restore is now non-destructive on timeout:
-  - if Firebase auth readiness or session restore is just slow, the frontend no longer clears the saved session after 10 seconds and no longer throws the user to the login form right away;
-  - the stalled restore attempt is invalidated safely, a fresh restore continues in the background, and the UI should recover automatically when Firebase finishes loading;
-  - only a definitive invalid session path should clear auth state and force a new login.
+- Hard refresh auth restore is now more tolerant:
+  - a 10-second restore timeout is treated as a soft timeout, not as proof of logout;
+  - the saved session is no longer wiped just because Firebase restored slowly after hard refresh;
+  - the frontend now gives auth restore a longer second window before showing the login form;
+  - repeat login for an existing user no longer blocks on non-critical RTDB profile rewrites or access-mirror sync if Firebase Auth is already open.
 
 ## Architecture Notes
 ### Dialog History
@@ -100,5 +101,5 @@
 - The production site currently returns `405` on same-origin `OPTIONS /api/gemini-live-token`, so remote token routing is the only healthy warmup path right now.
 - If the first client reply disappears again, look in the admin tech log for `assistant_output_buffered_before_user_turn`, `assistant_output_waiting_for_user_turn`, and `assistant_output_released_after_user_turn`.
 - If dialog history acts like a permissions problem, verify both Firebase rules and fresh auth token state.
-- If a hard refresh looks like a logout, first check whether it was only a delayed Firebase auth restore; timeout alone should no longer be treated as a real logout.
+- If a hard refresh looks like a logout, first check whether Firebase Auth simply restored too slowly; soft timeout alone should not wipe the browser session anymore.
 - When updating context again, prefer replacing old bullets instead of appending another long timeline.

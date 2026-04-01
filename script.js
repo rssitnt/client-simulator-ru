@@ -304,7 +304,7 @@ const VOICE_TOKEN_ENDPOINT_TIMEOUT_MS = 45000;
 const VOICE_TRANSCRIBE_ENDPOINT_TIMEOUT_MS = 18000;
 const AUTH_SESSION_RESTORE_TIMEOUT_MS = 10000;
 const AUTH_SESSION_RESTORE_RETRY_TIMEOUT_MS = 25000;
-const AUTH_SESSION_MATCH_GRACE_TIMEOUT_MS = 6000;
+const AUTH_SESSION_MATCH_GRACE_TIMEOUT_MS = 45000;
 const AUTH_FLOW_STEP_TIMEOUT_MS = 12000;
 const AUTH_MAGIC_LINK_SEND_TIMEOUT_MS = 20000;
 const PROMPTS_REST_FALLBACK_TIMEOUT_MS = 5000;
@@ -13047,7 +13047,7 @@ async function loadPrompts() {
     await consumeEmailVerificationLinkIfPresent();
 
     let restored = false;
-    let restoreContinuesInBackground = false;
+    let shouldUseExtendedAuthRestoreRetry = false;
     try {
         restored = await withPromiseTimeout(
             restoreAuthSession(),
@@ -13058,44 +13058,35 @@ async function loadPrompts() {
         const isTimeout = isAuthRestoreTimeoutError(error);
         if (isTimeout) {
             console.warn('Auth session restore timed out:', error);
-            pendingAuthRestoreMessage = 'Восстанавливаем прошлую сессию дольше обычного. Доступ вернётся автоматически, как только Firebase догрузится.';
-            cancelPendingAuthSessionRestore();
-            restoreContinuesInBackground = true;
-            startBackgroundAuthSessionRestore(restoreAuthSession(), 'initial-timeout');
+            shouldUseExtendedAuthRestoreRetry = true;
+            pendingAuthRestoreMessage = '';
         } else {
             console.warn('Auth session restore failed:', error);
-            cancelPendingAuthSessionRestore();
-            stopProtectedRealtimeListeners();
-            clearAuthSession();
-            clearAuthCacheIdentity();
             pendingAuthRestoreMessage = getReadableFirebaseAuthError(error, 'login');
         }
         restored = false;
     }
 
-    if (!restored && !restoreContinuesInBackground) {
+    if (!restored) {
         const lateSession = getAuthSession();
         if (lateSession?.login) {
             try {
                 restored = await withPromiseTimeout(
                     restoreAuthSession(),
-                    AUTH_SESSION_RESTORE_TIMEOUT_MS,
-                    `Таймаут повторного восстановления сессии (${AUTH_SESSION_RESTORE_TIMEOUT_MS / 1000}с).`
+                    shouldUseExtendedAuthRestoreRetry
+                        ? AUTH_SESSION_RESTORE_RETRY_TIMEOUT_MS
+                        : AUTH_SESSION_RESTORE_TIMEOUT_MS,
+                    shouldUseExtendedAuthRestoreRetry
+                        ? `Расширенный таймаут восстановления сессии (${AUTH_SESSION_RESTORE_RETRY_TIMEOUT_MS / 1000}с).`
+                        : `Таймаут повторного восстановления сессии (${AUTH_SESSION_RESTORE_TIMEOUT_MS / 1000}с).`
                 );
             } catch (error) {
                 const isTimeout = isAuthRestoreTimeoutError(error);
                 if (isTimeout) {
                     console.warn('Late auth session restore timed out:', error);
-                    pendingAuthRestoreMessage = 'Восстанавливаем прошлую сессию дольше обычного. Доступ вернётся автоматически, как только Firebase догрузится.';
-                    cancelPendingAuthSessionRestore();
-                    restoreContinuesInBackground = true;
-                    startBackgroundAuthSessionRestore(restoreAuthSession(), 'late-timeout');
+                    pendingAuthRestoreMessage = 'Сессия после обновления восстанавливалась слишком долго. Войдите ещё раз, только если доступ сам не вернётся.';
                 } else {
                     console.warn('Late auth session restore failed:', error);
-                    cancelPendingAuthSessionRestore();
-                    stopProtectedRealtimeListeners();
-                    clearAuthSession();
-                    clearAuthCacheIdentity();
                     pendingAuthRestoreMessage = getReadableFirebaseAuthError(error, 'login');
                 }
                 restored = false;
@@ -13104,16 +13095,11 @@ async function loadPrompts() {
     }
 
     if (!restored) {
-        if (restoreContinuesInBackground) {
-            hideNameModal();
-            debugLog('Saved auth session restore continues in background');
-        } else {
-            selectedRole = 'user';
-            setCachedStorageValue(USER_ROLE_KEY, 'user');
-            showNameModal();
-            if (pendingAuthRestoreMessage) {
-                setAuthError(pendingAuthRestoreMessage);
-            }
+        selectedRole = 'user';
+        setCachedStorageValue(USER_ROLE_KEY, 'user');
+        showNameModal();
+        if (pendingAuthRestoreMessage) {
+            setAuthError(pendingAuthRestoreMessage);
         }
     } else {
         hideNameModal();
