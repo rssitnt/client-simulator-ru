@@ -20,7 +20,10 @@
 - The frontend now buffers this early first client reply instead of treating it as orphan output.
 - Audio for that first client reply can still start immediately.
 - The first client text bubble is delayed briefly until the opening manager turn is restored, so chat order stays stable in the normal path.
-- Added smoke coverage for this exact case: `output-before-first-input-transcript`.
+- Fixed the adjacent case where Gemini had only an unfinished preview of the first manager turn:
+  - when `waitingForInput`, `turnComplete`, or delayed assistant release fires before the first manager transcript is marked finished, the frontend now finalizes the current manager preview into the first manager bubble instead of losing it;
+  - this prevents “client already answered, but the first manager phrase is missing” failures.
+- Added smoke coverage for these cases: `output-before-first-input-transcript` and `waiting-for-input-finalizes-user-preview`.
 - Fixed voice startup behavior around token-server cold starts:
   - voice debug log loading no longer depends on the local JSON cache bootstrap order;
   - voice mode now prewarms the token endpoint with `OPTIONS` in the background;

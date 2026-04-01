@@ -41,7 +41,8 @@
 - Early first client reply is protected from frontend race conditions:
   - if Gemini emits the first client reply before the first manager transcript arrives, the frontend no longer drops it as `orphan_*`;
   - client audio can start immediately, but the first client text bubble is held briefly until the opening manager turn is restored, then shown in the correct order;
-  - covered by smoke scenario `output-before-first-input-transcript`.
+  - if Gemini only has an unfinished preview of the first manager turn when `waitingForInput` or delayed assistant release happens, the frontend now finalizes that preview into the first manager bubble before showing the buffered client reply;
+  - covered by smoke scenarios `output-before-first-input-transcript` and `waiting-for-input-finalizes-user-preview`.
 - Admin settings include a local Gemini Live tech log for debugging transport/startup issues.
 - Voice debug log loading is intentionally independent from the local JSON cache bootstrap so startup diagnostics do not break on localStorage init order.
 - Settings on mobile are a full-screen sheet with a fixed close button.

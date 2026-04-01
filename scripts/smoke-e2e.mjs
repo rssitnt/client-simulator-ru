@@ -431,6 +431,40 @@ class StubLiveSession {
         }, 620);
         return;
       }
+      if (scenario === 'waiting-for-input-finalizes-user-preview') {
+        this.emit({
+          serverContent: {
+            outputTranscription: {
+              text: 'Привет.',
+              finished: false
+            },
+            modelTurn: {
+              parts: [
+                {
+                  inlineData: {
+                    data: assistantAudioBase64,
+                    mimeType: 'audio/pcm;rate=24000'
+                  }
+                }
+              ]
+            }
+          }
+        }, 40);
+        this.emit({
+          serverContent: {
+            inputTranscription: {
+              text: 'Здравствуйте, нужен гидробур на CASE CX260C. Что есть по срокам и сервису?',
+              finished: false
+            }
+          }
+        }, 140);
+        this.emit({
+          serverContent: {
+            waitingForInput: true
+          }
+        }, 260);
+        return;
+      }
       if (scenario === 'audio-only-first-reply-fallback') {
         this.emit({
           serverContent: {
@@ -1732,6 +1766,21 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
                 firstUserIndex !== -1 && firstAssistantIndex !== -1 && firstUserIndex < firstAssistantIndex,
                 'First assistant reply was rendered before the opening manager turn'
             );
+        } else if (voiceScenario === 'waiting-for-input-finalizes-user-preview') {
+            expect(
+                dialogState.userMessages.some((text) => text.includes('CASE CX260C') && text.includes('срокам и сервису')),
+                'Opening manager turn was lost when Gemini only provided an unfinished user preview'
+            );
+            expect(
+                dialogState.assistantMessages.some((text) => text.trim() === 'Привет.'),
+                'Buffered first assistant reply was not preserved while finalizing the opening manager preview'
+            );
+            const firstUserIndex = dialogState.messageTimeline.findIndex((item) => item.role === 'user' && item.text.includes('CASE CX260C'));
+            const firstAssistantIndex = dialogState.messageTimeline.findIndex((item) => item.role === 'assistant' && item.text.trim() === 'Привет.');
+            expect(
+                firstUserIndex !== -1 && firstAssistantIndex !== -1 && firstUserIndex < firstAssistantIndex,
+                'Opening manager preview was not finalized before the buffered first assistant reply'
+            );
         } else if (voiceScenario === 'waiting-for-input-finalizes-first-reply') {
             expect(
                 dialogState.assistantMessages.some((text) => text.trim() === 'Привет.'),
@@ -1999,6 +2048,10 @@ async function main() {
         await runGeminiVoiceModeSmokeFlow(browser, baseUrl, {
             voiceScenario: 'waiting-for-input-finalizes-first-reply',
             expectedAssistantNeedle: 'Что скажешь по задаче?'
+        });
+        await runGeminiVoiceModeSmokeFlow(browser, baseUrl, {
+            voiceScenario: 'waiting-for-input-finalizes-user-preview',
+            expectedAssistantNeedle: 'Привет.'
         });
         await runGeminiVoiceModeSmokeFlow(browser, baseUrl, {
             voiceScenario: 'audio-only-first-reply-fallback',

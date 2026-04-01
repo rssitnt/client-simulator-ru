@@ -11495,10 +11495,28 @@ function markGeminiPendingAssistantBeforeFirstUserTurn(trigger = 'assistant_outp
     });
 }
 
+function finalizePendingGeminiUserTurnIfNeeded(reason = 'boundary_finalize') {
+    if (geminiVoiceUserTurnFinalized) return false;
+    const pendingUserTranscript = normalizeVoiceDialogText(
+        geminiVoiceUserDraft.trim() ? geminiVoiceUserDraft : geminiVoiceUserPreview
+    );
+    if (!pendingUserTranscript) return false;
+    const finalized = finalizeGeminiUserTurn(pendingUserTranscript);
+    if (finalized) {
+        recordVoiceDebugEvent('user_turn_finalized_from_boundary', {
+            status: 'info',
+            message: reason
+        });
+    }
+    return finalized;
+}
+
 function releaseGeminiPendingAssistantBeforeFirstUserTurn(reason = 'pending_user_turn_resolved') {
     if (!geminiVoicePendingAssistantBeforeFirstUserTurn) return false;
     clearGeminiPendingAssistantFinalizeTimer();
     geminiVoicePendingAssistantBeforeFirstUserTurn = false;
+
+    finalizePendingGeminiUserTurnIfNeeded(`${reason}_user_finalize`);
 
     const pendingAssistantTranscript = normalizeVoiceDialogText(
         geminiVoiceAssistantDraft.trim() ? geminiVoiceAssistantDraft : geminiVoiceAssistantPreview
@@ -16405,6 +16423,7 @@ async function handleGeminiLiveMessage(message) {
     }
 
     if (serverContent?.turnComplete || serverContent?.generationComplete) {
+        finalizePendingGeminiUserTurnIfNeeded('turn_complete');
         const shouldDelayCompletedAssistant =
             geminiVoicePendingAssistantBeforeFirstUserTurn && !geminiVoiceUserTurnFinalized;
         const completedAssistant = shouldDelayCompletedAssistant
@@ -16435,6 +16454,7 @@ async function handleGeminiLiveMessage(message) {
     }
 
     if (serverContent?.waitingForInput && isGeminiVoiceActive) {
+        finalizePendingGeminiUserTurnIfNeeded('waiting_for_input');
         const pendingAssistantTranscript = normalizeVoiceDialogText(
             geminiVoiceAssistantDraft.trim() ? geminiVoiceAssistantDraft : geminiVoiceAssistantPreview
         );
@@ -16458,7 +16478,9 @@ async function handleGeminiLiveMessage(message) {
             geminiVoiceAssistantTurnInProgress = false;
         }
         geminiVoiceUserTurnFinalized = false;
-        geminiVoiceUserPreview = '';
+        if (!normalizeVoiceDialogText(geminiVoiceUserDraft)) {
+            geminiVoiceUserPreview = '';
+        }
         if (
             !geminiVoiceMicInputEnabled &&
             (geminiVoiceHasAssistantReply || geminiVoiceHasAudioOutput || geminiVoiceAwaitingLateAssistantTranscript)
