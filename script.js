@@ -11644,10 +11644,7 @@ function shouldBufferEarlyGeminiAssistantReply() {
     if (normalizeVoiceDialogText(geminiVoiceUserDraft)) return false;
     if (Array.isArray(geminiVoiceDialogLines) && geminiVoiceDialogLines.length > 0) return false;
     if (Number(geminiVoiceDialogSyncedCount || 0) > 0) return false;
-    if (hasRecentGeminiVoiceSpeechActivity()) return true;
-    const startTimestamp = Number(geminiVoiceStartTimestamp || 0);
-    if (!startTimestamp) return false;
-    return (Date.now() - startTimestamp) <= GEMINI_VOICE_EARLY_ASSISTANT_BUFFER_WINDOW_MS;
+    return true;
 }
 
 function markGeminiPendingAssistantBeforeFirstUserTurn(trigger = 'assistant_output') {
