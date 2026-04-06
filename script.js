@@ -305,6 +305,7 @@ const VOICE_TRANSCRIBE_ENDPOINT_TIMEOUT_MS = 18000;
 const AUTH_SESSION_RESTORE_TIMEOUT_MS = 10000;
 const AUTH_SESSION_RESTORE_RETRY_TIMEOUT_MS = 25000;
 const AUTH_SESSION_MATCH_GRACE_TIMEOUT_MS = 45000;
+const AUTH_SESSION_OPEN_TIMEOUT_MS = 25000;
 const AUTH_FLOW_STEP_TIMEOUT_MS = 12000;
 const AUTH_MAGIC_LINK_SEND_TIMEOUT_MS = 20000;
 const PROMPTS_REST_FALLBACK_TIMEOUT_MS = 5000;
@@ -671,6 +672,19 @@ function waitForDelay(delayMs = 0) {
     return new Promise((resolve) => {
         setTimeout(resolve, Math.max(0, Number(delayMs) || 0));
     });
+}
+
+async function runAuthRequestWithRetry(requestFactory, retryDelayMs = 1200) {
+    try {
+        return await requestFactory();
+    } catch (error) {
+        const code = String(error?.code || '').trim();
+        if (code === 'auth/network-request-failed') {
+            await waitForDelay(retryDelayMs);
+            return await requestFactory();
+        }
+        throw error;
+    }
 }
 
 function setAuthSubmitState(isLoading = false, label = AUTH_SUBMIT_DEFAULT_LABEL) {
@@ -1213,14 +1227,14 @@ async function ensureFirebaseAuthPasswordSession(login, password) {
     let lastError = null;
 
     try {
-        await signInWithEmailAndPassword(auth, email, password);
+        await runAuthRequestWithRetry(() => signInWithEmailAndPassword(auth, email, password));
         if (hasFirebaseAuthSessionForLogin(email)) {
             return true;
         }
     } catch (e1) {
         lastError = e1;
         try {
-            await createUserWithEmailAndPassword(auth, email, password);
+            await runAuthRequestWithRetry(() => createUserWithEmailAndPassword(auth, email, password));
             if (hasFirebaseAuthSessionForLogin(email)) {
                 return true;
             }
@@ -7847,8 +7861,8 @@ async function handleAuthSubmit() {
         await runAuthStep(
             'Открываем Firebase-сессию...',
             () => ensureFirebaseAuthPasswordSession(login, password),
-            AUTH_FLOW_STEP_TIMEOUT_MS,
-            'Не удалось открыть Firebase-сессию. Проверьте Email/Password в Firebase Authentication и повторите вход.'
+            AUTH_SESSION_OPEN_TIMEOUT_MS,
+            'Не удалось открыть Firebase-сессию. Проверьте интернет и повторите вход.'
         );
 
         const requireRemoteUserSave = shouldRequireRemoteUserSaveForAuth(existingUser, targetUser, accessPolicy);

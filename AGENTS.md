@@ -64,6 +64,7 @@
   - the saved session is no longer wiped just because Firebase restored slowly after hard refresh;
   - the frontend now gives auth restore a longer second window before showing the login form;
   - repeat login for an existing user no longer blocks on non-critical RTDB profile rewrites or access-mirror sync if Firebase Auth is already open.
+  - opening Firebase Auth session now has a longer timeout and retries once on transient network errors.
 
 ## Architecture Notes
 ### Dialog History
