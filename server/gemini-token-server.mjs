@@ -80,6 +80,37 @@ const ai = GEMINI_API_KEY
     : null;
 
 const OPENAI_ALLOWED_VOICES = new Set(['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse']);
+const GEMINI_ALLOWED_VOICES = new Set([
+    'Zephyr',
+    'Puck',
+    'Charon',
+    'Kore',
+    'Fenrir',
+    'Leda',
+    'Orus',
+    'Aoede',
+    'Callirrhoe',
+    'Enceladus',
+    'Iapetus',
+    'Umbriel',
+    'Algieba',
+    'Despina',
+    'Erinome',
+    'Algenib',
+    'Rasalgethi',
+    'Laomedeia',
+    'Achernar',
+    'Alnilam',
+    'Schedar',
+    'Gacrux',
+    'Pulcherrima',
+    'Achird',
+    'Zubenelgenubi',
+    'Vindemiatrix',
+    'Sadachbia',
+    'Sadaltager',
+    'Sulafat'
+]);
 
 function getMissingServerConfigMessage() {
     if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
@@ -554,11 +585,18 @@ async function verifyFirebaseIdToken(idToken) {
     return user;
 }
 
-async function createGeminiEphemeralToken() {
+function sanitizeGeminiVoiceName(value) {
+    const normalized = String(value || '').trim();
+    if (!normalized) return GEMINI_LIVE_VOICE;
+    return GEMINI_ALLOWED_VOICES.has(normalized) ? normalized : GEMINI_LIVE_VOICE;
+}
+
+async function createGeminiEphemeralToken(requestedVoice) {
     if (!ai) {
         throw new Error('GEMINI_API_KEY is not configured');
     }
 
+    const resolvedVoice = sanitizeGeminiVoiceName(requestedVoice);
     const now = Date.now();
     const expireTime = new Date(now + 30 * 60 * 1000).toISOString();
     const newSessionExpireTime = new Date(now + 60 * 1000).toISOString();
@@ -576,7 +614,7 @@ async function createGeminiEphemeralToken() {
                     speechConfig: {
                         voiceConfig: {
                             prebuiltVoiceConfig: {
-                                voiceName: GEMINI_LIVE_VOICE
+                                voiceName: resolvedVoice
                             }
                         }
                     },
@@ -831,7 +869,8 @@ export async function handleTokenServerRequest(req, res) {
             return;
         }
 
-        const token = await createGeminiEphemeralToken();
+        const requestedVoice = sanitizeGeminiVoiceName(requestBody?.voice);
+        const token = await createGeminiEphemeralToken(requestedVoice);
         const tokenName = String(token?.name || '').trim();
         if (!tokenName) {
             throw new Error('Gemini token response is empty');
@@ -841,6 +880,7 @@ export async function handleTokenServerRequest(req, res) {
             name: tokenName,
             expireTime: token?.expireTime || null,
             newSessionExpireTime: token?.newSessionExpireTime || null,
+            voice: requestedVoice,
                 issuedFor: {
                     uid: authIdentity.uid || null,
                     email: authIdentity.email || null

@@ -58,7 +58,7 @@
   - real action in the last 60 seconds
 - Roles are enforced via Firebase Custom Claims.
 - App Check is enabled in the frontend/token-server flow.
-- Default Gemini voice is `Enceladus` unless the user picked another voice locally.
+- Default Gemini voice is `Enceladus`; the token server now respects the user-selected Gemini voice (from the allowlist) instead of forcing a single server-side voice.
 - Hard refresh auth restore is now more tolerant:
   - a 10-second restore timeout is treated as a soft timeout, not as proof of logout;
   - the saved session is no longer wiped just because Firebase restored slowly after hard refresh;

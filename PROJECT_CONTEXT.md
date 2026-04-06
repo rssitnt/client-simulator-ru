@@ -16,6 +16,7 @@
 - Assistant/client playback is half-duplex: microphone input is blocked while client audio is speaking and restored after playback.
 
 ## Relevant Current Fixes
+- Token server now respects the requested Gemini voice from the frontend (limited to the allowed list) instead of forcing a single server-side voice.
 - Fixed a race where the first client reply could be dropped if Gemini emitted client output before the first manager transcript reached the frontend.
 - The frontend now buffers this early first client reply instead of treating it as orphan output.
 - Audio for that first client reply can still start immediately.
@@ -63,4 +64,4 @@
 - Observed on 2026-03-30:
   - `OPTIONS https://client-simulator.ru/api/gemini-live-token` => `405`
   - `OPTIONS https://client-simulator-gemini-token.onrender.com/api/gemini-live-token` => `204`
-- Date: 2026-04-01
+- Date: 2026-04-06
