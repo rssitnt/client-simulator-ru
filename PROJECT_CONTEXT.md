@@ -48,6 +48,7 @@
 - Hardened Firebase Auth open step:
   - the Firebase Auth open step now retries once on `auth/network-request-failed`;
   - the timeout for opening Firebase Auth is longer and the message no longer blames email/password on a timeout.
+- Gemini Live early reconnect is now more tolerant (longer window and 2 attempts) to survive slow/failed WS handshakes.
 - Chat autoscroll now aligns to the start of very tall messages so the first line is visible; shorter messages still scroll to the bottom.
 
 ## Useful Debug Markers
