@@ -80,6 +80,7 @@ const GEMINI_LIVE_AUDIO_INPUT_ACTIVITY_THRESHOLD = 0.08;
 const GEMINI_LIVE_MEDIA_RESOLUTION = 'MEDIA_RESOLUTION_LOW';
 const GEMINI_LIVE_THINKING_BUDGET = 0;
 const GEMINI_VOICE_EARLY_ASSISTANT_REPLY_USER_GRACE_MS = 1200;
+const GEMINI_VOICE_EARLY_ASSISTANT_BUFFER_WINDOW_MS = 12000;
 const GEMINI_VOICE_RECENT_SPEECH_ACTIVITY_WINDOW_MS = 2500;
 const VOICE_COMPLETED_SHORT_REPLY_ALLOWLIST = new Set([
     'да',
@@ -11643,7 +11644,10 @@ function shouldBufferEarlyGeminiAssistantReply() {
     if (normalizeVoiceDialogText(geminiVoiceUserDraft)) return false;
     if (Array.isArray(geminiVoiceDialogLines) && geminiVoiceDialogLines.length > 0) return false;
     if (Number(geminiVoiceDialogSyncedCount || 0) > 0) return false;
-    return hasRecentGeminiVoiceSpeechActivity();
+    if (hasRecentGeminiVoiceSpeechActivity()) return true;
+    const startTimestamp = Number(geminiVoiceStartTimestamp || 0);
+    if (!startTimestamp) return false;
+    return (Date.now() - startTimestamp) <= GEMINI_VOICE_EARLY_ASSISTANT_BUFFER_WINDOW_MS;
 }
 
 function markGeminiPendingAssistantBeforeFirstUserTurn(trigger = 'assistant_output') {

@@ -21,6 +21,7 @@
 - The frontend now buffers this early first client reply instead of treating it as orphan output.
 - Audio for that first client reply can still start immediately.
 - The first client text bubble is delayed briefly until the opening manager turn is restored, so chat order stays stable in the normal path.
+- Early first client reply buffering now also activates for the first ~12s after call start (even if mic activity wasn't detected) to avoid dropping the very first reply on voice changes or slow mic detection.
 - Fixed the adjacent case where Gemini had only an unfinished preview of the first manager turn:
   - when `waitingForInput`, `turnComplete`, or delayed assistant release fires before the first manager transcript is marked finished, the frontend now finalizes the current manager preview into the first manager bubble instead of losing it;
   - this prevents “client already answered, but the first manager phrase is missing” failures.
