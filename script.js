@@ -108,6 +108,7 @@ const VOICE_COMPLETED_SHORT_LATIN_ALLOWLIST = new Set([
 ]);
 const VOICE_FAST_PACE_INSTRUCTIONS = 'Говори максимально быстро и энергично, но разборчиво. Отвечай кратко: 1-2 предложения без повторов.';
 const VOICE_END_CALL_INSTRUCTIONS = 'Если хочешь завершить разговор, скажи "до свидания" — система завершит звонок. Это можно использовать, если менеджер плохо отрабатывает.';
+const VOICE_FRESH_SESSION_GUARD = 'Это новый звонок без контекста прошлых диалогов. Не говори, что клиент уже что-то обозначал, если этого не было в текущем разговоре.';
 const ATTESTATION_QUEUE_STORAGE_KEY = 'attestationQueue:v1';
 const ATTESTATION_SEND_ATTEMPTS = 3;
 const ATTESTATION_QUEUE_MAX_FAILURES = 8;
@@ -16019,7 +16020,7 @@ function buildGeminiVoiceSystemInstruction(baseInstructions = '') {
     const cleanInstructions = normalizeVoiceDialogText(baseInstructions);
     const defaultInstruction = 'Ты вежливый клиент, веди естественный разговор голосом на русском языке.';
     const effectiveInstructions = cleanInstructions || defaultInstruction;
-    return `${effectiveInstructions}\n\n${VOICE_FAST_PACE_INSTRUCTIONS}\n\n${VOICE_END_CALL_INSTRUCTIONS}`;
+    return `${effectiveInstructions}\n\n${VOICE_FRESH_SESSION_GUARD}\n\n${VOICE_FAST_PACE_INSTRUCTIONS}\n\n${VOICE_END_CALL_INSTRUCTIONS}`;
 }
 
 function buildGeminiVoiceSessionConfig(sdk) {
@@ -18758,6 +18759,7 @@ function restoreStartConversationBlock() {
 function resetChatForNewVoiceCall() {
     invalidateActiveChatUiRequests();
     isProcessing = false;
+    resetCurrentDialogHistoryState();
     resetConversationHistory();
     lastRating = null;
     isDialogRated = false;
