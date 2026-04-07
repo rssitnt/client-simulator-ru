@@ -641,6 +641,27 @@ body.light-theme .custom-tooltip-layer.placement-bottom::before {
     background: #111111;
     border-right: 1px solid #1f1f1f;
     min-height: 0;
+    overflow: hidden;
+    transition:
+        width 0.22s ease,
+        max-width 0.22s ease,
+        min-width 0.22s ease,
+        flex-basis 0.22s ease,
+        opacity 0.18s ease,
+        border-color 0.18s ease;
+}
+
+body.history-sidebar-collapsed .history-panel {
+    width: 0;
+    max-width: 0;
+    min-width: 0;
+    flex-basis: 0;
+    opacity: 0;
+    border-right-color: transparent;
+}
+
+body.history-sidebar-collapsed .history-panel > * {
+    pointer-events: none;
 }
 
 .history-panel-header {
@@ -744,6 +765,60 @@ body.light-theme .custom-tooltip-layer.placement-bottom::before {
 .history-panel-action:hover {
     border-color: color-mix(in srgb, var(--color-accent) 38%, transparent);
     background: #212121;
+}
+
+.history-sidebar-toggle {
+    position: fixed;
+    top: max(68px, env(safe-area-inset-top, 0px) + 60px);
+    left: calc(344px - 18px);
+    z-index: 1995;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 0 14px 0 12px;
+    border: 1px solid #262626;
+    border-radius: 999px;
+    background: rgba(18, 18, 18, 0.94);
+    color: #d5d5d5;
+    cursor: pointer;
+    transition: left 0.22s ease, background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+    backdrop-filter: blur(10px);
+}
+
+.history-sidebar-toggle:hover {
+    background: rgba(24, 24, 24, 0.98);
+    border-color: #343434;
+    color: #ffffff;
+}
+
+.history-sidebar-toggle-icon {
+    flex: 0 0 auto;
+    transition: transform 0.22s ease;
+}
+
+.history-sidebar-toggle-text {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+body.history-sidebar-collapsed .history-sidebar-toggle {
+    left: max(12px, env(safe-area-inset-left, 0px) + 6px);
+}
+
+body.history-sidebar-collapsed .history-sidebar-toggle-icon {
+    transform: rotate(180deg);
+}
+
+body:not(.history-sidebar-collapsed) .history-sidebar-toggle {
+    width: 38px;
+    padding-right: 0;
+    justify-content: center;
+}
+
+body:not(.history-sidebar-collapsed) .history-sidebar-toggle-text {
+    display: none;
 }
 
 .history-thread-layout {
@@ -6312,6 +6387,18 @@ body.light-theme .history-panel-action {
     color: #1f2430;
 }
 
+body.light-theme .history-sidebar-toggle {
+    background: rgba(255, 255, 255, 0.96);
+    border-color: #dbe2ea;
+    color: #364152;
+}
+
+body.light-theme .history-sidebar-toggle:hover {
+    background: #ffffff;
+    border-color: #cfd7e2;
+    color: #1f2430;
+}
+
 body.light-theme .history-thread-list .dialog-history-item {
     background: #ffffff;
     border-color: #e3e8ef;
@@ -6974,6 +7061,10 @@ body.voice-mode-active .chat-messages {
 }
 
 @media (max-width: 1024px) {
+    .history-sidebar-toggle {
+        display: none;
+    }
+
     .history-panel-header {
         padding: 16px 14px 8px;
     }

@@ -148,6 +148,7 @@ const WEBHOOK_DEBUG_CONFIG_STORAGE_KEY = 'webhookDebugConfig:v1';
 const WEBHOOK_DEBUG_LOG_STORAGE_KEY = 'webhookDebugLog:v1';
 const WEBHOOK_DEBUG_LOG_MAX_ENTRIES = 40;
 const DIALOG_HISTORY_PAGE_SIZE = 50;
+const HISTORY_SIDEBAR_COLLAPSED_STORAGE_KEY = 'historySidebarCollapsed:v1';
 const DIALOG_HISTORY_SAVE_DEBOUNCE_MS = 700;
 const VOICE_DEBUG_LOG_STORAGE_KEY = 'voiceDebugLog:v1';
 const VOICE_DEBUG_LOG_MAX_ENTRIES = 80;
@@ -1404,6 +1405,8 @@ const chatMessages = document.getElementById('chatMessages');
 const userInput = document.getElementById('userInput');
 const sendBtn = document.getElementById('sendBtn');
 const clearChatBtn = document.getElementById('clearChat');
+const historySidebarToggleBtn = document.getElementById('historySidebarToggle');
+const historySidebarToggleText = document.getElementById('historySidebarToggleText');
 const systemPromptInput = document.getElementById('systemPrompt');
 const raterPromptInput = document.getElementById('raterPrompt');
 const managerPromptInput = document.getElementById('managerPrompt');
@@ -1756,6 +1759,7 @@ let dialogHistorySelectedRecord = null;
 let dialogHistorySelectedPayload = null;
 let dialogHistoryViewerLoading = false;
 let dialogHistoryRevealTimer = 0;
+let historySidebarCollapsed = true;
 let isProcessing = false;
 let lastRating = null;
 let isDialogRated = false;
@@ -6634,6 +6638,81 @@ function summarizeDialogHistoryTitleCandidate(value = '') {
     return clampDialogHistoryTitle(summary);
 }
 
+function formatDialogHistoryTitleCase(value = '') {
+    const normalized = clampDialogHistoryTitle(value);
+    if (!normalized) return '';
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function cleanupDialogHistorySubjectCandidate(value = '') {
+    let subject = normalizeDialogHistoryText(value || '')
+        .replace(/^(?:мне|нам|вообще|просто|сейчас|срочно|короче|значит|получается|нужен|нужна|нужны|нужно|ищу|интересует|требуется|подберите|подобрать|хочу)\s+/i, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (!subject) return '';
+    subject = subject
+        .split(/\s+(?:на|для|под)\s+(?=[a-zа-яё0-9-]{2,})/i)[0]
+        .split(/(?:,|;|\/)|\b(?:суглинок|суглинки|глина|песок|щебень|отверст(?:ие|ия|ий)|лунок|глубина|диаметр|цена|стоимость|срок(?:и)?|доставка|наличие)\b/i)[0]
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (!subject) return '';
+    const words = subject.split(/\s+/).filter(Boolean).slice(0, 5);
+    return formatDialogHistoryTitleCase(words.join(' '));
+}
+
+function extractDialogHistoryModelCandidate(text = '') {
+    const normalized = normalizeDialogHistoryText(text || '').replace(/[()]/g, ' ');
+    if (!normalized) return '';
+    const brandMatch = normalized.match(/\b(?:CASE|CAT|CATERPILLAR|JCB|HITACHI|VOLVO|KOMATSU|DOOSAN|HYUNDAI|SANY|XCMG|BOBCAT|LIEBHERR|DEERE|JOHN\s+DEERE|NEW\s+HOLLAND|TAKEUCHI|YANMAR|KOBELCO|MST|SDLG)\s+[A-Z0-9-]{2,}\b/i);
+    if (brandMatch?.[0]) {
+        return brandMatch[0].replace(/\s+/g, ' ').toUpperCase();
+    }
+    const pairedMatch = normalized.match(/\b[A-ZА-ЯЁ]{2,}\s+[A-Z0-9-]{2,}\b/g);
+    if (Array.isArray(pairedMatch)) {
+        const candidate = pairedMatch.find((item) => /\d/.test(item));
+        if (candidate) {
+            return candidate.replace(/\s+/g, ' ').toUpperCase();
+        }
+    }
+    const codeMatch = normalized.match(/\b[A-Z]{1,4}\d{2,}[A-Z0-9-]*\b/);
+    return codeMatch?.[0]?.toUpperCase() || '';
+}
+
+function extractDialogHistoryQualifierCandidate(text = '') {
+    const normalized = normalizeDialogHistoryText(text || '');
+    if (!normalized) return '';
+    const patterns = [
+        /\b\d+\s*(?:лунок|отверст(?:ие|ия|ий)|мм|см|м|метр(?:а|ов)?|тонн(?:а|ы|)?|бар|смен(?:а|ы)?|час(?:а|ов)?|дн(?:я|ей)|куб(?:а|ов)?|м3)\b/i,
+        /\b\d+\s+на\s+\d+\b/i,
+        /\b(?:суглинок|суглинки|глина|песок|щебень)\b/i,
+        /\b(?:цена|стоимость|срок(?:и)?|доставка|наличие)\b/i
+    ];
+    for (const pattern of patterns) {
+        const match = normalized.match(pattern);
+        if (match?.[0]) {
+            return formatDialogHistoryTitleCase(match[0].toLowerCase());
+        }
+    }
+    return '';
+}
+
+function extractDialogHistorySubjectCandidate(text = '') {
+    const normalized = normalizeDialogHistoryText(text || '');
+    if (!normalized) return '';
+    const patterns = [
+        /(?:нужен|нужна|нужны|нужно|ищу|интересует|требуется|подберите|подобрать|хочу)\s+([^.!?\n]+)/i,
+        /(?:по|про)\s+([^.!?\n]+)/i
+    ];
+    for (const pattern of patterns) {
+        const match = normalized.match(pattern);
+        const candidate = cleanupDialogHistorySubjectCandidate(match?.[1] || '');
+        if (candidate && /[a-zа-яё0-9]/i.test(candidate)) {
+            return candidate;
+        }
+    }
+    return '';
+}
+
 function formatDialogHistoryFallbackTitle(createdAt = '') {
     const ts = parseIsoMs(createdAt) || Date.now();
     const date = new Date(ts);
@@ -6668,6 +6747,43 @@ function isMeaningfulDialogHistoryTitleCandidate(value = '') {
 
 function deriveDialogHistoryAutoTitle(messages = [], createdAt = '') {
     const normalizedMessages = Array.isArray(messages) ? messages : [];
+    if (normalizedMessages.length < 2) {
+        return formatDialogHistoryFallbackTitle(createdAt);
+    }
+    const earlyMessages = normalizedMessages
+        .slice(0, 6)
+        .map((message) => normalizeDialogHistoryText(message?.content || ''))
+        .filter(Boolean);
+    if (!earlyMessages.length) {
+        return formatDialogHistoryFallbackTitle(createdAt);
+    }
+
+    const earlyText = earlyMessages.join('. ').slice(0, 420);
+    const subject = extractDialogHistorySubjectCandidate(earlyText);
+    const model = extractDialogHistoryModelCandidate(earlyText);
+    const qualifier = extractDialogHistoryQualifierCandidate(earlyText);
+
+    let candidate = '';
+    if (subject && model) {
+        const normalizedSubject = subject.toUpperCase();
+        candidate = normalizedSubject.includes(model)
+            ? subject
+            : `${subject} для ${model}`;
+    } else if (subject) {
+        candidate = subject;
+    } else if (model) {
+        candidate = `Диалог по ${model}`;
+    }
+
+    if (candidate && qualifier && !candidate.toLowerCase().includes(qualifier.toLowerCase())) {
+        candidate = `${candidate} · ${qualifier}`;
+    }
+
+    candidate = clampDialogHistoryTitle(candidate);
+    if (isMeaningfulDialogHistoryTitleCandidate(candidate)) {
+        return candidate;
+    }
+
     const firstStrongMessage = normalizedMessages.find((message) => isMeaningfulDialogHistoryTitleCandidate(message?.content));
     if (firstStrongMessage) {
         return clampDialogHistoryTitle(
@@ -7226,6 +7342,55 @@ function syncMainDialogHistoryStage() {
         userInput?.blur();
     }
     document.getElementById('chatPanel')?.classList.toggle('is-history-viewing', shouldShow);
+}
+
+function readHistorySidebarCollapsedPreference() {
+    const raw = String(getCachedStorageValue(HISTORY_SIDEBAR_COLLAPSED_STORAGE_KEY, '') || '').trim();
+    if (raw === '1') return true;
+    if (raw === '0') return false;
+    return null;
+}
+
+function persistHistorySidebarCollapsedPreference(collapsed) {
+    setCachedStorageValue(HISTORY_SIDEBAR_COLLAPSED_STORAGE_KEY, collapsed ? '1' : '0');
+}
+
+function updateHistorySidebarToggleUi() {
+    if (!historySidebarToggleBtn) return;
+    const isDesktop = window.innerWidth > 1024;
+    historySidebarToggleBtn.hidden = !isDesktop;
+    if (!isDesktop) return;
+    const collapsed = !!historySidebarCollapsed;
+    const label = collapsed ? 'Показать историю' : 'Скрыть историю';
+    historySidebarToggleBtn.setAttribute('title', label);
+    historySidebarToggleBtn.setAttribute('aria-label', label);
+    if (historySidebarToggleText) {
+        historySidebarToggleText.textContent = collapsed ? 'Диалоги' : 'Скрыть';
+    }
+}
+
+function applyHistorySidebarCollapsed(collapsed, options = {}) {
+    const isDesktop = window.innerWidth > 1024;
+    if (!isDesktop) {
+        document.body.classList.remove('history-sidebar-collapsed');
+        historySidebarCollapsed = false;
+        updateHistorySidebarToggleUi();
+        return;
+    }
+    historySidebarCollapsed = !!collapsed;
+    document.body.classList.toggle('history-sidebar-collapsed', historySidebarCollapsed);
+    if (options.persist !== false) {
+        persistHistorySidebarCollapsedPreference(historySidebarCollapsed);
+    }
+    updateHistorySidebarToggleUi();
+}
+
+function syncHistorySidebarResponsiveState() {
+    const preference = readHistorySidebarCollapsedPreference();
+    const nextCollapsed = window.innerWidth > 1024
+        ? (preference !== null ? preference : true)
+        : false;
+    applyHistorySidebarCollapsed(nextCollapsed, { persist: false });
 }
 
 function renderDialogHistoryScopeMeta() {
@@ -21589,6 +21754,9 @@ bindEvent(userInput, 'input', () => {
     updateSendBtnState();
     });
 bindEvent(clearChatBtn, 'click', () => { if (confirm('Очистить чат?')) clearChat(); });
+bindEvent(historySidebarToggleBtn, 'click', () => {
+    applyHistorySidebarCollapsed(!historySidebarCollapsed);
+});
 bindEvent(startBtn, 'click', startConversationHandler);
 bindEvent(rateChatBtn, 'click', rateChat);
 bindEvent(aiAssistBtn, 'click', generateAIResponse);
@@ -21907,6 +22075,9 @@ if (window.innerWidth <= 1024) {
     panels.forEach(p => p.classList.remove('active'));
     document.querySelector('.panel[data-panel="chat"]')?.classList.add('active');
 }
+
+syncHistorySidebarResponsiveState();
+window.addEventListener('resize', syncHistorySidebarResponsiveState);
 
 function isSelectionInsideTag(preview, tagName) {
     const selection = window.getSelection();

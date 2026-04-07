@@ -1415,6 +1415,7 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
         logStep('run dialog history persistence scenario');
         await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
         await waitForChatReady(page);
+        await page.waitForFunction(() => document.body.classList.contains('history-sidebar-collapsed'));
 
         await page.click('#startBtn');
         await page.waitForSelector('text=Готов обсудить задачу.');
@@ -1431,6 +1432,12 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
         await page.waitForFunction(() => {
             const meta = document.getElementById('dialogHistoryScopeMeta');
             return /диалог/i.test(String(meta?.textContent || ''));
+        });
+
+        await page.waitForFunction(() => {
+            const listTitle = document.querySelector('#dialogHistoryList .dialog-history-item-title');
+            const text = String(listTitle?.textContent || '');
+            return /гидробур|case/i.test(text);
         });
 
         await page.fill('#dialogHistoryTitleInput', 'Мой тестовый диалог');

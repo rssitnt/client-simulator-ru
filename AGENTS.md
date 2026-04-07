@@ -55,9 +55,10 @@
   - shared desktop/mobile/settings history views stay in sync from one state source;
   - the desktop rail has inline search and a fast `Новый диалог` action;
   - dialogs support pinning via `pinnedAt`, with pinned records sorted first;
-  - auto-titles are derived from the first meaningful line, with greetings/noise trimmed.
+  - auto-titles are derived from the early topic of the dialog (subject/model/qualifier), not from the raw first line.
   - the desktop rail is list-only; opening a saved dialog happens in the main chat workspace, not inside the sidebar itself.
   - the main shell does not auto-open the first history item on load.
+  - the desktop history rail starts collapsed by default and is reopened with a dedicated toggle.
 - Admins can view and delete foreign dialog history; users can manage only their own history.
 - Active time is now “real focused activity only”:
   - visible tab
