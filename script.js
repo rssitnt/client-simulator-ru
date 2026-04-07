@@ -7344,6 +7344,13 @@ function syncMainDialogHistoryStage() {
     document.getElementById('chatPanel')?.classList.toggle('is-history-viewing', shouldShow);
 }
 
+function resizeMainDialogHistoryTitleInput() {
+    if (!mainDialogHistoryTitleInput) return;
+    mainDialogHistoryTitleInput.style.height = 'auto';
+    const nextHeight = Math.max(mainDialogHistoryTitleInput.scrollHeight, 34);
+    mainDialogHistoryTitleInput.style.height = `${nextHeight}px`;
+}
+
 function readHistorySidebarCollapsedPreference() {
     const raw = String(getCachedStorageValue(HISTORY_SIDEBAR_COLLAPSED_STORAGE_KEY, '') || '').trim();
     if (raw === '1') return true;
@@ -7524,6 +7531,9 @@ function renderDialogHistoryViewerInto(ui) {
     const effectiveTitle = clampDialogHistoryTitle(record.title, record.autoTitle || formatDialogHistoryFallbackTitle(record.createdAt));
     ui.titleInput.value = effectiveTitle;
     ui.titleInput.disabled = !canRenameSelectedDialogHistory();
+    if (ui.titleInput === mainDialogHistoryTitleInput) {
+        resizeMainDialogHistoryTitleInput();
+    }
 
     const createdDate = new Date(parseIsoMs(record.createdAt || '') || Date.now());
     const updatedDate = new Date(parseIsoMs(record.updatedAt || '') || createdDate.getTime());
@@ -19144,6 +19154,12 @@ dialogHistoryUiSets.forEach((ui) => {
             showCopyNotification(error?.message || 'Не удалось переименовать диалог');
         });
     });
+
+    if (ui.titleInput === mainDialogHistoryTitleInput) {
+        bindEvent(ui.titleInput, 'input', () => {
+            resizeMainDialogHistoryTitleInput();
+        });
+    }
 });
 
 bindEvent(mainDialogHistorySearchInput, 'input', () => {

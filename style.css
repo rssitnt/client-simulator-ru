@@ -668,7 +668,7 @@ body.history-sidebar-collapsed .history-panel > * {
     min-height: auto;
     height: auto;
     align-items: flex-start;
-    padding: 20px 18px 10px 68px;
+    padding: 18px 18px 8px 68px;
     background: #111111;
 }
 
@@ -699,7 +699,7 @@ body.history-sidebar-collapsed .history-panel > * {
     min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 12px;
     padding: 0 16px 16px;
 }
 
@@ -751,15 +751,16 @@ body.history-sidebar-collapsed .history-panel > * {
     align-items: center;
     justify-content: center;
     min-height: 44px;
-    padding: 0 16px;
+    padding: 0 18px;
     border-radius: 16px;
     border: 1px solid #2f2f2f;
     background: #171717;
     color: #f1f1f1;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 700;
     cursor: pointer;
-    transition: border-color 0.2s ease, background-color 0.2s ease;
+    white-space: nowrap;
+    transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
 }
 
 .history-panel-action:hover {
@@ -826,6 +827,7 @@ body:not(.history-sidebar-collapsed) .history-sidebar-toggle-text {
     flex-direction: column;
     min-height: 0;
     flex: 1;
+    overflow: hidden;
 }
 
 .history-thread-list {
@@ -4202,7 +4204,7 @@ body.light-theme .btn-icon:hover {
 .dialog-history-list-wrap {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
     min-width: 0;
     min-height: 0;
 }
@@ -4210,10 +4212,11 @@ body.light-theme .btn-icon:hover {
 .dialog-history-list {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
     max-height: min(520px, 55vh);
     overflow-y: auto;
-    padding-right: 2px;
+    padding-right: 4px;
+    scrollbar-gutter: stable;
     scrollbar-width: thin;
     scrollbar-color: #444 transparent;
 }
@@ -4313,8 +4316,8 @@ body.light-theme .btn-icon:hover {
 }
 
 .history-thread-list .dialog-history-item {
-    gap: 8px;
-    padding: 12px 12px;
+    gap: 7px;
+    padding: 11px 12px;
     border-radius: 18px;
     background: #151515;
     border-color: #232323;
@@ -4335,8 +4338,8 @@ body.light-theme .btn-icon:hover {
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
-    font-size: 15px;
-    line-height: 1.32;
+    font-size: 14px;
+    line-height: 1.28;
     letter-spacing: -0.02em;
 }
 
@@ -4545,6 +4548,7 @@ body.light-theme .btn-icon:hover {
     border-color: #242424;
     background: #141414;
     color: #bcbcbc;
+    font-size: 13px;
 }
 
 .dialog-history-load-more:hover {
@@ -4580,13 +4584,16 @@ body.light-theme .btn-icon:hover {
 }
 
 .dialog-history-viewer-header-main {
-    align-items: flex-end;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
     padding-bottom: 16px;
     border-bottom: 1px solid #202020;
 }
 
 .dialog-history-title-wrap-main {
     gap: 10px;
+    width: 100%;
 }
 
 .dialog-history-stage-eyebrow {
@@ -4598,6 +4605,10 @@ body.light-theme .btn-icon:hover {
 }
 
 .dialog-history-title-input-main {
+    display: block;
+    width: 100%;
+    max-width: min(100%, 920px);
+    min-height: 34px;
     padding: 0;
     border: none;
     border-radius: 0;
@@ -4606,6 +4617,9 @@ body.light-theme .btn-icon:hover {
     font-weight: 700;
     line-height: 1.08;
     letter-spacing: -0.04em;
+    resize: none;
+    overflow: hidden;
+    white-space: pre-wrap;
 }
 
 .dialog-history-title-input-main:focus-visible {
@@ -4627,7 +4641,9 @@ body.light-theme .btn-icon:hover {
 }
 
 .dialog-history-viewer-actions-main {
-    justify-content: flex-end;
+    width: 100%;
+    justify-content: flex-start;
+    gap: 10px;
 }
 
 .dialog-history-messages-main {

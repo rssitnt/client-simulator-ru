@@ -59,6 +59,7 @@
   - the desktop rail is list-only; opening a saved dialog happens in the main chat workspace, not inside the sidebar itself.
   - the main shell does not auto-open the first history item on load.
   - the desktop history rail starts collapsed by default and is reopened with a dedicated toggle.
+  - the main saved-dialog viewer keeps title/meta above actions so long names do not clip in the header.
 - Admins can view and delete foreign dialog history; users can manage only their own history.
 - Active time is now “real focused activity only”:
   - visible tab
@@ -86,7 +87,7 @@
 - Audio files are not stored.
 - Owners can rename/delete their own dialogs.
 - Owners can pin/unpin their own dialogs; `pinnedAt` controls sort priority.
-- Auto-generated titles are summarized from the first meaningful message instead of using raw first-turn text.
+- Auto-generated titles are topic-based (subject/model/qualifier), not raw first-turn text.
 - Admins can open and delete any user’s dialog history, but cannot rename чужие записи.
 
 ### Auth / Security
