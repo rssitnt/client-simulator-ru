@@ -14480,9 +14480,28 @@ async function clearVoiceModeConfig() {
 async function getFirebaseAuthIdToken() {
     if (!auth?.currentUser || typeof auth.currentUser.getIdToken !== 'function') return '';
     try {
-        return String(await auth.currentUser.getIdToken()).trim();
+        const token = await withPromiseTimeout(
+            auth.currentUser.getIdToken(true),
+            5000,
+            'Таймаут запроса Firebase ID token.'
+        );
+        return String(token || '').trim();
     } catch (error) {
+        const code = String(error?.code || '').trim();
         console.warn('Failed to get Firebase ID token for voice endpoint:', error);
+        if (code === 'auth/network-request-failed') {
+            await waitForDelay(800);
+            try {
+                const token = await withPromiseTimeout(
+                    auth.currentUser.getIdToken(true),
+                    5000,
+                    'Таймаут запроса Firebase ID token.'
+                );
+                return String(token || '').trim();
+            } catch (retryError) {
+                console.warn('Firebase ID token retry failed:', retryError);
+            }
+        }
         return '';
     }
 }
@@ -14490,7 +14509,11 @@ async function getFirebaseAuthIdToken() {
 async function getFirebaseAppCheckToken() {
     if (!appCheck || typeof getAppCheckToken !== 'function') return '';
     try {
-        const tokenResult = await getAppCheckToken(appCheck, false);
+        const tokenResult = await withPromiseTimeout(
+            getAppCheckToken(appCheck, false),
+            4000,
+            'Таймаут App Check.'
+        );
         return String(tokenResult?.token || '').trim();
     } catch (error) {
         console.warn('Failed to get Firebase App Check token:', error);
@@ -14570,7 +14593,12 @@ async function loadGeminiSdkModule() {
 }
 
 async function buildGeminiVoiceServerRequestHeaders(tokenEndpoint = '') {
-    await waitForFirebaseAuthReady();
+    try {
+        await withPromiseTimeout(waitForFirebaseAuthReady(), 4000, 'Таймаут восстановления Firebase-сессии.');
+    } catch (error) {
+        console.warn('Firebase auth readiness timed out for voice:', error);
+        throw new Error('Вход ещё восстанавливается. Подождите несколько секунд и попробуйте снова.');
+    }
     const idToken = await getFirebaseAuthIdToken();
     const canUseLocalFallback = !idToken && canUseLocalhostDevVoiceTokenFallback(tokenEndpoint);
     if (!idToken && !canUseLocalFallback) {
@@ -16979,6 +17007,7 @@ async function startGeminiVoiceMode() {
             instructionsLength: String(sessionConfig.instructions || '').trim().length,
             systemInstructionLength: String(sessionConfig.systemInstruction || '').trim().length
         });
+        setVoiceModeStatus('Подтверждаем вход…', 'waiting');
         const clientSecret = await resolveGeminiLiveApiKey(sessionConfig, {
             signal: startAttempt.signal
         });
