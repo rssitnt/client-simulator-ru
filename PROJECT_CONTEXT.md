@@ -52,9 +52,14 @@
 - Voice token header prep now times out fast on auth/AppCheck so the call doesn't stall ~30s before connecting.
 - Voice token endpoint timeout reduced to 15s to avoid long first-load stalls; fallback transcript now merges with any early partial preview to avoid missing leading words.
 - Voice auth/AppCheck tokens are now prewarmed on login to avoid slow call starts; cached tokens are reused until TTL.
+- Voice startup warmup now also preloads the Gemini SDK and prewarms the token endpoint in the background as soon as auth + endpoint config are ready, instead of waiting for the first click on the call button.
+- Voice header building now reuses a fresh cached Firebase `idToken` immediately; it only waits for Firebase auth readiness when no cached token exists.
+- Voice token fetch now uses one short total budget across primary + fallback routes, so a bad first route cannot stretch startup into a 30+ second wait.
+- Early auto-reconnect now requires a real `live_open` before retrying; failed cold starts no longer immediately trigger another full slow reconnect cycle.
 - Echo-guard no longer trims the first client reply, so the first turn text should not lose leading words.
 - Chat autoscroll now aligns to the start of very tall messages so the first line is visible; shorter messages still scroll to the bottom.
 - Clearing the chat now resets the in-memory Gemini voice dialog buffer so the next call treats the first client reply as truly first.
+- Clearing the chat now also stops an active Gemini voice call before wiping the UI, so the bottom action no longer stays in the "end dialog" state after chat reset.
 - If the first client reply arrives as audio-only before the first manager turn, we now force a fallback transcription timer immediately so the first bubble can still appear.
 - If the first client reply audio is buffered but playback didn't start, we now replay the buffered audio once the turn is released/finalized.
 - Audio playback reset now preserves queued playback when early assistant audio arrives before capture init, so the first reply is not dropped.
@@ -76,4 +81,4 @@
 - Observed on 2026-03-30:
   - `OPTIONS https://client-simulator.ru/api/gemini-live-token` => `405`
   - `OPTIONS https://client-simulator-gemini-token.onrender.com/api/gemini-live-token` => `204`
-- Date: 2026-04-06
+- Date: 2026-04-07

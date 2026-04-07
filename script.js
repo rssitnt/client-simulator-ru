@@ -1734,6 +1734,7 @@ let geminiVoiceActiveSources = new Set();
 let geminiVoicePlaybackGeneration = 0;
 let isGeminiVoiceConnecting = false;
 let isGeminiVoiceActive = false;
+let geminiVoiceTransportOpened = false;
 let geminiVoiceCloseExpected = false;
 let geminiVoiceStartTimestamp = 0;
 let geminiVoiceStartAttemptId = 0;
@@ -1781,6 +1782,9 @@ let voiceAuthCachedIdToken = '';
 let voiceAuthCachedIdTokenAt = 0;
 let voiceAuthCachedAppCheckToken = '';
 let voiceAuthCachedAppCheckTokenAt = 0;
+let geminiVoiceStartupWarmupPromise = null;
+let geminiVoiceStartupWarmupEndpoint = '';
+let geminiVoiceStartupWarmupAt = 0;
 let geminiAudioInputRefreshPromise = null;
 let geminiAudioInputDevices = [];
 let geminiDialToneTimerId = 0;
@@ -4421,6 +4425,7 @@ function applyAuthenticatedUser(user) {
     }
     applyRoleRestrictions();
     scheduleVoiceAuthWarmup('apply_authenticated_user');
+    scheduleGeminiVoiceStartupWarmup('apply_authenticated_user');
 }
 
 function resetCurrentSessionToAuth(message = '') {
@@ -13821,6 +13826,9 @@ function setSharedGeminiTokenEndpoint(value) {
     sharedAppConfig.geminiTokenEndpoint = getTrustedGeminiTokenEndpointOrEmpty(value, {
         source: 'shared voice token endpoint'
     });
+    if (sharedAppConfig.geminiTokenEndpoint && auth?.currentUser) {
+        scheduleGeminiVoiceStartupWarmup('shared_token_endpoint');
+    }
 }
 
 function normalizeClientConversationActionPrompt(value) {
@@ -14577,6 +14585,52 @@ function scheduleVoiceAuthWarmup(reason = '') {
         });
 }
 
+function scheduleGeminiVoiceStartupWarmup(reason = '') {
+    if (!auth?.currentUser) return;
+
+    let tokenEndpoint = '';
+    try {
+        tokenEndpoint = sanitizeGeminiTokenEndpointOrThrow(getConfiguredGeminiTokenEndpoint(), {
+            source: 'Voice startup warmup'
+        });
+    } catch (error) {
+        tokenEndpoint = '';
+    }
+
+    if (!tokenEndpoint) {
+        geminiVoiceStartupWarmupEndpoint = '';
+        geminiVoiceStartupWarmupAt = 0;
+        return;
+    }
+
+    const now = Date.now();
+    const normalizedEndpoint = String(tokenEndpoint || '').trim();
+    const canReuseWarmup = normalizedEndpoint
+        && geminiVoiceStartupWarmupEndpoint === normalizedEndpoint
+        && (now - geminiVoiceStartupWarmupAt) < 2 * 60 * 1000;
+    if (geminiVoiceStartupWarmupPromise || canReuseWarmup) {
+        return;
+    }
+
+    geminiVoiceStartupWarmupEndpoint = normalizedEndpoint;
+    geminiVoiceStartupWarmupPromise = Promise.allSettled([
+        warmVoiceAuthTokens(`startup:${reason || 'auto'}`),
+        warmupGeminiVoiceTokenEndpoint(4000),
+        loadGeminiSdkModule()
+    ]).then((results) => {
+        geminiVoiceStartupWarmupAt = Date.now();
+        const tokenEndpointWarm = results[1]?.status === 'fulfilled' && results[1]?.value === true;
+        recordVoiceDebugEvent('voice_startup_warmup_done', {
+            status: tokenEndpointWarm ? 'ok' : 'error',
+            message: reason || 'auto'
+        });
+    }).catch((error) => {
+        console.warn('Voice startup warmup failed:', error);
+    }).finally(() => {
+        geminiVoiceStartupWarmupPromise = null;
+    });
+}
+
 function createGeminiVoiceStartCancelledError() {
     const error = new Error('Voice start cancelled');
     error.code = 'VOICE_START_CANCELLED';
@@ -14649,17 +14703,17 @@ async function loadGeminiSdkModule() {
 }
 
 async function buildGeminiVoiceServerRequestHeaders(tokenEndpoint = '') {
-    try {
-        await withPromiseTimeout(waitForFirebaseAuthReady(), 4000, 'Таймаут восстановления Firebase-сессии.');
-    } catch (error) {
-        console.warn('Firebase auth readiness timed out for voice:', error);
-        throw new Error('Вход ещё восстанавливается. Подождите несколько секунд и попробуйте снова.');
-    }
     const now = Date.now();
     let idToken = '';
     if (voiceAuthCachedIdToken && (now - voiceAuthCachedIdTokenAt) < VOICE_AUTH_TOKEN_TTL_MS) {
         idToken = voiceAuthCachedIdToken;
     } else {
+        try {
+            await withPromiseTimeout(waitForFirebaseAuthReady(), 4000, 'Таймаут восстановления Firebase-сессии.');
+        } catch (error) {
+            console.warn('Firebase auth readiness timed out for voice:', error);
+            throw new Error('Вход ещё восстанавливается. Подождите несколько секунд и попробуйте снова.');
+        }
         idToken = await getFirebaseAuthIdToken();
     }
     const canUseLocalFallback = !idToken && canUseLocalhostDevVoiceTokenFallback(tokenEndpoint);
@@ -14787,14 +14841,19 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
     let lastError = null;
     let sawTimeoutLikeFailure = false;
     let sawFallbackableFailure = false;
+    const totalDeadlineAt = Date.now() + 12000;
 
     for (let attemptIndex = 0; attemptIndex < endpointCandidates.length; attemptIndex += 1) {
         const endpoint = endpointCandidates[attemptIndex];
         const attemptNumber = attemptIndex + 1;
         const isFallbackAttempt = attemptIndex > 0;
+        const remainingBudgetMs = Math.max(0, totalDeadlineAt - Date.now());
+        if (remainingBudgetMs <= 0) {
+            break;
+        }
         const attemptTimeoutMs = isFallbackAttempt
-            ? Math.min(20000, VOICE_TOKEN_ENDPOINT_TIMEOUT_MS)
-            : VOICE_TOKEN_ENDPOINT_TIMEOUT_MS;
+            ? Math.max(1500, Math.min(4000, remainingBudgetMs))
+            : Math.max(3000, Math.min(8000, remainingBudgetMs));
 
         if (isFallbackAttempt) {
             setVoiceModeStatus('Сервер голосового режима отвечает медленно. Пробуем запасной маршрут…', 'waiting');
@@ -14909,6 +14968,11 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
             }
             throw error;
         }
+    }
+
+    if (!lastError && Date.now() >= totalDeadlineAt) {
+        sawTimeoutLikeFailure = true;
+        lastError = new Error('Token endpoint budget exceeded');
     }
 
     if (sawTimeoutLikeFailure) {
@@ -16260,6 +16324,7 @@ function handleGeminiVoiceTransportFailure(message = 'Соединение го�
         geminiVoiceEarlyReconnectAttempts < GEMINI_VOICE_EARLY_RECONNECT_MAX_ATTEMPTS &&
         elapsedMs >= 0 &&
         elapsedMs < GEMINI_VOICE_EARLY_RECONNECT_WINDOW_MS &&
+        geminiVoiceTransportOpened &&
         !geminiVoiceSetupComplete &&
         !geminiVoiceHasAssistantReply &&
         !geminiVoiceHasAudioOutput &&
@@ -16972,6 +17037,7 @@ async function stopGeminiVoiceMode(options = {}) {
     });
     const shouldPreserveDialog = !!preserveDialogForRating && hasBufferedVoiceDialog();
     const shouldRenderDialog = !silent && !shouldPreserveDialog;
+    geminiVoiceTransportOpened = false;
 
     if (!isGeminiVoiceActive && !isGeminiVoiceConnecting && !geminiLiveSession) {
         if (!shouldPreserveDialog) {
@@ -17049,6 +17115,7 @@ async function startGeminiVoiceMode() {
     geminiVoiceDebugSessionId = buildRequestId('voice');
     resetGeminiVoiceDebugSessionMarkers();
     resetGeminiVoiceDialogBuffer();
+    geminiVoiceTransportOpened = false;
     if (!currentDialogHistoryId && conversationHistory.length === 0) {
         prepareCurrentDialogHistorySession('voice');
     }
@@ -17106,6 +17173,7 @@ async function startGeminiVoiceMode() {
             callbacks: {
                 onopen: () => {
                     if (startAttempt.id !== geminiVoiceStartAttemptId) return;
+                    geminiVoiceTransportOpened = true;
                     recordVoiceDebugEvent('live_open', {
                         status: 'ok'
                     });
@@ -17175,6 +17243,7 @@ async function startGeminiVoiceMode() {
         });
         isGeminiVoiceConnecting = false;
         isGeminiVoiceActive = false;
+        geminiVoiceTransportOpened = false;
         await stopGeminiVoiceMode({ silent: true, expectedClose: true });
         geminiVoiceCloseExpected = false;
         if (!isGeminiVoiceStartCancelledError(error)) {
@@ -18852,11 +18921,18 @@ function resetChatForNewVoiceCall() {
 }
 
 async function clearChat() {
+    if (isGeminiVoiceConnecting || isGeminiVoiceActive || geminiLiveSession) {
+        await stopGeminiVoiceMode({
+            silent: true,
+            expectedClose: true,
+            preserveDialogForRating: false
+        });
+    }
     invalidateActiveChatUiRequests();
     isProcessing = false;
+    await flushCurrentDialogHistoryForReset({ forceClosed: true });
     resetGeminiVoiceDialogBuffer();
     geminiVoiceConversationFinished = false;
-    await flushCurrentDialogHistoryForReset({ forceClosed: true });
     resetConversationHistory();
     lastRating = null;
     isDialogRated = false;
