@@ -80,6 +80,14 @@
   - the settings accordion still mirrors the same data/actions for admin workflows.
 - History UI is now rendered into multiple synchronized surfaces from one source of truth, so selecting/renaming/deleting a dialog stays in sync between the main shell and settings.
 - Role/personality selection now uses a single GPT-style selector with descriptions instead of visible tab buttons; legacy hidden tabs remain only as compatibility hooks for existing switching logic.
+- The right prompt panel now has a context bar:
+  - shows the current role name and a short explanation of what this prompt controls;
+  - shows the active prompt variation badge;
+  - gives admins a direct `Новый вариант` action without hunting for the plus chip.
+- Voice UX is now more explicit in the main chat area:
+  - the in-chat voice status card survives beyond the initial connect phase and reflects `подключение / клиент говорит / ваша очередь / звонок завершён / ошибка`;
+  - the panel derives from centralized voice status state instead of depending on a missing standalone `voiceModeStatus` DOM block;
+  - terminal dialog notices now include a clearer badge + explanatory subtext.
 
 ## Useful Debug Markers
 - `assistant_output_buffered_before_user_turn`

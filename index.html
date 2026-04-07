@@ -661,7 +661,11 @@
                     <button id="startAttestationBtn" class="btn-start btn-start-attestation">Начать аттестацию</button>
                 </div>
                 <div id="voiceConnectStatus" class="voice-connect-status" role="status" aria-live="polite" aria-atomic="true" hidden>
-                    <div id="voiceConnectStatusText" class="voice-connect-status-text">Идёт подключение…</div>
+                    <div class="voice-connect-status-copy">
+                        <div id="voiceConnectStatusEyebrow" class="voice-connect-status-eyebrow">Звонок</div>
+                        <div id="voiceConnectStatusText" class="voice-connect-status-text">Идёт подключение…</div>
+                        <div id="voiceConnectStatusSubtext" class="voice-connect-status-subtext">Готовим соединение с клиентом.</div>
+                    </div>
                     <div id="voiceConnectMeter" class="voice-connect-meter" hidden>
                         <div class="voice-connect-meter-track" aria-hidden="true">
                             <div id="voiceConnectMeterFill" class="voice-connect-meter-fill"></div>
@@ -795,6 +799,16 @@
             
             <!-- Контент инструкций -->
             <div class="instruction-content">
+                <div class="prompt-context-bar">
+                    <div class="prompt-context-copy">
+                        <div id="promptContextRoleName" class="prompt-context-role-name">Клиент</div>
+                        <div id="promptContextRoleDescription" class="prompt-context-role-description">Сценарий переписки от лица клиента.</div>
+                    </div>
+                    <div class="prompt-context-actions">
+                        <span id="promptContextVariationBadge" class="prompt-context-variation-badge">Вариант не выбран</span>
+                        <button id="promptContextNewVariationBtn" class="prompt-context-action" type="button" hidden>Новый вариант</button>
+                    </div>
+                </div>
                 <!-- Sub-tabs for prompt variations -->
                 <div class="prompt-variations-container" id="promptVariations"></div>
                 <div id="promptSyncConflictNotice" class="prompt-sync-conflict-notice" hidden></div>
@@ -862,7 +876,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js" integrity="sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3" crossorigin="anonymous" defer></script>
     <!-- Turndown for HTML to Markdown conversion (WYSIWYG editing) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js" integrity="sha384-m6AyXEhyWRg2s2wrkDV64LGkaManYgMSAjn2U+zymzSJ42WthRSjCu1AqZJhoQV0" crossorigin="anonymous" defer></script>
-    <script type="module" src="script.js?v=20260407-14"></script>
+    <script type="module" src="script.js?v=20260407-15"></script>
     <!-- Last deployment trigger: 2026-03-24 15:00 -->
 </body>
 </html>

@@ -1417,7 +1417,9 @@ const rateChatBtn = document.getElementById('rateChat');
 const startBtn = document.getElementById('startBtn');
 const startConversation = document.getElementById('startConversation');
 const voiceConnectStatus = document.getElementById('voiceConnectStatus');
+const voiceConnectStatusEyebrow = document.getElementById('voiceConnectStatusEyebrow');
 const voiceConnectStatusText = document.getElementById('voiceConnectStatusText');
+const voiceConnectStatusSubtext = document.getElementById('voiceConnectStatusSubtext');
 const voiceConnectMeter = document.getElementById('voiceConnectMeter');
 const voiceConnectMeterFill = document.getElementById('voiceConnectMeterFill');
 const voiceConnectMeterLabel = document.getElementById('voiceConnectMeterLabel');
@@ -1621,6 +1623,10 @@ const instructionDropdown = document.getElementById('instructionDropdown');
 const instructionDropdownTrigger = instructionDropdown?.querySelector('.dropdown-trigger') || null;
 const instructionOptions = Array.from(document.querySelectorAll('#instructionOptions [data-value]'));
 const selectedInstructionText = document.getElementById('selectedInstructionText');
+const promptContextRoleName = document.getElementById('promptContextRoleName');
+const promptContextRoleDescription = document.getElementById('promptContextRoleDescription');
+const promptContextVariationBadge = document.getElementById('promptContextVariationBadge');
+const promptContextNewVariationBtn = document.getElementById('promptContextNewVariationBtn');
 const activeScenarioStrip = document.getElementById('activeScenarioStrip');
 const activeScenarioTitle = document.getElementById('activeScenarioTitle');
 const activeScenarioSummary = document.getElementById('activeScenarioSummary');
@@ -11625,12 +11631,17 @@ function setPrimaryActionMode(mode) {
 
 function setVoiceCallUiActive(active) {
     document.body?.classList.toggle('voice-call-active', !!active);
+    if (!active) {
+        currentVoiceModeStatusText = '';
+        currentVoiceModeStatusState = 'idle';
+    }
     if (!active && voiceModeStatus) {
         voiceModeStatus.hidden = true;
         voiceModeStatus.setAttribute('aria-hidden', 'true');
         voiceModeStatus.textContent = '';
         voiceModeStatus.dataset.state = 'idle';
     }
+    syncVoiceConnectStatusPanel();
     if (!userInput) return;
     if (active) {
         userInput.disabled = true;
@@ -11821,22 +11832,8 @@ function updateVoiceConnectingUi() {
             startDiv.style.display = '';
         }
     }
-    if (voiceConnectStatus) {
-        if (isGeminiVoiceConnecting) {
-            if (voiceConnectStatusText) {
-                voiceConnectStatusText.textContent = 'Идёт подключение…';
-            } else {
-                voiceConnectStatus.textContent = 'Идёт подключение…';
-            }
-            voiceConnectStatus.hidden = false;
-            updateVoiceConnectMeterUi();
-        } else {
-            voiceConnectStatus.hidden = true;
-            if (voiceConnectMeter) {
-                voiceConnectMeter.hidden = true;
-            }
-        }
-    }
+    updateVoiceConnectMeterUi();
+    syncVoiceConnectStatusPanel();
 }
 
 function updateSendBtnState() {
@@ -12144,6 +12141,7 @@ function renderVariations() {
     }
 
     promptVariationsContainer.replaceChildren(fragment);
+    renderPromptContextBar(role);
     renderPromptSyncConflictNotice(role);
     updatePromptVisibilityButton();
     updatePromptHistoryButton();
@@ -12171,6 +12169,14 @@ function getRoleLabel(role) {
     if (role === 'manager_call') return 'Клиент звонок';
     if (role === 'rater') return 'Оценщик';
     return role;
+}
+
+function getRoleDescription(role) {
+    if (role === 'client') return 'Сценарий переписки от лица клиента. Здесь задаётся его тон, цели и давление на менеджера.';
+    if (role === 'manager') return 'Промпт ассистента для текстового диалога. Определяет качество ответа менеджера в чате.';
+    if (role === 'manager_call') return 'Голосовой сценарий клиента. Определяет, как он говорит, спорит и завершает звонок.';
+    if (role === 'rater') return 'Правила разбора диалога и критерии оценки после завершения разговора.';
+    return '';
 }
 
 function getPromptHistoryKey(role, variationId) {
@@ -13595,6 +13601,8 @@ function hideAiImproveModal() {
 }
 
 let voiceModeStatusLockUntil = 0;
+let currentVoiceModeStatusText = '';
+let currentVoiceModeStatusState = 'idle';
 const VOICE_MODE_STATUS_COPY = Object.freeze({
     opening: 'Открываю голосовой режим…',
     auth: 'Проверяем доступ к звонку…',
@@ -13617,8 +13625,77 @@ function getVoiceModeStatusCopy(key, fallback = '') {
     return typeof text === 'string' && text.trim() ? text : fallback;
 }
 
+function getVoiceConnectPanelPresentation() {
+    const currentStatusText = String(currentVoiceModeStatusText || '').trim();
+    const statusState = String(currentVoiceModeStatusState || '').trim();
+    if (geminiVoiceConversationFinished) {
+        return {
+            eyebrow: 'Звонок завершён',
+            title: 'Разговор сохранён',
+            subtext: currentStatusText || 'Можно оценить диалог или очистить чат для нового звонка.',
+            state: 'finished'
+        };
+    }
+    if (isGeminiVoiceConnecting) {
+        return {
+            eyebrow: 'Подключение',
+            title: 'Готовим звонок',
+            subtext: currentStatusText || 'Проверяем доступ, набираем клиента и открываем соединение.',
+            state: 'waiting'
+        };
+    }
+    if (isGeminiVoiceActive) {
+        if (statusState === 'error') {
+            return {
+                eyebrow: 'Звонок',
+                title: 'Нужна проверка',
+                subtext: currentStatusText || 'Соединение нестабильно. Попробуйте завершить и перезапустить звонок.',
+                state: 'error'
+            };
+        }
+        if (statusState === 'waiting') {
+            return {
+                eyebrow: 'Звонок',
+                title: 'Клиент говорит',
+                subtext: currentStatusText || 'Сейчас лучше не перебивать.',
+                state: 'speaking'
+            };
+        }
+        return {
+            eyebrow: 'Звонок',
+            title: 'Ваша очередь',
+            subtext: currentStatusText || 'Клиент на линии. Можно отвечать.',
+            state: 'ready'
+        };
+    }
+    return null;
+}
+
+function syncVoiceConnectStatusPanel() {
+    if (!voiceConnectStatus) return;
+    const presentation = getVoiceConnectPanelPresentation();
+    if (!presentation) {
+        voiceConnectStatus.hidden = true;
+        delete voiceConnectStatus.dataset.state;
+        return;
+    }
+    voiceConnectStatus.hidden = false;
+    voiceConnectStatus.dataset.state = presentation.state;
+    if (voiceConnectStatusEyebrow) {
+        voiceConnectStatusEyebrow.textContent = presentation.eyebrow;
+    }
+    if (voiceConnectStatusText) {
+        voiceConnectStatusText.textContent = presentation.title;
+    }
+    if (voiceConnectStatusSubtext) {
+        voiceConnectStatusSubtext.textContent = presentation.subtext;
+    }
+    if (voiceConnectMeter) {
+        voiceConnectMeter.hidden = !isGeminiVoiceConnecting || !geminiVoiceMicMeterReady;
+    }
+}
+
 function setVoiceModeStatus(text, state = 'idle', options = {}) {
-    if (!voiceModeStatus) return;
     const normalizedText = String(text ?? '');
     const trimmedText = normalizedText.trim();
     const forceShow = options?.forceShow === true;
@@ -13629,20 +13706,30 @@ function setVoiceModeStatus(text, state = 'idle', options = {}) {
         isGeminiVoiceActive ||
         geminiVoiceConversationFinished;
     if (!trimmedText || !shouldShow) {
-        voiceModeStatus.hidden = true;
-        voiceModeStatus.setAttribute('aria-hidden', 'true');
-        voiceModeStatus.textContent = '';
-        voiceModeStatus.dataset.state = 'idle';
+        currentVoiceModeStatusText = '';
+        currentVoiceModeStatusState = 'idle';
+        if (voiceModeStatus) {
+            voiceModeStatus.hidden = true;
+            voiceModeStatus.setAttribute('aria-hidden', 'true');
+            voiceModeStatus.textContent = '';
+            voiceModeStatus.dataset.state = 'idle';
+        }
+        syncVoiceConnectStatusPanel();
         return;
     }
     const lockMs = Math.max(0, Number(options?.lockMs) || 0);
     if (lockMs) {
         voiceModeStatusLockUntil = Math.max(voiceModeStatusLockUntil, Date.now() + lockMs);
     }
-    voiceModeStatus.textContent = normalizedText;
-    voiceModeStatus.dataset.state = state;
-    voiceModeStatus.hidden = false;
-    voiceModeStatus.setAttribute('aria-hidden', 'false');
+    currentVoiceModeStatusText = normalizedText;
+    currentVoiceModeStatusState = state;
+    if (voiceModeStatus) {
+        voiceModeStatus.textContent = normalizedText;
+        voiceModeStatus.dataset.state = state;
+        voiceModeStatus.hidden = false;
+        voiceModeStatus.setAttribute('aria-hidden', 'false');
+    }
+    syncVoiceConnectStatusPanel();
 }
 
 function clearVoiceModeWidgetHideTimer() {
@@ -13921,6 +14008,25 @@ function setSharedGeminiTokenEndpoint(value) {
     });
     if (sharedAppConfig.geminiTokenEndpoint && auth?.currentUser) {
         scheduleGeminiVoiceStartupWarmup('shared_token_endpoint');
+    }
+}
+
+function renderPromptContextBar(role = getActiveRole()) {
+    if (promptContextRoleName) {
+        promptContextRoleName.textContent = getRoleLabel(role);
+    }
+    if (promptContextRoleDescription) {
+        promptContextRoleDescription.textContent = getRoleDescription(role);
+    }
+    if (promptContextVariationBadge) {
+        const activeVariation = getActiveVariation(role);
+        const badgeText = activeVariation
+            ? `Вариант: ${getPromptVariationDisplayName(activeVariation)}`
+            : 'Вариант не выбран';
+        promptContextVariationBadge.textContent = badgeText;
+    }
+    if (promptContextNewVariationBtn) {
+        promptContextNewVariationBtn.hidden = !isAdmin();
     }
 }
 
@@ -17800,6 +17906,7 @@ function setVoiceModeScreenActive(active) {
     } else {
         updateVoiceModeRateButtonState();
     }
+    syncVoiceConnectStatusPanel();
 }
 
 async function showVoiceModeModal() {
@@ -18299,6 +18406,7 @@ function activateInstructionEditor(role) {
     instructionOptions.forEach(opt => {
         opt.classList.toggle('active', opt.dataset.value === role);
     });
+    renderPromptContextBar(role);
 }
 
 function applyImprovedPrompt(targetMode = 'new') {
@@ -18368,6 +18476,7 @@ bindEvent(aiImproveBtn, 'click', showAiImproveModal);
 bindEvent(promptHistoryBtn, 'click', showPromptHistoryModal);
 bindEvent(promptCompareBtn, 'click', showPromptCompareModal);
 bindEvent(promptVisibilityBtn, 'click', toggleActivePromptVisibility);
+bindEvent(promptContextNewVariationBtn, 'click', () => addVariation(getActiveRole()));
 bindEvent(aiImproveModalClose, 'click', hideAiImproveModal);
 bindEvent(aiImproveCancel, 'click', hideAiImproveModal);
 bindEvent(aiImproveSubmit, 'click', improvePromptWithAI);
@@ -19651,6 +19760,16 @@ function buildConversationActionNoticeText(action) {
     return 'Диалог завершен';
 }
 
+function buildConversationActionNoticeMeta(action) {
+    if (action?.type === CONVERSATION_ACTION_TYPE.GO_SILENT) {
+        return 'Клиент ушёл в тишину. Можно попробовать вернуть его следующим сообщением.';
+    }
+    if (action?.shouldEvaluate === false) {
+        return 'Разговор закрыт без оценки.';
+    }
+    return 'Разговор закрыт окончательно. Можно сразу перейти к оценке.';
+}
+
 function getConversationActionStatePayload() {
     const action = conversationTerminalAction || conversationRecoverableAction;
     if (!action) return null;
@@ -19671,7 +19790,9 @@ function showConversationActionNotice(action) {
     wrapper.dataset.actionType = action.type;
     wrapper.innerHTML = `
         <div class="conversation-action-note-box">
+            <div class="conversation-action-note-badge">${action.type === CONVERSATION_ACTION_TYPE.GO_SILENT ? 'Тихий уход' : 'Финал диалога'}</div>
             <div class="conversation-action-note-text">${escapeHtml(buildConversationActionNoticeText(action))}</div>
+            <div class="conversation-action-note-meta">${escapeHtml(buildConversationActionNoticeMeta(action))}</div>
             ${shouldShowRateButton ? '<button class="btn-conversation-rate">Оценить</button>' : ''}
         </div>
     `;
