@@ -302,7 +302,7 @@ const CHAT_WEBHOOK_TIMEOUT_MS = 45000;
 const AI_HELPER_WEBHOOK_TIMEOUT_MS = 30000;
 const RATING_WEBHOOK_TIMEOUT_MS = 45000;
 const ATTESTATION_WEBHOOK_TIMEOUT_MS = 30000;
-const VOICE_TOKEN_ENDPOINT_TIMEOUT_MS = 45000;
+const VOICE_TOKEN_ENDPOINT_TIMEOUT_MS = 15000;
 const VOICE_TRANSCRIBE_ENDPOINT_TIMEOUT_MS = 18000;
 const AUTH_SESSION_RESTORE_TIMEOUT_MS = 10000;
 const AUTH_SESSION_RESTORE_RETRY_TIMEOUT_MS = 25000;
@@ -15126,8 +15126,13 @@ async function requestGeminiAssistantFallbackTranscriptForCurrentTurn(reason = '
                 status: 'ok',
                 message: transcript
             });
+            const mergedTranscript = normalizeVoiceDialogText(
+                geminiVoiceAssistantPreview
+                    ? mergeVoiceStreamingText(geminiVoiceAssistantPreview, transcript)
+                    : transcript
+            );
             geminiVoiceHasAssistantReply = true;
-            finalizeGeminiAssistantTurn(transcript, {
+            finalizeGeminiAssistantTurn(mergedTranscript || transcript, {
                 restoreListeningState: false
             });
         })
