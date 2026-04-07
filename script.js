@@ -1556,6 +1556,7 @@ const mainDialogHistoryDeleteBtn = document.getElementById('mainDialogHistoryDel
 const mainDialogHistoryMessages = document.getElementById('mainDialogHistoryMessages');
 const mainDialogHistoryRatingWrap = document.getElementById('mainDialogHistoryRatingWrap');
 const mainDialogHistoryRatingText = document.getElementById('mainDialogHistoryRatingText');
+const mainDialogHistoryStage = document.getElementById('mainDialogHistoryStage');
 const saveVoiceConfigBtn = document.getElementById('saveVoiceConfigBtn');
 const clearVoiceConfigBtn = document.getElementById('clearVoiceConfigBtn');
 const adminHiddenClientPromptAccordion = document.getElementById('adminHiddenClientPromptAccordion');
@@ -1639,6 +1640,7 @@ const activeScenarioSummary = document.getElementById('activeScenarioSummary');
 const activeScenarioPrefillBtn = document.getElementById('activeScenarioPrefillBtn');
 const activeScenarioStartBtn = document.getElementById('activeScenarioStartBtn');
 const activeScenarioClearBtn = document.getElementById('activeScenarioClearBtn');
+const chatInputContainer = document.querySelector('.chat-input-container');
 
 const promptInputsByRole = {
     client: systemPromptInput,
@@ -4471,6 +4473,7 @@ function applyAuthenticatedUser(user) {
     updateUserNameDisplay();
     loadDialogHistoryScope(normalized.login, {
         selectCurrentDialog: true,
+        autoSelectFirst: false,
         resetVisibleCount: true
     }).catch((error) => {
         console.error('Failed to refresh primary dialog history scope:', error);
@@ -6613,7 +6616,7 @@ function summarizeDialogHistoryTitleCandidate(value = '') {
     if (!normalized) return '';
     const firstLine = normalized.split('\n').find((line) => line.trim()) || normalized;
     let summary = firstLine
-        .replace(/^(привет|здравствуйте|добрый день|добрый вечер|алло|алё|слушаю|да)\s*[,.!?:-]*/i, '')
+        .replace(/^(привет|здравствуйте|здорово|добрый день|добрый вечер|доброе утро|алло|алё|слушаю|да|ну|ага|окей|ок)\s*[,.!?:-]*/i, '')
         .replace(/\s+/g, ' ')
         .trim();
     if (!summary) {
@@ -6623,10 +6626,10 @@ function summarizeDialogHistoryTitleCandidate(value = '') {
     if (sentenceParts.length > 0 && sentenceParts[0].length >= 12) {
         summary = sentenceParts[0];
     }
-    if (summary.length > 72) {
-        const soft = summary.slice(0, 72);
+    if (summary.length > 58) {
+        const soft = summary.slice(0, 58);
         const lastSpace = soft.lastIndexOf(' ');
-        summary = `${(lastSpace > 24 ? soft.slice(0, lastSpace) : soft).trim()}…`;
+        summary = `${(lastSpace > 18 ? soft.slice(0, lastSpace) : soft).trim()}…`;
     }
     return clampDialogHistoryTitle(summary);
 }
@@ -6683,9 +6686,9 @@ function buildDialogHistoryPreview(messages = [], ratingText = '') {
         : [];
     const lastMessage = normalizedMessages[normalizedMessages.length - 1] || '';
     if (lastMessage) {
-        return lastMessage.slice(0, 240);
+        return lastMessage.slice(0, 160);
     }
-    return normalizeDialogHistoryText(ratingText).slice(0, 240);
+    return normalizeDialogHistoryText(ratingText).slice(0, 160);
 }
 
 function buildDialogHistoryMessagesMap(messages = []) {
@@ -6722,7 +6725,7 @@ function normalizeDialogHistoryIndexRecord(raw, dialogId = '', loginFallback = '
         title,
         autoTitle,
         titleEdited,
-        preview: normalizeDialogHistoryText(raw.preview || '').slice(0, 240),
+        preview: normalizeDialogHistoryText(raw.preview || '').slice(0, 160),
         messageCount: Math.max(0, Number(raw.messageCount) || 0),
         hasRating: !!raw.hasRating,
         pinnedAt: String(raw.pinnedAt || '').trim() || null,
@@ -7174,6 +7177,57 @@ async function fetchDialogHistoryPayload(login = '', dialogId = '') {
     return normalizeDialogHistoryMessagesPayload(snapshot.val(), normalizedLogin, normalizedDialogId);
 }
 
+function formatDialogHistoryDialogsCount(count = 0) {
+    const value = Math.max(0, Number(count) || 0);
+    const mod10 = value % 10;
+    const mod100 = value % 100;
+    if (mod10 === 1 && mod100 !== 11) return `${value} диалог`;
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${value} диалога`;
+    return `${value} диалогов`;
+}
+
+function clearDialogHistorySelectionState() {
+    dialogHistorySelectedId = '';
+    dialogHistorySelectedRecord = null;
+    dialogHistorySelectedPayload = null;
+    dialogHistoryViewerLoading = false;
+}
+
+function activateShellPanel(panelName = 'chat') {
+    const target = String(panelName || 'chat').trim() || 'chat';
+    document.querySelectorAll('.mobile-tab').forEach((tab) => {
+        tab.classList.toggle('active', tab.dataset.panel === target);
+    });
+    document.querySelectorAll('.panel').forEach((panel) => {
+        panel.classList.toggle('active', panel.dataset.panel === target);
+    });
+}
+
+function isSelectedDialogCurrentLiveConversation() {
+    const scopeLogin = normalizeLogin(dialogHistoryScopeLogin || '');
+    if (!dialogHistorySelectedId || !currentDialogHistoryId || dialogHistorySelectedId !== currentDialogHistoryId) {
+        return false;
+    }
+    if (!isDialogHistoryScopeOwned(scopeLogin)) {
+        return false;
+    }
+    return conversationHistory.length > 0 || isGeminiVoiceConnecting || isGeminiVoiceActive || !!geminiLiveSession;
+}
+
+function syncMainDialogHistoryStage() {
+    if (!mainDialogHistoryStage || !chatMessages) return;
+    const shouldShow = !!dialogHistorySelectedId && !isSelectedDialogCurrentLiveConversation();
+    mainDialogHistoryStage.hidden = !shouldShow;
+    chatMessages.hidden = shouldShow;
+    if (chatInputContainer) {
+        chatInputContainer.hidden = shouldShow;
+    }
+    if (shouldShow) {
+        userInput?.blur();
+    }
+    document.getElementById('chatPanel')?.classList.toggle('is-history-viewing', shouldShow);
+}
+
 function renderDialogHistoryScopeMeta() {
     const scopeLogin = normalizeLogin(dialogHistoryScopeLogin || '');
     const recordsCount = Array.isArray(dialogHistoryScopeRecords) ? dialogHistoryScopeRecords.length : 0;
@@ -7184,8 +7238,12 @@ function renderDialogHistoryScopeMeta() {
     const text = !scopeLogin
         ? 'История пока недоступна.'
         : isDialogHistoryScopeOwned(scopeLogin)
-            ? `Ваши диалоги: ${filteredCount}${dialogHistorySearchQuery ? ` из ${recordsCount}` : ''}`
-            : `История пользователя ${scopeLogin}: ${filteredCount}${dialogHistorySearchQuery ? ` из ${recordsCount}` : ''}`;
+            ? (dialogHistorySearchQuery
+                ? `Найдено ${filteredCount} из ${formatDialogHistoryDialogsCount(recordsCount)}`
+                : formatDialogHistoryDialogsCount(filteredCount))
+            : `${scopeLogin} · ${dialogHistorySearchQuery
+                ? `Найдено ${filteredCount} из ${formatDialogHistoryDialogsCount(recordsCount)}`
+                : formatDialogHistoryDialogsCount(filteredCount)}`;
     dialogHistoryUiSets.forEach((ui) => {
         if (ui.scopeMeta) {
             ui.scopeMeta.textContent = text;
@@ -7220,20 +7278,29 @@ function renderDialogHistoryListInto(ui) {
         return;
     }
     visibleRecords.forEach((record) => {
+        const isCompactRail = ui.list === mainDialogHistoryList;
         const item = document.createElement('button');
         item.type = 'button';
         item.className = `dialog-history-item${dialogHistorySelectedId === record.id ? ' is-active' : ''}`;
         const updatedDate = new Date(parseIsoMs(record.updatedAt || '') || Date.now());
         const modeLabel = record.mode === 'voice' ? 'Звонок' : 'Чат';
+        const metaDate = isCompactRail
+            ? updatedDate.toLocaleString('ru-RU', {
+                day: '2-digit',
+                month: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            })
+            : updatedDate.toLocaleString('ru-RU');
         item.innerHTML = `
             <div class="dialog-history-item-title-row">
                 <div class="dialog-history-item-title">${escapeHtml(record.title || record.autoTitle || formatDialogHistoryFallbackTitle(record.createdAt))}</div>
                 ${record.pinnedAt ? '<span class="dialog-history-item-pin" aria-hidden="true">★</span>' : ''}
             </div>
-            <div class="dialog-history-item-preview">${escapeHtml(record.preview || 'Без текста')}</div>
+            ${isCompactRail ? '' : `<div class="dialog-history-item-preview">${escapeHtml(record.preview || 'Без текста')}</div>`}
             <div class="dialog-history-item-meta">
                 <span class="dialog-history-pill ${record.mode === 'voice' ? 'is-voice' : 'is-text'}">${modeLabel}</span>
-                <span>${updatedDate.toLocaleString('ru-RU')}</span>
+                <span>${metaDate}</span>
                 <span>${record.messageCount} репл.</span>
                 ${record.hasRating ? '<span>Есть оценка</span>' : ''}
             </div>
@@ -7243,6 +7310,9 @@ function renderDialogHistoryListInto(ui) {
                 console.error('Failed to load dialog history selection:', error);
                 showCopyNotification(error?.message || 'Не удалось открыть диалог');
             });
+            if (ui.list === mainDialogHistoryList && window.innerWidth <= 1024) {
+                activateShellPanel('chat');
+            }
         });
         ui.list.appendChild(item);
     });
@@ -7271,6 +7341,12 @@ function renderDialogHistoryViewerInto(ui) {
     if (!dialogHistorySelectedRecord || !dialogHistorySelectedPayload) {
         ui.viewerEmpty.hidden = false;
         ui.viewerContent.hidden = true;
+        ui.viewerEmpty.textContent = dialogHistoryViewerLoading && dialogHistorySelectedId
+            ? 'Открываем диалог…'
+            : 'Выберите диалог из списка.';
+        if (ui.pinBtn) {
+            ui.pinBtn.hidden = true;
+        }
         ui.deleteBtn.hidden = true;
         return;
     }
@@ -7328,6 +7404,7 @@ function renderDialogHistoryViewerInto(ui) {
 
 function renderDialogHistoryViewer() {
     dialogHistoryUiSets.forEach(renderDialogHistoryViewerInto);
+    syncMainDialogHistoryStage();
 }
 
 function syncDialogHistoryUiWithCurrentConversation() {
@@ -7350,9 +7427,7 @@ function syncDialogHistoryUiWithCurrentConversation() {
 async function loadDialogHistorySelection(dialogId = '') {
     const normalizedDialogId = String(dialogId || '').trim();
     if (!normalizedDialogId) {
-        dialogHistorySelectedId = '';
-        dialogHistorySelectedRecord = null;
-        dialogHistorySelectedPayload = null;
+        clearDialogHistorySelectionState();
         renderDialogHistoryList();
         renderDialogHistoryViewer();
         return;
@@ -7399,9 +7474,7 @@ async function loadDialogHistoryScope(login = '', options = {}) {
     if (!normalizedLogin) {
         dialogHistoryScopeLogin = '';
         dialogHistoryScopeRecords = [];
-        dialogHistorySelectedId = '';
-        dialogHistorySelectedRecord = null;
-        dialogHistorySelectedPayload = null;
+        clearDialogHistorySelectionState();
         renderDialogHistoryScopeMeta();
         renderDialogHistoryList();
         renderDialogHistoryViewer();
@@ -7428,6 +7501,7 @@ async function loadDialogHistoryScope(login = '', options = {}) {
 
     const preferredDialogId = String(options.preferredDialogId || '').trim();
     const currentLiveDialogId = isDialogHistoryScopeOwned(normalizedLogin) ? currentDialogHistoryId : '';
+    const shouldAutoSelectFirst = options.autoSelectFirst === true;
     let nextSelectedId = '';
 
     if (preferredDialogId && dialogHistoryScopeRecords.some((record) => record.id === preferredDialogId)) {
@@ -7443,14 +7517,12 @@ async function loadDialogHistoryScope(login = '', options = {}) {
         && dialogHistoryScopeRecords.some((record) => record.id === dialogHistorySelectedId)
     ) {
         nextSelectedId = dialogHistorySelectedId;
-    } else if (dialogHistoryScopeRecords.length > 0) {
+    } else if (shouldAutoSelectFirst && dialogHistoryScopeRecords.length > 0) {
         nextSelectedId = dialogHistoryScopeRecords[0].id;
     }
 
     if (!nextSelectedId) {
-        dialogHistorySelectedId = '';
-        dialogHistorySelectedRecord = null;
-        dialogHistorySelectedPayload = null;
+        clearDialogHistorySelectionState();
         renderDialogHistoryViewer();
         return;
     }
@@ -7499,6 +7571,7 @@ async function openDialogHistoryScope(login = '', options = {}) {
             historyLogin: normalizedLogin,
             historyOpenAccordion: options.openAccordion,
             historySelectCurrentDialog: options.selectCurrentDialog !== false,
+            historyAutoSelectFirst: options.autoSelectFirst !== false,
             historyPreferredDialogId: options.preferredDialogId || '',
             historyResetVisibleCount: options.resetVisibleCount !== false
         });
@@ -7511,6 +7584,7 @@ async function openDialogHistoryScope(login = '', options = {}) {
     }
     await loadDialogHistoryScope(normalizedLogin, {
         selectCurrentDialog: options.selectCurrentDialog !== false,
+        autoSelectFirst: options.autoSelectFirst !== false,
         preferredDialogId: options.preferredDialogId || '',
         resetVisibleCount: options.resetVisibleCount !== false
     });
@@ -7667,6 +7741,9 @@ async function deleteSelectedDialogHistory() {
 }
 
 async function startFreshDialogFromHistory() {
+    clearDialogHistorySelectionState();
+    renderDialogHistoryList();
+    renderDialogHistoryViewer();
     const hasExistingDialog = conversationHistory.length > 0
         || hasBufferedVoiceDialog()
         || !!currentDialogHistoryId
@@ -7682,12 +7759,7 @@ async function startFreshDialogFromHistory() {
     }
 
     if (window.innerWidth <= 1024) {
-        document.querySelectorAll('.mobile-tab').forEach((tab) => {
-            tab.classList.toggle('active', tab.dataset.panel === 'chat');
-        });
-        document.querySelectorAll('.panel').forEach((panel) => {
-            panel.classList.toggle('active', panel.dataset.panel === 'chat');
-        });
+        activateShellPanel('chat');
     }
 
     requestAnimationFrame(() => {
@@ -18269,6 +18341,7 @@ function showSettingsModal(options = {}) {
     const historyLogin = normalizeLogin(options.historyLogin || currentUser?.login || '');
     loadDialogHistoryScope(historyLogin, {
         selectCurrentDialog: options.historySelectCurrentDialog !== false,
+        autoSelectFirst: options.historyAutoSelectFirst !== false,
         preferredDialogId: options.historyPreferredDialogId || '',
         resetVisibleCount: options.historyResetVisibleCount !== false
     }).catch((error) => {
@@ -19426,6 +19499,7 @@ function resetChatForNewVoiceCall() {
     isProcessing = false;
     resetCurrentDialogHistoryState();
     resetConversationHistory();
+    clearDialogHistorySelectionState();
     lastRating = null;
     isDialogRated = false;
     clearConversationTerminalState();
@@ -19442,6 +19516,8 @@ function resetChatForNewVoiceCall() {
     if (chatMessages) {
         chatMessages.innerHTML = '';
     }
+    renderDialogHistoryList();
+    renderDialogHistoryViewer();
 }
 
 async function clearChat() {
@@ -19459,6 +19535,7 @@ async function clearChat() {
     resetGeminiVoiceDialogBuffer();
     geminiVoiceConversationFinished = false;
     resetConversationHistory();
+    clearDialogHistorySelectionState();
     lastRating = null;
     isDialogRated = false;
     clearConversationTerminalState();
@@ -19491,6 +19568,8 @@ async function clearChat() {
         });
     }
     setStartButtonsEnabled(isChatReady);
+    renderDialogHistoryList();
+    renderDialogHistoryViewer();
 }
 
 function escapeHtml(value) {

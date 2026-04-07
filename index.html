@@ -578,7 +578,7 @@
             <div class="panel-header history-panel-header">
                 <div class="history-panel-title-group">
                     <div class="history-panel-eyebrow">Диалоги</div>
-                    <div class="history-panel-title">История как в рабочем чате</div>
+                    <div class="history-panel-title">История</div>
                 </div>
             </div>
             <div class="history-panel-body">
@@ -603,39 +603,6 @@
                         <button id="mainDialogHistoryLoadMoreBtn" class="btn-change dialog-history-load-more" type="button" hidden>
                             Показать ещё
                         </button>
-                    </div>
-                    <div id="mainDialogHistoryViewer" class="dialog-history-viewer history-thread-viewer">
-                        <div id="mainDialogHistoryViewerEmpty" class="dialog-history-empty dialog-history-empty-viewer">
-                            Выберите диалог из списка.
-                        </div>
-                        <div id="mainDialogHistoryViewerContent" class="dialog-history-viewer-content" hidden>
-                            <div class="dialog-history-viewer-header">
-                                <div class="dialog-history-title-wrap">
-                                    <input
-                                        id="mainDialogHistoryTitleInput"
-                                        class="dialog-history-title-input"
-                                        type="text"
-                                        maxlength="140"
-                                        placeholder="Название диалога"
-                                        autocomplete="off"
-                                    >
-                                    <div id="mainDialogHistoryViewerMeta" class="dialog-history-viewer-meta"></div>
-                                </div>
-                                <div class="dialog-history-viewer-actions">
-                                    <button id="mainDialogHistoryPinBtn" class="btn-change" type="button" hidden>
-                                        Закрепить
-                                    </button>
-                                    <button id="mainDialogHistoryDeleteBtn" class="btn-change btn-danger-subtle" type="button" hidden>
-                                        Удалить
-                                    </button>
-                                </div>
-                            </div>
-                            <div id="mainDialogHistoryMessages" class="dialog-history-messages"></div>
-                            <div id="mainDialogHistoryRatingWrap" class="dialog-history-rating-wrap" hidden>
-                                <div class="dialog-history-rating-title">Оценка</div>
-                                <div id="mainDialogHistoryRatingText" class="dialog-history-rating-text"></div>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -687,6 +654,42 @@
                             <div id="voiceConnectMeterFill" class="voice-connect-meter-fill"></div>
                         </div>
                         <div id="voiceConnectMeterLabel" class="voice-connect-meter-label">Микрофон: недостаточно</div>
+                    </div>
+                </div>
+            </div>
+            <div id="mainDialogHistoryStage" class="chat-history-stage" hidden>
+                <div id="mainDialogHistoryViewer" class="dialog-history-viewer dialog-history-viewer-main">
+                    <div id="mainDialogHistoryViewerEmpty" class="dialog-history-empty dialog-history-empty-viewer">
+                        Выберите диалог из списка.
+                    </div>
+                    <div id="mainDialogHistoryViewerContent" class="dialog-history-viewer-content" hidden>
+                        <div class="dialog-history-viewer-header dialog-history-viewer-header-main">
+                            <div class="dialog-history-title-wrap dialog-history-title-wrap-main">
+                                <div class="dialog-history-stage-eyebrow">Сохранённый диалог</div>
+                                <input
+                                    id="mainDialogHistoryTitleInput"
+                                    class="dialog-history-title-input dialog-history-title-input-main"
+                                    type="text"
+                                    maxlength="140"
+                                    placeholder="Название диалога"
+                                    autocomplete="off"
+                                >
+                                <div id="mainDialogHistoryViewerMeta" class="dialog-history-viewer-meta dialog-history-viewer-meta-main"></div>
+                            </div>
+                            <div class="dialog-history-viewer-actions dialog-history-viewer-actions-main">
+                                <button id="mainDialogHistoryPinBtn" class="btn-change" type="button" hidden>
+                                    Закрепить
+                                </button>
+                                <button id="mainDialogHistoryDeleteBtn" class="btn-change btn-danger-subtle" type="button" hidden>
+                                    Удалить
+                                </button>
+                            </div>
+                        </div>
+                        <div id="mainDialogHistoryMessages" class="dialog-history-messages dialog-history-messages-main"></div>
+                        <div id="mainDialogHistoryRatingWrap" class="dialog-history-rating-wrap" hidden>
+                            <div class="dialog-history-rating-title">Оценка</div>
+                            <div id="mainDialogHistoryRatingText" class="dialog-history-rating-text"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -892,7 +895,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js" integrity="sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3" crossorigin="anonymous" defer></script>
     <!-- Turndown for HTML to Markdown conversion (WYSIWYG editing) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js" integrity="sha384-m6AyXEhyWRg2s2wrkDV64LGkaManYgMSAjn2U+zymzSJ42WthRSjCu1AqZJhoQV0" crossorigin="anonymous" defer></script>
-<script type="module" src="script.js?v=20260407-16"></script>
+<script type="module" src="script.js?v=20260407-17"></script>
     <!-- Last deployment trigger: 2026-03-24 15:00 -->
 </body>
 </html>

@@ -56,6 +56,8 @@
   - the desktop rail has inline search and a fast `Новый диалог` action;
   - dialogs support pinning via `pinnedAt`, with pinned records sorted first;
   - auto-titles are derived from the first meaningful line, with greetings/noise trimmed.
+  - the desktop rail is list-only; opening a saved dialog happens in the main chat workspace, not inside the sidebar itself.
+  - the main shell does not auto-open the first history item on load.
 - Admins can view and delete foreign dialog history; users can manage only their own history.
 - Active time is now “real focused activity only”:
   - visible tab

@@ -75,7 +75,7 @@
 - Starting a new voice call now clears the previous chat/voice dialog state so the call always begins fresh.
 - Voice system instructions now include an explicit "fresh session" guard to prevent the client from acting as if a previous dialog already happened.
 - Dialog history is now surfaced in the main app shell instead of being hidden only in settings:
-  - desktop has a dedicated left history rail with list + preview;
+  - desktop has a dedicated left history rail for the list only;
   - mobile has a separate `История` tab;
   - the settings accordion still mirrors the same data/actions for admin workflows.
 - History UI is rendered into multiple synchronized surfaces from one source of truth, so selecting/renaming/deleting a dialog stays in sync between the main shell and settings.
@@ -84,6 +84,8 @@
   - `Новый диалог` starts a fresh session and returns focus to the main chat input;
   - dialogs can be pinned via `pinnedAt`, and pinned dialogs sort above the rest;
   - auto-titles are generated from the first meaningful line with greetings/noise trimmed, so titles are shorter and cleaner.
+  - selecting a saved dialog in the main rail now opens it in the central chat workspace instead of rendering a second bulky viewer inside the sidebar;
+  - the main shell no longer auto-selects the first saved dialog on load, so the current chat/start screen stays in control until the user clicks a history item.
 - Role/personality selection now uses a single GPT-style selector with descriptions instead of visible tab buttons; legacy hidden tabs remain only as compatibility hooks for existing switching logic.
 - The right prompt panel now has a context bar:
   - shows the current role name and a short explanation of what this prompt controls;

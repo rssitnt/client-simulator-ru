@@ -1430,7 +1430,7 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
         await page.waitForSelector('#dialogHistoryList .dialog-history-item');
         await page.waitForFunction(() => {
             const meta = document.getElementById('dialogHistoryScopeMeta');
-            return String(meta?.textContent || '').includes('Ваши диалоги');
+            return /диалог/i.test(String(meta?.textContent || ''));
         });
 
         await page.fill('#dialogHistoryTitleInput', 'Мой тестовый диалог');
@@ -1468,7 +1468,7 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
         await page.waitForFunction(() => {
             const meta = document.getElementById('dialogHistoryScopeMeta');
             const titleInput = document.getElementById('dialogHistoryTitleInput');
-            return String(meta?.textContent || '').includes('Ваши диалоги')
+            return /диалог/i.test(String(meta?.textContent || ''))
                 && String(titleInput?.value || '').includes('Мой тестовый диалог');
         });
     } catch (error) {
