@@ -93,6 +93,11 @@
   - shows the current role name and a short explanation of what this prompt controls;
   - shows the active prompt variation badge;
   - gives admins a direct `Новый вариант` action without hunting for the plus chip.
+- The main shell has been visually rebuilt instead of layered over the old layout:
+  - desktop uses a top app header, a collapsible history rail, a central chat workspace, and a separate right prompt panel;
+  - mobile keeps the same functionality but with cleaner tabs and a corrected start screen that no longer clips its heading;
+  - the auth screen is now centered as a desktop card instead of sitting in a left-aligned half-screen block.
+- The final shell CSS now explicitly protects `[hidden]` states, because the redesign introduced custom `display` rules that would otherwise visually resurrect hidden panels/buttons.
 - Voice UX is now more explicit in the main chat area:
   - the in-chat voice status card survives beyond the initial connect phase and reflects `подключение / клиент говорит / ваша очередь / звонок завершён / ошибка`;
   - the panel derives from centralized voice status state instead of depending on a missing standalone `voiceModeStatus` DOM block;

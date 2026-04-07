@@ -1245,7 +1245,22 @@ async function openSettings(page) {
 }
 
 async function closeSettings(page) {
-    await page.click('#settingsBtn');
+    const closedViaUi = await page.evaluate(() => {
+        const closeBtn = document.getElementById('settingsModalCloseBtn');
+        if (closeBtn) {
+            closeBtn.click();
+            return true;
+        }
+        const modal = document.getElementById('settingsModal');
+        if (modal) {
+            modal.classList.remove('active');
+            return true;
+        }
+        return false;
+    });
+    if (!closedViaUi) {
+        await page.click('#settingsBtn');
+    }
     await page.waitForFunction(() => !document.getElementById('settingsModal')?.classList.contains('active'));
 }
 

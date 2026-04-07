@@ -19668,6 +19668,28 @@ function resetConversationHistory() {
     syncDialogHistoryUiWithCurrentConversation();
 }
 
+function buildStartConversationMarkup() {
+    return `
+        <div id="startConversation" class="start-conversation">
+            <div class="start-conversation-copy">
+                <div class="start-conversation-eyebrow">Новая сессия</div>
+                <h1 class="start-conversation-title">Запустите тренировочный диалог в одном окне.</h1>
+                <p class="start-conversation-description">Здесь живут обычный чат, голосовой звонок и аттестация. История слева, роли и промпты справа.</p>
+            </div>
+            <div class="start-conversation-actions">
+                <button id="startBtn" class="btn-start" type="button">
+                    <span class="btn-start-label">Новый диалог</span>
+                    <span class="btn-start-meta">Текстовый сценарий с клиентом</span>
+                </button>
+                <button id="startAttestationBtn" class="btn-start btn-start-attestation" type="button">
+                    <span class="btn-start-label">Аттестация</span>
+                    <span class="btn-start-meta">Проверка ответа по вашему регламенту</span>
+                </button>
+            </div>
+        </div>
+    `;
+}
+
 function restoreStartConversationBlock() {
     const startDiv = document.getElementById('startConversation');
     if (!startDiv) return;
@@ -19732,12 +19754,7 @@ async function clearChat() {
     
     refreshSessionIds(generateSessionId());
     
-    chatMessages.innerHTML = `
-        <div id="startConversation" class="start-conversation">
-            <button id="startBtn" class="btn-start">Начать диалог</button>
-            <button id="startAttestationBtn" class="btn-start btn-start-attestation">Начать аттестацию</button>
-        </div>
-    `;
+    chatMessages.innerHTML = buildStartConversationMarkup();
     const startBtnEl = document.getElementById('startBtn');
     if (startBtnEl) startBtnEl.addEventListener('click', startConversationHandler);
     const startAttestationBtnEl = document.getElementById('startAttestationBtn');
