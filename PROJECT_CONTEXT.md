@@ -98,6 +98,12 @@
   - the in-chat voice status card survives beyond the initial connect phase and reflects `подключение / клиент говорит / ваша очередь / звонок завершён / ошибка`;
   - the panel derives from centralized voice status state instead of depending on a missing standalone `voiceModeStatus` DOM block;
   - terminal dialog notices now include a clearer badge + explanatory subtext.
+- After the reverted full-shell redesign, the interface was repaired in-place instead of redone again:
+  - login is back to a centered modal card instead of a broken half-screen overlay;
+  - the main chat and prompt panels now have explicit headers and cleaner panel separation;
+  - the new-session screen uses three clear entry actions (`чат / звонок / аттестация`) instead of a cramped empty state;
+  - on empty sessions the bottom composer is collapsed to a compact voice-call button, so mobile no longer loses the start actions under the input bar;
+  - the floating history toggle no longer overlaps the clear-chat button in collapsed desktop mode.
 
 ## Useful Debug Markers
 - `assistant_output_buffered_before_user_turn`
@@ -116,4 +122,4 @@
 - Observed on 2026-03-30:
   - `OPTIONS https://client-simulator.ru/api/gemini-live-token` => `405`
   - `OPTIONS https://client-simulator-gemini-token.onrender.com/api/gemini-live-token` => `204`
-- Date: 2026-04-07
+- Date: 2026-04-08

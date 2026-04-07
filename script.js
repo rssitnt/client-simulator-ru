@@ -1418,6 +1418,7 @@ const voiceBtn = document.getElementById('voiceBtn');
 const aiAssistBtn = document.getElementById('aiAssistBtn');
 const rateChatBtn = document.getElementById('rateChat');
 const startBtn = document.getElementById('startBtn');
+const startVoiceBtn = document.getElementById('startVoiceBtn');
 const startConversation = document.getElementById('startConversation');
 const voiceConnectStatus = document.getElementById('voiceConnectStatus');
 const voiceConnectStatusEyebrow = document.getElementById('voiceConnectStatusEyebrow');
@@ -7369,7 +7370,7 @@ function updateHistorySidebarToggleUi() {
     if (!isDesktop) return;
     const collapsed = !!historySidebarCollapsed;
     const label = collapsed ? 'Показать историю' : 'Скрыть историю';
-    historySidebarToggleBtn.setAttribute('title', label);
+    historySidebarToggleBtn.removeAttribute('title');
     historySidebarToggleBtn.setAttribute('aria-label', label);
     if (historySidebarToggleText) {
         historySidebarToggleText.textContent = collapsed ? 'Диалоги' : 'Скрыть';
@@ -11954,8 +11955,9 @@ function toggleInputState(enabled) {
 
 function setStartButtonsEnabled(enabled) {
     const startBtnEl = document.getElementById('startBtn');
+    const startVoiceBtnEl = document.getElementById('startVoiceBtn');
     const startAttestationBtnEl = document.getElementById('startAttestationBtn');
-    [startBtnEl, startAttestationBtnEl].forEach((btn) => {
+    [startBtnEl, startVoiceBtnEl, startAttestationBtnEl].forEach((btn) => {
         if (!btn) return;
         btn.disabled = !enabled;
     });
@@ -12223,8 +12225,28 @@ function updateVoiceConnectingUi() {
             startDiv.style.display = '';
         }
     }
+    syncChatEmptyUiState();
     updateVoiceConnectMeterUi();
     syncVoiceConnectStatusPanel();
+}
+
+function syncChatEmptyUiState() {
+    const startDiv = document.getElementById('startConversation');
+    const startVisible = !!startDiv
+        && chatMessages?.contains(startDiv)
+        && !startDiv.hidden
+        && window.getComputedStyle(startDiv).display !== 'none';
+    const isEmptyState = startVisible
+        && !conversationHistory.length
+        && !isGeminiVoiceConnecting
+        && !isGeminiVoiceActive;
+
+    document.body?.classList.toggle('chat-empty-state', isEmptyState);
+    if (clearChatBtn) {
+        clearChatBtn.hidden = isEmptyState;
+        clearChatBtn.disabled = isEmptyState;
+        clearChatBtn.setAttribute('aria-hidden', isEmptyState ? 'true' : 'false');
+    }
 }
 
 function updateSendBtnState() {
@@ -19668,11 +19690,38 @@ function resetConversationHistory() {
     syncDialogHistoryUiWithCurrentConversation();
 }
 
+function buildStartConversationMarkup() {
+    return `
+        <div id="startConversation" class="start-conversation">
+            <div class="start-conversation-copy">
+                <div class="start-conversation-eyebrow">Новая сессия</div>
+                <h1 class="start-conversation-title">Выберите формат новой сессии.</h1>
+                <p class="start-conversation-description">Чат, голосовой режим и аттестация запускаются из одного экрана. История слева, роль и сценарий справа.</p>
+            </div>
+            <div class="start-conversation-actions">
+                <button id="startBtn" class="btn-start" type="button">
+                    <span class="btn-start-label">Начать диалог</span>
+                    <span class="btn-start-meta">Обычная переписка с клиентом</span>
+                </button>
+                <button id="startVoiceBtn" class="btn-start btn-start-voice" type="button">
+                    <span class="btn-start-label">Позвонить клиенту</span>
+                    <span class="btn-start-meta">Сразу открыть голосовой режим</span>
+                </button>
+                <button id="startAttestationBtn" class="btn-start btn-start-attestation" type="button">
+                    <span class="btn-start-label">Начать аттестацию</span>
+                    <span class="btn-start-meta">Проверка ответа по вашему регламенту</span>
+                </button>
+            </div>
+        </div>
+    `;
+}
+
 function restoreStartConversationBlock() {
     const startDiv = document.getElementById('startConversation');
     if (!startDiv) return;
     if (isGeminiVoiceConnecting || isGeminiVoiceActive) return;
     startDiv.style.display = '';
+    syncChatEmptyUiState();
 }
 
 function resetChatForNewVoiceCall() {
@@ -19732,14 +19781,16 @@ async function clearChat() {
     
     refreshSessionIds(generateSessionId());
     
-    chatMessages.innerHTML = `
-        <div id="startConversation" class="start-conversation">
-            <button id="startBtn" class="btn-start">Начать диалог</button>
-            <button id="startAttestationBtn" class="btn-start btn-start-attestation">Начать аттестацию</button>
-        </div>
-    `;
+    chatMessages.innerHTML = buildStartConversationMarkup();
     const startBtnEl = document.getElementById('startBtn');
     if (startBtnEl) startBtnEl.addEventListener('click', startConversationHandler);
+    const startVoiceBtnEl = document.getElementById('startVoiceBtn');
+    if (startVoiceBtnEl) {
+        startVoiceBtnEl.addEventListener('click', () => {
+            if (!isChatReady || isProcessing) return;
+            showVoiceModeModal();
+        });
+    }
     const startAttestationBtnEl = document.getElementById('startAttestationBtn');
     if (startAttestationBtnEl) {
         startAttestationBtnEl.style.display = isAttestationMode ? 'none' : '';
@@ -19749,6 +19800,7 @@ async function clearChat() {
         });
     }
     setStartButtonsEnabled(isChatReady);
+    syncChatEmptyUiState();
     renderDialogHistoryList();
     renderDialogHistoryViewer();
 }
@@ -19932,6 +19984,7 @@ async function sendMessage() {
     
     const startDiv = document.getElementById('startConversation');
     if (startDiv) startDiv.style.display = 'none';
+    syncChatEmptyUiState();
     
     addMessage(userMessage, 'user', false);
     const dialogHistory = conversationHistoryText.trim();
@@ -20058,6 +20111,7 @@ async function startConversationHandler() {
     
     const startDiv = document.getElementById('startConversation');
     if (startDiv) startDiv.style.display = 'none';
+    syncChatEmptyUiState();
     
     const loadingMsg = addMessage('', 'loading');
     let debugEntryId = null;
@@ -21774,6 +21828,10 @@ bindEvent(historySidebarToggleBtn, 'click', () => {
     applyHistorySidebarCollapsed(!historySidebarCollapsed);
 });
 bindEvent(startBtn, 'click', startConversationHandler);
+bindEvent(startVoiceBtn, 'click', () => {
+    if (!isChatReady || isProcessing) return;
+    showVoiceModeModal();
+});
 bindEvent(rateChatBtn, 'click', rateChat);
 bindEvent(aiAssistBtn, 'click', generateAIResponse);
 if (exitAttestationBtn) {

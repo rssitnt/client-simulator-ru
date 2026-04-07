@@ -61,6 +61,12 @@
   - the desktop history rail starts collapsed by default and is reopened with a dedicated toggle.
   - the main saved-dialog viewer keeps title/meta above actions so long names do not clip in the header.
 - A large from-scratch shell redesign was attempted on 2026-04-07 and reverted the same day because it created too many visual regressions at once; future redesigns should land in smaller passes or from a prototype branch first.
+- The current interface was then repaired in-place:
+  - login is a centered modal card again;
+  - chat/prompt areas have explicit headers and clearer panel structure;
+  - a fresh session has three visible start actions (`чат / звонок / аттестация`);
+  - on an empty session the bottom composer collapses to a compact voice-call button so mobile start actions stay visible;
+  - the collapsed desktop history toggle is offset far enough not to overlap the clear-chat button.
 - Admins can view and delete foreign dialog history; users can manage only their own history.
 - Active time is now “real focused activity only”:
   - visible tab
