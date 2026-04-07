@@ -11680,6 +11680,10 @@ function releaseGeminiPendingAssistantBeforeFirstUserTurn(reason = 'pending_user
 
     finalizePendingGeminiUserTurnIfNeeded(`${reason}_user_finalize`);
 
+    if (hasBufferedGeminiAssistantAudio() && !geminiVoiceHasAudioOutput) {
+        playBufferedGeminiAssistantAudioOnce(`${reason}_early_replay`);
+    }
+
     const pendingAssistantTranscript = normalizeVoiceDialogText(
         geminiVoiceAssistantDraft.trim() ? geminiVoiceAssistantDraft : geminiVoiceAssistantPreview
     );
@@ -14966,6 +14970,21 @@ function buildGeminiAssistantFallbackAudioPayload() {
     return null;
 }
 
+function playBufferedGeminiAssistantAudioOnce(reason = 'buffer_replay') {
+    if (geminiVoiceHasAudioOutput) return false;
+    const payload = buildGeminiAssistantFallbackAudioPayload();
+    if (!payload?.audioBase64) return false;
+    enqueueGeminiAudioPlayback(payload.audioBase64, payload.mimeType || 'audio/wav').catch((error) => {
+        console.warn('Failed to replay buffered assistant audio:', error);
+    });
+    recordVoiceDebugEvent('assistant_audio_replayed', {
+        status: 'info',
+        message: reason,
+        mimeType: payload.mimeType || 'audio/wav'
+    });
+    return true;
+}
+
 function scheduleGeminiAssistantFallbackTranscript(reason = 'waiting_for_input', delayMs = GEMINI_VOICE_FALLBACK_TRANSCRIBE_HOLD_MS) {
     if (!hasPendingGeminiAssistantAudioOnlyTurn()) {
         return false;
@@ -16041,6 +16060,9 @@ function finalizeGeminiAssistantTurn(sourceText, options = {}) {
         Number(geminiVoiceAssistantCurrentTurnId || 0)
     );
     pushGeminiVoiceDialogLine('assistant', completedAssistantText);
+    if (hasBufferedGeminiAssistantAudio() && !geminiVoiceHasAudioOutput) {
+        playBufferedGeminiAssistantAudioOnce('finalize_replay');
+    }
     resetGeminiAssistantTurnAudioState();
     appendGeminiVoiceDialogToChat();
     if (shouldScheduleAutoStop) {
