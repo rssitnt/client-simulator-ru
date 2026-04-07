@@ -15281,15 +15281,18 @@ async function enqueueGeminiAudioPlayback(base64Data, mimeType = 'audio/pcm;rate
     return queued;
 }
 
-function resetGeminiPlaybackCursor() {
-    geminiVoicePlaybackGeneration += 1;
-    if (geminiVoiceActiveSources.size) {
-        geminiVoiceActiveSources.forEach((source) => {
-            try { source.stop(); } catch (error) {}
-        });
-        geminiVoiceActiveSources.clear();
+function resetGeminiPlaybackCursor(options = {}) {
+    const preserveQueue = !!options?.preserveQueue;
+    if (!preserveQueue) {
+        geminiVoicePlaybackGeneration += 1;
+        if (geminiVoiceActiveSources.size) {
+            geminiVoiceActiveSources.forEach((source) => {
+                try { source.stop(); } catch (error) {}
+            });
+            geminiVoiceActiveSources.clear();
+        }
+        geminiVoicePlaybackQueue = Promise.resolve();
     }
-    geminiVoicePlaybackQueue = Promise.resolve();
     if (!geminiVoiceAudioContext) {
         geminiVoicePlaybackCursor = 0;
         geminiVoiceHasAudioOutput = false;
@@ -17034,7 +17037,9 @@ async function startGeminiVoiceMode() {
         });
         throwIfGeminiVoiceStartAttemptStale(startAttempt.id);
         await initGeminiVoiceCapture();
-        resetGeminiPlaybackCursor();
+        resetGeminiPlaybackCursor({
+            preserveQueue: hasBufferedGeminiAssistantAudio() && !geminiVoiceHasAudioOutput
+        });
         await primeGeminiVoiceAudioOutput();
         geminiVoiceAudioReady = true;
         recordVoiceDebugEvent('audio_output_primed', {

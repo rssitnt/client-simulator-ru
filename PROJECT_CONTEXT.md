@@ -53,6 +53,7 @@
 - Clearing the chat now resets the in-memory Gemini voice dialog buffer so the next call treats the first client reply as truly first.
 - If the first client reply arrives as audio-only before the first manager turn, we now force a fallback transcription timer immediately so the first bubble can still appear.
 - If the first client reply audio is buffered but playback didn't start, we now replay the buffered audio once the turn is released/finalized.
+- Audio playback reset now preserves queued playback when early assistant audio arrives before capture init, so the first reply is not dropped.
 
 ## Useful Debug Markers
 - `assistant_output_buffered_before_user_turn`
