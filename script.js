@@ -1539,6 +1539,18 @@ const dialogHistoryDeleteBtn = document.getElementById('dialogHistoryDeleteBtn')
 const dialogHistoryMessages = document.getElementById('dialogHistoryMessages');
 const dialogHistoryRatingWrap = document.getElementById('dialogHistoryRatingWrap');
 const dialogHistoryRatingText = document.getElementById('dialogHistoryRatingText');
+const mainDialogHistoryScopeMeta = document.getElementById('mainDialogHistoryScopeMeta');
+const mainDialogHistoryList = document.getElementById('mainDialogHistoryList');
+const mainDialogHistoryLoadMoreBtn = document.getElementById('mainDialogHistoryLoadMoreBtn');
+const mainDialogHistoryViewer = document.getElementById('mainDialogHistoryViewer');
+const mainDialogHistoryViewerEmpty = document.getElementById('mainDialogHistoryViewerEmpty');
+const mainDialogHistoryViewerContent = document.getElementById('mainDialogHistoryViewerContent');
+const mainDialogHistoryTitleInput = document.getElementById('mainDialogHistoryTitleInput');
+const mainDialogHistoryViewerMeta = document.getElementById('mainDialogHistoryViewerMeta');
+const mainDialogHistoryDeleteBtn = document.getElementById('mainDialogHistoryDeleteBtn');
+const mainDialogHistoryMessages = document.getElementById('mainDialogHistoryMessages');
+const mainDialogHistoryRatingWrap = document.getElementById('mainDialogHistoryRatingWrap');
+const mainDialogHistoryRatingText = document.getElementById('mainDialogHistoryRatingText');
 const saveVoiceConfigBtn = document.getElementById('saveVoiceConfigBtn');
 const clearVoiceConfigBtn = document.getElementById('clearVoiceConfigBtn');
 const adminHiddenClientPromptAccordion = document.getElementById('adminHiddenClientPromptAccordion');
@@ -1566,6 +1578,37 @@ const adminSortRoleBtn = document.getElementById('adminSortRoleBtn');
 const adminSortAccessBtn = document.getElementById('adminSortAccessBtn');
 const adminSortActiveBtn = document.getElementById('adminSortActiveBtn');
 const adminUsersTableBody = document.getElementById('adminUsersTableBody');
+const dialogHistoryUiSets = [
+    {
+        scopeMeta: dialogHistoryScopeMeta,
+        list: dialogHistoryList,
+        loadMoreBtn: dialogHistoryLoadMoreBtn,
+        viewer: dialogHistoryViewer,
+        viewerEmpty: dialogHistoryViewerEmpty,
+        viewerContent: dialogHistoryViewerContent,
+        titleInput: dialogHistoryTitleInput,
+        viewerMeta: dialogHistoryViewerMeta,
+        deleteBtn: dialogHistoryDeleteBtn,
+        messages: dialogHistoryMessages,
+        ratingWrap: dialogHistoryRatingWrap,
+        ratingText: dialogHistoryRatingText
+    },
+    {
+        scopeMeta: mainDialogHistoryScopeMeta,
+        list: mainDialogHistoryList,
+        loadMoreBtn: mainDialogHistoryLoadMoreBtn,
+        viewer: mainDialogHistoryViewer,
+        viewerEmpty: mainDialogHistoryViewerEmpty,
+        viewerContent: mainDialogHistoryViewerContent,
+        titleInput: mainDialogHistoryTitleInput,
+        viewerMeta: mainDialogHistoryViewerMeta,
+        deleteBtn: mainDialogHistoryDeleteBtn,
+        messages: mainDialogHistoryMessages,
+        ratingWrap: mainDialogHistoryRatingWrap,
+        ratingText: mainDialogHistoryRatingText
+    }
+].filter((item) => item.list && item.viewer);
+const dialogHistoryTitleInputs = dialogHistoryUiSets.map((item) => item.titleInput).filter(Boolean);
 const partnerInviteEmailInput = document.getElementById('partnerInviteEmailInput');
 const partnerInviteDaysInput = document.getElementById('partnerInviteDaysInput');
 const partnerInviteAddBtn = document.getElementById('partnerInviteAddBtn');
@@ -1574,9 +1617,10 @@ const panelsContainer = document.querySelector('.panels-container');
 const instructionsPanelElement = document.getElementById('instructionsPanel');
 const instructionTabs = Array.from(document.querySelectorAll('.instruction-tab'));
 const instructionEditors = Array.from(document.querySelectorAll('.instruction-editor'));
-const instructionOptions = Array.from(document.querySelectorAll('.dropdown-option'));
-const selectedInstructionText = document.getElementById('selectedInstructionText');
 const instructionDropdown = document.getElementById('instructionDropdown');
+const instructionDropdownTrigger = instructionDropdown?.querySelector('.dropdown-trigger') || null;
+const instructionOptions = Array.from(document.querySelectorAll('#instructionOptions [data-value]'));
+const selectedInstructionText = document.getElementById('selectedInstructionText');
 const activeScenarioStrip = document.getElementById('activeScenarioStrip');
 const activeScenarioTitle = document.getElementById('activeScenarioTitle');
 const activeScenarioSummary = document.getElementById('activeScenarioSummary');
@@ -4411,6 +4455,15 @@ function applyAuthenticatedUser(user) {
     }
 
     updateUserNameDisplay();
+    loadDialogHistoryScope(normalized.login, {
+        selectCurrentDialog: true,
+        resetVisibleCount: true
+    }).catch((error) => {
+        console.error('Failed to refresh primary dialog history scope:', error);
+        renderDialogHistoryScopeMeta();
+        renderDialogHistoryList();
+        renderDialogHistoryViewer();
+    });
     if (isDevBypassSession) {
         stopCurrentUserRecordSubscription();
         stopCurrentUserPromptOverridesSubscription();
@@ -4462,6 +4515,9 @@ function resetCurrentSessionToAuth(message = '') {
     dialogHistorySelectedRecord = null;
     dialogHistorySelectedPayload = null;
     dialogHistoryViewerLoading = false;
+    renderDialogHistoryScopeMeta();
+    renderDialogHistoryList();
+    renderDialogHistoryViewer();
     currentUser = null;
     syncSelectedRole('user');
     clearAuthSession();
@@ -7065,30 +7121,31 @@ async function fetchDialogHistoryPayload(login = '', dialogId = '') {
 }
 
 function renderDialogHistoryScopeMeta() {
-    if (!dialogHistoryScopeMeta) return;
     const scopeLogin = normalizeLogin(dialogHistoryScopeLogin || '');
-    if (!scopeLogin) {
-        dialogHistoryScopeMeta.textContent = 'История пока недоступна.';
-        return;
-    }
-    const isOwn = isDialogHistoryScopeOwned(scopeLogin);
     const recordsCount = Array.isArray(dialogHistoryScopeRecords) ? dialogHistoryScopeRecords.length : 0;
-    dialogHistoryScopeMeta.textContent = isOwn
-        ? `Ваши диалоги: ${recordsCount}`
-        : `История пользователя ${scopeLogin}: ${recordsCount}`;
+    const text = !scopeLogin
+        ? 'История пока недоступна.'
+        : isDialogHistoryScopeOwned(scopeLogin)
+            ? `Ваши диалоги: ${recordsCount}`
+            : `История пользователя ${scopeLogin}: ${recordsCount}`;
+    dialogHistoryUiSets.forEach((ui) => {
+        if (ui.scopeMeta) {
+            ui.scopeMeta.textContent = text;
+        }
+    });
 }
 
-function renderDialogHistoryList() {
-    if (!dialogHistoryList || !dialogHistoryLoadMoreBtn) return;
-    dialogHistoryList.innerHTML = '';
+function renderDialogHistoryListInto(ui) {
+    if (!ui?.list || !ui.loadMoreBtn) return;
+    ui.list.innerHTML = '';
     const records = Array.isArray(dialogHistoryScopeRecords) ? dialogHistoryScopeRecords : [];
     const visibleRecords = records.slice(0, dialogHistoryVisibleCount);
     if (!visibleRecords.length) {
         const empty = document.createElement('div');
         empty.className = 'dialog-history-empty';
         empty.textContent = 'Сохранённых диалогов пока нет.';
-        dialogHistoryList.appendChild(empty);
-        dialogHistoryLoadMoreBtn.hidden = true;
+        ui.list.appendChild(empty);
+        ui.loadMoreBtn.hidden = true;
         return;
     }
     visibleRecords.forEach((record) => {
@@ -7113,76 +7170,84 @@ function renderDialogHistoryList() {
                 showCopyNotification(error?.message || 'Не удалось открыть диалог');
             });
         });
-        dialogHistoryList.appendChild(item);
+        ui.list.appendChild(item);
     });
-    dialogHistoryLoadMoreBtn.hidden = visibleRecords.length >= records.length;
+    ui.loadMoreBtn.hidden = visibleRecords.length >= records.length;
 }
 
-function renderDialogHistoryViewer() {
+function renderDialogHistoryList() {
+    dialogHistoryUiSets.forEach(renderDialogHistoryListInto);
+}
+
+function renderDialogHistoryViewerInto(ui) {
     if (
-        !dialogHistoryViewer
-        || !dialogHistoryViewerEmpty
-        || !dialogHistoryViewerContent
-        || !dialogHistoryTitleInput
-        || !dialogHistoryViewerMeta
-        || !dialogHistoryMessages
-        || !dialogHistoryDeleteBtn
-        || !dialogHistoryRatingWrap
-        || !dialogHistoryRatingText
+        !ui?.viewer
+        || !ui.viewerEmpty
+        || !ui.viewerContent
+        || !ui.titleInput
+        || !ui.viewerMeta
+        || !ui.messages
+        || !ui.deleteBtn
+        || !ui.ratingWrap
+        || !ui.ratingText
     ) {
         return;
     }
 
     if (!dialogHistorySelectedRecord || !dialogHistorySelectedPayload) {
-        dialogHistoryViewerEmpty.hidden = false;
-        dialogHistoryViewerContent.hidden = true;
-        dialogHistoryDeleteBtn.hidden = true;
+        ui.viewerEmpty.hidden = false;
+        ui.viewerContent.hidden = true;
+        ui.deleteBtn.hidden = true;
         return;
     }
 
-    dialogHistoryViewerEmpty.hidden = true;
-    dialogHistoryViewerContent.hidden = false;
+    ui.viewerEmpty.hidden = true;
+    ui.viewerContent.hidden = false;
 
     const record = dialogHistorySelectedRecord;
     const payload = dialogHistorySelectedPayload;
     const effectiveTitle = clampDialogHistoryTitle(record.title, record.autoTitle || formatDialogHistoryFallbackTitle(record.createdAt));
-    dialogHistoryTitleInput.value = effectiveTitle;
-    dialogHistoryTitleInput.disabled = !canRenameSelectedDialogHistory();
+    ui.titleInput.value = effectiveTitle;
+    ui.titleInput.disabled = !canRenameSelectedDialogHistory();
 
     const createdDate = new Date(parseIsoMs(record.createdAt || '') || Date.now());
     const updatedDate = new Date(parseIsoMs(record.updatedAt || '') || createdDate.getTime());
-    dialogHistoryViewerMeta.innerHTML = `
+    ui.viewerMeta.innerHTML = `
         <span class="dialog-history-pill ${record.mode === 'voice' ? 'is-voice' : 'is-text'}">${record.mode === 'voice' ? 'Звонок' : 'Чат'}</span>
         <span>Создан: ${createdDate.toLocaleString('ru-RU')}</span>
         <span>Обновлён: ${updatedDate.toLocaleString('ru-RU')}</span>
         <span>${record.messageCount} репл.</span>
     `;
 
-    dialogHistoryDeleteBtn.hidden = !canDeleteSelectedDialogHistory();
-    dialogHistoryDeleteBtn.disabled = false;
+    ui.deleteBtn.hidden = !canDeleteSelectedDialogHistory();
+    ui.deleteBtn.disabled = false;
 
-    dialogHistoryMessages.innerHTML = '';
+    ui.messages.innerHTML = '';
     if (!Array.isArray(payload.messages) || !payload.messages.length) {
         const empty = document.createElement('div');
         empty.className = 'dialog-history-empty';
         empty.textContent = 'Сообщения не найдены.';
-        dialogHistoryMessages.appendChild(empty);
+        ui.messages.appendChild(empty);
     } else {
         payload.messages.forEach((message) => {
             const item = document.createElement('div');
             item.className = `dialog-history-message ${message.role === 'assistant' ? 'is-assistant' : 'is-user'}`;
             item.textContent = message.content;
-            dialogHistoryMessages.appendChild(item);
+            ui.messages.appendChild(item);
         });
     }
 
     if (payload.rating?.text) {
-        dialogHistoryRatingWrap.hidden = false;
-        dialogHistoryRatingText.textContent = payload.rating.text;
+        ui.ratingWrap.hidden = false;
+        ui.ratingText.textContent = payload.rating.text;
     } else {
-        dialogHistoryRatingWrap.hidden = true;
-        dialogHistoryRatingText.textContent = '';
+        ui.ratingWrap.hidden = true;
+        ui.ratingText.textContent = '';
     }
+}
+
+function renderDialogHistoryViewer() {
+    dialogHistoryUiSets.forEach(renderDialogHistoryViewerInto);
 }
 
 function syncDialogHistoryUiWithCurrentConversation() {
@@ -7368,11 +7433,12 @@ async function openDialogHistoryScope(login = '', options = {}) {
     });
 }
 
-async function commitDialogHistoryTitleRename() {
-    if (!dialogHistoryTitleInput || !dialogHistorySelectedRecord || !canRenameSelectedDialogHistory()) return false;
+async function commitDialogHistoryTitleRename(sourceInput = null) {
+    const titleInput = sourceInput || document.activeElement || dialogHistoryTitleInputs[0] || null;
+    if (!titleInput || !dialogHistorySelectedRecord || !canRenameSelectedDialogHistory()) return false;
     const selectedRecord = dialogHistorySelectedRecord;
     const fallbackTitle = clampDialogHistoryTitle(selectedRecord.autoTitle, formatDialogHistoryFallbackTitle(selectedRecord.createdAt));
-    const nextTitleRaw = clampDialogHistoryTitle(dialogHistoryTitleInput.value);
+    const nextTitleRaw = clampDialogHistoryTitle(titleInput.value);
     const shouldResetToAuto = !nextTitleRaw;
     const nextTitle = shouldResetToAuto ? fallbackTitle : nextTitleRaw;
     const nextTitleEdited = !shouldResetToAuto;
@@ -7381,7 +7447,9 @@ async function commitDialogHistoryTitleRename() {
         nextTitle === selectedRecord.title
         && !!nextTitleEdited === !!selectedRecord.titleEdited
     ) {
-        dialogHistoryTitleInput.value = selectedRecord.title || fallbackTitle;
+        dialogHistoryTitleInputs.forEach((input) => {
+            input.value = selectedRecord.title || fallbackTitle;
+        });
         return true;
     }
 
@@ -7397,7 +7465,9 @@ async function commitDialogHistoryTitleRename() {
             titleEdited: nextTitleEdited,
             updatedAt: nowIso
         };
-        dialogHistoryTitleInput.value = nextTitle;
+        dialogHistoryTitleInputs.forEach((input) => {
+            input.value = nextTitle;
+        });
         await saveCurrentDialogHistoryNow({ nowIso });
         renderDialogHistoryViewer();
         renderDialogHistoryList();
@@ -7424,7 +7494,9 @@ async function commitDialogHistoryTitleRename() {
     );
     dialogHistorySelectedRecord = updatedRecord;
     upsertDialogHistoryScopeRecord(updatedRecord);
-    dialogHistoryTitleInput.value = updatedRecord.title;
+    dialogHistoryTitleInputs.forEach((input) => {
+        input.value = updatedRecord.title;
+    });
     renderDialogHistoryViewer();
     return true;
 }
@@ -18536,41 +18608,43 @@ bindEvent(adminVoiceDebugClearBtn, 'click', () => {
     showCopyNotification('Техлог голоса очищен');
 });
 
-bindEvent(dialogHistoryLoadMoreBtn, 'click', () => {
-    dialogHistoryVisibleCount += DIALOG_HISTORY_PAGE_SIZE;
-    renderDialogHistoryList();
-});
-
-bindEvent(dialogHistoryDeleteBtn, 'click', () => {
-    deleteSelectedDialogHistory().catch((error) => {
-        console.error('Failed to delete dialog history:', error);
-        showCopyNotification(error?.message || 'Не удалось удалить диалог');
+dialogHistoryUiSets.forEach((ui) => {
+    bindEvent(ui.loadMoreBtn, 'click', () => {
+        dialogHistoryVisibleCount += DIALOG_HISTORY_PAGE_SIZE;
+        renderDialogHistoryList();
     });
-});
 
-bindEvent(dialogHistoryTitleInput, 'keydown', (event) => {
-    if (event.key === 'Escape') {
-        event.preventDefault();
-        if (dialogHistorySelectedRecord) {
-            dialogHistoryTitleInput.value = dialogHistorySelectedRecord.title
-                || dialogHistorySelectedRecord.autoTitle
-                || formatDialogHistoryFallbackTitle(dialogHistorySelectedRecord.createdAt);
+    bindEvent(ui.deleteBtn, 'click', () => {
+        deleteSelectedDialogHistory().catch((error) => {
+            console.error('Failed to delete dialog history:', error);
+            showCopyNotification(error?.message || 'Не удалось удалить диалог');
+        });
+    });
+
+    bindEvent(ui.titleInput, 'keydown', (event) => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            if (dialogHistorySelectedRecord) {
+                ui.titleInput.value = dialogHistorySelectedRecord.title
+                    || dialogHistorySelectedRecord.autoTitle
+                    || formatDialogHistoryFallbackTitle(dialogHistorySelectedRecord.createdAt);
+            }
+            ui.titleInput.blur();
+            return;
         }
-        dialogHistoryTitleInput.blur();
-        return;
-    }
-    if (event.key !== 'Enter') return;
-    event.preventDefault();
-    commitDialogHistoryTitleRename().catch((error) => {
-        console.error('Failed to rename dialog history:', error);
-        showCopyNotification(error?.message || 'Не удалось переименовать диалог');
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        commitDialogHistoryTitleRename(ui.titleInput).catch((error) => {
+            console.error('Failed to rename dialog history:', error);
+            showCopyNotification(error?.message || 'Не удалось переименовать диалог');
+        });
     });
-});
 
-bindEvent(dialogHistoryTitleInput, 'blur', () => {
-    commitDialogHistoryTitleRename().catch((error) => {
-        console.error('Failed to rename dialog history:', error);
-        showCopyNotification(error?.message || 'Не удалось переименовать диалог');
+    bindEvent(ui.titleInput, 'blur', () => {
+        commitDialogHistoryTitleRename(ui.titleInput).catch((error) => {
+            console.error('Failed to rename dialog history:', error);
+            showCopyNotification(error?.message || 'Не удалось переименовать диалог');
+        });
     });
 });
 
@@ -21236,26 +21310,31 @@ instructionTabs.forEach(tab => {
 
 // Instruction dropdown for compact mode (custom implementation)
 if (instructionDropdown) {
-    // Toggle dropdown
-    instructionDropdown.addEventListener('click', (e) => {
+    const closeInstructionDropdown = () => {
+        instructionDropdown.classList.remove('active');
+        instructionDropdownTrigger?.setAttribute('aria-expanded', 'false');
+    };
+
+    bindEvent(instructionDropdownTrigger, 'click', (e) => {
         e.stopPropagation();
-        instructionDropdown.classList.toggle('active');
+        const nextOpen = !instructionDropdown.classList.contains('active');
+        instructionDropdown.classList.toggle('active', nextOpen);
+        instructionDropdownTrigger?.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
     });
 
-    // Option selection
     instructionOptions.forEach(option => {
         option.addEventListener('click', (e) => {
             e.stopPropagation();
             syncCurrentEditorNow();
             
             const instructionType = option.dataset.value;
-            const instructionName = option.innerText;
+            const instructionName = option.dataset.label || option.querySelector('.personality-option-title')?.innerText || option.innerText;
             
             // Update UI
             selectedInstructionText.innerText = instructionName;
             instructionOptions.forEach(opt => opt.classList.remove('active'));
             option.classList.add('active');
-            instructionDropdown.classList.remove('active');
+            closeInstructionDropdown();
             
             // Sync with tabs
             instructionTabs.forEach(t => t.classList.remove('active'));
@@ -21278,9 +21357,8 @@ if (instructionDropdown) {
         });
     });
 
-    // Close dropdown on click outside
     document.addEventListener('click', () => {
-        instructionDropdown.classList.remove('active');
+        closeInstructionDropdown();
     });
 }
 

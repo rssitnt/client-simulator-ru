@@ -74,6 +74,12 @@
 - Audio playback reset now preserves queued playback when early assistant audio arrives before capture init, so the first reply is not dropped.
 - Starting a new voice call now clears the previous chat/voice dialog state so the call always begins fresh.
 - Voice system instructions now include an explicit "fresh session" guard to prevent the client from acting as if a previous dialog already happened.
+- Dialog history is now surfaced in the main app shell instead of being hidden only in settings:
+  - desktop has a dedicated left history rail with list + preview;
+  - mobile has a separate `История` tab;
+  - the settings accordion still mirrors the same data/actions for admin workflows.
+- History UI is now rendered into multiple synchronized surfaces from one source of truth, so selecting/renaming/deleting a dialog stays in sync between the main shell and settings.
+- Role/personality selection now uses a single GPT-style selector with descriptions instead of visible tab buttons; legacy hidden tabs remain only as compatibility hooks for existing switching logic.
 
 ## Useful Debug Markers
 - `assistant_output_buffered_before_user_turn`

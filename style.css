@@ -631,6 +631,74 @@ body.light-theme .custom-tooltip-layer.placement-bottom::before {
     gap: 0;
 }
 
+.history-panel {
+    width: 360px;
+    max-width: 360px;
+    min-width: 320px;
+    flex: 0 0 360px;
+    display: flex;
+    flex-direction: column;
+    background: #111111;
+    border-right: 1px solid #1f1f1f;
+    min-height: 0;
+}
+
+.history-panel-header {
+    padding-right: 20px;
+}
+
+.history-panel-title-group {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.history-panel-eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #7d7d7d;
+}
+
+.history-panel-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #f3f3f3;
+}
+
+.history-panel-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 0 14px 14px;
+}
+
+.history-panel-meta {
+    padding: 0 6px;
+}
+
+.history-thread-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    flex: 1;
+}
+
+.history-thread-list {
+    max-height: min(44vh, 420px);
+}
+
+.history-thread-viewer {
+    flex: 1;
+    min-height: 260px;
+    max-height: none;
+}
+
 /* На широких экранах все панели видимы */
 @media (min-width: 1025px) {
     .panel {
@@ -1775,11 +1843,24 @@ body.voice-call-active .input-wrapper {
     white-space: nowrap;
 }
 
+.instruction-tabs-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+    pointer-events: none;
+}
+
 /* Кастомный выпадающий список для узких экранов */
 .custom-instruction-dropdown {
-    display: none;
+    display: block;
     position: relative;
-    min-width: 140px;
+    min-width: 240px;
     z-index: 100;
 }
 
@@ -1787,26 +1868,29 @@ body.voice-call-active .input-wrapper {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 14px;
-    background-color: #1a1a1a;
-    border: none;
-    border-radius: 8px;
-    color: #e0e0e0;
+    gap: 14px;
+    width: 100%;
+    padding: 12px 14px;
+    background-color: #171717;
+    border: 1px solid #2a2a2a;
+    border-radius: 16px;
+    color: #f0f0f0;
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.18);
 }
 
 .dropdown-trigger:hover {
-    background-color: #252525;
+    background-color: #1d1d1d;
+    border-color: #363636;
 }
 
 .dropdown-arrow {
-    margin-left: 10px;
     color: #888;
     transition: transform 0.2s ease;
+    flex: 0 0 auto;
 }
 
 .custom-instruction-dropdown.active .dropdown-arrow {
@@ -1816,15 +1900,16 @@ body.voice-call-active .input-wrapper {
 .dropdown-options {
     display: none;
     position: absolute;
-    top: calc(100% + 6px);
+    top: calc(100% + 10px);
     left: 0;
     right: 0;
-    background-color: #1a1a1a;
-    border: none;
-    border-radius: 8px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    background-color: #171717;
+    border: 1px solid #2a2a2a;
+    border-radius: 18px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.45);
     overflow: hidden;
     animation: fadeInScale 0.15s ease;
+    padding: 8px;
 }
 
 .custom-instruction-dropdown.active .dropdown-options {
@@ -1832,27 +1917,95 @@ body.voice-call-active .input-wrapper {
 }
 
 .dropdown-option {
-    padding: 10px 14px;
-    color: #888;
+    width: 100%;
+    padding: 12px 14px;
+    color: #b5b5b5;
     font-size: 14px;
     cursor: pointer;
     transition: all 0.2s ease;
+    border: none;
+    border-radius: 12px;
+    background: transparent;
+    text-align: left;
 }
 
 .dropdown-option:hover {
-    background-color: #252525;
+    background-color: #202020;
     color: #fff;
 }
 
 .dropdown-option.active {
-    background-color: var(--color-accent);
+    background-color: color-mix(in srgb, var(--color-accent) 16%, #202020);
     color: #fff;
+}
+
+.personality-selector-copy {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+}
+
+.personality-selector-caption {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #848484;
+}
+
+.personality-selector-value {
+    font-size: 15px;
+    font-weight: 600;
+    color: #f5f5f5;
+}
+
+.personality-selector-menu {
+    min-width: 320px;
+}
+
+.personality-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.personality-option-copy {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.personality-option-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #f5f5f5;
+}
+
+.personality-option-description {
+    font-size: 12px;
+    line-height: 1.45;
+    color: #8d8d8d;
+}
+
+.personality-option-check {
+    color: transparent;
+    font-size: 14px;
+    font-weight: 700;
+    flex: 0 0 auto;
+}
+
+.personality-option.active .personality-option-check {
+    color: var(--color-accent);
 }
 
 /* Light theme for dropdown */
 body.light-theme .dropdown-trigger {
     background-color: #f8f9fa;
-    border: none;
+    border: 1px solid #e5e7eb;
     color: #1a1a1a;
     box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
@@ -1863,7 +2016,7 @@ body.light-theme .dropdown-trigger:hover {
 
 body.light-theme .dropdown-options {
     background-color: #ffffff;
-    border: none;
+    border: 1px solid #e5e7eb;
     box-shadow: 0 10px 25px rgba(0,0,0,0.1);
 }
 
@@ -1877,8 +2030,29 @@ body.light-theme .dropdown-option:hover {
 }
 
 body.light-theme .dropdown-option.active {
-    background-color: var(--color-accent);
-    color: #fff;
+    background-color: color-mix(in srgb, var(--color-accent) 12%, #ffffff);
+    color: #1a1a1a;
+}
+
+body.light-theme .history-panel {
+    background: #fafafa;
+    border-right-color: #ececec;
+}
+
+body.light-theme .history-panel-title {
+    color: #181818;
+}
+
+body.light-theme .history-panel-eyebrow,
+body.light-theme .history-panel-meta,
+body.light-theme .personality-selector-caption,
+body.light-theme .personality-option-description {
+    color: #6d6d6d;
+}
+
+body.light-theme .personality-selector-value,
+body.light-theme .personality-option-title {
+    color: #161616;
 }
 
 /* При узкой панели - скрываем табы, показываем кастомный dropdown */
@@ -2604,8 +2778,8 @@ body.light-theme .ai-improve-modal textarea::-webkit-scrollbar-thumb:hover {
     }
 
     .mobile-tab {
-        flex: 0 1 calc(50% - 12px);
-        max-width: 128px;
+        flex: 1 1 0;
+        max-width: 132px;
     }
     
     .panels-container {
@@ -2632,9 +2806,30 @@ body.light-theme .ai-improve-modal textarea::-webkit-scrollbar-thumb:hover {
         display: none;
     }
     
-    .chat-panel, .prompt-panel {
+    .chat-panel, .prompt-panel, .history-panel {
         min-width: 0;
         max-height: 100%;
+    }
+
+    .history-panel {
+        width: 100%;
+        max-width: none;
+        min-width: 0;
+        flex: none !important;
+        border-right: none;
+    }
+
+    .history-panel-body {
+        padding-bottom: max(12px, env(safe-area-inset-bottom, 0px) + 6px);
+    }
+
+    .history-thread-list {
+        max-height: none;
+        flex: 1;
+    }
+
+    .history-thread-viewer {
+        min-height: 220px;
     }
     
     .chat-messages {
@@ -2694,7 +2889,7 @@ body.light-theme .ai-improve-modal textarea::-webkit-scrollbar-thumb:hover {
         display: flex;
         align-items: center;
         justify-content: center;
-        max-width: 112px;
+        max-width: none;
     }
     
     .chat-input-container {
@@ -2715,6 +2910,23 @@ body.light-theme .ai-improve-modal textarea::-webkit-scrollbar-thumb:hover {
     .input-actions {
         bottom: 8px;
         right: 8px;
+    }
+
+    .history-panel-header {
+        padding-right: 16px;
+    }
+
+    .history-panel-body {
+        padding: 0 12px max(12px, env(safe-area-inset-bottom, 0px) + 8px);
+    }
+
+    .custom-instruction-dropdown {
+        min-width: 0;
+        width: 100%;
+    }
+
+    .personality-selector-menu {
+        min-width: 0;
     }
     
     #userInput {

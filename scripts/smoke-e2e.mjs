@@ -1420,7 +1420,10 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
         await page.waitForSelector('text=Готов обсудить задачу.');
         await page.fill('#userInput', 'Нужен гидробур на CASE 260.');
         await page.click('#sendBtn');
-        await page.waitForSelector('text=Ок.');
+        await page.waitForFunction(() => {
+            return Array.from(document.querySelectorAll('#chatMessages .message'))
+                .some((node) => String(node.textContent || '').includes('Ок.'));
+        });
 
         await openSettings(page);
         await ensureDetailsOpen(page, '#dialogHistoryAccordion');
@@ -2008,7 +2011,10 @@ async function runEndConversationFlow(browser, baseUrl) {
 
         await page.fill('#userInput', 'уходи');
         await page.click('#sendBtn');
-        await page.waitForSelector('text=Диалог завершен');
+        await page.waitForFunction(() => {
+            return Array.from(document.querySelectorAll('#chatMessages .message'))
+                .some((node) => String(node.textContent || '').includes('Диалог завершен'));
+        });
         await page.waitForSelector('.conversation-action-note .btn-conversation-rate');
 
         const isInputDisabled = await page.locator('#userInput').isDisabled();
@@ -2019,7 +2025,10 @@ async function runEndConversationFlow(browser, baseUrl) {
             const ratingText = document.querySelector('.message.rating')?.textContent || '';
             return ratingText.includes('Smoke rating done') && ratingText.includes('Что убило диалог');
         });
-        await page.waitForSelector('text=Диалог завершен');
+        await page.waitForFunction(() => {
+            return Array.from(document.querySelectorAll('#chatMessages .message'))
+                .some((node) => String(node.textContent || '').includes('Диалог завершен'));
+        });
         expect(scenario.requests.some((item) => item.payload.requestType === 'rating'), 'Rating webhook was not called');
 
         const startRequest = scenario.requests.find((item) => item.payload.requestType === 'chat_start' && item.payload.chatInput === '/start');

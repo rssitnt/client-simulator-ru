@@ -565,11 +565,66 @@
     <div class="container">
         <!-- Tabs для мобильных устройств -->
         <div class="mobile-tabs">
+            <button class="mobile-tab" data-panel="history">История</button>
             <button class="mobile-tab active" data-panel="chat">Чат</button>
             <button class="mobile-tab" data-panel="instructions">Роль</button>
         </div>
         
         <div class="panels-container">
+        <aside class="history-panel panel active" id="historyPanel" data-panel="history">
+            <div class="panel-header history-panel-header">
+                <div class="history-panel-title-group">
+                    <div class="history-panel-eyebrow">Диалоги</div>
+                    <div class="history-panel-title">История как в рабочем чате</div>
+                </div>
+            </div>
+            <div class="history-panel-body">
+                <div id="mainDialogHistoryScopeMeta" class="dialog-history-scope-meta history-panel-meta">
+                    Здесь будут ваши последние диалоги.
+                </div>
+                <div class="history-thread-layout">
+                    <div class="dialog-history-list-wrap history-thread-list-wrap">
+                        <div id="mainDialogHistoryList" class="dialog-history-list history-thread-list">
+                            <div class="dialog-history-empty">Диалогов пока нет</div>
+                        </div>
+                        <button id="mainDialogHistoryLoadMoreBtn" class="btn-change dialog-history-load-more" type="button" hidden>
+                            Показать ещё
+                        </button>
+                    </div>
+                    <div id="mainDialogHistoryViewer" class="dialog-history-viewer history-thread-viewer">
+                        <div id="mainDialogHistoryViewerEmpty" class="dialog-history-empty dialog-history-empty-viewer">
+                            Выберите диалог из списка.
+                        </div>
+                        <div id="mainDialogHistoryViewerContent" class="dialog-history-viewer-content" hidden>
+                            <div class="dialog-history-viewer-header">
+                                <div class="dialog-history-title-wrap">
+                                    <input
+                                        id="mainDialogHistoryTitleInput"
+                                        class="dialog-history-title-input"
+                                        type="text"
+                                        maxlength="140"
+                                        placeholder="Название диалога"
+                                        autocomplete="off"
+                                    >
+                                    <div id="mainDialogHistoryViewerMeta" class="dialog-history-viewer-meta"></div>
+                                </div>
+                                <div class="dialog-history-viewer-actions">
+                                    <button id="mainDialogHistoryDeleteBtn" class="btn-change btn-danger-subtle" type="button" hidden>
+                                        Удалить
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="mainDialogHistoryMessages" class="dialog-history-messages"></div>
+                            <div id="mainDialogHistoryRatingWrap" class="dialog-history-rating-wrap" hidden>
+                                <div class="dialog-history-rating-title">Оценка</div>
+                                <div id="mainDialogHistoryRatingText" class="dialog-history-rating-text"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
         <!-- Левая панель - Чат -->
         <div class="chat-panel panel" id="chatPanel" data-panel="chat">
             <div class="panel-header">
@@ -657,26 +712,53 @@
         <!-- Панель инструкций с табами -->
         <div class="prompt-panel panel" id="instructionsPanel" data-panel="instructions">
             <div class="panel-header" style="justify-content: space-between;">
-                <!-- Табы для переключения между инструкциями -->
-                <div class="instruction-tabs" style="background: transparent; padding: 0; border: none;">
-                    <button class="instruction-tab active" data-instruction="client">Клиент</button>
-                    <button class="instruction-tab" data-instruction="manager">Менеджер</button>
-                    <button class="instruction-tab" data-instruction="manager_call">Клиент звонок</button>
-                    <button class="instruction-tab" data-instruction="rater">Оценщик</button>
+                <!-- Табы оставлены скрыто для совместимости со старой логикой -->
+                <div class="instruction-tabs instruction-tabs-hidden" aria-hidden="true">
+                    <button class="instruction-tab active" data-instruction="client" tabindex="-1">Клиент</button>
+                    <button class="instruction-tab" data-instruction="manager" tabindex="-1">Менеджер</button>
+                    <button class="instruction-tab" data-instruction="manager_call" tabindex="-1">Клиент звонок</button>
+                    <button class="instruction-tab" data-instruction="rater" tabindex="-1">Оценщик</button>
                 </div>
-                <!-- Выпадающий список для узких экранов (кастомный) -->
-                <div class="custom-instruction-dropdown" id="instructionDropdown">
-                    <div class="dropdown-trigger">
-                        <span id="selectedInstructionText">Клиент</span>
+                <!-- Выбор личности в стиле селектора моделей -->
+                <div class="custom-instruction-dropdown personality-selector" id="instructionDropdown">
+                    <button class="dropdown-trigger personality-selector-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+                        <span class="personality-selector-copy">
+                            <span class="personality-selector-caption">Личность</span>
+                            <span id="selectedInstructionText" class="personality-selector-value">Клиент</span>
+                        </span>
                         <svg class="dropdown-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="6 9 12 15 18 9"></polyline>
                         </svg>
-                    </div>
-                    <div class="dropdown-options" id="instructionOptions">
-                        <div class="dropdown-option active" data-value="client">Клиент</div>
-                        <div class="dropdown-option" data-value="manager">Менеджер</div>
-                        <div class="dropdown-option" data-value="manager_call">Клиент звонок</div>
-                        <div class="dropdown-option" data-value="rater">Оценщик</div>
+                    </button>
+                    <div class="dropdown-options personality-selector-menu" id="instructionOptions" role="listbox">
+                        <button class="dropdown-option personality-option active" type="button" data-value="client" data-label="Клиент">
+                            <span class="personality-option-copy">
+                                <span class="personality-option-title">Клиент</span>
+                                <span class="personality-option-description">Сценарий переписки от лица клиента</span>
+                            </span>
+                            <span class="personality-option-check" aria-hidden="true">✓</span>
+                        </button>
+                        <button class="dropdown-option personality-option" type="button" data-value="manager" data-label="Менеджер">
+                            <span class="personality-option-copy">
+                                <span class="personality-option-title">Менеджер</span>
+                                <span class="personality-option-description">Промпт ассистента для текстового диалога</span>
+                            </span>
+                            <span class="personality-option-check" aria-hidden="true">✓</span>
+                        </button>
+                        <button class="dropdown-option personality-option" type="button" data-value="manager_call" data-label="Клиент звонок">
+                            <span class="personality-option-copy">
+                                <span class="personality-option-title">Клиент звонок</span>
+                                <span class="personality-option-description">Поведение клиента в голосовом режиме</span>
+                            </span>
+                            <span class="personality-option-check" aria-hidden="true">✓</span>
+                        </button>
+                        <button class="dropdown-option personality-option" type="button" data-value="rater" data-label="Оценщик">
+                            <span class="personality-option-copy">
+                                <span class="personality-option-title">Оценщик</span>
+                                <span class="personality-option-description">Критерии разбора и оценки диалога</span>
+                            </span>
+                            <span class="personality-option-check" aria-hidden="true">✓</span>
+                        </button>
                     </div>
                 </div>
                 <!-- Скрытый нативный селект для совместимости с существующим кодом -->
@@ -780,7 +862,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js" integrity="sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3" crossorigin="anonymous" defer></script>
     <!-- Turndown for HTML to Markdown conversion (WYSIWYG editing) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js" integrity="sha384-m6AyXEhyWRg2s2wrkDV64LGkaManYgMSAjn2U+zymzSJ42WthRSjCu1AqZJhoQV0" crossorigin="anonymous" defer></script>
-<script type="module" src="script.js?v=20260407-13"></script>
+    <script type="module" src="script.js?v=20260407-14"></script>
     <!-- Last deployment trigger: 2026-03-24 15:00 -->
 </body>
 </html>
