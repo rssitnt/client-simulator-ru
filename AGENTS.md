@@ -60,11 +60,7 @@
   - the main shell does not auto-open the first history item on load.
   - the desktop history rail starts collapsed by default and is reopened with a dedicated toggle.
   - the main saved-dialog viewer keeps title/meta above actions so long names do not clip in the header.
-- The visual shell is now being treated as a fresh product surface, not as incremental polish over the legacy layout:
-  - desktop = app header + collapsible history rail + central workspace + right prompt panel;
-  - mobile keeps all major functions but with cleaner tabs and a non-clipped start screen;
-  - the desktop auth screen is now a centered card, while mobile auth remains compact/full-screen.
-- The redesign CSS must preserve `[hidden]` semantics explicitly, otherwise custom `display` rules can make logically hidden panels/buttons visible again.
+- A large from-scratch shell redesign was attempted on 2026-04-07 and reverted the same day because it created too many visual regressions at once; future redesigns should land in smaller passes or from a prototype branch first.
 - Admins can view and delete foreign dialog history; users can manage only their own history.
 - Active time is now “real focused activity only”:
   - visible tab

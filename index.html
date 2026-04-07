@@ -17,7 +17,7 @@
         integrity="sha384-oaMLBGEzBOJx3UHwac0cVndtX5fxGQIfnAeFZ35RTgqPcYlbprH9o9PUV/F8Le07"
         crossorigin="anonymous"
     >
-    <link rel="stylesheet" href="style.css?v=20260407-21">
+    <link rel="stylesheet" href="style.css?v=20260328-04">
     
     <!-- Favicon -->
     <link rel="apple-touch-icon" sizes="180x180" href="favicon/apple-touch-icon.png">
@@ -541,45 +541,38 @@
         </div>
     </div>
 
-    <div class="container">
-        <header class="app-shell-header">
-            <div class="app-shell-brand">
-                <div class="app-shell-brand-mark">CS</div>
-                <div class="app-shell-brand-copy">
-                    <div class="app-shell-brand-eyebrow">Client Simulator Studio</div>
-                    <div class="app-shell-brand-title">Тренажёр диалогов, звонков и аттестации</div>
-                </div>
-            </div>
-            <div class="app-shell-actions">
-                <button id="historySidebarToggle" class="history-sidebar-toggle" type="button" title="Показать историю" aria-label="Показать историю">
-                    <svg class="history-sidebar-toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <polyline points="15 18 9 12 15 6"></polyline>
-                    </svg>
-                    <span id="historySidebarToggleText" class="history-sidebar-toggle-text">Диалоги</span>
-                </button>
-                <button id="clearChat" class="btn-icon btn-clear-floating app-shell-icon-btn" title="Очистить чат">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M3 6H21M5 6V20C5 21.1046 5.89543 22 7 22H17C18.1046 22 19 21.1046 19 20V6M8 6V4C8 2.89543 8.89543 2 10 2H14C15.1046 2 16 2.89543 16 4V6"/>
-                        <path d="M14 11V17"/>
-                        <path d="M10 11V17"/>
-                    </svg>
-                </button>
-                <button id="settingsBtn" class="btn-icon btn-settings-floating app-shell-icon-btn" title="Настройки">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="4" y1="21" x2="4" y2="14"></line>
-                        <line x1="4" y1="10" x2="4" y2="3"></line>
-                        <line x1="12" y1="21" x2="12" y2="12"></line>
-                        <line x1="12" y1="8" x2="12" y2="3"></line>
-                        <line x1="20" y1="21" x2="20" y2="16"></line>
-                        <line x1="20" y1="12" x2="20" y2="3"></line>
-                        <line x1="1" y1="14" x2="7" y2="14"></line>
-                        <line x1="9" y1="8" x2="15" y2="8"></line>
-                        <line x1="17" y1="16" x2="23" y2="16"></line>
-                    </svg>
-                </button>
-            </div>
-        </header>
+    <!-- Кнопка очистки чата (плавающая слева сверху) -->
+    <button id="clearChat" class="btn-icon btn-clear-floating" title="Очистить чат">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 6H21M5 6V20C5 21.1046 5.89543 22 7 22H17C18.1046 22 19 21.1046 19 20V6M8 6V4C8 2.89543 8.89543 2 10 2H14C15.1046 2 16 2.89543 16 4V6"/>
+            <path d="M14 11V17"/>
+            <path d="M10 11V17"/>
+        </svg>
+    </button>
 
+    <button id="historySidebarToggle" class="history-sidebar-toggle" type="button" title="Показать историю" aria-label="Показать историю">
+        <svg class="history-sidebar-toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+        <span id="historySidebarToggleText" class="history-sidebar-toggle-text">Диалоги</span>
+    </button>
+
+    <!-- Кнопка настроек (плавающая справа сверху) -->
+    <button id="settingsBtn" class="btn-icon btn-settings-floating" title="Настройки">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="4" y1="21" x2="4" y2="14"></line>
+            <line x1="4" y1="10" x2="4" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12" y2="3"></line>
+            <line x1="20" y1="21" x2="20" y2="16"></line>
+            <line x1="20" y1="12" x2="20" y2="3"></line>
+            <line x1="1" y1="14" x2="7" y2="14"></line>
+            <line x1="9" y1="8" x2="15" y2="8"></line>
+            <line x1="17" y1="16" x2="23" y2="16"></line>
+        </svg>
+    </button>
+
+    <div class="container">
         <!-- Tabs для мобильных устройств -->
         <div class="mobile-tabs">
             <button class="mobile-tab" data-panel="history">История</button>
@@ -624,11 +617,7 @@
 
         <!-- Левая панель - Чат -->
         <div class="chat-panel panel" id="chatPanel" data-panel="chat">
-            <div class="panel-header chat-panel-header">
-                <div class="panel-heading panel-heading-chat">
-                    <div class="panel-eyebrow">Рабочая зона</div>
-                    <div class="panel-title">Диалог с клиентом</div>
-                </div>
+            <div class="panel-header">
                 <input type="hidden" id="managerName">
                 <span id="currentUserName" style="display: none;"></span>
                 <div class="header-buttons">
@@ -658,21 +647,8 @@
 
             <div id="chatMessages" class="chat-messages">
                 <div id="startConversation" class="start-conversation">
-                    <div class="start-conversation-copy">
-                        <div class="start-conversation-eyebrow">Новая сессия</div>
-                        <h1 class="start-conversation-title">Запустите тренировочный диалог в одном окне.</h1>
-                        <p class="start-conversation-description">Здесь живут обычный чат, голосовой звонок и аттестация. История слева, роли и промпты справа.</p>
-                    </div>
-                    <div class="start-conversation-actions">
-                        <button id="startBtn" class="btn-start" type="button">
-                            <span class="btn-start-label">Новый диалог</span>
-                            <span class="btn-start-meta">Текстовый сценарий с клиентом</span>
-                        </button>
-                        <button id="startAttestationBtn" class="btn-start btn-start-attestation" type="button">
-                            <span class="btn-start-label">Аттестация</span>
-                            <span class="btn-start-meta">Проверка ответа по вашему регламенту</span>
-                        </button>
-                    </div>
+                    <button id="startBtn" class="btn-start">Начать диалог</button>
+                    <button id="startAttestationBtn" class="btn-start btn-start-attestation">Начать аттестацию</button>
                 </div>
                 <div id="voiceConnectStatus" class="voice-connect-status" role="status" aria-live="polite" aria-atomic="true" hidden>
                     <div class="voice-connect-status-copy">
@@ -765,12 +741,7 @@
 
         <!-- Панель инструкций с табами -->
         <div class="prompt-panel panel" id="instructionsPanel" data-panel="instructions">
-            <div class="panel-header prompt-panel-header">
-                <div class="panel-heading panel-heading-prompt">
-                    <div class="panel-eyebrow">Конфигуратор роли</div>
-                    <div class="panel-title">Промпт, вариации и публикация</div>
-                </div>
-                <div class="prompt-panel-topbar">
+            <div class="panel-header" style="justify-content: space-between;">
                 <!-- Табы оставлены скрыто для совместимости со старой логикой -->
                 <div class="instruction-tabs instruction-tabs-hidden" aria-hidden="true">
                     <button class="instruction-tab active" data-instruction="client" tabindex="-1">Клиент</button>
@@ -849,7 +820,6 @@
                             <button class="dropdown-item" data-prompt-format="rtf">RTF</button>
                         </div>
                     </div>
-                </div>
                 </div>
             </div>
             
@@ -932,7 +902,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js" integrity="sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3" crossorigin="anonymous" defer></script>
     <!-- Turndown for HTML to Markdown conversion (WYSIWYG editing) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js" integrity="sha384-m6AyXEhyWRg2s2wrkDV64LGkaManYgMSAjn2U+zymzSJ42WthRSjCu1AqZJhoQV0" crossorigin="anonymous" defer></script>
-    <script type="module" src="script.js?v=20260407-21"></script>
+<script type="module" src="script.js?v=20260407-19"></script>
     <!-- Last deployment trigger: 2026-03-24 15:00 -->
 </body>
 </html>

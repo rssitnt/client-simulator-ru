@@ -88,16 +88,12 @@
   - the main shell no longer auto-selects the first saved dialog on load, so the current chat/start screen stays in control until the user clicks a history item.
   - on desktop the history rail is collapsed by default and reopened through a dedicated toggle, so the chat workspace stays primary on first load.
   - the central saved-dialog viewer now stacks title/meta above actions on desktop too, so long titles are no longer clipped by the action buttons.
+- A full visual shell rewrite was attempted on 2026-04-07 and then reverted because it introduced too many regressions at once; future redesign work should ship in smaller reviewed passes or from a separate prototype branch.
 - Role/personality selection now uses a single GPT-style selector with descriptions instead of visible tab buttons; legacy hidden tabs remain only as compatibility hooks for existing switching logic.
 - The right prompt panel now has a context bar:
   - shows the current role name and a short explanation of what this prompt controls;
   - shows the active prompt variation badge;
   - gives admins a direct `Новый вариант` action without hunting for the plus chip.
-- The main shell has been visually rebuilt instead of layered over the old layout:
-  - desktop uses a top app header, a collapsible history rail, a central chat workspace, and a separate right prompt panel;
-  - mobile keeps the same functionality but with cleaner tabs and a corrected start screen that no longer clips its heading;
-  - the auth screen is now centered as a desktop card instead of sitting in a left-aligned half-screen block.
-- The final shell CSS now explicitly protects `[hidden]` states, because the redesign introduced custom `display` rules that would otherwise visually resurrect hidden panels/buttons.
 - Voice UX is now more explicit in the main chat area:
   - the in-chat voice status card survives beyond the initial connect phase and reflects `подключение / клиент говорит / ваша очередь / звонок завершён / ошибка`;
   - the panel derives from centralized voice status state instead of depending on a missing standalone `voiceModeStatus` DOM block;
