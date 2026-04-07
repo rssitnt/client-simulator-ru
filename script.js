@@ -82,6 +82,8 @@ const GEMINI_LIVE_THINKING_BUDGET = 0;
 const GEMINI_VOICE_EARLY_ASSISTANT_REPLY_USER_GRACE_MS = 1200;
 const GEMINI_VOICE_EARLY_ASSISTANT_BUFFER_WINDOW_MS = 45000;
 const GEMINI_VOICE_RECENT_SPEECH_ACTIVITY_WINDOW_MS = 2500;
+const VOICE_AUTH_TOKEN_TTL_MS = 55 * 60 * 1000;
+const VOICE_APP_CHECK_TTL_MS = 20 * 60 * 1000;
 const VOICE_COMPLETED_SHORT_REPLY_ALLOWLIST = new Set([
     'да',
     'нет',
@@ -1774,6 +1776,11 @@ let geminiVoiceMicLevelNormalized = 0;
 let geminiVoiceMicMeterReady = false;
 let geminiVoiceLastSpeechActivityAt = 0;
 let geminiVoicePendingAssistantBeforeFirstUserTurn = false;
+let voiceAuthWarmupPromise = null;
+let voiceAuthCachedIdToken = '';
+let voiceAuthCachedIdTokenAt = 0;
+let voiceAuthCachedAppCheckToken = '';
+let voiceAuthCachedAppCheckTokenAt = 0;
 let geminiAudioInputRefreshPromise = null;
 let geminiAudioInputDevices = [];
 let geminiDialToneTimerId = 0;
@@ -4413,6 +4420,7 @@ function applyAuthenticatedUser(user) {
         void syncAuthClaimsForCurrentUser({ force: true });
     }
     applyRoleRestrictions();
+    scheduleVoiceAuthWarmup('apply_authenticated_user');
 }
 
 function resetCurrentSessionToAuth(message = '') {
@@ -14486,7 +14494,12 @@ async function getFirebaseAuthIdToken() {
             5000,
             'Таймаут запроса Firebase ID token.'
         );
-        return String(token || '').trim();
+        const normalized = String(token || '').trim();
+        if (normalized) {
+            voiceAuthCachedIdToken = normalized;
+            voiceAuthCachedIdTokenAt = Date.now();
+        }
+        return normalized;
     } catch (error) {
         const code = String(error?.code || '').trim();
         console.warn('Failed to get Firebase ID token for voice endpoint:', error);
@@ -14498,7 +14511,12 @@ async function getFirebaseAuthIdToken() {
                     5000,
                     'Таймаут запроса Firebase ID token.'
                 );
-                return String(token || '').trim();
+                const normalized = String(token || '').trim();
+                if (normalized) {
+                    voiceAuthCachedIdToken = normalized;
+                    voiceAuthCachedIdTokenAt = Date.now();
+                }
+                return normalized;
             } catch (retryError) {
                 console.warn('Firebase ID token retry failed:', retryError);
             }
@@ -14515,11 +14533,48 @@ async function getFirebaseAppCheckToken() {
             4000,
             'Таймаут App Check.'
         );
-        return String(tokenResult?.token || '').trim();
+        const normalized = String(tokenResult?.token || '').trim();
+        if (normalized) {
+            voiceAuthCachedAppCheckToken = normalized;
+            voiceAuthCachedAppCheckTokenAt = Date.now();
+        }
+        return normalized;
     } catch (error) {
         console.warn('Failed to get Firebase App Check token:', error);
         return '';
     }
+}
+
+async function warmVoiceAuthTokens(reason = '') {
+    if (!auth?.currentUser) return false;
+    const now = Date.now();
+    const hasFreshIdToken = !!voiceAuthCachedIdToken && (now - voiceAuthCachedIdTokenAt) < VOICE_AUTH_TOKEN_TTL_MS;
+    const hasFreshAppCheck = !!voiceAuthCachedAppCheckToken && (now - voiceAuthCachedAppCheckTokenAt) < VOICE_APP_CHECK_TTL_MS;
+    if (hasFreshIdToken && hasFreshAppCheck) return true;
+    recordVoiceDebugEvent('voice_auth_warmup_started', {
+        status: 'info',
+        message: reason || 'auto'
+    });
+    const [idToken, appCheckToken] = await Promise.all([
+        hasFreshIdToken ? voiceAuthCachedIdToken : getFirebaseAuthIdToken(),
+        hasFreshAppCheck ? voiceAuthCachedAppCheckToken : getFirebaseAppCheckToken()
+    ]);
+    recordVoiceDebugEvent('voice_auth_warmup_done', {
+        status: idToken ? 'ok' : 'error',
+        message: reason || 'auto'
+    });
+    return !!idToken;
+}
+
+function scheduleVoiceAuthWarmup(reason = '') {
+    if (voiceAuthWarmupPromise) return;
+    voiceAuthWarmupPromise = warmVoiceAuthTokens(reason)
+        .catch((error) => {
+            console.warn('Voice auth warmup failed:', error);
+        })
+        .finally(() => {
+            voiceAuthWarmupPromise = null;
+        });
 }
 
 function createGeminiVoiceStartCancelledError() {
@@ -14600,7 +14655,13 @@ async function buildGeminiVoiceServerRequestHeaders(tokenEndpoint = '') {
         console.warn('Firebase auth readiness timed out for voice:', error);
         throw new Error('Вход ещё восстанавливается. Подождите несколько секунд и попробуйте снова.');
     }
-    const idToken = await getFirebaseAuthIdToken();
+    const now = Date.now();
+    let idToken = '';
+    if (voiceAuthCachedIdToken && (now - voiceAuthCachedIdTokenAt) < VOICE_AUTH_TOKEN_TTL_MS) {
+        idToken = voiceAuthCachedIdToken;
+    } else {
+        idToken = await getFirebaseAuthIdToken();
+    }
     const canUseLocalFallback = !idToken && canUseLocalhostDevVoiceTokenFallback(tokenEndpoint);
     if (!idToken && !canUseLocalFallback) {
         throw new Error('Для голосового режима нужен подтвержденный вход через email.');
@@ -14609,7 +14670,12 @@ async function buildGeminiVoiceServerRequestHeaders(tokenEndpoint = '') {
     if (idToken) {
         headers.Authorization = `Bearer ${idToken}`;
     }
-    const appCheckToken = await getFirebaseAppCheckToken().catch(() => '');
+    let appCheckToken = '';
+    if (voiceAuthCachedAppCheckToken && (now - voiceAuthCachedAppCheckTokenAt) < VOICE_APP_CHECK_TTL_MS) {
+        appCheckToken = voiceAuthCachedAppCheckToken;
+    } else {
+        appCheckToken = await getFirebaseAppCheckToken().catch(() => '');
+    }
     if (appCheckToken) {
         headers['X-Firebase-AppCheck'] = appCheckToken;
     }

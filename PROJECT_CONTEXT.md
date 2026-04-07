@@ -51,6 +51,7 @@
 - Gemini Live early reconnect is now more tolerant (longer window and 2 attempts) to survive slow/failed WS handshakes.
 - Voice token header prep now times out fast on auth/AppCheck so the call doesn't stall ~30s before connecting.
 - Voice token endpoint timeout reduced to 15s to avoid long first-load stalls; fallback transcript now merges with any early partial preview to avoid missing leading words.
+- Voice auth/AppCheck tokens are now prewarmed on login to avoid slow call starts; cached tokens are reused until TTL.
 - Chat autoscroll now aligns to the start of very tall messages so the first line is visible; shorter messages still scroll to the bottom.
 - Clearing the chat now resets the in-memory Gemini voice dialog buffer so the next call treats the first client reply as truly first.
 - If the first client reply arrives as audio-only before the first manager turn, we now force a fallback transcription timer immediately so the first bubble can still appear.
