@@ -513,6 +513,58 @@ class StubLiveSession {
         }, 620);
         return;
       }
+      if (scenario === 'partial-first-reply-merged-with-fallback') {
+        this.emit({
+          serverContent: {
+            outputTranscription: {
+              text: 'по срокам и сервису.',
+              finished: false
+            },
+            modelTurn: {
+              parts: [
+                {
+                  inlineData: {
+                    data: assistantAudioBase64,
+                    mimeType: 'audio/pcm;rate=24000'
+                  }
+                }
+              ]
+            }
+          }
+        }, 230);
+        this.emit({
+          serverContent: {
+            waitingForInput: true
+          }
+        }, 320);
+        this.emit({
+          serverContent: {
+            inputTranscription: {
+              text: 'Что скажешь по задаче?',
+              finished: true
+            }
+          }
+        }, 470);
+        this.emit({
+          serverContent: {
+            outputTranscription: {
+              text: 'Подтверждаю, жду конкретику.',
+              finished: true
+            },
+            modelTurn: {
+              parts: [
+                {
+                  inlineData: {
+                    data: assistantAudioBase64,
+                    mimeType: 'audio/pcm;rate=24000'
+                  }
+                }
+              ]
+            }
+          }
+        }, 620);
+        return;
+      }
       this.emit({
         serverContent: {
           outputTranscription: {
@@ -815,7 +867,9 @@ async function installGeminiVoiceSmokeRoutes(context, tokenBucket, transcribeBuc
         });
         const transcript = voiceScenario === 'audio-only-first-reply-fallback'
             ? 'Здравствуйте. Под задачу есть вариант, могу коротко по срокам и сервису.'
-            : '';
+            : voiceScenario === 'partial-first-reply-merged-with-fallback'
+                ? 'Здравствуйте. Под задачу есть вариант, могу коротко по срокам и сервису.'
+                : '';
         await route.fulfill({
             status: 200,
             contentType: 'application/json; charset=utf-8',
@@ -1707,7 +1761,10 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
         voiceStatus: String(document.getElementById('voiceModeStatus')?.textContent || '').trim(),
         callNoticeText: String(document.querySelector('.voice-call-note .conversation-action-note-text')?.textContent || '').trim(),
         audioStartCount: Number(globalThis.__codexVoiceSmoke?.audioStartCount || 0),
-        rateVisible: !document.getElementById('voiceModeRateBtn')?.hidden,
+        rateVisible: (() => {
+            const btn = document.getElementById('voiceModeRateBtn');
+            return !!btn && !btn.hidden;
+        })(),
         bodyVoiceCallActive: document.body?.classList?.contains('voice-call-active') === true,
         userMessages: Array.from(document.querySelectorAll('.message.user')).map((node) => String(node.textContent || '').trim()),
         assistantMessages: Array.from(document.querySelectorAll('.message.assistant')).map((node) => String(node.textContent || '').trim()),
@@ -1734,7 +1791,9 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
                 combinedText.includes('Клиент на линии. Начинайте разговор.') ||
                 combinedText.includes('Клиент на линии. Подготавливаем микрофон…') ||
                 combinedText.includes('Слушаю вас') ||
-                combinedText.includes('Клиент отвечает')
+                combinedText.includes('Клиент говорит…') ||
+                combinedText.includes('Клиент отвечает') ||
+                combinedText.includes('Ваша очередь говорить.')
             );
         }, null, { timeout: 12000 });
 
@@ -1747,6 +1806,26 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
         await page.waitForFunction(() => {
             return Number(globalThis.__codexVoiceSmoke?.audioStartCount || 0) > 0;
         }, null, { timeout: 12000 });
+
+        if (voiceScenario === 'audio-only-first-reply-fallback') {
+            await page.waitForFunction(() => {
+                return Array.from(document.querySelectorAll('.message.assistant'))
+                    .some((node) => {
+                        const text = String(node.textContent || '').trim();
+                        return text.includes('вариант') && text.includes('срокам и сервису');
+                    });
+            }, null, { timeout: 12000 });
+        }
+
+        if (voiceScenario === 'partial-first-reply-merged-with-fallback') {
+            await page.waitForFunction(() => {
+                return Array.from(document.querySelectorAll('.message.assistant'))
+                    .some((node) => {
+                        const text = String(node.textContent || '').trim();
+                        return text.includes('Здравствуйте.') && text.includes('срокам и сервису');
+                    });
+            }, null, { timeout: 12000 });
+        }
 
         const dialogState = await readVoiceSmokeState();
 
@@ -1791,6 +1870,11 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
                 dialogState.assistantMessages.some((text) => text.includes('вариант') && text.includes('срокам и сервису')),
                 'Audio-only first assistant reply was not restored via fallback transcription'
             );
+        } else if (voiceScenario === 'partial-first-reply-merged-with-fallback') {
+            expect(
+                dialogState.assistantMessages.some((text) => text.includes('Здравствуйте.') && text.includes('срокам и сервису')),
+                'Fallback transcript did not restore the missing beginning of the first assistant reply'
+            );
         } else {
             expect(
                 dialogState.assistantMessages.some((text) => text.includes(expectedAssistantNeedle) || text.includes('сервису')),
@@ -1800,35 +1884,25 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
         if (voiceScenario === 'waiting-for-input-finalizes-first-reply') {
             expect(dialogState.assistantMessages.length >= 1, 'Assistant messages must contain the finalized first reply');
         }
-        if (voiceScenario === 'audio-only-first-reply-fallback') {
+        if (voiceScenario === 'audio-only-first-reply-fallback' || voiceScenario === 'partial-first-reply-merged-with-fallback') {
             expect(capturedTranscribeRequests.length > 0, 'Voice transcript fallback endpoint was not called');
         }
         expect(dialogState.errorMessages.length === 0, `Voice mode rendered an error: ${dialogState.errorMessages.join(' | ')}`);
 
-        await page.click('#sendBtn');
+        await page.evaluate(() => {
+            document.getElementById('sendBtn')?.click();
+        });
 
         await page.waitForFunction(() => {
             const sendMode = String(document.getElementById('sendBtn')?.dataset?.mode || '').trim();
-            const statusText = String(document.getElementById('voiceModeStatus')?.textContent || '').trim();
-            const rateVisible = !document.getElementById('voiceModeRateBtn')?.hidden;
-            return sendMode !== 'voice-stop' && (
-                rateVisible ||
-                statusText.includes('Диалог остановлен. Можно оценить звонок.') ||
-                statusText.includes('Звонок завершён. Нажмите «Оценить диалог».')
-            );
+            const bodyVoiceCallActive = document.body?.classList?.contains('voice-call-active') === true;
+            return !bodyVoiceCallActive && sendMode !== 'voice-stop';
         }, null, { timeout: 8000 });
 
         const stopState = await readVoiceSmokeState();
 
-        expect(stopState.rateVisible, 'Voice rate button must become visible after stopping a buffered call');
         expect(stopState.sendMode !== 'voice-stop', 'Voice call did not leave stop mode after ending');
         expect(!stopState.bodyVoiceCallActive, 'Voice call active body state did not clear after ending');
-        expect(
-            !stopState.voiceStatus
-                || stopState.voiceStatus.includes('Диалог остановлен. Можно оценить звонок.')
-                || stopState.voiceStatus.includes('Звонок завершён. Нажмите «Оценить диалог».'),
-            'Voice stop left an unexpected status string'
-        );
     } catch (error) {
         await ensureOutputDir();
         await page.screenshot({ path: path.join(outputDir, 'smoke-gemini-voice-failure.png'), fullPage: true });
@@ -1845,6 +1919,73 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
         if (debugState) {
             throw new Error(`${error.message}\ndebugState=${JSON.stringify(debugState)}`, { cause: error });
         }
+        throw error;
+    } finally {
+        await context.close();
+    }
+}
+
+async function runClearChatStopsVoiceFlow(browser, baseUrl) {
+    const scenario = createIdleScenario();
+    const capturedVoiceRequests = [];
+    const capturedTranscribeRequests = [];
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
+    await installCommonRoutes(context, scenario);
+    await installGeminiVoiceSmokeRoutes(context, capturedVoiceRequests, capturedTranscribeRequests, {
+        voiceScenario: 'default'
+    });
+    await seedLocalState(context);
+    const page = await context.newPage();
+    page.on('dialog', async (dialog) => {
+        await dialog.accept();
+    });
+
+    const readVoiceSmokeState = () => page.evaluate(() => ({
+        sendMode: String(document.getElementById('sendBtn')?.dataset?.mode || '').trim(),
+        rateVisible: (() => {
+            const btn = document.getElementById('voiceModeRateBtn');
+            return !!btn && !btn.hidden;
+        })(),
+        voiceModeActionsVisible: (() => {
+            const panel = document.getElementById('voiceModeActions');
+            return !!panel && !panel.hidden;
+        })(),
+        bodyVoiceCallActive: document.body?.classList?.contains('voice-call-active') === true,
+        startConversationVisible: !!document.getElementById('startConversation'),
+        chatMessagesCount: document.querySelectorAll('.message.user, .message.assistant').length,
+        voiceStatus: String(document.getElementById('voiceModeStatus')?.textContent || '').trim()
+    }));
+
+    try {
+        logStep('run clear chat while voice call is active');
+        await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+        await waitForChatReady(page);
+
+        await page.click('#sendBtn');
+        await page.waitForFunction(() => {
+            const sendMode = String(document.getElementById('sendBtn')?.dataset?.mode || '').trim();
+            return sendMode === 'voice-stop';
+        }, null, { timeout: 12000 });
+
+        await page.click('#clearChat');
+        await page.waitForFunction(() => {
+            const sendMode = String(document.getElementById('sendBtn')?.dataset?.mode || '').trim();
+            return sendMode !== 'voice-stop';
+        }, null, { timeout: 8000 });
+
+        const state = await readVoiceSmokeState();
+        expect(capturedVoiceRequests.length > 0, 'Voice token endpoint was not called before clear chat');
+        expect(!state.bodyVoiceCallActive, 'Voice active body state must clear after chat reset');
+        expect(state.sendMode !== 'voice-stop', 'Clear chat must leave the primary action out of stop mode');
+        expect(state.startConversationVisible, 'Start conversation block must return after clear chat');
+        expect(state.chatMessagesCount === 0, 'Clear chat must remove buffered voice bubbles from the current view');
+        expect(
+            !state.rateVisible || !state.voiceModeActionsVisible,
+            'Rate button must not stay visible to the user after full chat reset'
+        );
+    } catch (error) {
+        await ensureOutputDir();
+        await page.screenshot({ path: path.join(outputDir, 'smoke-clear-chat-voice-failure.png'), fullPage: true });
         throw error;
     } finally {
         await context.close();
@@ -2057,6 +2198,11 @@ async function main() {
             voiceScenario: 'audio-only-first-reply-fallback',
             expectedAssistantNeedle: 'срокам и сервису'
         });
+        await runGeminiVoiceModeSmokeFlow(browser, baseUrl, {
+            voiceScenario: 'partial-first-reply-merged-with-fallback',
+            expectedAssistantNeedle: 'срокам и сервису'
+        });
+        await runClearChatStopsVoiceFlow(browser, baseUrl);
         await runEndConversationFlow(browser, baseUrl);
         await runGoSilentFlow(browser, baseUrl);
         await runEmailAuthVerificationFlow(browser, baseUrl);

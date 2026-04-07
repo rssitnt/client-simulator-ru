@@ -2646,7 +2646,7 @@ body.light-theme .ai-improve-modal textarea::-webkit-scrollbar-thumb:hover {
     
     .chat-input-container {
         flex-shrink: 0;
-        padding: 0 16px 12px;
+        padding: 0 16px max(12px, env(safe-area-inset-bottom, 0px) + 6px);
         position: sticky;
         bottom: 0;
         background: #0F0F0F;
@@ -2698,9 +2698,9 @@ body.light-theme .ai-improve-modal textarea::-webkit-scrollbar-thumb:hover {
     }
     
     .chat-input-container {
-        padding: 0 12px 10px;
+        padding: 0 12px max(10px, env(safe-area-inset-bottom, 0px) + 6px);
         position: sticky;
-        bottom: 8px;
+        bottom: 0;
         background: #0F0F0F;
     }
     
@@ -6243,11 +6243,122 @@ body.light-theme .voice-mode-status[data-state="listening"] {
 
 body.voice-mode-active {
     overflow: auto;
+    overscroll-behavior-y: contain;
 }
 
 body.voice-mode-active > :not(#voiceModeScreen):not(#voiceModeActions) {
     visibility: visible !important;
     pointer-events: auto !important;
+}
+
+body.voice-mode-active .chat-messages {
+    padding-top: 104px;
+    padding-bottom: calc(104px + env(safe-area-inset-bottom, 0px));
+}
+
+@media (max-width: 768px) {
+    .voice-mode-actions {
+        top: max(10px, env(safe-area-inset-top, 0px) + 6px);
+        left: max(10px, env(safe-area-inset-left, 0px) + 6px);
+        right: max(10px, env(safe-area-inset-right, 0px) + 6px);
+        max-width: none;
+        width: auto;
+        gap: 10px;
+    }
+
+    .voice-mode-actions-row {
+        width: 100%;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 8px;
+    }
+
+    .voice-mode-exit-btn,
+    .voice-mode-stop-btn,
+    .voice-mode-rate-btn {
+        min-height: 44px;
+        padding: 12px 14px;
+        font-size: 13px;
+        flex: 0 0 auto;
+    }
+
+    .voice-mode-status {
+        width: 100%;
+        max-width: none;
+        min-height: 44px;
+        font-size: 13px;
+        line-height: 1.4;
+        padding: 11px 12px;
+        white-space: normal;
+    }
+
+    body.voice-mode-active .chat-messages {
+        padding-top: max(132px, env(safe-area-inset-top, 0px) + 118px);
+        padding-left: 14px;
+        padding-right: 14px;
+        padding-bottom: max(24px, env(safe-area-inset-bottom, 0px) + 14px);
+    }
+
+    .dialog-history-list {
+        max-height: min(280px, 34vh);
+    }
+
+    .dialog-history-viewer {
+        padding: 12px;
+    }
+
+    .dialog-history-messages {
+        max-height: min(360px, 42vh);
+    }
+
+    .dialog-history-message {
+        max-width: 100%;
+    }
+
+    body.voice-mode-active .message {
+        max-width: min(92%, 720px);
+    }
+
+    body.voice-mode-active .conversation-action-note-box {
+        max-width: min(88vw, 520px);
+    }
+}
+
+@media (max-width: 640px) {
+    .voice-mode-exit-btn,
+    .voice-mode-stop-btn,
+    .voice-mode-rate-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .conversation-action-note-box {
+        max-width: min(92vw, 520px);
+    }
+}
+
+@media (max-width: 480px) {
+    .voice-mode-actions-row {
+        flex-wrap: wrap;
+        justify-content: flex-start;
+    }
+
+    .voice-mode-exit-btn,
+    .voice-mode-stop-btn,
+    .voice-mode-rate-btn {
+        flex: 1 1 calc(50% - 6px);
+        justify-content: center;
+        text-align: center;
+    }
+
+    .voice-mode-status {
+        font-size: 12px;
+        padding: 10px 11px;
+    }
+
+    body.voice-mode-active .chat-messages {
+        padding-top: max(146px, env(safe-area-inset-top, 0px) + 132px);
+    }
 }
 
 /* AI Improve Modal */

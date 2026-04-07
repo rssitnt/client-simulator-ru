@@ -56,9 +56,18 @@
 - Voice header building now reuses a fresh cached Firebase `idToken` immediately; it only waits for Firebase auth readiness when no cached token exists.
 - Voice token fetch now uses one short total budget across primary + fallback routes, so a bad first route cannot stretch startup into a 30+ second wait.
 - Early auto-reconnect now requires a real `live_open` before retrying; failed cold starts no longer immediately trigger another full slow reconnect cycle.
+- Voice fallback transcription for the first client reply now prefers the more complete variant instead of blindly merging a truncated preview over a fuller fallback transcript.
+- When a voice line that is already shown in chat/history later becomes fuller, the frontend now rewrites the existing bubble/history entry instead of leaving the older truncated text on screen.
+- If Gemini first finalized only a truncated assistant prefix, fallback transcription can now patch the already rendered bubble by assistant `turnId` instead of losing the missing beginning forever.
 - Echo-guard no longer trims the first client reply, so the first turn text should not lose leading words.
 - Chat autoscroll now aligns to the start of very tall messages so the first line is visible; shorter messages still scroll to the bottom.
 - Clearing the chat now resets the in-memory Gemini voice dialog buffer so the next call treats the first client reply as truly first.
+- Full chat reset now also closes the voice overlay layer, clears its status/rate UI, and returns the page to a clean non-call state.
+- Mobile voice mode got a safer overlay layout:
+  - `viewport-fit=cover` is enabled;
+  - voice overlay spacing respects safe areas better;
+  - duplicated mobile overlay CSS was collapsed into one source of truth;
+  - mobile sticky input bottom spacing now respects `safe-area-inset-bottom`.
 - Clearing the chat now also stops an active Gemini voice call before wiping the UI, so the bottom action no longer stays in the "end dialog" state after chat reset.
 - If the first client reply arrives as audio-only before the first manager turn, we now force a fallback transcription timer immediately so the first bubble can still appear.
 - If the first client reply audio is buffered but playback didn't start, we now replay the buffered audio once the turn is released/finalized.
@@ -74,9 +83,11 @@
 - `token_request_started`
 - `token_request_failed`
 - `token_request_succeeded`
+- `voice_startup_warmup_done`
 
 ## Verification
 - Passed: `node --check script.js`
+- Passed: `node --check scripts/smoke-e2e.mjs`
 - Passed: `npm run test:smoke`
 - Observed on 2026-03-30:
   - `OPTIONS https://client-simulator.ru/api/gemini-live-token` => `405`
