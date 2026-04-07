@@ -16441,41 +16441,45 @@ async function handleGeminiLiveMessage(message) {
         const inlineData = part?.inlineData;
         const mimeType = String(inlineData?.mimeType || inlineData?.mime_type || '').trim();
         const audioBase64 = String(inlineData?.data || '').trim();
-        if (audioBase64 && (!mimeType || /^audio\//i.test(mimeType))) {
-            const shouldBufferEarlyReply = shouldBufferEarlyGeminiAssistantReply();
-            if (
-                !geminiVoiceAssistantTurnInProgress &&
-                !hasPendingGeminiAssistantTurn() &&
-                !geminiVoiceUserPreview.trim() &&
-                !geminiVoiceUserDraft.trim() &&
-                !geminiVoiceUserTurnFinalized
-            ) {
-                if (!shouldBufferEarlyReply) {
-                    recordVoiceDebugEvent('assistant_output_ignored', {
-                        status: 'info',
-                        message: 'orphan_audio_part'
-                    });
+            if (audioBase64 && (!mimeType || /^audio\//i.test(mimeType))) {
+                const shouldBufferEarlyReply = shouldBufferEarlyGeminiAssistantReply();
+                if (
+                    !geminiVoiceAssistantTurnInProgress &&
+                    !hasPendingGeminiAssistantTurn() &&
+                    !geminiVoiceUserPreview.trim() &&
+                    !geminiVoiceUserDraft.trim() &&
+                    !geminiVoiceUserTurnFinalized
+                ) {
+                    if (!shouldBufferEarlyReply) {
+                        recordVoiceDebugEvent('assistant_output_ignored', {
+                            status: 'info',
+                            message: 'orphan_audio_part'
+                        });
+                    } else {
+                        markGeminiPendingAssistantBeforeFirstUserTurn('audio_part');
+                        beginGeminiAssistantVoiceOutput('audio_part');
+                        appendGeminiAssistantAudioChunk(audioBase64, mimeType || 'audio/pcm;rate=24000');
+                        recordGeminiFirstAudioChunkIfNeeded(audioBase64, mimeType);
+                        await enqueueGeminiAudioPlayback(audioBase64, mimeType).catch((error) => {
+                            console.warn('Failed to play Gemini Live audio chunk:', error);
+                        });
+                        scheduleGeminiAssistantFallbackTranscript('early_audio_only', GEMINI_VOICE_FALLBACK_TRANSCRIBE_HOLD_MS);
+                        hasAudioChunk = true;
+                    }
                 } else {
-                    markGeminiPendingAssistantBeforeFirstUserTurn('audio_part');
                     beginGeminiAssistantVoiceOutput('audio_part');
                     appendGeminiAssistantAudioChunk(audioBase64, mimeType || 'audio/pcm;rate=24000');
                     recordGeminiFirstAudioChunkIfNeeded(audioBase64, mimeType);
                     await enqueueGeminiAudioPlayback(audioBase64, mimeType).catch((error) => {
                         console.warn('Failed to play Gemini Live audio chunk:', error);
                     });
+                    if (geminiVoicePendingAssistantBeforeFirstUserTurn && !geminiVoiceUserTurnFinalized) {
+                        scheduleGeminiAssistantFallbackTranscript('early_audio_only', GEMINI_VOICE_FALLBACK_TRANSCRIBE_HOLD_MS);
+                    }
                     hasAudioChunk = true;
                 }
-            } else {
-                beginGeminiAssistantVoiceOutput('audio_part');
-                appendGeminiAssistantAudioChunk(audioBase64, mimeType || 'audio/pcm;rate=24000');
-                recordGeminiFirstAudioChunkIfNeeded(audioBase64, mimeType);
-                await enqueueGeminiAudioPlayback(audioBase64, mimeType).catch((error) => {
-                    console.warn('Failed to play Gemini Live audio chunk:', error);
-                });
-                hasAudioChunk = true;
+                continue;
             }
-            continue;
-        }
         const partText = normalizeVoiceDialogText(part?.text || '');
         if (partText && !outputText) {
             const shouldBufferEarlyReply = shouldBufferEarlyGeminiAssistantReply();
@@ -16542,6 +16546,7 @@ async function handleGeminiLiveMessage(message) {
                     await enqueueGeminiAudioPlayback(audioBase64, mimeType || 'audio/pcm;rate=24000').catch((error) => {
                         console.warn('Failed to play Gemini Live audio chunk:', error);
                     });
+                    scheduleGeminiAssistantFallbackTranscript('early_audio_only', GEMINI_VOICE_FALLBACK_TRANSCRIBE_HOLD_MS);
                 }
             } else {
                 beginGeminiAssistantVoiceOutput('output_audio');
@@ -16550,6 +16555,9 @@ async function handleGeminiLiveMessage(message) {
                 await enqueueGeminiAudioPlayback(audioBase64, mimeType || 'audio/pcm;rate=24000').catch((error) => {
                     console.warn('Failed to play Gemini Live audio chunk:', error);
                 });
+                if (geminiVoicePendingAssistantBeforeFirstUserTurn && !geminiVoiceUserTurnFinalized) {
+                    scheduleGeminiAssistantFallbackTranscript('early_audio_only', GEMINI_VOICE_FALLBACK_TRANSCRIBE_HOLD_MS);
+                }
             }
         }
     }
