@@ -55,6 +55,7 @@
 - If the first client reply arrives as audio-only before the first manager turn, we now force a fallback transcription timer immediately so the first bubble can still appear.
 - If the first client reply audio is buffered but playback didn't start, we now replay the buffered audio once the turn is released/finalized.
 - Audio playback reset now preserves queued playback when early assistant audio arrives before capture init, so the first reply is not dropped.
+- Starting a new voice call now clears the previous chat/voice dialog state so the call always begins fresh.
 
 ## Useful Debug Markers
 - `assistant_output_buffered_before_user_turn`

@@ -16965,6 +16965,10 @@ async function startGeminiVoiceMode() {
         return;
     }
 
+    if (conversationHistory.length > 0 || hasBufferedVoiceDialog() || currentDialogHistoryId) {
+        resetChatForNewVoiceCall();
+    }
+
     geminiVoiceCloseExpected = false;
     geminiVoiceStartTimestamp = Date.now();
     geminiVoiceDebugSessionId = buildRequestId('voice');
@@ -18749,6 +18753,26 @@ function restoreStartConversationBlock() {
     if (!startDiv) return;
     if (isGeminiVoiceConnecting || isGeminiVoiceActive) return;
     startDiv.style.display = '';
+}
+
+function resetChatForNewVoiceCall() {
+    invalidateActiveChatUiRequests();
+    isProcessing = false;
+    resetConversationHistory();
+    lastRating = null;
+    isDialogRated = false;
+    clearConversationTerminalState();
+    removeReratePrompt();
+    updatePromptLock();
+    unlockDialogInput();
+    rateChatBtn.classList.remove('rated');
+    rateChatBtn.classList.remove('loading');
+    aiAssistBtn.classList.remove('loading');
+    updateRateChatButtonState();
+    refreshSessionIds(generateSessionId());
+    if (chatMessages) {
+        chatMessages.innerHTML = '';
+    }
 }
 
 async function clearChat() {
