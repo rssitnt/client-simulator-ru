@@ -15874,6 +15874,9 @@ function getRecentUserTranscriptForEchoGuard() {
 function sanitizeAssistantCompletedTranscript(rawText) {
     const source = filterCompletedVoiceNoise(rawText);
     if (!source) return '';
+    if (Number(geminiVoiceAssistantCurrentTurnId || 0) <= 1) {
+        return source;
+    }
 
     const userText = getRecentUserTranscriptForEchoGuard();
     if (!userText) return source;
