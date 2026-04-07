@@ -50,6 +50,7 @@
   - the timeout for opening Firebase Auth is longer and the message no longer blames email/password on a timeout.
 - Gemini Live early reconnect is now more tolerant (longer window and 2 attempts) to survive slow/failed WS handshakes.
 - Chat autoscroll now aligns to the start of very tall messages so the first line is visible; shorter messages still scroll to the bottom.
+- Clearing the chat now resets the in-memory Gemini voice dialog buffer so the next call treats the first client reply as truly first.
 
 ## Useful Debug Markers
 - `assistant_output_buffered_before_user_turn`

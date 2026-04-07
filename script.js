@@ -18690,6 +18690,8 @@ function restoreStartConversationBlock() {
 async function clearChat() {
     invalidateActiveChatUiRequests();
     isProcessing = false;
+    resetGeminiVoiceDialogBuffer();
+    geminiVoiceConversationFinished = false;
     await flushCurrentDialogHistoryForReset({ forceClosed: true });
     resetConversationHistory();
     lastRating = null;
