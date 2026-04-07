@@ -406,6 +406,9 @@
                                         <div id="dialogHistoryViewerMeta" class="dialog-history-viewer-meta"></div>
                                     </div>
                                     <div class="dialog-history-viewer-actions">
+                                        <button id="dialogHistoryPinBtn" class="btn-change" type="button" hidden>
+                                            Закрепить
+                                        </button>
                                         <button id="dialogHistoryDeleteBtn" class="btn-change btn-danger-subtle" type="button" hidden>
                                             Удалить
                                         </button>
@@ -582,6 +585,16 @@
                 <div id="mainDialogHistoryScopeMeta" class="dialog-history-scope-meta history-panel-meta">
                     Здесь будут ваши последние диалоги.
                 </div>
+                <div class="history-panel-controls">
+                    <label class="history-search" for="mainDialogHistorySearchInput">
+                        <svg class="history-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="11" cy="11" r="7"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input id="mainDialogHistorySearchInput" class="history-search-input" type="search" placeholder="Поиск по диалогам" autocomplete="off">
+                    </label>
+                    <button id="mainDialogHistoryNewBtn" class="history-panel-action" type="button">Новый диалог</button>
+                </div>
                 <div class="history-thread-layout">
                     <div class="dialog-history-list-wrap history-thread-list-wrap">
                         <div id="mainDialogHistoryList" class="dialog-history-list history-thread-list">
@@ -609,6 +622,9 @@
                                     <div id="mainDialogHistoryViewerMeta" class="dialog-history-viewer-meta"></div>
                                 </div>
                                 <div class="dialog-history-viewer-actions">
+                                    <button id="mainDialogHistoryPinBtn" class="btn-change" type="button" hidden>
+                                        Закрепить
+                                    </button>
                                     <button id="mainDialogHistoryDeleteBtn" class="btn-change btn-danger-subtle" type="button" hidden>
                                         Удалить
                                     </button>
@@ -876,7 +892,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js" integrity="sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3" crossorigin="anonymous" defer></script>
     <!-- Turndown for HTML to Markdown conversion (WYSIWYG editing) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js" integrity="sha384-m6AyXEhyWRg2s2wrkDV64LGkaManYgMSAjn2U+zymzSJ42WthRSjCu1AqZJhoQV0" crossorigin="anonymous" defer></script>
-    <script type="module" src="script.js?v=20260407-15"></script>
+<script type="module" src="script.js?v=20260407-16"></script>
     <!-- Last deployment trigger: 2026-03-24 15:00 -->
 </body>
 </html>

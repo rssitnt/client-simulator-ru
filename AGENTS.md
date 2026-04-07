@@ -51,6 +51,11 @@
   - index: `dialog_history_index/{loginKey}/{dialogId}`
   - payload: `dialog_history_messages/{loginKey}/{dialogId}`
   - only text/transcripts/rating are stored; audio is not stored.
+- Main history UX is now GPT-like:
+  - shared desktop/mobile/settings history views stay in sync from one state source;
+  - the desktop rail has inline search and a fast `Новый диалог` action;
+  - dialogs support pinning via `pinnedAt`, with pinned records sorted first;
+  - auto-titles are derived from the first meaningful line, with greetings/noise trimmed.
 - Admins can view and delete foreign dialog history; users can manage only their own history.
 - Active time is now “real focused activity only”:
   - visible tab
@@ -77,6 +82,8 @@
   - optional rating text
 - Audio files are not stored.
 - Owners can rename/delete their own dialogs.
+- Owners can pin/unpin their own dialogs; `pinnedAt` controls sort priority.
+- Auto-generated titles are summarized from the first meaningful message instead of using raw first-turn text.
 - Admins can open and delete any user’s dialog history, but cannot rename чужие записи.
 
 ### Auth / Security

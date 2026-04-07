@@ -78,7 +78,12 @@
   - desktop has a dedicated left history rail with list + preview;
   - mobile has a separate `История` tab;
   - the settings accordion still mirrors the same data/actions for admin workflows.
-- History UI is now rendered into multiple synchronized surfaces from one source of truth, so selecting/renaming/deleting a dialog stays in sync between the main shell and settings.
+- History UI is rendered into multiple synchronized surfaces from one source of truth, so selecting/renaming/deleting a dialog stays in sync between the main shell and settings.
+- The main history rail now has GPT-like ergonomics:
+  - inline search filters both the rail and mirrored history views from the same state;
+  - `Новый диалог` starts a fresh session and returns focus to the main chat input;
+  - dialogs can be pinned via `pinnedAt`, and pinned dialogs sort above the rest;
+  - auto-titles are generated from the first meaningful line with greetings/noise trimmed, so titles are shorter and cleaner.
 - Role/personality selection now uses a single GPT-style selector with descriptions instead of visible tab buttons; legacy hidden tabs remain only as compatibility hooks for existing switching logic.
 - The right prompt panel now has a context bar:
   - shows the current role name and a short explanation of what this prompt controls;

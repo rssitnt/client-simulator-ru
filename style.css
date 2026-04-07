@@ -681,6 +681,63 @@ body.light-theme .custom-tooltip-layer.placement-bottom::before {
     padding: 0 6px;
 }
 
+.history-panel-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.history-search {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    min-height: 40px;
+    border-radius: 14px;
+    border: 1px solid #262626;
+    background: #181818;
+}
+
+.history-search-icon {
+    color: #707070;
+    flex: 0 0 auto;
+}
+
+.history-search-input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: #ececec;
+    font-size: 13px;
+}
+
+.history-search-input::placeholder {
+    color: #6f6f6f;
+}
+
+.history-panel-action {
+    flex: 0 0 auto;
+    min-height: 40px;
+    padding: 0 14px;
+    border-radius: 14px;
+    border: 1px solid #323232;
+    background: #1c1c1c;
+    color: #f1f1f1;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.history-panel-action:hover {
+    border-color: color-mix(in srgb, var(--color-accent) 38%, transparent);
+    background: #212121;
+}
+
 .history-thread-layout {
     display: flex;
     flex-direction: column;
@@ -2118,6 +2175,26 @@ body.light-theme .history-panel-title {
     color: #181818;
 }
 
+body.light-theme .history-search {
+    background: #ffffff;
+    border-color: #e5e5e5;
+}
+
+body.light-theme .history-search-input {
+    color: #222;
+}
+
+body.light-theme .history-search-input::placeholder,
+body.light-theme .history-search-icon {
+    color: #8a8a8a;
+}
+
+body.light-theme .history-panel-action {
+    background: #ffffff;
+    border-color: #e2e2e2;
+    color: #1f1f1f;
+}
+
 body.light-theme .history-panel-eyebrow,
 body.light-theme .history-panel-meta,
 body.light-theme .personality-selector-caption,
@@ -3089,6 +3166,11 @@ body.light-theme .ai-improve-modal textarea::-webkit-scrollbar-thumb:hover {
 
     .history-panel-body {
         padding: 0 12px max(12px, env(safe-area-inset-bottom, 0px) + 8px);
+    }
+
+    .history-panel-controls {
+        flex-direction: column;
+        align-items: stretch;
     }
 
     .custom-instruction-dropdown {
@@ -4106,6 +4188,26 @@ body.light-theme .btn-icon:hover {
     font-weight: 600;
     color: #f4f4f4;
     line-height: 1.35;
+    min-width: 0;
+    flex: 1;
+}
+
+.dialog-history-item-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.dialog-history-item-pin {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    color: #ffce63;
+    font-size: 13px;
+    flex: 0 0 auto;
 }
 
 .dialog-history-item-preview {
