@@ -84,6 +84,8 @@
   - `Новый диалог` starts a fresh session and returns focus to the main chat input;
   - dialogs can be pinned via `pinnedAt`, and pinned dialogs sort above the rest;
   - auto-titles are now topic-based, using the early dialog context to extract a subject/model/qualifier instead of copying the first raw replica;
+  - legacy long first-line titles are normalized on read, so older records also show short topic titles without manual rename;
+  - each history row now has a hover/tap `...` menu with `переименовать / поделиться / удалить`;
   - selecting a saved dialog in the main rail now opens it in the central chat workspace instead of rendering a second bulky viewer inside the sidebar;
   - the main shell no longer auto-selects the first saved dialog on load, so the current chat/start screen stays in control until the user clicks a history item.
   - on desktop the history rail is collapsed by default and reopened through a dedicated toggle, so the chat workspace stays primary on first load.
@@ -105,6 +107,7 @@
   - on empty sessions the bottom composer is collapsed to a compact voice-call button, so mobile no longer loses the start actions under the input bar;
   - the floating history toggle no longer overlaps the clear-chat button in collapsed desktop mode.
   - the separate saved-dialog viewer in the central chat workspace was removed; saved dialogs stay in the history rail/settings surfaces instead of rendering a second large card under the main start/chat UI.
+  - the extra `Диалоги` eyebrow above `История` was removed to reduce visual noise in the left rail.
 
 ## Useful Debug Markers
 - `assistant_output_buffered_before_user_turn`

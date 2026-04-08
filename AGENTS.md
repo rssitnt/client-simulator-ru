@@ -56,6 +56,8 @@
   - the desktop rail has inline search and a fast `Новый диалог` action;
   - dialogs support pinning via `pinnedAt`, with pinned records sorted first;
   - auto-titles are derived from the early topic of the dialog (subject/model/qualifier), not from the raw first line.
+  - legacy long first-line titles are normalized on read, so older records also show short topic titles without manual rename.
+  - each history row has a hover/tap `...` menu with `переименовать / поделиться / удалить`.
   - the desktop rail is list-only; opening a saved dialog happens in the main chat workspace, not inside the sidebar itself.
   - the main shell does not auto-open the first history item on load.
   - the desktop history rail starts collapsed by default and is reopened with a dedicated toggle.
@@ -68,6 +70,7 @@
   - on an empty session the bottom composer collapses to a compact voice-call button so mobile start actions stay visible;
   - the collapsed desktop history toggle is offset far enough not to overlap the clear-chat button.
   - the large saved-dialog viewer is no longer rendered in the center workspace; saved-dialog access remains in the history rail/settings surfaces.
+  - the extra `Диалоги` eyebrow above `История` was removed from the left rail.
 - Admins can view and delete foreign dialog history; users can manage only their own history.
 - Active time is now “real focused activity only”:
   - visible tab
