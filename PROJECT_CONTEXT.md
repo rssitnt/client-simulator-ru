@@ -104,6 +104,7 @@
   - the new-session screen uses three clear entry actions (`чат / звонок / аттестация`) instead of a cramped empty state;
   - on empty sessions the bottom composer is collapsed to a compact voice-call button, so mobile no longer loses the start actions under the input bar;
   - the floating history toggle no longer overlaps the clear-chat button in collapsed desktop mode.
+  - the separate saved-dialog viewer in the central chat workspace was removed; saved dialogs stay in the history rail/settings surfaces instead of rendering a second large card under the main start/chat UI.
 
 ## Useful Debug Markers
 - `assistant_output_buffered_before_user_turn`

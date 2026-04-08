@@ -7333,16 +7333,12 @@ function isSelectedDialogCurrentLiveConversation() {
 
 function syncMainDialogHistoryStage() {
     if (!mainDialogHistoryStage || !chatMessages) return;
-    const shouldShow = !!dialogHistorySelectedId && !isSelectedDialogCurrentLiveConversation();
-    mainDialogHistoryStage.hidden = !shouldShow;
-    chatMessages.hidden = shouldShow;
+    mainDialogHistoryStage.hidden = true;
+    chatMessages.hidden = false;
     if (chatInputContainer) {
-        chatInputContainer.hidden = shouldShow;
+        chatInputContainer.hidden = false;
     }
-    if (shouldShow) {
-        userInput?.blur();
-    }
-    document.getElementById('chatPanel')?.classList.toggle('is-history-viewing', shouldShow);
+    document.getElementById('chatPanel')?.classList.remove('is-history-viewing');
 }
 
 function resizeMainDialogHistoryTitleInput() {

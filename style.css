@@ -4556,11 +4556,7 @@ body.light-theme .btn-icon:hover {
 }
 
 .chat-history-stage {
-    flex: 1;
-    min-height: 0;
-    padding: 22px 22px 0;
-    display: flex;
-    flex-direction: column;
+    display: none !important;
 }
 
 .chat-history-stage[hidden] {

@@ -67,6 +67,7 @@
   - a fresh session has three visible start actions (`чат / звонок / аттестация`);
   - on an empty session the bottom composer collapses to a compact voice-call button so mobile start actions stay visible;
   - the collapsed desktop history toggle is offset far enough not to overlap the clear-chat button.
+  - the large saved-dialog viewer is no longer rendered in the center workspace; saved-dialog access remains in the history rail/settings surfaces.
 - Admins can view and delete foreign dialog history; users can manage only their own history.
 - Active time is now “real focused activity only”:
   - visible tab
