@@ -74,40 +74,13 @@
 - Audio playback reset now preserves queued playback when early assistant audio arrives before capture init, so the first reply is not dropped.
 - Starting a new voice call now clears the previous chat/voice dialog state so the call always begins fresh.
 - Voice system instructions now include an explicit "fresh session" guard to prevent the client from acting as if a previous dialog already happened.
-- Dialog history is now surfaced in the main app shell instead of being hidden only in settings:
-  - desktop has a dedicated left history rail for the list only;
-  - mobile has a separate `История` tab;
-  - the settings accordion still mirrors the same data/actions for admin workflows.
-- History UI is rendered into multiple synchronized surfaces from one source of truth, so selecting/renaming/deleting a dialog stays in sync between the main shell and settings.
-- The main history rail now has GPT-like ergonomics:
-  - inline search filters both the rail and mirrored history views from the same state;
-  - `Новый диалог` starts a fresh session and returns focus to the main chat input;
-  - dialogs can be pinned via `pinnedAt`, and pinned dialogs sort above the rest;
-  - auto-titles are now topic-based, using the early dialog context to extract a subject/model/qualifier instead of copying the first raw replica;
-  - legacy long first-line titles are normalized on read, so older records also show short topic titles without manual rename;
-  - each history row now has a hover/tap `...` menu with `переименовать / поделиться / удалить`;
-  - selecting a saved dialog in the main rail now opens it in the central chat workspace instead of rendering a second bulky viewer inside the sidebar;
-  - the main shell no longer auto-selects the first saved dialog on load, so the current chat/start screen stays in control until the user clicks a history item.
-  - on desktop the history rail is collapsed by default and reopened through a dedicated toggle, so the chat workspace stays primary on first load.
-  - the central saved-dialog viewer now stacks title/meta above actions on desktop too, so long titles are no longer clipped by the action buttons.
+- Dialog history remains available both in settings/admin surfaces and in the main shell.
+- Dialog history auto-titles are topic-based, using the early dialog context to extract a subject/model/qualifier instead of copying the first raw replica.
+- Legacy long first-line titles are normalized on read, so older records also show short topic titles without manual rename.
+- Dialogs can still be pinned via `pinnedAt`, and pinned dialogs sort above the rest.
 - A full visual shell rewrite was attempted on 2026-04-07 and then reverted because it introduced too many regressions at once; future redesign work should ship in smaller reviewed passes or from a separate prototype branch.
-- Role/personality selection now uses a single GPT-style selector with descriptions instead of visible tab buttons; legacy hidden tabs remain only as compatibility hooks for existing switching logic.
-- The right prompt panel now has a context bar:
-  - shows the current role name and a short explanation of what this prompt controls;
-  - shows the active prompt variation badge;
-  - gives admins a direct `Новый вариант` action without hunting for the plus chip.
-- Voice UX is now more explicit in the main chat area:
-  - the in-chat voice status card survives beyond the initial connect phase and reflects `подключение / клиент говорит / ваша очередь / звонок завершён / ошибка`;
-  - the panel derives from centralized voice status state instead of depending on a missing standalone `voiceModeStatus` DOM block;
-  - terminal dialog notices now include a clearer badge + explanatory subtext.
-- After the reverted full-shell redesign, the interface was repaired in-place instead of redone again:
-  - login is back to a centered modal card instead of a broken half-screen overlay;
-  - the main chat and prompt panels now have explicit headers and cleaner panel separation;
-  - the new-session screen uses three clear entry actions (`чат / звонок / аттестация`) instead of a cramped empty state;
-  - on empty sessions the bottom composer is collapsed to a compact voice-call button, so mobile no longer loses the start actions under the input bar;
-  - the floating history toggle no longer overlaps the clear-chat button in collapsed desktop mode.
-  - the separate saved-dialog viewer in the central chat workspace was removed; saved dialogs stay in the history rail/settings surfaces instead of rendering a second large card under the main start/chat UI.
-  - the extra `Диалоги` eyebrow above `История` was removed to reduce visual noise in the left rail.
+- Production/main is intentionally back on the older interface variant; newer shell experiments and localhost-only minimalist prototypes are not deployed.
+- The main shell still uses the older saved-dialog presentation with a central viewer, so do not assume the later list-only/GPT-like rail on `main`.
 
 ## Useful Debug Markers
 - `assistant_output_buffered_before_user_turn`
@@ -126,4 +99,7 @@
 - Observed on 2026-03-30:
   - `OPTIONS https://client-simulator.ru/api/gemini-live-token` => `405`
   - `OPTIONS https://client-simulator-gemini-token.onrender.com/api/gemini-live-token` => `204`
+- Observed on 2026-04-08:
+  - production HTML was serving `style.css?v=20260408-03` / `script.js?v=20260408-03`;
+  - main was rolled back to the older UI variant and cache-busted to `20260408-20`.
 - Date: 2026-04-08

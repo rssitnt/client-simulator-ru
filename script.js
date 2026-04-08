@@ -1418,7 +1418,6 @@ const voiceBtn = document.getElementById('voiceBtn');
 const aiAssistBtn = document.getElementById('aiAssistBtn');
 const rateChatBtn = document.getElementById('rateChat');
 const startBtn = document.getElementById('startBtn');
-const startVoiceBtn = document.getElementById('startVoiceBtn');
 const startConversation = document.getElementById('startConversation');
 const voiceConnectStatus = document.getElementById('voiceConnectStatus');
 const voiceConnectStatusEyebrow = document.getElementById('voiceConnectStatusEyebrow');
@@ -1760,7 +1759,6 @@ let dialogHistorySelectedRecord = null;
 let dialogHistorySelectedPayload = null;
 let dialogHistoryViewerLoading = false;
 let dialogHistoryRevealTimer = 0;
-let dialogHistoryMenuOpenId = '';
 let historySidebarCollapsed = true;
 let isProcessing = false;
 let lastRating = null;
@@ -6747,60 +6745,6 @@ function isMeaningfulDialogHistoryTitleCandidate(value = '') {
     return /[a-zа-яё0-9]/i.test(raw);
 }
 
-function looksLikeLegacyDialogHistoryTitle(value = '') {
-    const normalized = normalizeDialogHistoryText(value || '');
-    if (!normalized) return false;
-    if (/^(привет|здравствуйте|здорово|добрый день|добрый вечер|доброе утро|алло|алё|слушаю|да,?\s|ну\s|короче\s|я\s+же\s+сказал)/i.test(normalized)) {
-        return true;
-    }
-    if (normalized.length > 72) return true;
-    if (normalized.split(/\s+/).filter(Boolean).length > 9) return true;
-    return /[.!?]/.test(normalized);
-}
-
-function deriveDialogHistoryAutoTitleFromRecord(raw = null, createdAt = '') {
-    if (!raw || typeof raw !== 'object') {
-        return formatDialogHistoryFallbackTitle(createdAt);
-    }
-    const candidateMessages = [
-        normalizeDialogHistoryText(raw.title || ''),
-        normalizeDialogHistoryText(raw.autoTitle || ''),
-        normalizeDialogHistoryText(raw.preview || '')
-    ]
-        .filter(Boolean)
-        .filter((value, index, arr) => arr.indexOf(value) === index)
-        .map((content) => ({ content }));
-
-    if (!candidateMessages.length) {
-        return formatDialogHistoryFallbackTitle(createdAt);
-    }
-
-    const derived = deriveDialogHistoryAutoTitle(candidateMessages, createdAt);
-    if (isMeaningfulDialogHistoryTitleCandidate(derived)) {
-        return derived;
-    }
-
-    const summarized = summarizeDialogHistoryTitleCandidate(candidateMessages[0]?.content || '');
-    if (isMeaningfulDialogHistoryTitleCandidate(summarized)) {
-        return summarized;
-    }
-
-    return formatDialogHistoryFallbackTitle(createdAt);
-}
-
-function shouldReplaceDialogHistoryTitleWithDerived(record = null, derivedTitle = '') {
-    if (!record || !isMeaningfulDialogHistoryTitleCandidate(derivedTitle)) return false;
-    if (!record.titleEdited) {
-        return (
-            !isMeaningfulDialogHistoryTitleCandidate(record.autoTitle)
-            || !isMeaningfulDialogHistoryTitleCandidate(record.title)
-            || looksLikeLegacyDialogHistoryTitle(record.title)
-            || looksLikeLegacyDialogHistoryTitle(record.autoTitle)
-        );
-    }
-    return false;
-}
-
 function deriveDialogHistoryAutoTitle(messages = [], createdAt = '') {
     const normalizedMessages = Array.isArray(messages) ? messages : [];
     if (normalizedMessages.length < 2) {
@@ -6886,25 +6830,9 @@ function normalizeDialogHistoryIndexRecord(raw, dialogId = '', loginFallback = '
     const id = String(raw.id || dialogId || '').trim();
     if (!id) return null;
     const createdAt = String(raw.createdAt || '').trim() || new Date().toISOString();
-    const preview = normalizeDialogHistoryText(raw.preview || '').slice(0, 160);
-    let autoTitle = clampDialogHistoryTitle(raw.autoTitle, formatDialogHistoryFallbackTitle(createdAt));
+    const autoTitle = clampDialogHistoryTitle(raw.autoTitle, formatDialogHistoryFallbackTitle(createdAt));
     const titleEdited = !!raw.titleEdited;
-    let title = clampDialogHistoryTitle(raw.title, autoTitle);
-
-    const derivedAutoTitle = clampDialogHistoryTitle(deriveDialogHistoryAutoTitleFromRecord({
-        title,
-        autoTitle,
-        preview
-    }, createdAt), formatDialogHistoryFallbackTitle(createdAt));
-
-    if (isMeaningfulDialogHistoryTitleCandidate(derivedAutoTitle)) {
-        autoTitle = derivedAutoTitle;
-    }
-
-    if (shouldReplaceDialogHistoryTitleWithDerived({ title, autoTitle: raw.autoTitle, titleEdited }, derivedAutoTitle)) {
-        title = derivedAutoTitle;
-    }
-
+    const title = clampDialogHistoryTitle(raw.title, autoTitle);
     return {
         id,
         login,
@@ -6913,7 +6841,7 @@ function normalizeDialogHistoryIndexRecord(raw, dialogId = '', loginFallback = '
         title,
         autoTitle,
         titleEdited,
-        preview,
+        preview: normalizeDialogHistoryText(raw.preview || '').slice(0, 160),
         messageCount: Math.max(0, Number(raw.messageCount) || 0),
         hasRating: !!raw.hasRating,
         pinnedAt: String(raw.pinnedAt || '').trim() || null,
@@ -6992,23 +6920,16 @@ function isDialogHistoryScopeOwned(login = dialogHistoryScopeLogin) {
     return !!normalizedScopeLogin && normalizedScopeLogin === normalizedCurrentLogin;
 }
 
-function canRenameDialogHistoryRecord(record = null) {
-    if (!record) return false;
-    return isDialogHistoryScopeOwned(record.login);
-}
-
-function canDeleteDialogHistoryRecord(record = null) {
-    if (!record) return false;
-    if (isDialogHistoryScopeOwned(record.login)) return true;
-    return isAdmin();
-}
-
 function canRenameSelectedDialogHistory() {
-    return canRenameDialogHistoryRecord(dialogHistorySelectedRecord);
+    if (!dialogHistorySelectedRecord) return false;
+    if (!isDialogHistoryScopeOwned(dialogHistorySelectedRecord.login)) return false;
+    return true;
 }
 
 function canDeleteSelectedDialogHistory() {
-    return canDeleteDialogHistoryRecord(dialogHistorySelectedRecord);
+    if (!dialogHistorySelectedRecord) return false;
+    if (isDialogHistoryScopeOwned(dialogHistorySelectedRecord.login)) return true;
+    return isAdmin();
 }
 
 function resetCurrentDialogHistoryState() {
@@ -7411,12 +7332,16 @@ function isSelectedDialogCurrentLiveConversation() {
 
 function syncMainDialogHistoryStage() {
     if (!mainDialogHistoryStage || !chatMessages) return;
-    mainDialogHistoryStage.hidden = true;
-    chatMessages.hidden = false;
+    const shouldShow = !!dialogHistorySelectedId && !isSelectedDialogCurrentLiveConversation();
+    mainDialogHistoryStage.hidden = !shouldShow;
+    chatMessages.hidden = shouldShow;
     if (chatInputContainer) {
-        chatInputContainer.hidden = false;
+        chatInputContainer.hidden = shouldShow;
     }
-    document.getElementById('chatPanel')?.classList.remove('is-history-viewing');
+    if (shouldShow) {
+        userInput?.blur();
+    }
+    document.getElementById('chatPanel')?.classList.toggle('is-history-viewing', shouldShow);
 }
 
 function resizeMainDialogHistoryTitleInput() {
@@ -7444,7 +7369,7 @@ function updateHistorySidebarToggleUi() {
     if (!isDesktop) return;
     const collapsed = !!historySidebarCollapsed;
     const label = collapsed ? 'Показать историю' : 'Скрыть историю';
-    historySidebarToggleBtn.removeAttribute('title');
+    historySidebarToggleBtn.setAttribute('title', label);
     historySidebarToggleBtn.setAttribute('aria-label', label);
     if (historySidebarToggleText) {
         historySidebarToggleText.textContent = collapsed ? 'Диалоги' : 'Скрыть';
@@ -7509,210 +7434,6 @@ function getFilteredDialogHistoryRecords() {
     });
 }
 
-function getDialogHistoryRecordEffectiveTitle(record = null) {
-    if (!record) return 'этот диалог';
-    return clampDialogHistoryTitle(
-        record.title,
-        record.autoTitle || formatDialogHistoryFallbackTitle(record.createdAt)
-    );
-}
-
-function closeDialogHistoryItemMenu(options = {}) {
-    if (!dialogHistoryMenuOpenId) return;
-    dialogHistoryMenuOpenId = '';
-    if (options.render !== false) {
-        renderDialogHistoryList();
-    }
-}
-
-function toggleDialogHistoryItemMenu(dialogId = '') {
-    const normalizedDialogId = String(dialogId || '').trim();
-    dialogHistoryMenuOpenId = dialogHistoryMenuOpenId === normalizedDialogId ? '' : normalizedDialogId;
-    renderDialogHistoryList();
-}
-
-async function getDialogHistoryPayloadForRecord(record = null) {
-    if (!record) throw new Error('Диалог не найден');
-    const normalizedLogin = normalizeLogin(record.login || dialogHistoryScopeLogin || '');
-    if (!normalizedLogin) {
-        throw new Error('Не удалось определить владельца диалога');
-    }
-    if (record.id === currentDialogHistoryId && isDialogHistoryScopeOwned(normalizedLogin)) {
-        const liveSnapshot = buildCurrentDialogHistorySnapshot();
-        if (liveSnapshot?.messagesPayload) {
-            return liveSnapshot.messagesPayload;
-        }
-    }
-    return fetchDialogHistoryPayload(normalizedLogin, record.id);
-}
-
-function buildDialogHistoryShareText(record = null, payload = null) {
-    const title = getDialogHistoryRecordEffectiveTitle(record);
-    const lines = [title];
-    const messages = Array.isArray(payload?.messages) ? payload.messages : [];
-    messages.forEach((message) => {
-        const role = message?.role === 'assistant' ? 'Клиент' : 'Менеджер';
-        const content = normalizeDialogHistoryText(message?.content || '');
-        if (!content) return;
-        lines.push(`${role}: ${content}`);
-    });
-    if (payload?.rating?.text) {
-        lines.push(`Оценка: ${normalizeDialogHistoryText(payload.rating.text)}`);
-    }
-    return lines.filter(Boolean).join('\n\n');
-}
-
-async function shareDialogHistoryRecord(record = null) {
-    if (!record) return false;
-    const payload = await getDialogHistoryPayloadForRecord(record);
-    const shareText = buildDialogHistoryShareText(record, payload);
-    if (!shareText) {
-        throw new Error('В диалоге пока нет текста для отправки');
-    }
-
-    if (navigator.share) {
-        try {
-            await navigator.share({
-                title: getDialogHistoryRecordEffectiveTitle(record),
-                text: shareText
-            });
-            return true;
-        } catch (error) {
-            if (error?.name === 'AbortError') {
-                return false;
-            }
-        }
-    }
-
-    await navigator.clipboard.writeText(shareText);
-    showCopyNotification('Диалог скопирован для отправки');
-    return true;
-}
-
-async function saveDialogHistoryRecordTitle(record = null, nextTitleRaw = '') {
-    if (!record || !canRenameDialogHistoryRecord(record)) return false;
-    const fallbackTitle = clampDialogHistoryTitle(record.autoTitle, formatDialogHistoryFallbackTitle(record.createdAt));
-    const nextTitleValue = clampDialogHistoryTitle(nextTitleRaw);
-    const shouldResetToAuto = !nextTitleValue;
-    const nextTitle = shouldResetToAuto ? fallbackTitle : nextTitleValue;
-    const nextTitleEdited = !shouldResetToAuto;
-
-    if (nextTitle === record.title && !!nextTitleEdited === !!record.titleEdited) {
-        if (dialogHistorySelectedId === record.id) {
-            dialogHistoryTitleInputs.forEach((input) => {
-                input.value = record.title || fallbackTitle;
-            });
-        }
-        return true;
-    }
-
-    const nowIso = new Date().toISOString();
-    if (record.id === currentDialogHistoryId && isDialogHistoryScopeOwned(record.login)) {
-        currentDialogHistoryTitleEdited = nextTitleEdited;
-        currentDialogHistoryTitle = nextTitle;
-        currentDialogHistoryAutoTitle = fallbackTitle;
-        const liveRecord = normalizeDialogHistoryIndexRecord({
-            ...record,
-            title: nextTitle,
-            autoTitle: fallbackTitle,
-            titleEdited: nextTitleEdited,
-            updatedAt: nowIso
-        }, record.id, record.login);
-        if (!liveRecord) return false;
-        if (dialogHistorySelectedId === record.id) {
-            dialogHistorySelectedRecord = liveRecord;
-            dialogHistoryTitleInputs.forEach((input) => {
-                input.value = liveRecord.title;
-            });
-        }
-        upsertDialogHistoryScopeRecord(liveRecord);
-        await saveCurrentDialogHistoryNow({ nowIso });
-        renderDialogHistoryViewer();
-        return true;
-    }
-
-    const updatedRecord = normalizeDialogHistoryIndexRecord({
-        ...record,
-        title: nextTitle,
-        autoTitle: fallbackTitle,
-        titleEdited: nextTitleEdited,
-        updatedAt: nowIso
-    }, record.id, record.login);
-    if (!updatedRecord) return false;
-    const dbPath = getDialogHistoryIndexPath(record.login, record.id);
-    if (!dbPath) return false;
-    await firebaseWritePathWithFallback(
-        dbPath,
-        () => set(ref(db, dbPath), updatedRecord),
-        updatedRecord,
-        'PUT',
-        FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
-        `Firebase write for ${dbPath}`
-    );
-    if (dialogHistorySelectedId === record.id) {
-        dialogHistorySelectedRecord = updatedRecord;
-        dialogHistoryTitleInputs.forEach((input) => {
-            input.value = updatedRecord.title;
-        });
-    }
-    upsertDialogHistoryScopeRecord(updatedRecord);
-    renderDialogHistoryViewer();
-    return true;
-}
-
-async function renameDialogHistoryRecord(record = null) {
-    if (!record || !canRenameDialogHistoryRecord(record)) return false;
-    const currentTitle = getDialogHistoryRecordEffectiveTitle(record);
-    const nextTitle = window.prompt('Новое название диалога', currentTitle);
-    if (nextTitle === null) return false;
-    return saveDialogHistoryRecordTitle(record, nextTitle);
-}
-
-async function deleteDialogHistoryRecord(record = null) {
-    if (!record || !canDeleteDialogHistoryRecord(record)) return false;
-    const title = getDialogHistoryRecordEffectiveTitle(record);
-    if (!confirm(`Удалить "${title}"?`)) {
-        return false;
-    }
-    const indexPath = getDialogHistoryIndexPath(record.login, record.id);
-    const messagesPath = getDialogHistoryMessagesPath(record.login, record.id);
-    if (!indexPath || !messagesPath) {
-        throw new Error('Не удалось определить путь удаления');
-    }
-
-    await Promise.all([
-        firebaseWritePathWithFallback(
-            indexPath,
-            () => set(ref(db, indexPath), null),
-            null,
-            'DELETE',
-            FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
-            `Firebase delete for ${indexPath}`
-        ),
-        firebaseWritePathWithFallback(
-            messagesPath,
-            () => set(ref(db, messagesPath), null),
-            null,
-            'DELETE',
-            FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
-            `Firebase delete for ${messagesPath}`
-        )
-    ]);
-
-    if (record.id === currentDialogHistoryId && isDialogHistoryScopeOwned(record.login)) {
-        resetCurrentDialogHistoryState();
-    }
-
-    const removedSelectedRecord = dialogHistorySelectedId === record.id;
-    removeDialogHistoryScopeRecord(record.id);
-    closeDialogHistoryItemMenu({ render: false });
-    if (removedSelectedRecord && !dialogHistorySelectedId && dialogHistoryScopeRecords.length > 0) {
-        await loadDialogHistorySelection(dialogHistoryScopeRecords[0].id);
-    }
-    showCopyNotification('Диалог удалён');
-    return true;
-}
-
 function renderDialogHistoryListInto(ui) {
     if (!ui?.list || !ui.loadMoreBtn) return;
     ui.list.innerHTML = '';
@@ -7730,8 +7451,9 @@ function renderDialogHistoryListInto(ui) {
     }
     visibleRecords.forEach((record) => {
         const isCompactRail = ui.list === mainDialogHistoryList;
-        const item = document.createElement('div');
-        item.className = `dialog-history-item${dialogHistorySelectedId === record.id ? ' is-active' : ''}${dialogHistoryMenuOpenId === record.id ? ' is-menu-open' : ''}`;
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = `dialog-history-item${dialogHistorySelectedId === record.id ? ' is-active' : ''}`;
         const updatedDate = new Date(parseIsoMs(record.updatedAt || '') || Date.now());
         const modeLabel = record.mode === 'voice' ? 'Звонок' : 'Чат';
         const metaDate = isCompactRail
@@ -7742,12 +7464,9 @@ function renderDialogHistoryListInto(ui) {
                 minute: '2-digit'
             })
             : updatedDate.toLocaleString('ru-RU');
-        const mainButton = document.createElement('button');
-        mainButton.type = 'button';
-        mainButton.className = 'dialog-history-item-main';
-        mainButton.innerHTML = `
+        item.innerHTML = `
             <div class="dialog-history-item-title-row">
-                <div class="dialog-history-item-title">${escapeHtml(getDialogHistoryRecordEffectiveTitle(record))}</div>
+                <div class="dialog-history-item-title">${escapeHtml(record.title || record.autoTitle || formatDialogHistoryFallbackTitle(record.createdAt))}</div>
                 ${record.pinnedAt ? '<span class="dialog-history-item-pin" aria-hidden="true">★</span>' : ''}
             </div>
             ${isCompactRail ? '' : `<div class="dialog-history-item-preview">${escapeHtml(record.preview || 'Без текста')}</div>`}
@@ -7758,7 +7477,7 @@ function renderDialogHistoryListInto(ui) {
                 ${record.hasRating ? '<span>Есть оценка</span>' : ''}
             </div>
         `;
-        mainButton.addEventListener('click', () => {
+        item.addEventListener('click', () => {
             loadDialogHistorySelection(record.id).catch((error) => {
                 console.error('Failed to load dialog history selection:', error);
                 showCopyNotification(error?.message || 'Не удалось открыть диалог');
@@ -7767,75 +7486,6 @@ function renderDialogHistoryListInto(ui) {
                 activateShellPanel('chat');
             }
         });
-
-        const actions = document.createElement('div');
-        actions.className = 'dialog-history-item-actions';
-
-        const menuToggle = document.createElement('button');
-        menuToggle.type = 'button';
-        menuToggle.className = 'dialog-history-item-menu-toggle';
-        menuToggle.setAttribute('aria-label', `Действия для "${getDialogHistoryRecordEffectiveTitle(record)}"`);
-        menuToggle.setAttribute('aria-expanded', dialogHistoryMenuOpenId === record.id ? 'true' : 'false');
-        menuToggle.textContent = '...';
-        menuToggle.addEventListener('click', (event) => {
-            event.stopPropagation();
-            toggleDialogHistoryItemMenu(record.id);
-        });
-
-        const menu = document.createElement('div');
-        menu.className = 'dialog-history-item-menu';
-        menu.hidden = dialogHistoryMenuOpenId !== record.id;
-
-        const renameBtn = document.createElement('button');
-        renameBtn.type = 'button';
-        renameBtn.className = 'dialog-history-item-menu-action';
-        renameBtn.textContent = 'Переименовать';
-        renameBtn.disabled = !canRenameDialogHistoryRecord(record);
-        renameBtn.addEventListener('click', async (event) => {
-            event.stopPropagation();
-            closeDialogHistoryItemMenu({ render: false });
-            try {
-                await renameDialogHistoryRecord(record);
-            } catch (error) {
-                console.error('Failed to rename dialog history record:', error);
-                showCopyNotification(error?.message || 'Не удалось переименовать диалог');
-            }
-        });
-
-        const shareBtn = document.createElement('button');
-        shareBtn.type = 'button';
-        shareBtn.className = 'dialog-history-item-menu-action';
-        shareBtn.textContent = 'Поделиться';
-        shareBtn.addEventListener('click', async (event) => {
-            event.stopPropagation();
-            closeDialogHistoryItemMenu({ render: false });
-            try {
-                await shareDialogHistoryRecord(record);
-            } catch (error) {
-                console.error('Failed to share dialog history record:', error);
-                showCopyNotification(error?.message || 'Не удалось подготовить диалог');
-            }
-        });
-
-        const deleteBtn = document.createElement('button');
-        deleteBtn.type = 'button';
-        deleteBtn.className = 'dialog-history-item-menu-action is-danger';
-        deleteBtn.textContent = 'Удалить';
-        deleteBtn.disabled = !canDeleteDialogHistoryRecord(record);
-        deleteBtn.addEventListener('click', async (event) => {
-            event.stopPropagation();
-            closeDialogHistoryItemMenu({ render: false });
-            try {
-                await deleteDialogHistoryRecord(record);
-            } catch (error) {
-                console.error('Failed to delete dialog history record:', error);
-                showCopyNotification(error?.message || 'Не удалось удалить диалог');
-            }
-        });
-
-        menu.append(renameBtn, shareBtn, deleteBtn);
-        actions.append(menuToggle, menu);
-        item.append(mainButton, actions);
         ui.list.appendChild(item);
     });
     ui.loadMoreBtn.hidden = visibleRecords.length >= records.length;
@@ -7951,7 +7601,6 @@ function syncDialogHistoryUiWithCurrentConversation() {
 
 async function loadDialogHistorySelection(dialogId = '') {
     const normalizedDialogId = String(dialogId || '').trim();
-    dialogHistoryMenuOpenId = '';
     if (!normalizedDialogId) {
         clearDialogHistorySelectionState();
         renderDialogHistoryList();
@@ -8119,7 +7768,69 @@ async function openDialogHistoryScope(login = '', options = {}) {
 async function commitDialogHistoryTitleRename(sourceInput = null) {
     const titleInput = sourceInput || document.activeElement || dialogHistoryTitleInputs[0] || null;
     if (!titleInput || !dialogHistorySelectedRecord || !canRenameSelectedDialogHistory()) return false;
-    return saveDialogHistoryRecordTitle(dialogHistorySelectedRecord, titleInput.value);
+    const selectedRecord = dialogHistorySelectedRecord;
+    const fallbackTitle = clampDialogHistoryTitle(selectedRecord.autoTitle, formatDialogHistoryFallbackTitle(selectedRecord.createdAt));
+    const nextTitleRaw = clampDialogHistoryTitle(titleInput.value);
+    const shouldResetToAuto = !nextTitleRaw;
+    const nextTitle = shouldResetToAuto ? fallbackTitle : nextTitleRaw;
+    const nextTitleEdited = !shouldResetToAuto;
+
+    if (
+        nextTitle === selectedRecord.title
+        && !!nextTitleEdited === !!selectedRecord.titleEdited
+    ) {
+        dialogHistoryTitleInputs.forEach((input) => {
+            input.value = selectedRecord.title || fallbackTitle;
+        });
+        return true;
+    }
+
+    const nowIso = new Date().toISOString();
+    if (selectedRecord.id === currentDialogHistoryId && isDialogHistoryScopeOwned(selectedRecord.login)) {
+        currentDialogHistoryTitleEdited = nextTitleEdited;
+        currentDialogHistoryTitle = nextTitle;
+        currentDialogHistoryAutoTitle = fallbackTitle;
+        dialogHistorySelectedRecord = {
+            ...selectedRecord,
+            title: nextTitle,
+            autoTitle: fallbackTitle,
+            titleEdited: nextTitleEdited,
+            updatedAt: nowIso
+        };
+        dialogHistoryTitleInputs.forEach((input) => {
+            input.value = nextTitle;
+        });
+        await saveCurrentDialogHistoryNow({ nowIso });
+        renderDialogHistoryViewer();
+        renderDialogHistoryList();
+        return true;
+    }
+
+    const updatedRecord = normalizeDialogHistoryIndexRecord({
+        ...selectedRecord,
+        title: nextTitle,
+        autoTitle: fallbackTitle,
+        titleEdited: nextTitleEdited,
+        updatedAt: nowIso
+    }, selectedRecord.id, selectedRecord.login);
+    if (!updatedRecord) return false;
+    const dbPath = getDialogHistoryIndexPath(selectedRecord.login, selectedRecord.id);
+    if (!dbPath) return false;
+    await firebaseWritePathWithFallback(
+        dbPath,
+        () => set(ref(db, dbPath), updatedRecord),
+        updatedRecord,
+        'PUT',
+        FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
+        `Firebase write for ${dbPath}`
+    );
+    dialogHistorySelectedRecord = updatedRecord;
+    upsertDialogHistoryScopeRecord(updatedRecord);
+    dialogHistoryTitleInputs.forEach((input) => {
+        input.value = updatedRecord.title;
+    });
+    renderDialogHistoryViewer();
+    return true;
 }
 
 async function toggleSelectedDialogHistoryPinned() {
@@ -8161,7 +7872,47 @@ async function toggleSelectedDialogHistoryPinned() {
 }
 
 async function deleteSelectedDialogHistory() {
-    return deleteDialogHistoryRecord(dialogHistorySelectedRecord);
+    if (!dialogHistorySelectedRecord || !canDeleteSelectedDialogHistory()) return false;
+    const record = dialogHistorySelectedRecord;
+    const title = record.title || record.autoTitle || 'этот диалог';
+    if (!confirm(`Удалить ${title}?`)) {
+        return false;
+    }
+    const indexPath = getDialogHistoryIndexPath(record.login, record.id);
+    const messagesPath = getDialogHistoryMessagesPath(record.login, record.id);
+    if (!indexPath || !messagesPath) {
+        throw new Error('Не удалось определить путь удаления');
+    }
+
+    await Promise.all([
+        firebaseWritePathWithFallback(
+            indexPath,
+            () => set(ref(db, indexPath), null),
+            null,
+            'DELETE',
+            FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
+            `Firebase delete for ${indexPath}`
+        ),
+        firebaseWritePathWithFallback(
+            messagesPath,
+            () => set(ref(db, messagesPath), null),
+            null,
+            'DELETE',
+            FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
+            `Firebase delete for ${messagesPath}`
+        )
+    ]);
+
+    if (record.id === currentDialogHistoryId && isDialogHistoryScopeOwned(record.login)) {
+        resetCurrentDialogHistoryState();
+    }
+
+    removeDialogHistoryScopeRecord(record.id);
+    if (!dialogHistorySelectedId && dialogHistoryScopeRecords.length > 0) {
+        await loadDialogHistorySelection(dialogHistoryScopeRecords[0].id);
+    }
+    showCopyNotification('Диалог удалён');
+    return true;
 }
 
 async function startFreshDialogFromHistory() {
@@ -12203,9 +11954,8 @@ function toggleInputState(enabled) {
 
 function setStartButtonsEnabled(enabled) {
     const startBtnEl = document.getElementById('startBtn');
-    const startVoiceBtnEl = document.getElementById('startVoiceBtn');
     const startAttestationBtnEl = document.getElementById('startAttestationBtn');
-    [startBtnEl, startVoiceBtnEl, startAttestationBtnEl].forEach((btn) => {
+    [startBtnEl, startAttestationBtnEl].forEach((btn) => {
         if (!btn) return;
         btn.disabled = !enabled;
     });
@@ -12473,28 +12223,8 @@ function updateVoiceConnectingUi() {
             startDiv.style.display = '';
         }
     }
-    syncChatEmptyUiState();
     updateVoiceConnectMeterUi();
     syncVoiceConnectStatusPanel();
-}
-
-function syncChatEmptyUiState() {
-    const startDiv = document.getElementById('startConversation');
-    const startVisible = !!startDiv
-        && chatMessages?.contains(startDiv)
-        && !startDiv.hidden
-        && window.getComputedStyle(startDiv).display !== 'none';
-    const isEmptyState = startVisible
-        && !conversationHistory.length
-        && !isGeminiVoiceConnecting
-        && !isGeminiVoiceActive;
-
-    document.body?.classList.toggle('chat-empty-state', isEmptyState);
-    if (clearChatBtn) {
-        clearChatBtn.hidden = isEmptyState;
-        clearChatBtn.disabled = isEmptyState;
-        clearChatBtn.setAttribute('aria-hidden', isEmptyState ? 'true' : 'false');
-    }
 }
 
 function updateSendBtnState() {
@@ -19446,20 +19176,6 @@ bindEvent(mainDialogHistoryNewBtn, 'click', () => {
     });
 });
 
-document.addEventListener('click', (event) => {
-    if (!dialogHistoryMenuOpenId) return;
-    const target = event.target;
-    if (target instanceof Element && target.closest('.dialog-history-item-actions')) {
-        return;
-    }
-    closeDialogHistoryItemMenu();
-});
-
-document.addEventListener('keydown', (event) => {
-    if (event.key !== 'Escape' || !dialogHistoryMenuOpenId) return;
-    closeDialogHistoryItemMenu();
-});
-
 [geminiApiKeyInput, geminiTokenEndpointInput, geminiVoiceNameInput, geminiAudioInputDeviceInput].forEach((input) => {
     bindEvent(input, 'keydown', (e) => {
         if (e.key !== 'Enter') return;
@@ -19952,38 +19668,11 @@ function resetConversationHistory() {
     syncDialogHistoryUiWithCurrentConversation();
 }
 
-function buildStartConversationMarkup() {
-    return `
-        <div id="startConversation" class="start-conversation">
-            <div class="start-conversation-copy">
-                <div class="start-conversation-eyebrow">Новая сессия</div>
-                <h1 class="start-conversation-title">Выберите формат новой сессии.</h1>
-                <p class="start-conversation-description">Чат, голосовой режим и аттестация запускаются из одного экрана. История слева, роль и сценарий справа.</p>
-            </div>
-            <div class="start-conversation-actions">
-                <button id="startBtn" class="btn-start" type="button">
-                    <span class="btn-start-label">Начать диалог</span>
-                    <span class="btn-start-meta">Обычная переписка с клиентом</span>
-                </button>
-                <button id="startVoiceBtn" class="btn-start btn-start-voice" type="button">
-                    <span class="btn-start-label">Позвонить клиенту</span>
-                    <span class="btn-start-meta">Сразу открыть голосовой режим</span>
-                </button>
-                <button id="startAttestationBtn" class="btn-start btn-start-attestation" type="button">
-                    <span class="btn-start-label">Начать аттестацию</span>
-                    <span class="btn-start-meta">Проверка ответа по вашему регламенту</span>
-                </button>
-            </div>
-        </div>
-    `;
-}
-
 function restoreStartConversationBlock() {
     const startDiv = document.getElementById('startConversation');
     if (!startDiv) return;
     if (isGeminiVoiceConnecting || isGeminiVoiceActive) return;
     startDiv.style.display = '';
-    syncChatEmptyUiState();
 }
 
 function resetChatForNewVoiceCall() {
@@ -20043,16 +19732,14 @@ async function clearChat() {
     
     refreshSessionIds(generateSessionId());
     
-    chatMessages.innerHTML = buildStartConversationMarkup();
+    chatMessages.innerHTML = `
+        <div id="startConversation" class="start-conversation">
+            <button id="startBtn" class="btn-start">Начать диалог</button>
+            <button id="startAttestationBtn" class="btn-start btn-start-attestation">Начать аттестацию</button>
+        </div>
+    `;
     const startBtnEl = document.getElementById('startBtn');
     if (startBtnEl) startBtnEl.addEventListener('click', startConversationHandler);
-    const startVoiceBtnEl = document.getElementById('startVoiceBtn');
-    if (startVoiceBtnEl) {
-        startVoiceBtnEl.addEventListener('click', () => {
-            if (!isChatReady || isProcessing) return;
-            showVoiceModeModal();
-        });
-    }
     const startAttestationBtnEl = document.getElementById('startAttestationBtn');
     if (startAttestationBtnEl) {
         startAttestationBtnEl.style.display = isAttestationMode ? 'none' : '';
@@ -20062,7 +19749,6 @@ async function clearChat() {
         });
     }
     setStartButtonsEnabled(isChatReady);
-    syncChatEmptyUiState();
     renderDialogHistoryList();
     renderDialogHistoryViewer();
 }
@@ -20246,7 +19932,6 @@ async function sendMessage() {
     
     const startDiv = document.getElementById('startConversation');
     if (startDiv) startDiv.style.display = 'none';
-    syncChatEmptyUiState();
     
     addMessage(userMessage, 'user', false);
     const dialogHistory = conversationHistoryText.trim();
@@ -20373,7 +20058,6 @@ async function startConversationHandler() {
     
     const startDiv = document.getElementById('startConversation');
     if (startDiv) startDiv.style.display = 'none';
-    syncChatEmptyUiState();
     
     const loadingMsg = addMessage('', 'loading');
     let debugEntryId = null;
@@ -22090,10 +21774,6 @@ bindEvent(historySidebarToggleBtn, 'click', () => {
     applyHistorySidebarCollapsed(!historySidebarCollapsed);
 });
 bindEvent(startBtn, 'click', startConversationHandler);
-bindEvent(startVoiceBtn, 'click', () => {
-    if (!isChatReady || isProcessing) return;
-    showVoiceModeModal();
-});
 bindEvent(rateChatBtn, 'click', rateChat);
 bindEvent(aiAssistBtn, 'click', generateAIResponse);
 if (exitAttestationBtn) {

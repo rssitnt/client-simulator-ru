@@ -17,7 +17,7 @@
         integrity="sha384-oaMLBGEzBOJx3UHwac0cVndtX5fxGQIfnAeFZ35RTgqPcYlbprH9o9PUV/F8Le07"
         crossorigin="anonymous"
     >
-    <link rel="stylesheet" href="style.css?v=20260408-03">
+    <link rel="stylesheet" href="style.css?v=20260408-20">
     
     <!-- Favicon -->
     <link rel="apple-touch-icon" sizes="180x180" href="favicon/apple-touch-icon.png">
@@ -550,7 +550,7 @@
         </svg>
     </button>
 
-    <button id="historySidebarToggle" class="history-sidebar-toggle" type="button" aria-label="Показать историю">
+    <button id="historySidebarToggle" class="history-sidebar-toggle" type="button" title="Показать историю" aria-label="Показать историю">
         <svg class="history-sidebar-toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <polyline points="15 18 9 12 15 6"></polyline>
         </svg>
@@ -584,6 +584,7 @@
         <aside class="history-panel panel active" id="historyPanel" data-panel="history">
             <div class="panel-header history-panel-header">
                 <div class="history-panel-title-group">
+                    <div class="history-panel-eyebrow">Диалоги</div>
                     <div class="history-panel-title">История</div>
                 </div>
             </div>
@@ -617,10 +618,6 @@
         <!-- Левая панель - Чат -->
         <div class="chat-panel panel" id="chatPanel" data-panel="chat">
             <div class="panel-header">
-                <div class="panel-heading panel-heading-chat">
-                    <div class="panel-eyebrow">Рабочая зона</div>
-                    <div class="panel-title">Диалог с клиентом</div>
-                </div>
                 <input type="hidden" id="managerName">
                 <span id="currentUserName" style="display: none;"></span>
                 <div class="header-buttons">
@@ -650,25 +647,8 @@
 
             <div id="chatMessages" class="chat-messages">
                 <div id="startConversation" class="start-conversation">
-                    <div class="start-conversation-copy">
-                        <div class="start-conversation-eyebrow">Новая сессия</div>
-                        <h1 class="start-conversation-title">Выберите формат новой сессии.</h1>
-                        <p class="start-conversation-description">Чат, голосовой режим и аттестация запускаются из одного экрана. История слева, роль и сценарий справа.</p>
-                    </div>
-                        <div class="start-conversation-actions">
-                            <button id="startBtn" class="btn-start" type="button">
-                                <span class="btn-start-label">Начать диалог</span>
-                                <span class="btn-start-meta">Обычная переписка с клиентом</span>
-                            </button>
-                            <button id="startVoiceBtn" class="btn-start btn-start-voice" type="button">
-                                <span class="btn-start-label">Позвонить клиенту</span>
-                                <span class="btn-start-meta">Сразу открыть голосовой режим</span>
-                            </button>
-                            <button id="startAttestationBtn" class="btn-start btn-start-attestation" type="button">
-                                <span class="btn-start-label">Начать аттестацию</span>
-                                <span class="btn-start-meta">Проверка ответа по вашему регламенту</span>
-                            </button>
-                        </div>
+                    <button id="startBtn" class="btn-start">Начать диалог</button>
+                    <button id="startAttestationBtn" class="btn-start btn-start-attestation">Начать аттестацию</button>
                 </div>
                 <div id="voiceConnectStatus" class="voice-connect-status" role="status" aria-live="polite" aria-atomic="true" hidden>
                     <div class="voice-connect-status-copy">
@@ -761,12 +741,7 @@
 
         <!-- Панель инструкций с табами -->
         <div class="prompt-panel panel" id="instructionsPanel" data-panel="instructions">
-            <div class="panel-header prompt-panel-header">
-                <div class="panel-heading panel-heading-prompt">
-                    <div class="panel-eyebrow">Роль и сценарий</div>
-                    <div class="panel-title">Настройки клиента</div>
-                </div>
-                <div class="prompt-panel-topbar">
+            <div class="panel-header" style="justify-content: space-between;">
                 <!-- Табы оставлены скрыто для совместимости со старой логикой -->
                 <div class="instruction-tabs instruction-tabs-hidden" aria-hidden="true">
                     <button class="instruction-tab active" data-instruction="client" tabindex="-1">Клиент</button>
@@ -845,7 +820,6 @@
                             <button class="dropdown-item" data-prompt-format="rtf">RTF</button>
                         </div>
                     </div>
-                </div>
                 </div>
             </div>
             
@@ -928,7 +902,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js" integrity="sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3" crossorigin="anonymous" defer></script>
     <!-- Turndown for HTML to Markdown conversion (WYSIWYG editing) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js" integrity="sha384-m6AyXEhyWRg2s2wrkDV64LGkaManYgMSAjn2U+zymzSJ42WthRSjCu1AqZJhoQV0" crossorigin="anonymous" defer></script>
-<script type="module" src="script.js?v=20260408-03"></script>
+<script type="module" src="script.js?v=20260408-20"></script>
     <!-- Last deployment trigger: 2026-03-24 15:00 -->
 </body>
 </html>

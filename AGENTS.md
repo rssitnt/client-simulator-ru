@@ -51,26 +51,10 @@
   - index: `dialog_history_index/{loginKey}/{dialogId}`
   - payload: `dialog_history_messages/{loginKey}/{dialogId}`
   - only text/transcripts/rating are stored; audio is not stored.
-- Main history UX is now GPT-like:
-  - shared desktop/mobile/settings history views stay in sync from one state source;
-  - the desktop rail has inline search and a fast `Новый диалог` action;
-  - dialogs support pinning via `pinnedAt`, with pinned records sorted first;
-  - auto-titles are derived from the early topic of the dialog (subject/model/qualifier), not from the raw first line.
-  - legacy long first-line titles are normalized on read, so older records also show short topic titles without manual rename.
-  - each history row has a hover/tap `...` menu with `переименовать / поделиться / удалить`.
-  - the desktop rail is list-only; opening a saved dialog happens in the main chat workspace, not inside the sidebar itself.
-  - the main shell does not auto-open the first history item on load.
-  - the desktop history rail starts collapsed by default and is reopened with a dedicated toggle.
-  - the main saved-dialog viewer keeps title/meta above actions so long names do not clip in the header.
+- Dialog history still lives in RTDB and remains available in the main shell plus the settings/admin surfaces.
+- Auto-titles are topic-based (subject/model/qualifier), not raw first-turn quotes; pinning via `pinnedAt` is still supported.
 - A large from-scratch shell redesign was attempted on 2026-04-07 and reverted the same day because it created too many visual regressions at once; future redesigns should land in smaller passes or from a prototype branch first.
-- The current interface was then repaired in-place:
-  - login is a centered modal card again;
-  - chat/prompt areas have explicit headers and clearer panel structure;
-  - a fresh session has three visible start actions (`чат / звонок / аттестация`);
-  - on an empty session the bottom composer collapses to a compact voice-call button so mobile start actions stay visible;
-  - the collapsed desktop history toggle is offset far enough not to overlap the clear-chat button.
-  - the large saved-dialog viewer is no longer rendered in the center workspace; saved-dialog access remains in the history rail/settings surfaces.
-  - the extra `Диалоги` eyebrow above `История` was removed from the left rail.
+- Production/main is intentionally back on the older pre-2026-04-08 interface variant; later UI experiments and localhost-only shell work are not part of the deployed site.
 - Admins can view and delete foreign dialog history; users can manage only their own history.
 - Active time is now “real focused activity only”:
   - visible tab
@@ -100,6 +84,7 @@
 - Owners can pin/unpin their own dialogs; `pinnedAt` controls sort priority.
 - Auto-generated titles are topic-based (subject/model/qualifier), not raw first-turn text.
 - Admins can open and delete any user’s dialog history, but cannot rename чужие записи.
+- The main shell still uses the older history presentation with a central saved-dialog viewer; do not assume the later list-only/GPT-like rail is on `main`.
 
 ### Auth / Security
 - Roles are enforced through Firebase Custom Claims, not just RTDB role fields.
@@ -125,4 +110,5 @@
 - If the first client reply disappears again, look in the admin tech log for `assistant_output_buffered_before_user_turn`, `assistant_output_waiting_for_user_turn`, and `assistant_output_released_after_user_turn`.
 - If dialog history acts like a permissions problem, verify both Firebase rules and fresh auth token state.
 - If a hard refresh looks like a logout, first check whether Firebase Auth simply restored too slowly; soft timeout alone should not wipe the browser session anymore.
+- On 2026-04-08 production was deliberately rolled back to the older UI variant; if the domain again shows a “new” shell unexpectedly, compare deployed asset versions first.
 - When updating context again, prefer replacing old bullets instead of appending another long timeline.
