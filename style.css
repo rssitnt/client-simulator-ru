@@ -12151,6 +12151,52 @@ body.local-minimal-ui .admin-invite-days-unit {
     color: var(--local-text-muted-final);
 }
 
+body.local-minimal-ui .admin-invite-form {
+    grid-template-columns: minmax(0, 1fr) 168px auto;
+    gap: 14px;
+    align-items: stretch;
+}
+
+body.local-minimal-ui .admin-invite-days-wrap {
+    display: grid;
+    grid-template-columns: minmax(44px, 64px) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 0 18px;
+    overflow: hidden;
+}
+
+body.local-minimal-ui .admin-invite-days {
+    min-width: 0;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    text-align: left;
+    appearance: textfield;
+    -moz-appearance: textfield;
+}
+
+body.local-minimal-ui .admin-invite-days::-webkit-outer-spin-button,
+body.local-minimal-ui .admin-invite-days::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+body.local-minimal-ui .admin-invite-days-unit {
+    justify-self: start;
+    white-space: nowrap;
+}
+
+body.local-minimal-ui .admin-invite-btn {
+    min-width: 0;
+    padding-inline: 28px;
+    white-space: nowrap;
+}
+
 body.local-minimal-ui .admin-invite-btn,
 body.local-minimal-ui .admin-user-action-group .btn-change,
 body.local-minimal-ui .admin-webhook-debug-actions .btn-change,
