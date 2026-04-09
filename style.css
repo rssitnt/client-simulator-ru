@@ -10751,7 +10751,7 @@ body.local-minimal-ui .local-prompt-backdrop {
     left: 286px;
     z-index: 41;
     border: none;
-    background: rgba(5, 5, 8, 0.42);
+    background: transparent;
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.22s ease;
