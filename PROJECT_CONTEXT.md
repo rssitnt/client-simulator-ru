@@ -159,7 +159,8 @@
   - in the local drawer, the visible `Роль` / `Личность` labels are hidden, prompt variations are rendered as a vertical list instead of pills, and the composer wrapper hides the textarea scrollbar cleanly;
   - local shell header action buttons are now visually plain by default; their pill chrome should appear only on hover/active, not at rest;
   - the local shell chat header is action-only now: the visible `Чат` title is removed from the top bar;
-  - the local history panel now collapses into a persistent left-edge rail; when collapsed it stays visible as a ChatGPT-like strip with expand, new-chat, and search icons instead of disappearing completely;
+- the local history panel now collapses into a persistent left-edge rail; when collapsed it stays visible as a ChatGPT-like strip with expand, new-chat, and search icons instead of disappearing completely;
+- in that collapsed rail state, no scrollbar should be visible; the history scrollbar belongs only to the expanded panel.
   - the local history list no longer renders a visible `История` heading above search/new-chat in the localhost prototype;
 - the localhost role/personality dropdown now renders on an opaque surface with opaque option cards, so the prompt content under the menu should no longer show through;
 - while the localhost role/personality dropdown is open, the underlying `.instruction-content` is intentionally hidden; this is the current robust fix against prompt text / variation labels bleeding through the role menu;

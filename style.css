@@ -9855,6 +9855,7 @@ body.local-minimal-ui.history-sidebar-collapsed .history-panel {
     opacity: 1;
     visibility: visible;
     border-right: 1px solid var(--local-border-final);
+    overflow-y: hidden;
 }
 
 body.local-minimal-ui.history-sidebar-collapsed .history-panel {
@@ -9871,6 +9872,10 @@ body.local-minimal-ui.history-sidebar-collapsed .history-panel-main {
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
+}
+
+body.local-minimal-ui.history-sidebar-collapsed .history-panel::-webkit-scrollbar {
+    width: 0;
 }
 
 body.local-minimal-ui.history-sidebar-collapsed .history-rail-action {
