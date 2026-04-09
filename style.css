@@ -10713,7 +10713,7 @@ body.local-minimal-ui .prompt-context-role-name {
 }
 
 body.local-minimal-ui .personality-selector-menu {
-    display: flex;
+    display: none;
     flex-direction: column;
     top: calc(100% + 12px);
     gap: 6px;
@@ -10731,6 +10731,10 @@ body.local-minimal-ui .personality-selector-menu {
     overflow-y: auto;
     overscroll-behavior: contain;
     background-clip: padding-box;
+}
+
+body.local-minimal-ui .custom-instruction-dropdown.personality-selector.active .personality-selector-menu {
+    display: flex;
 }
 
 body.local-minimal-ui .personality-option {

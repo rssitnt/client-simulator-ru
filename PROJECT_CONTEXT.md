@@ -127,6 +127,7 @@
   - the composer host strip itself should also stay transparent in local minimal UI; an earlier gradient/background on `.chat-input-container` created a visible dark block between the dialog and the rounded input shell, so that container is now intended to render without its own background or top border.
   - chat scroll and history scroll in the local minimal shell now intentionally reuse the same rounded thin scrollbar language as the settings drawer instead of using separate scrollbar styles.
   - the voice-stop primary action in local minimal UI was redesigned away from the old generic white circular send-button look with an outlined stop square; it now uses a larger dedicated stop button with a filled rounded-square icon so the end-call action reads as intentional, not like a default placeholder.
+  - the role selector overlap bug in the local prompt drawer was caused by CSS, not JS: `.personality-selector-menu` had been set to `display:flex` directly, which overrode the base hidden state from `.dropdown-options`; the menu must default to hidden and only switch to flex inside `.custom-instruction-dropdown.personality-selector.active`.
   - local shell hides the old floating clear/history/settings controls and uses inline header actions instead;
   - desktop history width is locked to the grid so the rail no longer visually overlaps the chat column;
   - if the client prompt is still empty, pressing `Чат с клиентом` now opens the role/scenario UI instead of dropping a red inline error into the chat;
