@@ -5410,6 +5410,10 @@ body.local-minimal-ui .btn-settings-floating {
     display: none !important;
 }
 
+.chat-history-stage:not([hidden]) {
+    display: block !important;
+}
+
 .chat-history-stage[hidden] {
     display: none !important;
 }
@@ -12423,7 +12427,7 @@ body.local-minimal-ui .admin-users-table {
 
 body.local-minimal-ui .admin-users-table th,
 body.local-minimal-ui .admin-users-table td {
-    padding: 10px 10px;
+    padding: 6px 10px;
     color: var(--local-text-final);
     border-bottom: 1px solid var(--local-border-final);
     vertical-align: middle;
@@ -12462,22 +12466,22 @@ body.local-minimal-ui .admin-webhook-debug-label {
 
 body.local-minimal-ui .admin-users-table th:nth-child(1),
 body.local-minimal-ui .admin-users-table td:nth-child(1) {
-    width: 32%;
+    width: 30%;
 }
 
 body.local-minimal-ui .admin-users-table th:nth-child(2),
 body.local-minimal-ui .admin-users-table td:nth-child(2) {
-    width: 14%;
+    width: 12%;
 }
 
 body.local-minimal-ui .admin-users-table th:nth-child(3),
 body.local-minimal-ui .admin-users-table td:nth-child(3) {
-    width: 22%;
+    width: 28%;
 }
 
 body.local-minimal-ui .admin-users-table th:nth-child(4),
 body.local-minimal-ui .admin-users-table td:nth-child(4) {
-    width: 12%;
+    width: 10%;
 }
 
 body.local-minimal-ui .admin-users-table th:nth-child(5),
@@ -12500,9 +12504,17 @@ body.local-minimal-ui .admin-presence {
 }
 
 body.local-minimal-ui .admin-role-picker-trigger {
-    min-height: 34px;
-    padding: 0 12px;
-    border-radius: 14px;
+    min-height: 32px;
+    padding: 0 10px;
+    border-radius: 13px;
+}
+
+body.local-minimal-ui .admin-role-picker-label,
+body.local-minimal-ui .admin-access-source,
+body.local-minimal-ui .admin-status-main,
+body.local-minimal-ui .admin-presence,
+body.local-minimal-ui .admin-time {
+    font-size: 12px;
 }
 
 body.local-minimal-ui .admin-webhook-debug-list {

@@ -7683,12 +7683,13 @@ function isSelectedDialogCurrentLiveConversation() {
 
 function syncMainDialogHistoryStage() {
     if (!mainDialogHistoryStage || !chatMessages) return;
-    mainDialogHistoryStage.hidden = true;
-    chatMessages.hidden = false;
+    const shouldShowHistoryStage = !!dialogHistorySelectedId && !isSelectedDialogCurrentLiveConversation();
+    mainDialogHistoryStage.hidden = !shouldShowHistoryStage;
+    chatMessages.hidden = shouldShowHistoryStage;
     if (chatInputContainer) {
-        chatInputContainer.hidden = false;
+        chatInputContainer.hidden = shouldShowHistoryStage;
     }
-    document.getElementById('chatPanel')?.classList.remove('is-history-viewing');
+    document.getElementById('chatPanel')?.classList.toggle('is-history-viewing', shouldShowHistoryStage);
 }
 
 function resizeMainDialogHistoryTitleInput() {
@@ -8233,16 +8234,27 @@ function renderDialogHistoryViewerInto(ui) {
         return;
     }
 
-    if (!dialogHistorySelectedRecord || !dialogHistorySelectedPayload) {
+    if (!dialogHistorySelectedId) {
         ui.viewerEmpty.hidden = false;
         ui.viewerContent.hidden = true;
-        ui.viewerEmpty.textContent = dialogHistoryViewerLoading && dialogHistorySelectedId
-            ? 'Открываем диалог…'
-            : 'Выберите диалог из списка.';
+        ui.viewerEmpty.textContent = 'Выберите диалог из списка.';
         if (ui.pinBtn) {
             ui.pinBtn.hidden = true;
         }
         ui.deleteBtn.hidden = true;
+        return;
+    }
+
+    if (!dialogHistorySelectedRecord || !dialogHistorySelectedPayload) {
+        ui.viewerEmpty.hidden = false;
+        ui.viewerContent.hidden = true;
+        ui.viewerEmpty.textContent = dialogHistoryViewerLoading
+            ? 'Открываем диалог…'
+            : 'Не удалось загрузить этот диалог.';
+        if (ui.pinBtn) {
+            ui.pinBtn.hidden = true;
+        }
+        ui.deleteBtn.hidden = !canDeleteSelectedDialogHistory();
         return;
     }
 

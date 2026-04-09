@@ -99,6 +99,7 @@
   - legacy long first-line titles are normalized on read, so older records also show short topic titles without manual rename;
   - each history row now has a hover/tap `...` menu with `переименовать / поделиться / удалить`;
   - selecting a saved dialog in the main rail now opens it in the central chat workspace instead of rendering a second bulky viewer inside the sidebar;
+  - if a saved dialog is selected and its payload is loaded, the central `mainDialogHistoryStage` must be shown; earlier breakage came from `syncMainDialogHistoryStage()` + CSS forcing the stage hidden even after successful selection.
   - the main shell no longer auto-selects the first saved dialog on load, so the current chat/start screen stays in control until the user clicks a history item.
   - on desktop the history rail is collapsed by default and reopened through a dedicated toggle, so the chat workspace stays primary on first load.
   - the central saved-dialog viewer now stacks title/meta above actions on desktop too, so long titles are no longer clipped by the action buttons.
