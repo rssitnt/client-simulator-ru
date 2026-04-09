@@ -10716,10 +10716,11 @@ body.local-minimal-ui .personality-selector-menu {
     display: none;
     flex-direction: column;
     top: calc(100% + 12px);
-    gap: 6px;
-    padding: 10px;
+    gap: 8px;
+    padding: 12px;
     max-height: min(70vh, 420px);
     border-color: var(--local-border-final);
+    border-radius: 24px;
     background: rgb(27, 25, 22) !important;
     box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
     z-index: 1305;
@@ -10748,7 +10749,7 @@ body.local-minimal-ui .personality-option {
     margin: 0;
     border: 1px solid transparent;
     border-bottom: none;
-    border-radius: 20px;
+    border-radius: 18px;
     background: rgb(27, 25, 22) !important;
     opacity: 1;
     position: relative;
