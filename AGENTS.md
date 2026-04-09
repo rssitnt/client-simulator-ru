@@ -68,7 +68,7 @@
   - the main shell does not auto-open the first history item on load.
   - the desktop history rail starts collapsed by default and is reopened with a dedicated toggle.
   - the main saved-dialog viewer keeps title/meta above actions so long names do not clip in the header.
-  - the main saved-dialog view must actually become visible after selecting a history item: `syncMainDialogHistoryStage()` should show `mainDialogHistoryStage` whenever a non-live saved dialog has both record and payload, and `style.css` must allow `.chat-history-stage:not([hidden])` to render instead of forcing it permanently hidden.
+  - the main saved-dialog view must actually become visible after selecting a history item: `syncMainDialogHistoryStage()` should switch to `mainDialogHistoryStage` for any non-live selected history item, including the loading/error states; do not gate the stage visibility on `dialogHistorySelectedPayload`, or clicks will look like they did nothing.
 - A large from-scratch shell redesign was attempted on 2026-04-07 and reverted the same day because it created too many visual regressions at once; future redesigns should land in smaller passes or from a prototype branch first.
 - The current interface was then repaired in-place:
   - login is a centered modal card again;
