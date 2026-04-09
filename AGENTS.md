@@ -147,6 +147,7 @@
   - the settings `Сменить` button no longer flips admin/user view immediately;
   - it opens the confirm block first, and the actual switch happens only after explicit `OK`;
   - this protects against accidental role flips from stray/overlapping clicks.
+- In the local empty-state start cards, only the main titles remain visible; the lower subtitle lines under `Чат с клиентом / Голосовой звонок / Аттестация` were intentionally removed.
 
 ## Architecture Notes
 ### Dialog History
