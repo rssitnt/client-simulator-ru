@@ -100,6 +100,7 @@
   - while the localhost role/personality dropdown is open, `.instruction-content` is intentionally hidden underneath it; keep that behavior so prompt variations and prompt copy cannot bleed through the menu even if browser stacking gets quirky;
   - keep the localhost role/personality dropdown radii nested cleanly: the menu uses a larger outer radius and option cards use a slightly smaller inner radius so active cards do not look clipped or oddly squared at the corners;
   - the localhost role/personality dropdown now shows only the role names inside the menu; keep the subtitle/description lines hidden there unless the user explicitly asks to restore them;
+  - the localhost role/personality dropdown selected item is intentionally neutral now; do not restore the old green active card unless the user explicitly asks for an accent state there;
   - the local top action/header areas are now transparent surfaces; do not reintroduce a tinted header strip above the chat or inside the role drawer unless requested;
   - localhost light theme now has its own warm overrides for the shell, history rail, start cards, composer, role drawer, role dropdown, and settings drawer; it should no longer fall back to the broken old dark/white mixed styles;
   - when adjusting localhost light theme, keep the role drawer, history rail, dropdown menus, and settings controls on one shared warm-cream surface ladder so it does not drift into mismatched whites after dark-theme fixes;

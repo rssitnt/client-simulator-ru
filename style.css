@@ -10762,9 +10762,9 @@ body.local-minimal-ui .personality-option:hover {
 }
 
 body.local-minimal-ui .personality-option.active {
-    border-color: rgba(37, 115, 84, 0.72);
-    background: rgb(22, 52, 40) !important;
-    box-shadow: inset 0 0 0 1px rgba(37, 115, 84, 0.2);
+    border-color: var(--local-border-strong-final);
+    background: #211f1b !important;
+    box-shadow: inset 0 0 0 1px rgba(139, 120, 94, 0.12);
 }
 
 body.local-minimal-ui .personality-option-copy {
