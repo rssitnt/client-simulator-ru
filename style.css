@@ -12328,17 +12328,17 @@ body.local-minimal-ui .admin-invite-days-unit {
 }
 
 body.local-minimal-ui .admin-invite-form {
-    grid-template-columns: minmax(0, 1fr) 168px auto;
+    grid-template-columns: minmax(0, 1.45fr) 138px 120px;
     gap: 14px;
     align-items: stretch;
 }
 
 body.local-minimal-ui .admin-invite-days-wrap {
     display: grid;
-    grid-template-columns: minmax(44px, 64px) auto;
+    grid-template-columns: minmax(34px, 52px) auto;
     align-items: center;
-    gap: 12px;
-    padding: 0 18px;
+    gap: 8px;
+    padding: 0 14px;
     overflow: hidden;
 }
 
@@ -12369,8 +12369,11 @@ body.local-minimal-ui .admin-invite-days-unit {
 
 body.local-minimal-ui .admin-invite-btn {
     min-width: 0;
-    padding-inline: 28px;
-    white-space: nowrap;
+    padding-inline: 12px;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.15;
+    word-break: break-word;
 }
 
 body.local-minimal-ui .admin-invite-btn,
