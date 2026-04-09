@@ -51,10 +51,68 @@
   - index: `dialog_history_index/{loginKey}/{dialogId}`
   - payload: `dialog_history_messages/{loginKey}/{dialogId}`
   - only text/transcripts/rating are stored; audio is not stored.
-- Dialog history still lives in RTDB and remains available in the main shell plus the settings/admin surfaces.
-- Auto-titles are topic-based (subject/model/qualifier), not raw first-turn quotes; pinning via `pinnedAt` is still supported.
+- Main history UX is now GPT-like:
+  - desktop/mobile history stays in sync from one state source;
+  - the desktop rail has inline search and a fast `Новый диалог` action;
+  - dialogs support pinning via `pinnedAt`, with pinned records sorted first;
+  - auto-titles are derived from the early topic of the dialog (subject/model/qualifier), not from the raw first line.
+  - legacy long first-line titles are normalized on read, so older records also show short topic titles without manual rename.
+  - each history row has a hover/tap `...` menu with `переименовать / поделиться / удалить`.
+  - the desktop rail is list-only; opening a saved dialog happens in the main chat workspace, not inside the sidebar itself.
+  - dialog history is no longer duplicated inside settings; the left rail is the single primary place for browsing saved dialogs.
+  - the main shell does not auto-open the first history item on load.
+  - the desktop history rail starts collapsed by default and is reopened with a dedicated toggle.
+  - the main saved-dialog viewer keeps title/meta above actions so long names do not clip in the header.
 - A large from-scratch shell redesign was attempted on 2026-04-07 and reverted the same day because it created too many visual regressions at once; future redesigns should land in smaller passes or from a prototype branch first.
-- Production/main is intentionally back on the older pre-2026-04-08 interface variant; later UI experiments and localhost-only shell work are not part of the deployed site.
+- The current interface was then repaired in-place:
+  - login is a centered modal card again;
+  - chat/prompt areas have explicit headers and clearer panel structure;
+  - a fresh session has three visible start actions (`чат / звонок / аттестация`);
+  - on an empty session the bottom composer collapses to a compact voice-call button so mobile start actions stay visible;
+  - the collapsed desktop history toggle is offset far enough not to overlap the clear-chat button.
+  - the large saved-dialog viewer is no longer rendered in the center workspace; saved-dialog access remains in the history rail only.
+  - the extra `Диалоги` eyebrow above `История` was removed from the left rail.
+- A local-only minimal shell prototype now exists behind `body.local-minimal-ui` on `localhost/127.0.0.1`:
+  - it preserves existing IDs/logic and smoke coverage;
+  - it uses a calmer ChatGPT-like shell with open history rail by default locally;
+  - on desktop, the shell is intentionally `история + чат`, while the role/prompt editor opens as a right drawer instead of occupying a permanent third column;
+  - the localhost settings surface is now restyled into the same warm right-side drawer language as the new shell; it should no longer appear as the old centered modal card;
+  - the localhost settings top theme/close section is no longer sticky; it should scroll away with the rest of settings content instead of hanging over the fields;
+  - the localhost settings drawer no longer shows accent color presets; settings keep only the theme toggle there;
+  - the localhost settings close button now occupies the same top-right slot and size as the local settings-open icon in the chat header, instead of sitting inline in the drawer row;
+  - the localhost early minimal-UI boot no longer uses an inline script; it is loaded from `early-local-ui.js` immediately after `<body>` starts, so CSP can stay strict without `unsafe-inline` and the old interface should not flash before the local shell class is applied;
+  - Firebase App Check is intentionally skipped on localhost preview, and Firebase REST fallback is disabled there unless App Check is truly active; this prevents local reCAPTCHA/App Check spam and repeated REST `401` noise in dev tools;
+  - the old floating clear/history/settings controls are hidden locally in favor of inline header actions;
+  - desktop history width is fixed to the local grid so the rail does not visually intrude into chat anymore;
+  - if the client prompt is empty, local start actions now route the user into role/scenario setup instead of showing a red prompt-empty chat error;
+  - localhost now injects built-in fallback prompts for `client / manager / manager_call / rater` whenever Firebase/cached public prompts are absent, so local tests and local dev auth do not start from blank prompt editors;
+  - localhost minimal UI class is now applied inline at the top of `body` in `index.html`, before the main shell markup, so the old interface should not flash briefly before the local prototype takes over;
+  - the local start-screen voice CTA is intentionally visually neutral now; do not restore the old green accent unless the user explicitly asks for it;
+  - local drawer open/close still explicitly dismisses tooltip state before toggling, so stale tooltip state cannot stay over the interface after clicking;
+  - in the local drawer, the visible `Роль` / `Личность` labels are hidden, prompt variations are shown as a vertical list instead of chips, and the local composer wrapper clips the textarea scrollbar cleanly;
+  - local shell header action buttons are now plain at rest; pill chrome should appear only on hover/active, not permanently;
+  - the local shell chat header is action-only now; do not reintroduce a visible `Чат` title in that top bar unless requested;
+  - the local history rail now owns its own left-edge collapse control; when collapsed it stays as a narrow ChatGPT-like rail with expand, new-chat, and search icons instead of disappearing completely;
+  - the local history area no longer shows a visible `История` title above the list in the localhost prototype;
+  - when the localhost history list is empty, it must stay visually empty; do not show the dashed `Пока пусто. Первый чат появится здесь.` placeholder card there anymore;
+  - the localhost role/personality dropdown now uses fully opaque cards and a higher stacking context so prompt content beneath it must not bleed through visually;
+  - the local top action/header areas are now transparent surfaces; do not reintroduce a tinted header strip above the chat or inside the role drawer unless requested;
+  - localhost light theme now has its own warm overrides for the shell, history rail, start cards, composer, role drawer, role dropdown, and settings drawer; it should no longer fall back to the broken old dark/white mixed styles;
+  - the localhost minimal UI uses the old custom tooltip system again for hover help on icon/ambiguous controls; the local override no longer disables tooltip rendering globally;
+  - in localhost minimal UI, clicking a tooltip-enabled button must immediately hide its tooltip and suppress re-show on that same hovered/focused button until the pointer/focus leaves it;
+  - localhost chat messages in the minimal shell are now laid out as side-aligned rows again: client/assistant on the left, manager/user on the right; they should no longer appear as one centered conversation column;
+  - the localhost collapsed history rail should not have its own tinted overlay anymore; it inherits the panel surface and no longer shows a brighter top block over the left strip;
+  - the localhost left history rail no longer has an inner vertical divider line; only the outer history-vs-chat boundary should remain visible;
+  - the localhost history chevron must stay in the same left-rail position when the sidebar expands or collapses; do not let it drift toward the center in the open state;
+  - the localhost history rail width is fixed, so the top collapse chevron keeps the same left-edge position in expanded and collapsed states;
+  - the localhost history item `...` actions use a compact neutral ellipsis button plus a fixed floating dropdown; the menu must not be clipped by the scrollable list or overlap the card content awkwardly;
+  - in localhost minimal UI, dialog messages are no longer laid out as one centered text column: manager (`.message.user`) stays on the right, client (`.message.assistant`) stays on the left, while only non-message utility blocks remain center-constrained;
+  - the local shell palette has been warmed from cool blue-grays to warmer neutral grays/taupes; future color tweaks should stay in that warmer direction unless the user asks otherwise;
+  - tooltip globals were changed to non-TDZ storage because early local drawer init could throw `ReferenceError: Cannot access 'tooltipLayer' before initialization` and silently break later local UI bindings;
+  - on mobile the local prototype forces full-width panels and redirects the same empty-prompt start case into the `Роль` tab;
+  - the localhost light theme now has its own warm override layer for history/chat/start cards/input/role drawer/settings drawer, so it no longer falls back to old cold or dark surfaces from the legacy UI;
+  - it is intentionally not a production rollout yet.
+- Production `main` was rolled back to the older interface variant on 2026-04-08; localhost is allowed to stay on this newer minimal prototype without pushing it.
 - Admins can view and delete foreign dialog history; users can manage only their own history.
 - Active time is now “real focused activity only”:
   - visible tab
@@ -84,7 +142,6 @@
 - Owners can pin/unpin their own dialogs; `pinnedAt` controls sort priority.
 - Auto-generated titles are topic-based (subject/model/qualifier), not raw first-turn text.
 - Admins can open and delete any user’s dialog history, but cannot rename чужие записи.
-- The main shell still uses the older history presentation with a central saved-dialog viewer; do not assume the later list-only/GPT-like rail is on `main`.
 
 ### Auth / Security
 - Roles are enforced through Firebase Custom Claims, not just RTDB role fields.
@@ -110,5 +167,4 @@
 - If the first client reply disappears again, look in the admin tech log for `assistant_output_buffered_before_user_turn`, `assistant_output_waiting_for_user_turn`, and `assistant_output_released_after_user_turn`.
 - If dialog history acts like a permissions problem, verify both Firebase rules and fresh auth token state.
 - If a hard refresh looks like a logout, first check whether Firebase Auth simply restored too slowly; soft timeout alone should not wipe the browser session anymore.
-- On 2026-04-08 production was deliberately rolled back to the older UI variant; if the domain again shows a “new” shell unexpectedly, compare deployed asset versions first.
 - When updating context again, prefer replacing old bullets instead of appending another long timeline.

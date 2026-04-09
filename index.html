@@ -17,7 +17,7 @@
         integrity="sha384-oaMLBGEzBOJx3UHwac0cVndtX5fxGQIfnAeFZ35RTgqPcYlbprH9o9PUV/F8Le07"
         crossorigin="anonymous"
     >
-    <link rel="stylesheet" href="style.css?v=20260408-20">
+<link rel="stylesheet" href="style.css?v=20260409-01">
     
     <!-- Favicon -->
     <link rel="apple-touch-icon" sizes="180x180" href="favicon/apple-touch-icon.png">
@@ -27,6 +27,7 @@
     <link rel="shortcut icon" href="favicon/favicon.ico">
 </head>
 <body>
+    <script src="early-local-ui.js"></script>
     <!-- Модальное окно авторизации -->
     <div id="nameModal" class="modal-overlay">
         <div class="modal-content auth-modal-content">
@@ -179,52 +180,6 @@
                             </span>
                         </span>
                     </label>
-                    <div class="color-presets">
-                        <button class="color-preset" data-color="#7F96FF" style="background: #7F96FF;" title="Синий"></button>
-                        <button class="color-preset" data-color="#10B981" style="background: #10B981;" title="Изумруд"></button>
-                        <button class="color-preset" data-color="#F59E0B" style="background: #F59E0B;" title="Янтарь"></button>
-                        <button class="color-preset" data-color="#EF4444" style="background: #EF4444;" title="Красный"></button>
-                        <button class="color-preset" data-color="#8B5CF6" style="background: #8B5CF6;" title="Фиолетовый"></button>
-                        <button class="color-preset" data-color="#EC4899" style="background: #EC4899;" title="Розовый"></button>
-                        
-                        <div class="more-colors-container">
-                            <button class="more-colors-btn" id="moreColorsBtn" title="Больше цветов">+</button>
-                            <div class="more-colors-popup" id="moreColorsPopup">
-                                <button class="color-option" data-color="#EF4444" style="background: #EF4444;"></button>
-                                <button class="color-option" data-color="#F97316" style="background: #F97316;"></button>
-                                <button class="color-option" data-color="#F59E0B" style="background: #F59E0B;"></button>
-                                <button class="color-option" data-color="#EAB308" style="background: #EAB308;"></button>
-                                <button class="color-option" data-color="#84CC16" style="background: #84CC16;"></button>
-                                <button class="color-option" data-color="#22C55E" style="background: #22C55E;"></button>
-                                <button class="color-option" data-color="#10B981" style="background: #10B981;"></button>
-                                <button class="color-option" data-color="#14B8A6" style="background: #14B8A6;"></button>
-                                <button class="color-option" data-color="#06B6D4" style="background: #06B6D4;"></button>
-                                <button class="color-option" data-color="#0EA5E9" style="background: #0EA5E9;"></button>
-                                <button class="color-option" data-color="#3B82F6" style="background: #3B82F6;"></button>
-                                <button class="color-option" data-color="#6366F1" style="background: #6366F1;"></button>
-                                <button class="color-option" data-color="#7F96FF" style="background: #7F96FF;"></button>
-                                <button class="color-option" data-color="#8B5CF6" style="background: #8B5CF6;"></button>
-                                <button class="color-option" data-color="#A855F7" style="background: #A855F7;"></button>
-                                <button class="color-option" data-color="#D946EF" style="background: #D946EF;"></button>
-                                <button class="color-option" data-color="#EC4899" style="background: #EC4899;"></button>
-                                <button class="color-option" data-color="#F43F5E" style="background: #F43F5E;"></button>
-                                <button class="color-option" data-color="#FB7185" style="background: #FB7185;"></button>
-                                <button class="color-option" data-color="#FDA4AF" style="background: #FDA4AF;"></button>
-                                <button class="color-option" data-color="#78716C" style="background: #78716C;"></button>
-                                <button class="color-option" data-color="#71717A" style="background: #71717A;"></button>
-                                <button class="color-option" data-color="#6B7280" style="background: #6B7280;"></button>
-                                <button class="color-option" data-color="#64748B" style="background: #64748B;"></button>
-                                <button class="color-option" data-color="#0F172A" style="background: #0F172A;"></button>
-                                <button class="color-option" data-color="#1E293B" style="background: #1E293B;"></button>
-                                <button class="color-option" data-color="#334155" style="background: #334155;"></button>
-                                <button class="color-option" data-color="#475569" style="background: #475569;"></button>
-                                <button class="color-option" data-color="#B91C1C" style="background: #B91C1C;"></button>
-                                <button class="color-option" data-color="#047857" style="background: #047857;"></button>
-                                <button class="color-option" data-color="#1D4ED8" style="background: #1D4ED8;"></button>
-                                <button class="color-option" data-color="#7C3AED" style="background: #7C3AED;"></button>
-                            </div>
-                        </div>
-                    </div>
                     <button id="settingsModalCloseBtn" class="settings-modal-close" type="button" aria-label="Закрыть настройки">
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -373,58 +328,6 @@
                 </div>
             </div>
 
-            <details id="dialogHistoryAccordion" class="admin-hidden-prompt-section">
-                <summary class="admin-hidden-prompt-summary">История диалогов</summary>
-                <div class="dialog-history-body admin-hidden-prompt-body">
-                    <div id="dialogHistoryScopeMeta" class="dialog-history-scope-meta">
-                        Здесь будут ваши последние диалоги.
-                    </div>
-                    <div class="dialog-history-layout">
-                        <div class="dialog-history-list-wrap">
-                            <div id="dialogHistoryList" class="dialog-history-list">
-                                <div class="dialog-history-empty">Диалогов пока нет</div>
-                            </div>
-                            <button id="dialogHistoryLoadMoreBtn" class="btn-change dialog-history-load-more" type="button" hidden>
-                                Показать ещё
-                            </button>
-                        </div>
-                        <div id="dialogHistoryViewer" class="dialog-history-viewer">
-                            <div id="dialogHistoryViewerEmpty" class="dialog-history-empty dialog-history-empty-viewer">
-                                Выберите диалог из списка.
-                            </div>
-                            <div id="dialogHistoryViewerContent" class="dialog-history-viewer-content" hidden>
-                                <div class="dialog-history-viewer-header">
-                                    <div class="dialog-history-title-wrap">
-                                        <input
-                                            id="dialogHistoryTitleInput"
-                                            class="dialog-history-title-input"
-                                            type="text"
-                                            maxlength="140"
-                                            placeholder="Название диалога"
-                                            autocomplete="off"
-                                        >
-                                        <div id="dialogHistoryViewerMeta" class="dialog-history-viewer-meta"></div>
-                                    </div>
-                                    <div class="dialog-history-viewer-actions">
-                                        <button id="dialogHistoryPinBtn" class="btn-change" type="button" hidden>
-                                            Закрепить
-                                        </button>
-                                        <button id="dialogHistoryDeleteBtn" class="btn-change btn-danger-subtle" type="button" hidden>
-                                            Удалить
-                                        </button>
-                                    </div>
-                                </div>
-                                <div id="dialogHistoryMessages" class="dialog-history-messages"></div>
-                                <div id="dialogHistoryRatingWrap" class="dialog-history-rating-wrap" hidden>
-                                    <div class="dialog-history-rating-title">Оценка</div>
-                                    <div id="dialogHistoryRatingText" class="dialog-history-rating-text"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </details>
-
             <!-- Панель администратора -->
             <details id="adminPanelAccordion" class="admin-accordion" style="display: none;">
                 <summary class="admin-accordion-trigger">Панель администратора</summary>
@@ -550,13 +453,6 @@
         </svg>
     </button>
 
-    <button id="historySidebarToggle" class="history-sidebar-toggle" type="button" title="Показать историю" aria-label="Показать историю">
-        <svg class="history-sidebar-toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polyline points="15 18 9 12 15 6"></polyline>
-        </svg>
-        <span id="historySidebarToggleText" class="history-sidebar-toggle-text">Диалоги</span>
-    </button>
-
     <!-- Кнопка настроек (плавающая справа сверху) -->
     <button id="settingsBtn" class="btn-icon btn-settings-floating" title="Настройки">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -582,34 +478,52 @@
         
         <div class="panels-container">
         <aside class="history-panel panel active" id="historyPanel" data-panel="history">
-            <div class="panel-header history-panel-header">
-                <div class="history-panel-title-group">
-                    <div class="history-panel-eyebrow">Диалоги</div>
-                    <div class="history-panel-title">История</div>
-                </div>
+            <div class="history-panel-rail" aria-hidden="false">
+                <button id="historySidebarToggle" class="history-sidebar-toggle history-rail-btn" type="button" aria-label="Показать историю">
+                    <svg class="history-sidebar-toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                    <span id="historySidebarToggleText" class="history-sidebar-toggle-text">Диалоги</span>
+                </button>
+                <button id="historyRailNewBtn" class="history-rail-btn history-rail-action" type="button" aria-label="Новый диалог" title="Новый диалог">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 20h9"></path>
+                        <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4Z"></path>
+                    </svg>
+                </button>
+                <button id="historyRailSearchBtn" class="history-rail-btn history-rail-action" type="button" aria-label="Поиск по диалогам" title="Поиск по диалогам">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="11" cy="11" r="7"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                </button>
             </div>
-            <div class="history-panel-body">
-                <div id="mainDialogHistoryScopeMeta" class="dialog-history-scope-meta history-panel-meta">
-                    Здесь будут ваши последние диалоги.
+            <div class="history-panel-main">
+                <div class="panel-header history-panel-header">
+                    <div class="history-panel-title-group">
+                        <div class="history-panel-title">История</div>
+                    </div>
                 </div>
-                <div class="history-panel-controls">
-                    <label class="history-search" for="mainDialogHistorySearchInput">
-                        <svg class="history-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <circle cx="11" cy="11" r="7"></circle>
-                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                        </svg>
-                        <input id="mainDialogHistorySearchInput" class="history-search-input" type="search" placeholder="Поиск по диалогам" autocomplete="off">
-                    </label>
-                    <button id="mainDialogHistoryNewBtn" class="history-panel-action" type="button">Новый диалог</button>
-                </div>
-                <div class="history-thread-layout">
-                    <div class="dialog-history-list-wrap history-thread-list-wrap">
-                        <div id="mainDialogHistoryList" class="dialog-history-list history-thread-list">
-                            <div class="dialog-history-empty">Диалогов пока нет</div>
+                <div class="history-panel-body">
+                    <div id="mainDialogHistoryScopeMeta" class="dialog-history-scope-meta history-panel-meta" hidden>
+                    </div>
+                    <div class="history-panel-controls">
+                        <label class="history-search" for="mainDialogHistorySearchInput">
+                            <svg class="history-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <circle cx="11" cy="11" r="7"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                            <input id="mainDialogHistorySearchInput" class="history-search-input" type="search" placeholder="Поиск по диалогам" autocomplete="off">
+                        </label>
+                        <button id="mainDialogHistoryNewBtn" class="history-panel-action" type="button">Новый диалог</button>
+                    </div>
+                    <div class="history-thread-layout">
+                        <div class="dialog-history-list-wrap history-thread-list-wrap">
+                            <div id="mainDialogHistoryList" class="dialog-history-list history-thread-list"></div>
+                            <button id="mainDialogHistoryLoadMoreBtn" class="btn-change dialog-history-load-more" type="button" hidden>
+                                Показать ещё
+                            </button>
                         </div>
-                        <button id="mainDialogHistoryLoadMoreBtn" class="btn-change dialog-history-load-more" type="button" hidden>
-                            Показать ещё
-                        </button>
                     </div>
                 </div>
             </div>
@@ -618,10 +532,40 @@
         <!-- Левая панель - Чат -->
         <div class="chat-panel panel" id="chatPanel" data-panel="chat">
             <div class="panel-header">
+                <div class="panel-heading panel-heading-chat">
+                    <div class="panel-eyebrow">Чат</div>
+                    <div class="panel-title">Диалог</div>
+                </div>
                 <input type="hidden" id="managerName">
                 <span id="currentUserName" style="display: none;"></span>
                 <div class="header-buttons">
                     <button id="exitAttestationBtn" class="btn-attestation btn-attestation-exit" title="Выход из аттестации">Выход из аттестации</button>
+                    <button id="localHistoryToggleBtn" class="btn-icon local-shell-action-btn" type="button" aria-label="Показать историю">
+                        <span class="local-shell-action-label">История</span>
+                    </button>
+                    <button id="localPromptToggleBtn" class="btn-icon local-shell-action-btn" type="button" aria-label="Открыть панель роли" hidden>
+                        <span class="local-shell-action-label">Роль</span>
+                    </button>
+                    <button id="localClearChatInlineBtn" class="btn-icon local-shell-icon-btn" type="button" title="Очистить чат" aria-label="Очистить чат" hidden>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M3 6H21M5 6V20C5 21.1046 5.89543 22 7 22H17C18.1046 22 19 21.1046 19 20V6M8 6V4C8 2.89543 8.89543 2 10 2H14C15.1046 2 16 2.89543 16 4V6"></path>
+                            <path d="M10 11V17"></path>
+                            <path d="M14 11V17"></path>
+                        </svg>
+                    </button>
+                    <button id="localSettingsTopBtn" class="btn-icon local-shell-icon-btn" type="button" title="Настройки" aria-label="Открыть настройки" hidden>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <line x1="4" y1="21" x2="4" y2="14"></line>
+                            <line x1="4" y1="10" x2="4" y2="3"></line>
+                            <line x1="12" y1="21" x2="12" y2="12"></line>
+                            <line x1="12" y1="8" x2="12" y2="3"></line>
+                            <line x1="20" y1="21" x2="20" y2="16"></line>
+                            <line x1="20" y1="12" x2="20" y2="3"></line>
+                            <line x1="1" y1="14" x2="7" y2="14"></line>
+                            <line x1="9" y1="8" x2="15" y2="8"></line>
+                            <line x1="17" y1="16" x2="23" y2="16"></line>
+                        </svg>
+                    </button>
                     <div style="position: relative;">
                         <button id="exportChat" class="btn-icon btn-export" title="Экспорт диалога">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -647,8 +591,23 @@
 
             <div id="chatMessages" class="chat-messages">
                 <div id="startConversation" class="start-conversation">
-                    <button id="startBtn" class="btn-start">Начать диалог</button>
-                    <button id="startAttestationBtn" class="btn-start btn-start-attestation">Начать аттестацию</button>
+                    <div class="start-conversation-copy">
+                        <p id="localStartConversationDescription" class="start-conversation-description" hidden></p>
+                    </div>
+                        <div class="start-conversation-actions">
+                            <button id="startBtn" class="btn-start" type="button">
+                                <span class="btn-start-label">Чат с клиентом</span>
+                                <span class="btn-start-meta">Текстовая переписка</span>
+                            </button>
+                            <button id="startVoiceBtn" class="btn-start btn-start-voice" type="button">
+                                <span class="btn-start-label">Голосовой звонок</span>
+                                <span class="btn-start-meta">Сразу открыть voice-режим</span>
+                            </button>
+                            <button id="startAttestationBtn" class="btn-start btn-start-attestation" type="button">
+                                <span class="btn-start-label">Аттестация</span>
+                                <span class="btn-start-meta">Проверка ответа по регламенту</span>
+                            </button>
+                        </div>
                 </div>
                 <div id="voiceConnectStatus" class="voice-connect-status" role="status" aria-live="polite" aria-atomic="true" hidden>
                     <div class="voice-connect-status-copy">
@@ -741,7 +700,12 @@
 
         <!-- Панель инструкций с табами -->
         <div class="prompt-panel panel" id="instructionsPanel" data-panel="instructions">
-            <div class="panel-header" style="justify-content: space-between;">
+            <div class="panel-header prompt-panel-header">
+                <div class="panel-heading panel-heading-prompt">
+                    <div class="panel-eyebrow">Сценарий</div>
+                    <div class="panel-title">Роль</div>
+                </div>
+                <div class="prompt-panel-topbar">
                 <!-- Табы оставлены скрыто для совместимости со старой логикой -->
                 <div class="instruction-tabs instruction-tabs-hidden" aria-hidden="true">
                     <button class="instruction-tab active" data-instruction="client" tabindex="-1">Клиент</button>
@@ -800,6 +764,12 @@
                 </select>
                 
                 <div class="header-buttons">
+                    <button id="localPromptCloseBtn" class="btn-icon local-shell-icon-btn" type="button" aria-label="Закрыть панель роли" hidden>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
                     <div style="position: relative;">
                         <button id="exportCurrentPrompt" class="btn-icon btn-export" title="Экспорт инструкции">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -820,6 +790,7 @@
                             <button class="dropdown-item" data-prompt-format="rtf">RTF</button>
                         </div>
                     </div>
+                </div>
                 </div>
             </div>
             
@@ -894,6 +865,8 @@
             </div>
         </div>
         </div>
+
+        <button id="localPromptBackdrop" class="local-prompt-backdrop" type="button" aria-label="Закрыть панель роли" hidden></button>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous" defer></script>
@@ -902,7 +875,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js" integrity="sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3" crossorigin="anonymous" defer></script>
     <!-- Turndown for HTML to Markdown conversion (WYSIWYG editing) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js" integrity="sha384-m6AyXEhyWRg2s2wrkDV64LGkaManYgMSAjn2U+zymzSJ42WthRSjCu1AqZJhoQV0" crossorigin="anonymous" defer></script>
-<script type="module" src="script.js?v=20260408-20"></script>
+<script type="module" src="script.js?v=20260409-01"></script>
     <!-- Last deployment trigger: 2026-03-24 15:00 -->
 </body>
 </html>

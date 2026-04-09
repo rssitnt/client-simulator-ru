@@ -74,13 +74,80 @@
 - Audio playback reset now preserves queued playback when early assistant audio arrives before capture init, so the first reply is not dropped.
 - Starting a new voice call now clears the previous chat/voice dialog state so the call always begins fresh.
 - Voice system instructions now include an explicit "fresh session" guard to prevent the client from acting as if a previous dialog already happened.
-- Dialog history remains available both in settings/admin surfaces and in the main shell.
-- Dialog history auto-titles are topic-based, using the early dialog context to extract a subject/model/qualifier instead of copying the first raw replica.
-- Legacy long first-line titles are normalized on read, so older records also show short topic titles without manual rename.
-- Dialogs can still be pinned via `pinnedAt`, and pinned dialogs sort above the rest.
+- Dialog history is now surfaced in the main app shell instead of being hidden only in settings:
+  - desktop has a dedicated left history rail for the list only;
+  - mobile has a separate `История` tab;
+  - settings no longer duplicate the dialog-history browser.
+- History UI is rendered from one shared state source across the main shell surfaces (desktop rail / mobile history tab); settings no longer host a duplicate dialog-history browser.
+- The main history rail now has GPT-like ergonomics:
+  - inline search filters the visible history surface from the same shared state;
+  - `Новый диалог` starts a fresh session and returns focus to the main chat input;
+  - dialogs can be pinned via `pinnedAt`, and pinned dialogs sort above the rest;
+  - auto-titles are now topic-based, using the early dialog context to extract a subject/model/qualifier instead of copying the first raw replica;
+  - legacy long first-line titles are normalized on read, so older records also show short topic titles without manual rename;
+  - each history row now has a hover/tap `...` menu with `переименовать / поделиться / удалить`;
+  - selecting a saved dialog in the main rail now opens it in the central chat workspace instead of rendering a second bulky viewer inside the sidebar;
+  - the main shell no longer auto-selects the first saved dialog on load, so the current chat/start screen stays in control until the user clicks a history item.
+  - on desktop the history rail is collapsed by default and reopened through a dedicated toggle, so the chat workspace stays primary on first load.
+  - the central saved-dialog viewer now stacks title/meta above actions on desktop too, so long titles are no longer clipped by the action buttons.
 - A full visual shell rewrite was attempted on 2026-04-07 and then reverted because it introduced too many regressions at once; future redesign work should ship in smaller reviewed passes or from a separate prototype branch.
-- Production/main is intentionally back on the older interface variant; newer shell experiments and localhost-only minimalist prototypes are not deployed.
-- The main shell still uses the older saved-dialog presentation with a central viewer, so do not assume the later list-only/GPT-like rail on `main`.
+- Role/personality selection now uses a single GPT-style selector with descriptions instead of visible tab buttons; legacy hidden tabs remain only as compatibility hooks for existing switching logic.
+- The right prompt panel now has a context bar:
+  - shows the current role name and a short explanation of what this prompt controls;
+  - shows the active prompt variation badge;
+  - gives admins a direct `Новый вариант` action without hunting for the plus chip.
+- Voice UX is now more explicit in the main chat area:
+  - the in-chat voice status card survives beyond the initial connect phase and reflects `подключение / клиент говорит / ваша очередь / звонок завершён / ошибка`;
+  - the panel derives from centralized voice status state instead of depending on a missing standalone `voiceModeStatus` DOM block;
+  - terminal dialog notices now include a clearer badge + explanatory subtext.
+- After the reverted full-shell redesign, the interface was repaired in-place instead of redone again:
+  - login is back to a centered modal card instead of a broken half-screen overlay;
+  - the main chat and prompt panels now have explicit headers and cleaner panel separation;
+  - the new-session screen uses three clear entry actions (`чат / звонок / аттестация`) instead of a cramped empty state;
+  - on empty sessions the bottom composer is collapsed to a compact voice-call button, so mobile no longer loses the start actions under the input bar;
+  - the floating history toggle no longer overlaps the clear-chat button in collapsed desktop mode.
+  - the separate saved-dialog viewer in the central chat workspace was removed; saved dialogs stay in the history rail instead of rendering a second large card under the main start/chat UI.
+  - the extra `Диалоги` eyebrow above `История` was removed to reduce visual noise in the left rail.
+- A new local-only minimal shell prototype now exists for `localhost/127.0.0.1`:
+  - enabled by `body.local-minimal-ui`;
+  - keeps the current functionality/IDs, but swaps the shell to a much more minimal ChatGPT-like layout;
+- desktop uses a clean two-zone shell (`история + чат`), while the role/prompt panel opens as a right drawer instead of living as a permanent third column;
+- the localhost settings surface was also moved visually into that same shell language: it now reads as a warm right-side drawer instead of the old centered modal card;
+  - the localhost settings top theme/close block is no longer sticky; it now scrolls away together with the rest of the settings content instead of staying pinned over the form;
+  - the localhost settings drawer no longer shows accent color presets; only the theme toggle remains in settings;
+  - the localhost settings close button now sits in the same top-right slot/size as the local settings-open icon from the chat header, instead of living inline inside the drawer content flow;
+  - the localhost history rail no longer shows the dashed empty placeholder card when there are no dialogs yet; it stays blank until real history items exist;
+  - the localhost early minimal-UI boot no longer uses an inline script; it is moved to `early-local-ui.js` to satisfy CSP without `unsafe-inline`, and is loaded immediately after `<body>` starts so the old interface should not flash before the local shell class is applied;
+  - Firebase App Check is now intentionally skipped on localhost preview, and Firebase REST fallback is also disabled there unless App Check is actually active; this avoids local reCAPTCHA/App Check console spam and repeated REST `401` noise during dev;
+  - local shell hides the old floating clear/history/settings controls and uses inline header actions instead;
+  - desktop history width is locked to the grid so the rail no longer visually overlaps the chat column;
+  - if the client prompt is still empty, pressing `Чат с клиентом` now opens the role/scenario UI instead of dropping a red inline error into the chat;
+  - localhost now has built-in fallback public prompts for `client / manager / manager_call / rater`, so local login and smoke flows no longer depend on Firebase prompt data or manual prompt seeding just to avoid blank editors;
+  - localhost minimal UI is now enabled by an inline script at the very top of `body`, before the main DOM shell is parsed, so the old interface should no longer flash for the first moments of page load;
+  - the local start-screen voice card was neutralized visually; it no longer has a separate green fill/border accent and now matches the other start actions;
+  - local drawer controls still force-hide transient tooltip state before open/close, so old tooltip state cannot remain hanging after clicking the drawer button;
+  - in the local drawer, the visible `Роль` / `Личность` labels are hidden, prompt variations are rendered as a vertical list instead of pills, and the composer wrapper hides the textarea scrollbar cleanly;
+  - local shell header action buttons are now visually plain by default; their pill chrome should appear only on hover/active, not at rest;
+  - the local shell chat header is action-only now: the visible `Чат` title is removed from the top bar;
+  - the local history panel now collapses into a persistent left-edge rail; when collapsed it stays visible as a ChatGPT-like strip with expand, new-chat, and search icons instead of disappearing completely;
+  - the local history list no longer renders a visible `История` heading above search/new-chat in the localhost prototype;
+  - the localhost role/personality dropdown now renders on an opaque surface with opaque option cards, so the prompt content under the menu should no longer show through;
+  - the local top headers (chat actions and role drawer topbar) are transparent now, without a separate tinted strip or divider line;
+  - localhost light theme now has dedicated warm overrides for the shell, history, start cards, composer, role drawer/dropdown, and settings drawer; it should no longer mix the new local shell with old dark legacy panels;
+  - localhost minimal UI hover tooltips are enabled again through the old custom tooltip layer; local CSS now only restyles that layer instead of suppressing it;
+  - in localhost minimal UI, clicking a tooltip-enabled button now force-hides the tooltip and suppresses re-show on that same button until hover/focus actually leaves it;
+  - localhost minimal chat layout is side-based again: simulated client/assistant messages render on the left, manager/user messages on the right, instead of the whole dialog reading like one centered column;
+  - the localhost collapsed history rail no longer uses its own semi-transparent/tinted background; it now sits on the same flat panel surface as the rest of the sidebar;
+  - the localhost history rail no longer draws its own internal vertical divider beside the chevron strip; only the outer history/chat separator should remain visible;
+  - the localhost history chevron is pinned to the same left-rail coordinates in both expanded and collapsed states, so opening the sidebar should not move that button toward the center;
+  - the localhost history rail keeps a fixed 56px width, so the top collapse chevron stays in the same left-edge position before and after collapsing the sidebar;
+  - the localhost history item `...` button is now a compact neutral ellipsis control, and its dropdown is rendered as a fixed floating menu positioned to the viewport so it is not clipped by the history list scroll container;
+  - localhost minimal UI message alignment was corrected: only non-message blocks use the centered content width, while actual dialog bubbles use side alignment (`assistant/client` left, `user/manager` right);
+  - the local shell palette is now intentionally warmer (`body` about `rgb(20,19,16)`, surfaces about `rgb(26,25,23)`), not blue-gray;
+  - tooltip globals were switched away from TDZ-sensitive `let` storage because early local drawer init was able to throw `ReferenceError: Cannot access 'tooltipLayer' before initialization` and silently break later UI bindings;
+  - on mobile the local shell panels now stretch to the full viewport width, and the same empty-prompt start flow redirects to the `Роль` tab;
+  - desktop defaults to an open history rail locally, while production keeps the current default behavior until an explicit rollout.
+- Production `main` was rolled back to the older interface variant on 2026-04-08; localhost intentionally keeps this newer minimal shell for further iteration without deploy.
 
 ## Useful Debug Markers
 - `assistant_output_buffered_before_user_turn`
@@ -96,10 +163,8 @@
 - Passed: `node --check script.js`
 - Passed: `node --check scripts/smoke-e2e.mjs`
 - Passed: `npm run test:smoke`
+- Passed: headless localhost check confirms localhost dev auth now gets non-empty default prompts for all four roles without remote prompt data
 - Observed on 2026-03-30:
   - `OPTIONS https://client-simulator.ru/api/gemini-live-token` => `405`
   - `OPTIONS https://client-simulator-gemini-token.onrender.com/api/gemini-live-token` => `204`
-- Observed on 2026-04-08:
-  - production HTML was serving `style.css?v=20260408-03` / `script.js?v=20260408-03`;
-  - main was rolled back to the older UI variant and cache-busted to `20260408-20`.
 - Date: 2026-04-08

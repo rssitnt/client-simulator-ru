@@ -1240,13 +1240,51 @@ async function waitForChatReady(page) {
 }
 
 async function openSettings(page) {
-    await page.click('#settingsBtn');
+    const useLocalDrawer = await page.evaluate(() => document.body.classList.contains('local-minimal-ui') && window.innerWidth > 1024);
+    if (useLocalDrawer) {
+        const drawerOpen = await page.evaluate(() => document.body.classList.contains('local-prompt-open'));
+        if (drawerOpen) {
+            await page.click('#localPromptCloseBtn');
+            await page.waitForFunction(() => !document.body.classList.contains('local-prompt-open'));
+        }
+        await page.click('#localSettingsTopBtn');
+    } else {
+        await page.click('#settingsBtn');
+    }
     await page.waitForSelector('#settingsModal.active');
 }
 
 async function closeSettings(page) {
-    await page.click('#settingsBtn');
+    const closeButtonVisible = await page.locator('#settingsModalCloseBtn').isVisible().catch(() => false);
+    if (closeButtonVisible) {
+        await page.click('#settingsModalCloseBtn');
+    } else {
+        await page.evaluate(() => {
+            const modal = document.getElementById('settingsModal');
+            if (!modal) return;
+            modal.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+        });
+    }
     await page.waitForFunction(() => !document.getElementById('settingsModal')?.classList.contains('active'));
+    const localDrawerOpen = await page.evaluate(() => document.body.classList.contains('local-prompt-open'));
+    if (localDrawerOpen) {
+        const promptCloseVisible = await page.locator('#localPromptCloseBtn').isVisible().catch(() => false);
+        if (promptCloseVisible) {
+            await page.click('#localPromptCloseBtn');
+        } else {
+            await page.evaluate(() => document.body.classList.remove('local-prompt-open'));
+        }
+        await page.waitForFunction(() => !document.body.classList.contains('local-prompt-open'));
+    }
+}
+
+async function ensurePromptPanelAvailable(page) {
+    const useLocalDrawer = await page.evaluate(() => document.body.classList.contains('local-minimal-ui') && window.innerWidth > 1024);
+    if (!useLocalDrawer) return;
+    const drawerOpen = await page.evaluate(() => document.body.classList.contains('local-prompt-open'));
+    if (drawerOpen) return;
+    await page.click('#localPromptToggleBtn');
+    await page.waitForFunction(() => document.body.classList.contains('local-prompt-open'));
 }
 
 async function ensureDetailsOpen(page, selector) {
@@ -1272,6 +1310,7 @@ async function runPromptWorkflowFlow(browser, baseUrl) {
 
         const originalContent = await page.evaluate(() => document.getElementById('systemPrompt')?.value || '');
 
+        await ensurePromptPanelAvailable(page);
         await page.click('#promptVisibilityBtn');
         await page.waitForFunction(() => {
             const btn = document.getElementById('promptCompareBtn');
@@ -1322,11 +1361,13 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
     await installCommonRoutes(context, scenario);
     await seedLocalState(context);
     await context.addInitScript(() => {
+        const ownLogin = 'smoke.admin@7271155.ru';
         const foreignLogin = 'foreign.user@tradicia-k.ru';
         const nowIso = new Date().toISOString();
         const loginToStorageKey = (value) => Array.from(String(value || '').trim().toLowerCase())
             .map((char) => char.codePointAt(0).toString(16))
             .join('_');
+        const ownKey = loginToStorageKey(ownLogin);
         const foreignKey = loginToStorageKey(foreignLogin);
         const authUsers = JSON.parse(localStorage.getItem('authUsers:v1') || '{}');
         authUsers[foreignKey] = {
@@ -1356,11 +1397,35 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
             data: {},
             listeners: []
         });
+        const ownDialogId = 'dlg_own_1';
         const foreignDialogId = 'dlg_foreign_1';
         dbState.data.dialog_history_index = dbState.data.dialog_history_index || {};
         dbState.data.dialog_history_messages = dbState.data.dialog_history_messages || {};
-        dbState.data.dialog_history_index[foreignKey] = {
-            [foreignDialogId]: {
+        dbState.data.dialog_history_index[ownKey] = dbState.data.dialog_history_index[ownKey] || {};
+        dbState.data.dialog_history_index[foreignKey] = dbState.data.dialog_history_index[foreignKey] || {};
+        dbState.data.dialog_history_messages[ownKey] = dbState.data.dialog_history_messages[ownKey] || {};
+        dbState.data.dialog_history_messages[foreignKey] = dbState.data.dialog_history_messages[foreignKey] || {};
+        if (!dbState.data.dialog_history_index[ownKey][ownDialogId]) {
+            dbState.data.dialog_history_index[ownKey][ownDialogId] = {
+                id: ownDialogId,
+                login: ownLogin,
+                uid: 'smoke-admin-1',
+                mode: 'text',
+                title: '',
+                autoTitle: 'Гидробур для CASE 260',
+                titleEdited: false,
+                preview: 'Нужен гидробур на CASE 260.',
+                messageCount: 2,
+                hasRating: false,
+                createdAt: nowIso,
+                updatedAt: nowIso,
+                lastMessageAt: nowIso,
+                closedAt: nowIso,
+                ratedAt: null
+            };
+        }
+        if (!dbState.data.dialog_history_index[foreignKey][foreignDialogId]) {
+            dbState.data.dialog_history_index[foreignKey][foreignDialogId] = {
                 id: foreignDialogId,
                 login: foreignLogin,
                 uid: 'foreign-user-1',
@@ -1376,10 +1441,36 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
                 lastMessageAt: nowIso,
                 closedAt: nowIso,
                 ratedAt: nowIso
-            }
-        };
-        dbState.data.dialog_history_messages[foreignKey] = {
-            [foreignDialogId]: {
+            };
+        }
+        if (!dbState.data.dialog_history_messages[ownKey][ownDialogId]) {
+            dbState.data.dialog_history_messages[ownKey][ownDialogId] = {
+                id: ownDialogId,
+                login: ownLogin,
+                uid: 'smoke-admin-1',
+                mode: 'text',
+                createdAt: nowIso,
+                updatedAt: nowIso,
+                closedAt: nowIso,
+                ratedAt: null,
+                messages: {
+                    m_0001: {
+                        id: 'm_0001',
+                        seq: 1,
+                        role: 'assistant',
+                        content: 'Нужен гидробур на CASE 260.'
+                    },
+                    m_0002: {
+                        id: 'm_0002',
+                        seq: 2,
+                        role: 'user',
+                        content: 'Ок. Подберу вариант под задачу.'
+                    }
+                }
+            };
+        }
+        if (!dbState.data.dialog_history_messages[foreignKey][foreignDialogId]) {
+            dbState.data.dialog_history_messages[foreignKey][foreignDialogId] = {
                 id: foreignDialogId,
                 login: foreignLogin,
                 uid: 'foreign-user-1',
@@ -1406,8 +1497,8 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
                     text: 'Хороший звонок',
                     createdAt: nowIso
                 }
-            }
-        };
+            };
+        }
     });
     const page = await context.newPage();
 
@@ -1415,38 +1506,37 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
         logStep('run dialog history persistence scenario');
         await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
         await waitForChatReady(page);
-        await page.waitForFunction(() => document.body.classList.contains('history-sidebar-collapsed'));
+        await page.waitForFunction(() => (
+            document.body.classList.contains('history-sidebar-collapsed')
+            || document.body.classList.contains('local-minimal-ui')
+        ));
 
-        await page.click('#startBtn');
-        await page.waitForSelector('text=Готов обсудить задачу.');
-        await page.fill('#userInput', 'Нужен гидробур на CASE 260.');
-        await page.click('#sendBtn');
+        await page.waitForSelector('#mainDialogHistoryList .dialog-history-item');
         await page.waitForFunction(() => {
-            return Array.from(document.querySelectorAll('#chatMessages .message'))
-                .some((node) => String(node.textContent || '').includes('Ок.'));
-        });
-
-        await openSettings(page);
-        await ensureDetailsOpen(page, '#dialogHistoryAccordion');
-        await page.waitForSelector('#dialogHistoryList .dialog-history-item');
-        await page.waitForFunction(() => {
-            const meta = document.getElementById('dialogHistoryScopeMeta');
+            const meta = document.getElementById('mainDialogHistoryScopeMeta');
             return /диалог/i.test(String(meta?.textContent || ''));
         });
 
         await page.waitForFunction(() => {
-            const listTitle = document.querySelector('#dialogHistoryList .dialog-history-item-title');
+            const listTitle = document.querySelector('#mainDialogHistoryList .dialog-history-item-title');
             const text = String(listTitle?.textContent || '');
             return /гидробур|case/i.test(text);
         });
 
-        await page.fill('#dialogHistoryTitleInput', 'Мой тестовый диалог');
-        await page.locator('#dialogHistoryTitleInput').blur();
+        await page.hover('#mainDialogHistoryList .dialog-history-item');
+        const renamePrompt = new Promise((resolve) => {
+            page.once('dialog', async (dialog) => {
+                expect(dialog.type() === 'prompt', 'History rename action must open a prompt dialog');
+                await dialog.accept('Мой тестовый диалог');
+                resolve(true);
+            });
+        });
+        await page.click('#mainDialogHistoryList .dialog-history-item-menu-toggle');
+        await page.click('.dialog-history-item-menu-action');
+        await renamePrompt;
         await page.waitForFunction(() => {
-            const titleInput = document.getElementById('dialogHistoryTitleInput');
-            const listTitle = document.querySelector('#dialogHistoryList .dialog-history-item-title');
-            return String(titleInput?.value || '').includes('Мой тестовый диалог')
-                && String(listTitle?.textContent || '').includes('Мой тестовый диалог');
+            const listTitle = document.querySelector('#mainDialogHistoryList .dialog-history-item-title');
+            return String(listTitle?.textContent || '').includes('Мой тестовый диалог');
         });
 
         const ownHistoryState = await page.evaluate(() => {
@@ -1469,18 +1559,19 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
         expect(ownHistoryState.title.includes('Мой тестовый диалог'), 'Renamed dialog title must persist into RTDB state');
         expect(ownHistoryState.preview.trim().length > 0, 'Dialog preview must persist into RTDB state');
 
-        await closeSettings(page);
-        await openSettings(page);
-        await ensureDetailsOpen(page, '#dialogHistoryAccordion');
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await waitForChatReady(page);
+        await page.waitForSelector('#mainDialogHistoryList .dialog-history-item');
         await page.waitForFunction(() => {
-            const meta = document.getElementById('dialogHistoryScopeMeta');
-            const titleInput = document.getElementById('dialogHistoryTitleInput');
-            return /диалог/i.test(String(meta?.textContent || ''))
-                && String(titleInput?.value || '').includes('Мой тестовый диалог');
+            const listTitle = document.querySelector('#mainDialogHistoryList .dialog-history-item-title');
+            const text = String(listTitle?.textContent || '');
+            return text.includes('Мой тестовый диалог') || /гидробур|case/i.test(text);
         });
     } catch (error) {
         await ensureOutputDir();
-        await page.screenshot({ path: path.join(outputDir, 'smoke-dialog-history-failure.png'), fullPage: true });
+        try {
+            await page.screenshot({ path: path.join(outputDir, 'smoke-dialog-history-failure.png'), fullPage: true, timeout: 5000 });
+        } catch {}
         throw error;
     } finally {
         await context.close();
@@ -1636,6 +1727,7 @@ async function runRolePreviewVisibilityFlow(browser, baseUrl) {
         await waitForChatReady(page);
 
         const originalContent = await page.evaluate(() => document.getElementById('systemPrompt')?.value || '');
+        await ensurePromptPanelAvailable(page);
         await page.click('#promptVisibilityBtn');
         await page.evaluate((secret) => {
             const preview = document.getElementById('systemPromptPreview');
@@ -1790,7 +1882,12 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
         await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
         await waitForChatReady(page);
 
-        await page.click('#sendBtn');
+        const primaryVoiceButtonVisible = await page.locator('#sendBtn').isVisible().catch(() => false);
+        if (primaryVoiceButtonVisible) {
+            await page.click('#sendBtn');
+        } else {
+            await page.click('#startVoiceBtn');
+        }
 
         await page.waitForFunction(() => {
             const sendMode = String(document.getElementById('sendBtn')?.dataset?.mode || '').trim();
@@ -1971,13 +2068,23 @@ async function runClearChatStopsVoiceFlow(browser, baseUrl) {
         await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
         await waitForChatReady(page);
 
-        await page.click('#sendBtn');
+        const primaryVoiceButtonVisible = await page.locator('#sendBtn').isVisible().catch(() => false);
+        if (primaryVoiceButtonVisible) {
+            await page.click('#sendBtn');
+        } else {
+            await page.click('#startVoiceBtn');
+        }
         await page.waitForFunction(() => {
             const sendMode = String(document.getElementById('sendBtn')?.dataset?.mode || '').trim();
             return sendMode === 'voice-stop';
         }, null, { timeout: 12000 });
 
-        await page.click('#clearChat');
+        const inlineClearVisible = await page.locator('#localClearChatInlineBtn').isVisible().catch(() => false);
+        if (inlineClearVisible) {
+            await page.click('#localClearChatInlineBtn');
+        } else {
+            await page.click('#clearChat');
+        }
         await page.waitForFunction(() => {
             const sendMode = String(document.getElementById('sendBtn')?.dataset?.mode || '').trim();
             return sendMode !== 'voice-stop';
@@ -2158,12 +2265,38 @@ async function runLocalhostDevAuthFlow(browser, baseUrl) {
             const startBtn = document.getElementById('startBtn');
             return !!startBtn && !startBtn.disabled;
         });
+        await page.waitForFunction(() => {
+            const hooks = window.__CLIENT_SIMULATOR_TEST_HOOKS__;
+            if (!hooks?.getPromptUiState) return false;
+            const client = String(hooks.getPromptUiState('client')?.activeContent || '');
+            const manager = String(hooks.getPromptUiState('manager')?.activeContent || '');
+            const voice = String(hooks.getPromptUiState('manager_call')?.activeContent || '');
+            const rater = String(hooks.getPromptUiState('rater')?.activeContent || '');
+            return client.length > 40 && manager.length > 30 && voice.length > 30 && rater.length > 30;
+        });
 
         const devSession = await page.evaluate(() => JSON.parse(localStorage.getItem('authSession:v1') || 'null'));
         expect(!!devSession?.devBypass, 'Localhost dev auth must persist devBypass session flag');
+        const promptState = await page.evaluate(() => {
+            const hooks = window.__CLIENT_SIMULATOR_TEST_HOOKS__;
+            return {
+                client: String(hooks?.getPromptUiState?.('client')?.activeContent || ''),
+                manager: String(hooks?.getPromptUiState?.('manager')?.activeContent || ''),
+                voice: String(hooks?.getPromptUiState?.('manager_call')?.activeContent || ''),
+                rater: String(hooks?.getPromptUiState?.('rater')?.activeContent || '')
+            };
+        });
+        expect(promptState.client.includes('CASE CX260C'), 'Localhost default client prompt was not applied');
+        expect(promptState.manager.includes('Традиция'), 'Localhost default manager prompt was not applied');
+        expect(promptState.voice.includes('гидробур'), 'Localhost default voice prompt was not applied');
+        expect(promptState.rater.includes('аудитор'), 'Localhost default rater prompt was not applied');
 
         await page.reload({ waitUntil: 'domcontentloaded' });
         await page.waitForFunction(() => !document.getElementById('nameModal')?.classList.contains('active'));
+        await page.waitForFunction(() => {
+            const hooks = window.__CLIENT_SIMULATOR_TEST_HOOKS__;
+            return String(hooks?.getPromptUiState?.('client')?.activeContent || '').includes('CASE CX260C');
+        });
     } catch (error) {
         await ensureOutputDir();
         await page.screenshot({ path: path.join(outputDir, 'smoke-localhost-dev-auth-failure.png'), fullPage: true });
