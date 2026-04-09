@@ -15131,6 +15131,19 @@ function getDefaultGeminiTokenEndpoint() {
     return String(GEMINI_LIVE_REMOTE_TOKEN_ENDPOINT || GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT || '').trim();
 }
 
+function isSameOriginGeminiTokenEndpoint(endpoint = '') {
+    const normalizedEndpoint = String(endpoint || '').trim();
+    if (!normalizedEndpoint || typeof window === 'undefined') return false;
+    try {
+        const parsed = new URL(normalizedEndpoint, window.location.origin);
+        const normalizedPath = normalizeGeminiTokenEndpoint(parsed.pathname || '').replace(/\/+$/, '') || '/';
+        return parsed.origin === window.location.origin
+            && normalizedPath === GEMINI_LIVE_ALLOWED_TOKEN_ENDPOINT_PATH;
+    } catch (error) {
+        return false;
+    }
+}
+
 function getConfiguredGeminiTokenEndpoint() {
     const localOverride = getTrustedGeminiTokenEndpointOrEmpty(
         getCachedStorageValue(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY),
@@ -15139,10 +15152,24 @@ function getConfiguredGeminiTokenEndpoint() {
             clearStorageKey: GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY
         }
     );
-    if (localOverride) return localOverride;
+    if (localOverride) {
+        if (isProductionHost() && isSameOriginGeminiTokenEndpoint(localOverride)) {
+            return getTrustedGeminiTokenEndpointOrEmpty(getDefaultGeminiTokenEndpoint(), {
+                source: 'production remote voice token endpoint'
+            }) || localOverride;
+        }
+        return localOverride;
+    }
 
     const sharedEndpoint = getSharedGeminiTokenEndpoint();
-    if (sharedEndpoint) return sharedEndpoint;
+    if (sharedEndpoint) {
+        if (isProductionHost() && isSameOriginGeminiTokenEndpoint(sharedEndpoint)) {
+            return getTrustedGeminiTokenEndpointOrEmpty(getDefaultGeminiTokenEndpoint(), {
+                source: 'production remote voice token endpoint'
+            }) || sharedEndpoint;
+        }
+        return sharedEndpoint;
+    }
 
     return getTrustedGeminiTokenEndpointOrEmpty(getDefaultGeminiTokenEndpoint(), {
         source: 'default voice token endpoint'
@@ -15980,6 +16007,7 @@ function isGeminiVoiceTokenPayloadRetryableError(error) {
 function getGeminiVoiceTokenEndpointCandidates(preferredEndpoint = '') {
     const candidates = [];
     const seen = new Set();
+    const isProdHost = isProductionHost();
 
     const addCandidate = (value) => {
         const sanitized = getTrustedGeminiTokenEndpointOrEmpty(value, {
@@ -16004,18 +16032,19 @@ function getGeminiVoiceTokenEndpointCandidates(preferredEndpoint = '') {
             && ((normalizeGeminiTokenEndpoint(parsed.pathname || '').replace(/\/+$/, '')) || '/') === GEMINI_LIVE_ALLOWED_TOKEN_ENDPOINT_PATH;
     } catch (error) {}
 
-    const preferRemoteBeforeSameOrigin = preferredIsSameOriginEndpoint
-        && PRODUCTION_HOSTNAMES.has(String(window?.location?.hostname || '').trim().toLowerCase());
+    const preferRemoteBeforeSameOrigin = preferredIsSameOriginEndpoint && isProdHost;
 
     if (preferRemoteBeforeSameOrigin) {
         addCandidate(GEMINI_LIVE_REMOTE_TOKEN_ENDPOINT);
     }
 
-    addCandidate(preferredEndpoint);
+    if (!(isProdHost && preferredIsSameOriginEndpoint)) {
+        addCandidate(preferredEndpoint);
+    }
 
     if (preferredIsSameOriginEndpoint) {
         addCandidate(GEMINI_LIVE_REMOTE_TOKEN_ENDPOINT);
-    } else {
+    } else if (!isProdHost) {
         addCandidate(GEMINI_LIVE_ALLOWED_TOKEN_ENDPOINT_PATH);
     }
 
