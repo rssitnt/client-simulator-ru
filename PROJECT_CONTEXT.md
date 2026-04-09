@@ -102,7 +102,7 @@
   - if a saved dialog is selected, the central `mainDialogHistoryStage` must switch on immediately for any non-live history item, including the loading/error states; earlier breakage came from gating the stage on a fully loaded payload, which made clicks look like nothing opened.
   - the main shell no longer auto-selects the first saved dialog on load, so the current chat/start screen stays in control until the user clicks a history item.
   - on desktop the history rail is collapsed by default and reopened through a dedicated toggle, so the chat workspace stays primary on first load.
-  - the central saved-dialog viewer now stacks title/meta above actions on desktop too, so long titles are no longer clipped by the action buttons.
+  - the old saved-dialog header block is removed now; when opening a saved dialog, the center area should start directly with the messages instead of rendering a separate title/meta/pin/delete section above them.
 - A full visual shell rewrite was attempted on 2026-04-07 and then reverted because it introduced too many regressions at once; future redesign work should ship in smaller reviewed passes or from a separate prototype branch.
 - Role/personality selection now uses a single GPT-style selector with descriptions instead of visible tab buttons; legacy hidden tabs remain only as compatibility hooks for existing switching logic.
 - The right prompt panel now has a context bar:

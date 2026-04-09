@@ -67,7 +67,7 @@
   - dialog history is no longer duplicated inside settings; the left rail is the single primary place for browsing saved dialogs.
   - the main shell does not auto-open the first history item on load.
   - the desktop history rail starts collapsed by default and is reopened with a dedicated toggle.
-  - the main saved-dialog viewer keeps title/meta above actions so long names do not clip in the header.
+  - the old saved-dialog header block is intentionally gone now: when a saved dialog is opened, the center view should start directly with the messages instead of rendering a separate `Сохранённый диалог` / title / meta / pin-delete section above them.
   - the main saved-dialog view must actually become visible after selecting a history item: `syncMainDialogHistoryStage()` should switch to `mainDialogHistoryStage` for any non-live selected history item, including the loading/error states; do not gate the stage visibility on `dialogHistorySelectedPayload`, or clicks will look like they did nothing.
 - A large from-scratch shell redesign was attempted on 2026-04-07 and reverted the same day because it created too many visual regressions at once; future redesigns should land in smaller passes or from a prototype branch first.
 - The current interface was then repaired in-place:
