@@ -123,6 +123,7 @@
   - the localhost history item `...` actions use a compact neutral ellipsis button plus a fixed floating dropdown; the menu must not be clipped by the scrollable list or overlap the card content awkwardly;
   - in localhost minimal UI, dialog messages are no longer laid out as one centered text column: manager (`.message.user`) stays on the right, client (`.message.assistant`) stays on the left, while only non-message utility blocks remain center-constrained;
   - the local shell palette has been warmed from cool blue-grays to warmer neutral grays/taupes; future color tweaks should stay in that warmer direction unless the user asks otherwise;
+  - the local accent is neutral now too: do not reintroduce the old green accent for active dropdown rows, selected prompt variations, voice pills, or control outlines unless the user explicitly asks for green back;
   - tooltip globals were changed to non-TDZ storage because early local drawer init could throw `ReferenceError: Cannot access 'tooltipLayer' before initialization` and silently break later local UI bindings;
   - on mobile the local prototype forces full-width panels and redirects the same empty-prompt start case into the `Роль` tab;
   - the localhost light theme now has its own warm override layer for history/chat/start cards/input/role drawer/settings drawer, so it no longer falls back to old cold or dark surfaces from the legacy UI;

@@ -167,6 +167,7 @@
   - the localhost history item `...` button is now a compact neutral ellipsis control, and its dropdown is rendered as a fixed floating menu positioned to the viewport so it is not clipped by the history list scroll container;
   - localhost minimal UI message alignment was corrected: only non-message blocks use the centered content width, while actual dialog bubbles use side alignment (`assistant/client` left, `user/manager` right);
   - the local shell palette is now intentionally warmer (`body` about `rgb(20,19,16)`, surfaces about `rgb(26,25,23)`), not blue-gray;
+  - the localhost accent has been neutralized too: old green accent states for selected rows, prompt chips, voice pills, and focus outlines were replaced with warm neutral taupe-based states;
   - tooltip globals were switched away from TDZ-sensitive `let` storage because early local drawer init was able to throw `ReferenceError: Cannot access 'tooltipLayer' before initialization` and silently break later UI bindings;
   - on mobile the local shell panels now stretch to the full viewport width, and the same empty-prompt start flow redirects to the `Роль` tab;
   - desktop defaults to an open history rail locally, while production keeps the current default behavior until an explicit rollout.

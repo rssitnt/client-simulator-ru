@@ -4270,8 +4270,8 @@ body.light-theme .btn-icon:hover {
 
 /* Local-only minimal shell prototype */
 body.local-minimal-ui {
-    --color-accent: #10a37f;
-    --color-accent-hover: #0c8c6d;
+    --color-accent: #8d7f72;
+    --color-accent-hover: #7a6e63;
     --local-shell-bg: #212121;
     --local-surface: #171717;
     --local-surface-raised: #1f1f1f;
@@ -4486,9 +4486,9 @@ body.local-minimal-ui .dialog-history-pill {
 }
 
 body.local-minimal-ui .dialog-history-pill.is-voice {
-    background: rgba(16, 163, 127, 0.12);
-    border-color: rgba(16, 163, 127, 0.2);
-    color: #b7f0df;
+    background: rgba(141, 127, 114, 0.14);
+    border-color: rgba(141, 127, 114, 0.24);
+    color: #d7cec5;
 }
 
 body.local-minimal-ui .dialog-history-item-menu-toggle {
@@ -4806,7 +4806,7 @@ body.local-minimal-ui .personality-option:hover {
 }
 
 body.local-minimal-ui .personality-option.active {
-    background: rgba(16, 163, 127, 0.14);
+    background: rgba(141, 127, 114, 0.14);
 }
 
 body.local-minimal-ui .instruction-content {
@@ -4831,8 +4831,8 @@ body.local-minimal-ui .prompt-variation-chip:hover {
 }
 
 body.local-minimal-ui .prompt-variation-chip.active {
-    background: rgba(16, 163, 127, 0.14);
-    border-color: rgba(16, 163, 127, 0.24);
+    background: rgba(141, 127, 114, 0.14);
+    border-color: rgba(141, 127, 114, 0.24);
 }
 
 body.local-minimal-ui .markdown-toolbar {
