@@ -12628,7 +12628,6 @@ body.local-minimal-ui.light-theme .admin-users-table th {
 }
 
 /* Final local history scrollbar behavior */
-body.local-minimal-ui #settingsModal .settings-panel,
 body.local-minimal-ui .history-panel {
     overflow-y: auto;
     overflow-x: hidden;
@@ -12636,31 +12635,23 @@ body.local-minimal-ui .history-panel {
     scrollbar-color: rgba(242, 238, 231, 0.16) transparent;
 }
 
-body.local-minimal-ui #settingsModal .settings-panel::-webkit-scrollbar,
 body.local-minimal-ui .history-panel::-webkit-scrollbar {
     width: 10px;
 }
 
-body.local-minimal-ui #settingsModal .settings-panel::-webkit-scrollbar-track,
 body.local-minimal-ui .history-panel::-webkit-scrollbar-track {
     background: transparent;
 }
 
-body.local-minimal-ui #settingsModal .settings-panel::-webkit-scrollbar-thumb,
 body.local-minimal-ui .history-panel::-webkit-scrollbar-thumb {
     background: rgba(242, 238, 231, 0.16);
     border-radius: 999px;
 }
 
-body.local-minimal-ui #settingsModal .settings-panel::-webkit-scrollbar-button,
 body.local-minimal-ui .history-panel::-webkit-scrollbar-button,
-body.local-minimal-ui #settingsModal .settings-panel::-webkit-scrollbar-button:single-button,
 body.local-minimal-ui .history-panel::-webkit-scrollbar-button:single-button,
-body.local-minimal-ui #settingsModal .settings-panel::-webkit-scrollbar-button:vertical:decrement,
 body.local-minimal-ui .history-panel::-webkit-scrollbar-button:vertical:decrement,
-body.local-minimal-ui #settingsModal .settings-panel::-webkit-scrollbar-button:vertical:increment,
 body.local-minimal-ui .history-panel::-webkit-scrollbar-button:vertical:increment,
-body.local-minimal-ui #settingsModal .settings-panel::-webkit-scrollbar-corner,
 body.local-minimal-ui .history-panel::-webkit-scrollbar-corner {
     display: none;
     width: 0;
@@ -12702,12 +12693,10 @@ body.local-minimal-ui .dialog-history-list {
     padding-right: 0 !important;
 }
 
-body.local-minimal-ui.light-theme #settingsModal .settings-panel,
 body.local-minimal-ui.light-theme .history-panel {
     scrollbar-color: rgba(139, 120, 94, 0.24) transparent;
 }
 
-body.local-minimal-ui.light-theme #settingsModal .settings-panel::-webkit-scrollbar-thumb,
 body.local-minimal-ui.light-theme .history-panel::-webkit-scrollbar-thumb {
     background: rgba(139, 120, 94, 0.24);
 }
