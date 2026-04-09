@@ -124,6 +124,7 @@
   - one leftover legacy rule `body.light-theme #startBtn { ... !important }` was still repainting only the top `Чат с клиентом` start card in light theme; the fix is a later local-minimal light-theme override for all three start buttons together (`#startBtn`, `#startVoiceBtn`, `#startAttestationBtn`);
   - the same legacy-light-theme issue also affected the composer textarea: old global `body.light-theme #userInput` / `textarea:focus` rules were repainting the textarea itself with a colder light-gray fill, so the local-minimal fix is a later override that keeps `#userInput` transparent in both normal and focus states;
   - composer tool buttons (`rate`, `AI`, `mic`) should remain backgroundless in local minimal UI even on hover/focus/active/loading/recording; the intended feedback is icon color only, because square fills looked broken inside the rounded composer shell;
+  - the composer host strip itself should also stay transparent in local minimal UI; an earlier gradient/background on `.chat-input-container` created a visible dark block between the dialog and the rounded input shell, so that container is now intended to render without its own background or top border.
   - local shell hides the old floating clear/history/settings controls and uses inline header actions instead;
   - desktop history width is locked to the grid so the rail no longer visually overlaps the chat column;
   - if the client prompt is still empty, pressing `Чат с клиентом` now opens the role/scenario UI instead of dropping a red inline error into the chat;
