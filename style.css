@@ -12176,7 +12176,7 @@ body.local-minimal-ui.light-theme .btn-start-meta {
 body.local-minimal-ui .admin-accordion {
     margin-top: 22px;
     padding-top: 18px;
-    border-top: 1px solid var(--local-border-final);
+    border-top: none;
 }
 
 body.local-minimal-ui .admin-accordion-trigger {
