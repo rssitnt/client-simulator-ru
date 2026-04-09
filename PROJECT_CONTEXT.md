@@ -151,6 +151,7 @@
 - the local empty-state start cards are compact and center-aligned now; they no longer span the wide rail width from earlier iterations;
 - the local empty-state start cards now explicitly center content vertically too; the old base `justify-content: flex-end` should not leak into the localhost variant;
 - the whole localhost empty-state start stack is centered as a column now; the wrapper should not stay left-biased inside the chat workspace;
+- the localhost prompt preview is flattened now: `.prompt-wrapper` owns the outer shell, and the inner preview should not look like a separate smaller inset card;
 - the local top headers (chat actions and role drawer topbar) are transparent now, without a separate tinted strip or divider line;
   - localhost light theme now has dedicated warm overrides for the shell, history, start cards, composer, role drawer/dropdown, and settings drawer; it should no longer mix the new local shell with old dark legacy panels;
   - localhost light theme refinements should stay on a consistent warm-cream panel/elevated/hover stack for role drawer surfaces, dropdowns, history cards, and settings controls; avoid splitting those into unrelated whites/beiges;

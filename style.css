@@ -10908,12 +10908,20 @@ body.local-minimal-ui .prompt-wrapper {
     border: 1px solid var(--local-border-final);
     border-radius: 18px;
     background: #1a1815;
+    overflow: hidden;
 }
 
 body.local-minimal-ui .prompt-preview,
 body.local-minimal-ui .prompt-editor {
-    padding: 18px;
     background: transparent !important;
+}
+
+body.local-minimal-ui .prompt-preview {
+    width: 100%;
+    min-height: 100%;
+    padding: 18px;
+    border-radius: 0;
+    box-sizing: border-box;
 }
 
 body.local-minimal-ui.light-theme .history-sidebar-toggle,
