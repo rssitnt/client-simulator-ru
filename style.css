@@ -11797,6 +11797,22 @@ body.local-minimal-ui.light-theme .admin-voice-debug-body {
     color: var(--local-text-final) !important;
 }
 
+body.local-minimal-ui.light-theme #startBtn,
+body.local-minimal-ui.light-theme #startVoiceBtn,
+body.local-minimal-ui.light-theme #startAttestationBtn {
+    background: #fbf7f0 !important;
+    border: 1px solid var(--local-border-final) !important;
+    box-shadow: none !important;
+    color: var(--local-text-final) !important;
+}
+
+body.local-minimal-ui.light-theme #startBtn:hover,
+body.local-minimal-ui.light-theme #startVoiceBtn:hover,
+body.local-minimal-ui.light-theme #startAttestationBtn:hover {
+    background: #f1e8dc !important;
+    border-color: var(--local-border-strong-final) !important;
+}
+
 body.local-minimal-ui.light-theme .personality-selector-menu,
 body.local-minimal-ui.light-theme .dropdown-menu.dropdown-menu-settings,
 body.local-minimal-ui.light-theme .voice-picker-menu {

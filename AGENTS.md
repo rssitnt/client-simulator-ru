@@ -101,6 +101,7 @@
   - localhost light theme now has its own warm overrides for the shell, history rail, start cards, composer, role drawer, role dropdown, and settings drawer; it should no longer fall back to the broken old dark/white mixed styles;
   - when adjusting localhost light theme, keep the role drawer, history rail, dropdown menus, and settings controls on one shared warm-cream surface ladder so it does not drift into mismatched whites after dark-theme fixes;
   - the current local light-theme repair also depends on a final bottom-of-file harmonization layer in `style.css`; prefer editing that tail block instead of reviving conflicting earlier light overrides higher in the file;
+  - the local light-theme start cards also depend on a late override for `#startBtn / #startVoiceBtn / #startAttestationBtn`, because an old global `body.light-theme #startBtn { ... !important }` rule otherwise makes only `Чат с клиентом` look different from the other two cards;
   - the localhost minimal UI uses the old custom tooltip system again for hover help on icon/ambiguous controls; the local override no longer disables tooltip rendering globally;
   - in localhost minimal UI, clicking a tooltip-enabled button must immediately hide its tooltip and suppress re-show on that same hovered/focused button until the pointer/focus leaves it;
   - localhost chat messages in the minimal shell are now laid out as side-aligned rows again: client/assistant on the left, manager/user on the right; they should no longer appear as one centered conversation column;
