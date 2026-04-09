@@ -10451,6 +10451,28 @@ body.local-minimal-ui #settingsModal .settings-panel::-webkit-scrollbar-thumb {
     border-radius: 999px;
 }
 
+body.local-minimal-ui .chat-messages,
+body.local-minimal-ui .history-panel-body {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(242, 238, 231, 0.16) transparent;
+}
+
+body.local-minimal-ui .chat-messages::-webkit-scrollbar,
+body.local-minimal-ui .history-panel-body::-webkit-scrollbar {
+    width: 10px;
+}
+
+body.local-minimal-ui .chat-messages::-webkit-scrollbar-track,
+body.local-minimal-ui .history-panel-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+body.local-minimal-ui .chat-messages::-webkit-scrollbar-thumb,
+body.local-minimal-ui .history-panel-body::-webkit-scrollbar-thumb {
+    background: rgba(242, 238, 231, 0.16);
+    border-radius: 999px;
+}
+
 body.local-minimal-ui .input-wrapper {
     width: min(760px, calc(100% - 40px));
     min-height: 60px;
@@ -11025,6 +11047,16 @@ body.local-minimal-ui.light-theme #settingsModal .settings-panel {
     background: #f7f2ea;
     border-left-color: var(--local-border-final);
     box-shadow: -24px 0 60px rgba(65, 53, 38, 0.12);
+}
+
+body.local-minimal-ui.light-theme .chat-messages,
+body.local-minimal-ui.light-theme .history-panel-body {
+    scrollbar-color: rgba(109, 98, 85, 0.18) transparent;
+}
+
+body.local-minimal-ui.light-theme .chat-messages::-webkit-scrollbar-thumb,
+body.local-minimal-ui.light-theme .history-panel-body::-webkit-scrollbar-thumb {
+    background: rgba(109, 98, 85, 0.18);
 }
 
 body.local-minimal-ui.light-theme .theme-color-section {
