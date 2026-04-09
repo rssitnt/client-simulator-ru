@@ -10628,6 +10628,10 @@ body.local-minimal-ui .custom-instruction-dropdown.personality-selector {
     isolation: isolate;
 }
 
+body.local-minimal-ui .custom-instruction-dropdown.personality-selector.active {
+    z-index: 1310;
+}
+
 body.local-minimal-ui .personality-selector-trigger:hover {
     border-color: var(--local-border-strong-final);
     background: var(--local-surface-muted-final);
@@ -10662,28 +10666,83 @@ body.local-minimal-ui .prompt-context-role-name {
 }
 
 body.local-minimal-ui .personality-selector-menu {
+    display: flex;
+    flex-direction: column;
+    top: calc(100% + 12px);
+    gap: 6px;
+    padding: 10px;
+    max-height: min(70vh, 420px);
     border-color: var(--local-border-final);
-    background: rgb(27, 25, 22);
+    background: rgb(27, 25, 22) !important;
     box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
-    z-index: 1200;
+    z-index: 1305;
+    position: absolute;
     isolation: isolate;
     opacity: 1;
     backdrop-filter: none;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background-clip: padding-box;
 }
 
 body.local-minimal-ui .personality-option {
-    border-bottom-color: #2a2723;
-    background: rgb(27, 25, 22);
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 0;
+    width: 100%;
+    min-height: 84px;
+    padding: 18px 58px 16px 18px;
+    margin: 0;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 20px;
+    background: rgb(27, 25, 22) !important;
     opacity: 1;
+    position: relative;
+    z-index: 1;
+    overflow: hidden;
 }
 
 body.local-minimal-ui .personality-option:hover {
-    background: rgb(33, 30, 26);
+    background: rgb(33, 30, 26) !important;
 }
 
 body.local-minimal-ui .personality-option.active {
-    background: rgb(22, 52, 40);
+    border-color: rgba(37, 115, 84, 0.72);
+    background: rgb(22, 52, 40) !important;
+    box-shadow: inset 0 0 0 1px rgba(37, 115, 84, 0.2);
+}
+
+body.local-minimal-ui .personality-option-copy {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 10px;
+    position: relative;
+    z-index: 1;
+}
+
+body.local-minimal-ui .personality-option-title {
+    display: block;
+    font-size: 18px;
+    line-height: 1.15;
+}
+
+body.local-minimal-ui .personality-option-description {
+    display: block;
+    font-size: 16px;
+    line-height: 1.45;
+}
+
+body.local-minimal-ui .personality-option-check {
+    position: absolute;
+    top: 50%;
+    right: 18px;
+    transform: translateY(-50%);
+    font-size: 18px;
+    line-height: 1;
+    flex: 0 0 auto;
 }
 
 body.local-minimal-ui .instruction-content {
@@ -11587,6 +11646,78 @@ body.local-minimal-ui.light-theme .custom-tooltip-layer {
     color: #f9f3eb;
 }
 
+body.local-minimal-ui.light-theme .history-panel,
+body.local-minimal-ui.light-theme .prompt-panel,
+body.local-minimal-ui.light-theme #settingsModal .settings-panel {
+    background: #f6efe6;
+}
+
+body.local-minimal-ui.light-theme .prompt-panel-header,
+body.local-minimal-ui.light-theme .theme-color-section {
+    background: #f3eadf;
+}
+
+body.local-minimal-ui.light-theme .history-search,
+body.local-minimal-ui.light-theme .history-panel-action,
+body.local-minimal-ui.light-theme .input-wrapper,
+body.local-minimal-ui.light-theme .personality-selector-trigger,
+body.local-minimal-ui.light-theme .prompt-context-action,
+body.local-minimal-ui.light-theme .prompt-variation-chip,
+body.local-minimal-ui.light-theme .prompt-wrapper,
+body.local-minimal-ui.light-theme .voice-picker-trigger,
+body.local-minimal-ui.light-theme .settings-row,
+body.local-minimal-ui.light-theme .account-block,
+body.local-minimal-ui.light-theme .export-row,
+body.local-minimal-ui.light-theme .settings-panel .btn-export,
+body.local-minimal-ui.light-theme .settings-modal-close {
+    background: #fcf8f2;
+    border-color: #ddd0c0;
+    color: var(--local-text-final);
+}
+
+body.local-minimal-ui.light-theme .history-panel-action:hover,
+body.local-minimal-ui.light-theme .personality-selector-trigger:hover,
+body.local-minimal-ui.light-theme .prompt-context-action:hover,
+body.local-minimal-ui.light-theme .prompt-variation-chip:hover,
+body.local-minimal-ui.light-theme .settings-panel .btn-export:hover,
+body.local-minimal-ui.light-theme .settings-modal-close:hover {
+    background: #f2e8dc;
+    border-color: #cdbba6;
+}
+
+body.local-minimal-ui.light-theme .personality-selector-menu,
+body.local-minimal-ui.light-theme .dropdown-menu.dropdown-menu-settings,
+body.local-minimal-ui.light-theme .voice-picker-menu {
+    background: #fcf8f2 !important;
+    border-color: #ddd0c0 !important;
+    box-shadow: 0 20px 48px rgba(63, 48, 30, 0.12) !important;
+}
+
+body.local-minimal-ui.light-theme .personality-option {
+    background: #fcf8f2 !important;
+    border-color: transparent;
+}
+
+body.local-minimal-ui.light-theme .personality-option:hover,
+body.local-minimal-ui.light-theme .dropdown-item:hover,
+body.local-minimal-ui.light-theme .voice-picker-option:hover {
+    background: #f2e8dc !important;
+}
+
+body.local-minimal-ui.light-theme .personality-option.active {
+    background: #e8dfd2 !important;
+    border-color: #d1c1af;
+    box-shadow: inset 0 0 0 1px rgba(138, 116, 88, 0.14);
+}
+
+body.local-minimal-ui.light-theme .personality-option-description,
+body.local-minimal-ui.light-theme .prompt-context-role-description,
+body.local-minimal-ui.light-theme .settings-label,
+body.local-minimal-ui.light-theme .history-panel-meta,
+body.local-minimal-ui.light-theme .dialog-history-item-meta {
+    color: rgba(84, 68, 51, 0.72);
+}
+
 body.local-minimal-ui.light-theme #nameModal .auth-modal-content {
     background: #fbf7f0;
     color: var(--local-text-final);
@@ -11621,4 +11752,89 @@ body.local-minimal-ui.light-theme #nameModal .btn-modal-secondary {
     background: #f2eadf;
     border-color: var(--local-border-final);
     color: var(--local-text-final);
+}
+
+/* Final local light-theme harmonization */
+body.local-minimal-ui.light-theme .history-panel {
+    background: #f7f1e8 !important;
+    border-right-color: var(--local-border-final) !important;
+}
+
+body.local-minimal-ui.light-theme .chat-panel,
+body.local-minimal-ui.light-theme .chat-messages,
+body.local-minimal-ui.light-theme .start-conversation {
+    background: #fcf8f1 !important;
+}
+
+body.local-minimal-ui.light-theme .prompt-panel,
+body.local-minimal-ui.light-theme #settingsModal .settings-panel {
+    background: #f6efe5 !important;
+    color: var(--local-text-final) !important;
+}
+
+body.local-minimal-ui.light-theme .prompt-panel-header,
+body.local-minimal-ui.light-theme .theme-color-section {
+    background: #f1e8dc !important;
+    border-bottom-color: var(--local-border-final) !important;
+}
+
+body.local-minimal-ui.light-theme .personality-selector-trigger,
+body.local-minimal-ui.light-theme .personality-selector-menu,
+body.local-minimal-ui.light-theme .personality-option,
+body.local-minimal-ui.light-theme .prompt-context-action,
+body.local-minimal-ui.light-theme .prompt-variation-chip,
+body.local-minimal-ui.light-theme .prompt-wrapper,
+body.local-minimal-ui.light-theme .voice-picker-trigger,
+body.local-minimal-ui.light-theme .settings-row,
+body.local-minimal-ui.light-theme .account-block,
+body.local-minimal-ui.light-theme .export-row,
+body.local-minimal-ui.light-theme .admin-invite-form,
+body.local-minimal-ui.light-theme .admin-hidden-prompt-body,
+body.local-minimal-ui.light-theme .admin-users-access-body,
+body.local-minimal-ui.light-theme .admin-voice-debug-body {
+    background: #fbf7f0 !important;
+    border-color: var(--local-border-final) !important;
+    color: var(--local-text-final) !important;
+}
+
+body.local-minimal-ui.light-theme .personality-selector-menu,
+body.local-minimal-ui.light-theme .dropdown-menu.dropdown-menu-settings,
+body.local-minimal-ui.light-theme .voice-picker-menu {
+    background: #fbf7f0 !important;
+    border-color: var(--local-border-final) !important;
+    box-shadow: 0 20px 48px rgba(63, 48, 30, 0.14) !important;
+}
+
+body.local-minimal-ui.light-theme .personality-option:hover,
+body.local-minimal-ui.light-theme .prompt-context-action:hover,
+body.local-minimal-ui.light-theme .prompt-variation-chip:hover,
+body.local-minimal-ui.light-theme .add-variation-btn:hover,
+body.local-minimal-ui.light-theme .dropdown-item:hover,
+body.local-minimal-ui.light-theme .voice-picker-option:hover,
+body.local-minimal-ui.light-theme .toolbar-btn:hover,
+body.local-minimal-ui.light-theme .history-panel-action:hover {
+    background: #f1e8dc !important;
+    border-color: var(--local-border-strong-final) !important;
+    color: var(--local-text-final) !important;
+}
+
+body.local-minimal-ui.light-theme .personality-option.active,
+body.local-minimal-ui.light-theme .prompt-variation-chip.active {
+    background: #ebe1d4 !important;
+    border-color: #d6cab9 !important;
+    color: var(--local-text-final) !important;
+    box-shadow: inset 0 0 0 1px rgba(139, 120, 94, 0.12);
+}
+
+body.local-minimal-ui.light-theme .personality-option-description,
+body.local-minimal-ui.light-theme .prompt-context-role-description,
+body.local-minimal-ui.light-theme .prompt-length-info,
+body.local-minimal-ui.light-theme .settings-label,
+body.local-minimal-ui.light-theme .account-line,
+body.local-minimal-ui.light-theme .admin-hidden-prompt-hint,
+body.local-minimal-ui.light-theme .admin-panel-title,
+body.local-minimal-ui.light-theme .history-panel-meta,
+body.local-minimal-ui.light-theme .dialog-history-item-meta,
+body.local-minimal-ui.light-theme .btn-start-meta {
+    color: var(--local-text-muted-final) !important;
 }

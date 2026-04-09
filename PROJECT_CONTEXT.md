@@ -108,7 +108,7 @@
   - the floating history toggle no longer overlaps the clear-chat button in collapsed desktop mode.
   - the separate saved-dialog viewer in the central chat workspace was removed; saved dialogs stay in the history rail instead of rendering a second large card under the main start/chat UI.
   - the extra `Диалоги` eyebrow above `История` was removed to reduce visual noise in the left rail.
-- A new local-only minimal shell prototype now exists for `localhost/127.0.0.1`:
+- The minimal shell now applies on `localhost/127.0.0.1` and on the production domains `client-simulator.ru` / `www.client-simulator.ru`:
   - enabled by `body.local-minimal-ui`;
   - keeps the current functionality/IDs, but swaps the shell to a much more minimal ChatGPT-like layout;
 - desktop uses a clean two-zone shell (`история + чат`), while the role/prompt panel opens as a right drawer instead of living as a permanent third column;
@@ -119,6 +119,8 @@
   - the localhost history rail no longer shows the dashed empty placeholder card when there are no dialogs yet; it stays blank until real history items exist;
   - the localhost early minimal-UI boot no longer uses an inline script; it is moved to `early-local-ui.js` to satisfy CSP without `unsafe-inline`, and is loaded immediately after `<body>` starts so the old interface should not flash before the local shell class is applied;
   - Firebase App Check is now intentionally skipped on localhost preview, and Firebase REST fallback is also disabled there unless App Check is actually active; this avoids local reCAPTCHA/App Check console spam and repeated REST `401` noise during dev;
+  - the localhost role/personality dropdown items are now forced into a taller opaque card layout with a stronger menu z-index, so active role rows should no longer collapse visually or reveal the prompt-variation chip text underneath;
+  - localhost light theme had accumulated overlapping override blocks; the current stabilization path is a final bottom-of-file harmonization layer that force-aligns history/chat/prompt/settings/dropdown surfaces in one place so light mode stays consistent after local dark-theme tweaks;
   - local shell hides the old floating clear/history/settings controls and uses inline header actions instead;
   - desktop history width is locked to the grid so the rail no longer visually overlaps the chat column;
   - if the client prompt is still empty, pressing `Чат с клиентом` now opens the role/scenario UI instead of dropping a red inline error into the chat;
@@ -134,6 +136,7 @@
   - the localhost role/personality dropdown now renders on an opaque surface with opaque option cards, so the prompt content under the menu should no longer show through;
   - the local top headers (chat actions and role drawer topbar) are transparent now, without a separate tinted strip or divider line;
   - localhost light theme now has dedicated warm overrides for the shell, history, start cards, composer, role drawer/dropdown, and settings drawer; it should no longer mix the new local shell with old dark legacy panels;
+  - localhost light theme refinements should stay on a consistent warm-cream panel/elevated/hover stack for role drawer surfaces, dropdowns, history cards, and settings controls; avoid splitting those into unrelated whites/beiges;
   - localhost minimal UI hover tooltips are enabled again through the old custom tooltip layer; local CSS now only restyles that layer instead of suppressing it;
   - in localhost minimal UI, clicking a tooltip-enabled button now force-hides the tooltip and suppresses re-show on that same button until hover/focus actually leaves it;
   - localhost minimal chat layout is side-based again: simulated client/assistant messages render on the left, manager/user messages on the right, instead of the whole dialog reading like one centered column;
@@ -147,7 +150,8 @@
   - tooltip globals were switched away from TDZ-sensitive `let` storage because early local drawer init was able to throw `ReferenceError: Cannot access 'tooltipLayer' before initialization` and silently break later UI bindings;
   - on mobile the local shell panels now stretch to the full viewport width, and the same empty-prompt start flow redirects to the `Роль` tab;
   - desktop defaults to an open history rail locally, while production keeps the current default behavior until an explicit rollout.
-- Production `main` was rolled back to the older interface variant on 2026-04-08; localhost intentionally keeps this newer minimal shell for further iteration without deploy.
+  - this shell is now the intended production UI on the main domain; the older grey production shell is deprecated and should not be treated as the target experience anymore.
+  - a side Vercel deployment of the new shell exists from 2026-04-09, but the production path remains GitHub Pages because Vercel was not reliably reachable for all users in the company environment.
 
 ## Useful Debug Markers
 - `assistant_output_buffered_before_user_turn`
@@ -164,6 +168,10 @@
 - Passed: `node --check scripts/smoke-e2e.mjs`
 - Passed: `npm run test:smoke`
 - Passed: headless localhost check confirms localhost dev auth now gets non-empty default prompts for all four roles without remote prompt data
+- Observed on 2026-04-09:
+  - repeated Vercel `Authorization successful` tabs were caused by a stuck local `npx vercel domains inspect www.client-simulator.ru` process chain;
+  - stopping the related `cmd.exe` / `node.exe` processes stopped the tab spam.
+  - deployment decision changed back toward GitHub Pages for the main domain because the Vercel-hosted site was not reachable for all company users.
 - Observed on 2026-03-30:
   - `OPTIONS https://client-simulator.ru/api/gemini-live-token` => `405`
   - `OPTIONS https://client-simulator-gemini-token.onrender.com/api/gemini-live-token` => `204`

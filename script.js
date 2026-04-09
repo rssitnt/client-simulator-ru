@@ -2193,8 +2193,13 @@ function isLocalhostAdminPreviewHost() {
     return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
 }
 
+function shouldUseMinimalUiHost() {
+    const hostname = String(window?.location?.hostname || '').trim().toLowerCase();
+    return isLocalhostAdminPreviewHost() || PRODUCTION_HOSTNAMES.has(hostname);
+}
+
 function isLocalMinimalUiEnabled() {
-    return isLocalhostAdminPreviewHost();
+    return shouldUseMinimalUiHost();
 }
 
 function syncLocalMinimalUiClass() {

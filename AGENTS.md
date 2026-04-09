@@ -72,7 +72,7 @@
   - the collapsed desktop history toggle is offset far enough not to overlap the clear-chat button.
   - the large saved-dialog viewer is no longer rendered in the center workspace; saved-dialog access remains in the history rail only.
   - the extra `Диалоги` eyebrow above `История` was removed from the left rail.
-- A local-only minimal shell prototype now exists behind `body.local-minimal-ui` on `localhost/127.0.0.1`:
+- The minimal shell now runs behind `body.local-minimal-ui` on `localhost/127.0.0.1` and on the production domains `client-simulator.ru` / `www.client-simulator.ru`:
   - it preserves existing IDs/logic and smoke coverage;
   - it uses a calmer ChatGPT-like shell with open history rail by default locally;
   - on desktop, the shell is intentionally `история + чат`, while the role/prompt editor opens as a right drawer instead of occupying a permanent third column;
@@ -96,8 +96,11 @@
   - the local history area no longer shows a visible `История` title above the list in the localhost prototype;
   - when the localhost history list is empty, it must stay visually empty; do not show the dashed `Пока пусто. Первый чат появится здесь.` placeholder card there anymore;
   - the localhost role/personality dropdown now uses fully opaque cards and a higher stacking context so prompt content beneath it must not bleed through visually;
+  - in the localhost role/personality dropdown, menu items must keep a stable tall two-line layout with the checkmark centered on the right; do not let the active role card collapse or show underlying variation text through it;
   - the local top action/header areas are now transparent surfaces; do not reintroduce a tinted header strip above the chat or inside the role drawer unless requested;
   - localhost light theme now has its own warm overrides for the shell, history rail, start cards, composer, role drawer, role dropdown, and settings drawer; it should no longer fall back to the broken old dark/white mixed styles;
+  - when adjusting localhost light theme, keep the role drawer, history rail, dropdown menus, and settings controls on one shared warm-cream surface ladder so it does not drift into mismatched whites after dark-theme fixes;
+  - the current local light-theme repair also depends on a final bottom-of-file harmonization layer in `style.css`; prefer editing that tail block instead of reviving conflicting earlier light overrides higher in the file;
   - the localhost minimal UI uses the old custom tooltip system again for hover help on icon/ambiguous controls; the local override no longer disables tooltip rendering globally;
   - in localhost minimal UI, clicking a tooltip-enabled button must immediately hide its tooltip and suppress re-show on that same hovered/focused button until the pointer/focus leaves it;
   - localhost chat messages in the minimal shell are now laid out as side-aligned rows again: client/assistant on the left, manager/user on the right; they should no longer appear as one centered conversation column;
@@ -111,8 +114,9 @@
   - tooltip globals were changed to non-TDZ storage because early local drawer init could throw `ReferenceError: Cannot access 'tooltipLayer' before initialization` and silently break later local UI bindings;
   - on mobile the local prototype forces full-width panels and redirects the same empty-prompt start case into the `Роль` tab;
   - the localhost light theme now has its own warm override layer for history/chat/start cards/input/role drawer/settings drawer, so it no longer falls back to old cold or dark surfaces from the legacy UI;
-  - it is intentionally not a production rollout yet.
-- Production `main` was rolled back to the older interface variant on 2026-04-08; localhost is allowed to stay on this newer minimal prototype without pushing it.
+  - it is now the intended production shell on the main domains; future fixes should treat the old grey shell as deprecated rather than as the primary interface.
+  - the old grey production shell should not be restored on the main domain unless explicitly requested.
+  - as of 2026-04-09, the chosen production host is still GitHub Pages for corporate-network compatibility; Vercel may still exist as a side deployment, but the main domain should continue serving from GitHub Pages unless the user explicitly asks to switch again.
 - Admins can view and delete foreign dialog history; users can manage only their own history.
 - Active time is now “real focused activity only”:
   - visible tab
@@ -164,6 +168,7 @@
 - If something starts failing in voice mode, check the admin tech log first before adding more heuristics.
 - If the call seems to “drop” immediately, first verify whether session key fetch timed out before Gemini Live even opened.
 - The production site currently returns `405` on same-origin `OPTIONS /api/gemini-live-token`, so remote token routing is the only healthy warmup path right now.
+- If repeated Vercel `Authorization successful / You can close this tab` pages start opening, first check for a stuck local `npx vercel ...` process (for example `vercel domains inspect ...`) and kill that process instead of approving more tabs; Vercel is not the primary production path right now.
 - If the first client reply disappears again, look in the admin tech log for `assistant_output_buffered_before_user_turn`, `assistant_output_waiting_for_user_turn`, and `assistant_output_released_after_user_turn`.
 - If dialog history acts like a permissions problem, verify both Firebase rules and fresh auth token state.
 - If a hard refresh looks like a logout, first check whether Firebase Auth simply restored too slowly; soft timeout alone should not wipe the browser session anymore.
