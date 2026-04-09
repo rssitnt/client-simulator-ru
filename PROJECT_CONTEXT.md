@@ -14,6 +14,7 @@
 - Client audio is played immediately in the browser.
 - Client text is assembled from `outputTranscription`, `text` parts, or fallback transcription via `/api/gemini-live-transcribe`.
 - Assistant/client playback is half-duplex: microphone input is blocked while client audio is speaking and restored after playback.
+- Gemini Live session config now explicitly enables aggressive automatic activity detection (`high/high`, ~700ms silence) so a manager turn closes faster and the client can start replying without hanging on SDK defaults.
 
 ## Relevant Current Fixes
 - Token server now respects the requested Gemini voice from the frontend (limited to the allowed list) instead of forcing a single server-side voice.

@@ -82,6 +82,8 @@ const GEMINI_LIVE_AUDIO_INPUT_LEVEL_GOOD_THRESHOLD = 0.45;
 const GEMINI_LIVE_AUDIO_INPUT_ACTIVITY_THRESHOLD = 0.08;
 const GEMINI_LIVE_MEDIA_RESOLUTION = 'MEDIA_RESOLUTION_LOW';
 const GEMINI_LIVE_THINKING_BUDGET = 0;
+const GEMINI_LIVE_VAD_PREFIX_PADDING_MS = 120;
+const GEMINI_LIVE_VAD_SILENCE_DURATION_MS = 700;
 const GEMINI_VOICE_EARLY_ASSISTANT_REPLY_USER_GRACE_MS = 1200;
 const GEMINI_VOICE_EARLY_ASSISTANT_BUFFER_WINDOW_MS = 45000;
 const GEMINI_VOICE_RECENT_SPEECH_ACTIVITY_WINDOW_MS = 2500;
@@ -17528,6 +17530,17 @@ function buildGeminiVoiceSessionConfig(sdk) {
     const activeClientPrompt = String(getActiveContent('client') || '').trim();
     const effectivePrompt = activeVoiceClientPrompt || activeClientPrompt || 'Ты вежливый клиент, веди естественный разговор голосом на русском языке.';
     const resolvedVoiceName = getConfiguredGeminiVoiceName();
+    const realtimeInputConfig = {
+        activityHandling: sdk.ActivityHandling?.START_OF_ACTIVITY_INTERRUPTS || 'START_OF_ACTIVITY_INTERRUPTS',
+        turnCoverage: sdk.TurnCoverage?.TURN_INCLUDES_ONLY_ACTIVITY || 'TURN_INCLUDES_ONLY_ACTIVITY',
+        automaticActivityDetection: {
+            disabled: false,
+            startOfSpeechSensitivity: sdk.StartSensitivity?.START_SENSITIVITY_HIGH || 'START_SENSITIVITY_HIGH',
+            endOfSpeechSensitivity: sdk.EndSensitivity?.END_SENSITIVITY_HIGH || 'END_SENSITIVITY_HIGH',
+            prefixPaddingMs: GEMINI_LIVE_VAD_PREFIX_PADDING_MS,
+            silenceDurationMs: GEMINI_LIVE_VAD_SILENCE_DURATION_MS
+        }
+    };
     return {
         model: GEMINI_LIVE_MODEL,
         voice: resolvedVoiceName,
@@ -17548,6 +17561,7 @@ function buildGeminiVoiceSessionConfig(sdk) {
             },
             inputAudioTranscription: {},
             outputAudioTranscription: {},
+            realtimeInputConfig,
             systemInstruction: buildGeminiVoiceSystemInstruction(effectivePrompt)
         }
     };
