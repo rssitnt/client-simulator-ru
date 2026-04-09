@@ -11821,6 +11821,14 @@ body.local-minimal-ui.light-theme .voice-picker-menu {
     box-shadow: 0 20px 48px rgba(63, 48, 30, 0.14) !important;
 }
 
+body.local-minimal-ui.light-theme #userInput,
+body.local-minimal-ui.light-theme #userInput:focus {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: var(--local-text-final) !important;
+}
+
 body.local-minimal-ui.light-theme .personality-option:hover,
 body.local-minimal-ui.light-theme .prompt-context-action:hover,
 body.local-minimal-ui.light-theme .prompt-variation-chip:hover,

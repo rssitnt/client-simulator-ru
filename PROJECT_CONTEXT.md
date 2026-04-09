@@ -122,6 +122,7 @@
   - the localhost role/personality dropdown items are now forced into a taller opaque card layout with a stronger menu z-index, so active role rows should no longer collapse visually or reveal the prompt-variation chip text underneath;
   - localhost light theme had accumulated overlapping override blocks; the current stabilization path is a final bottom-of-file harmonization layer that force-aligns history/chat/prompt/settings/dropdown surfaces in one place so light mode stays consistent after local dark-theme tweaks;
   - one leftover legacy rule `body.light-theme #startBtn { ... !important }` was still repainting only the top `Чат с клиентом` start card in light theme; the fix is a later local-minimal light-theme override for all three start buttons together (`#startBtn`, `#startVoiceBtn`, `#startAttestationBtn`);
+  - the same legacy-light-theme issue also affected the composer textarea: old global `body.light-theme #userInput` / `textarea:focus` rules were repainting the textarea itself with a colder light-gray fill, so the local-minimal fix is a later override that keeps `#userInput` transparent in both normal and focus states;
   - local shell hides the old floating clear/history/settings controls and uses inline header actions instead;
   - desktop history width is locked to the grid so the rail no longer visually overlaps the chat column;
   - if the client prompt is still empty, pressing `Чат с клиентом` now opens the role/scenario UI instead of dropping a red inline error into the chat;
