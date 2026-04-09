@@ -126,6 +126,7 @@
   - the admin panel inside settings now uses the same warm divider-based visual system as the rest of the shell; the old nested dark boxes are intentionally flattened;
   - the `Выдача доступа` row in that admin panel no longer uses a nested-number-field look: the outer days shell owns the visual chrome, while the inner numeric input stays transparent/borderless;
   - the admin role selector in the user list now also forces a theme-matched dropdown treatment, so the dark trigger should no longer open into a bright native-looking white menu in dark mode;
+  - the admin user list was compacted too: tighter row padding, a shorter role trigger, and wrapped access/status copy so the right-side text stays inside the drawer instead of clipping past the boundary;
   - the admin access table is allowed to scroll horizontally inside the drawer instead of forcing overflow/breakage in narrow layouts;
   - the voice tech log styling bug was corrected at the selector level: the real body class is `.admin-webhook-debug-body`, not the stale typo `.admin-voice-debug-body`.
   - the local history rail scroll now belongs to the whole main history column instead of the inner dialog list only, so the scrollbar starts at the full panel and matches the settings drawer styling.

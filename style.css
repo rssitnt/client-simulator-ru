@@ -6185,6 +6185,102 @@ body.light-theme .more-colors-popup {
     cursor: pointer;
 }
 
+.admin-role-picker {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+}
+
+.admin-role-picker-trigger {
+    width: 100%;
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 0 14px;
+    border: 1px solid #353535;
+    border-radius: 12px;
+    background: #252525;
+    color: #f1f1f1;
+    font: inherit;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.admin-role-picker-trigger:hover {
+    border-color: #454545;
+}
+
+.admin-role-picker-trigger:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.admin-role-picker-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-role-picker-chevron {
+    flex: 0 0 auto;
+    color: #a79d90;
+    font-size: 16px;
+    line-height: 1;
+    transform: translateY(-1px);
+}
+
+.admin-role-picker.is-open .admin-role-picker-chevron {
+    transform: rotate(180deg) translateY(1px);
+}
+
+.admin-role-picker-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 60;
+    min-width: 100%;
+    display: grid;
+    gap: 4px;
+    padding: 8px;
+    border: 1px solid #353535;
+    border-radius: 16px;
+    background: #1f1c19;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
+}
+
+.admin-role-picker-option {
+    width: 100%;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    background: transparent;
+    color: #f1f1f1;
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+.admin-role-picker-option:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.admin-role-picker-option.active {
+    background: #2a2520;
+    border-color: #3a332c;
+}
+
+.admin-role-picker-option:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
 .admin-time {
     white-space: nowrap;
     color: #b3b3b3;
@@ -11178,11 +11274,27 @@ body.local-minimal-ui.light-theme .password-input,
 body.local-minimal-ui.light-theme .admin-invite-input,
 body.local-minimal-ui.light-theme .admin-invite-days,
 body.local-minimal-ui.light-theme .admin-role-select,
+body.local-minimal-ui.light-theme .admin-role-picker-trigger,
 body.local-minimal-ui.light-theme .voice-picker-trigger,
 body.local-minimal-ui.light-theme .dropdown-menu.dropdown-menu-settings {
     background: #fbf7f0;
     border-color: var(--local-border-final);
     color: var(--local-text-final);
+}
+
+body.local-minimal-ui.light-theme .admin-role-picker-menu {
+    background: #fbf7f0;
+    border-color: var(--local-border-final);
+}
+
+body.local-minimal-ui.light-theme .admin-role-picker-option {
+    color: var(--local-text-final);
+}
+
+body.local-minimal-ui.light-theme .admin-role-picker-option:hover,
+body.local-minimal-ui.light-theme .admin-role-picker-option.active {
+    background: var(--local-surface-muted-final);
+    border-color: var(--local-border-final);
 }
 
 body.local-minimal-ui.light-theme .name-input::placeholder,
@@ -12132,12 +12244,34 @@ body.local-minimal-ui .admin-hidden-prompt-textarea {
 
 body.local-minimal-ui .admin-invite-input,
 body.local-minimal-ui .admin-invite-days,
-body.local-minimal-ui .admin-role-select {
+body.local-minimal-ui .admin-role-select,
+body.local-minimal-ui .admin-role-picker-trigger {
     min-height: 50px;
     border-radius: 18px;
     background: var(--local-surface-soft-final);
     border: 1px solid var(--local-border-final);
     color: var(--local-text-final);
+}
+
+body.local-minimal-ui .admin-role-picker-menu {
+    border-color: var(--local-border-final);
+    border-radius: 20px;
+    background: var(--local-surface-soft-final);
+}
+
+body.local-minimal-ui .admin-role-picker-option {
+    min-height: 44px;
+    border-radius: 14px;
+    color: var(--local-text-final);
+}
+
+body.local-minimal-ui .admin-role-picker-option:hover {
+    background: color-mix(in srgb, var(--local-surface-muted-final) 88%, transparent);
+}
+
+body.local-minimal-ui .admin-role-picker-option.active {
+    background: var(--local-surface-muted-final);
+    border-color: var(--local-border-final);
 }
 
 body.local-minimal-ui .admin-invite-days-wrap {
@@ -12259,15 +12393,19 @@ body.local-minimal-ui .admin-table-wrap::-webkit-scrollbar-thumb {
 }
 
 body.local-minimal-ui .admin-users-table {
-    min-width: 720px;
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
     font-size: 13px;
 }
 
 body.local-minimal-ui .admin-users-table th,
 body.local-minimal-ui .admin-users-table td {
-    padding: 14px 12px;
+    padding: 10px 10px;
     color: var(--local-text-final);
     border-bottom: 1px solid var(--local-border-final);
+    vertical-align: middle;
+    min-width: 0;
 }
 
 body.local-minimal-ui .admin-users-table th {
@@ -12298,6 +12436,51 @@ body.local-minimal-ui .admin-webhook-debug-empty,
 body.local-minimal-ui .admin-webhook-debug-time,
 body.local-minimal-ui .admin-webhook-debug-label {
     color: var(--local-text-muted-final) !important;
+}
+
+body.local-minimal-ui .admin-users-table th:nth-child(1),
+body.local-minimal-ui .admin-users-table td:nth-child(1) {
+    width: 32%;
+}
+
+body.local-minimal-ui .admin-users-table th:nth-child(2),
+body.local-minimal-ui .admin-users-table td:nth-child(2) {
+    width: 14%;
+}
+
+body.local-minimal-ui .admin-users-table th:nth-child(3),
+body.local-minimal-ui .admin-users-table td:nth-child(3) {
+    width: 22%;
+}
+
+body.local-minimal-ui .admin-users-table th:nth-child(4),
+body.local-minimal-ui .admin-users-table td:nth-child(4) {
+    width: 12%;
+}
+
+body.local-minimal-ui .admin-users-table th:nth-child(5),
+body.local-minimal-ui .admin-users-table td:nth-child(5) {
+    width: 12%;
+}
+
+body.local-minimal-ui .admin-users-table th:nth-child(6),
+body.local-minimal-ui .admin-users-table td:nth-child(6) {
+    width: 8%;
+}
+
+body.local-minimal-ui .admin-access-source,
+body.local-minimal-ui .admin-status-main,
+body.local-minimal-ui .admin-presence {
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    line-height: 1.35;
+}
+
+body.local-minimal-ui .admin-role-picker-trigger {
+    min-height: 34px;
+    padding: 0 12px;
+    border-radius: 14px;
 }
 
 body.local-minimal-ui .admin-webhook-debug-list {
