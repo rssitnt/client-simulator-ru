@@ -97,6 +97,7 @@
   - when the localhost history list is empty, it must stay visually empty; do not show the dashed `Пока пусто. Первый чат появится здесь.` placeholder card there anymore;
   - the localhost role/personality dropdown now uses fully opaque cards and a higher stacking context so prompt content beneath it must not bleed through visually;
   - in the localhost role/personality dropdown, menu items must keep a stable tall two-line layout with the checkmark centered on the right; do not let the active role card collapse or show underlying variation text through it;
+  - the localhost prompt-drawer topbar is now its own stacking layer above `.instruction-content`; keep the role trigger/menu above prompt variations so variation labels like `Основной` cannot bleed through under the dropdown;
   - the local top action/header areas are now transparent surfaces; do not reintroduce a tinted header strip above the chat or inside the role drawer unless requested;
   - localhost light theme now has its own warm overrides for the shell, history rail, start cards, composer, role drawer, role dropdown, and settings drawer; it should no longer fall back to the broken old dark/white mixed styles;
   - when adjusting localhost light theme, keep the role drawer, history rail, dropdown menus, and settings controls on one shared warm-cream surface ladder so it does not drift into mismatched whites after dark-theme fixes;

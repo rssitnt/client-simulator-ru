@@ -140,8 +140,9 @@
   - the local shell chat header is action-only now: the visible `Чат` title is removed from the top bar;
   - the local history panel now collapses into a persistent left-edge rail; when collapsed it stays visible as a ChatGPT-like strip with expand, new-chat, and search icons instead of disappearing completely;
   - the local history list no longer renders a visible `История` heading above search/new-chat in the localhost prototype;
-  - the localhost role/personality dropdown now renders on an opaque surface with opaque option cards, so the prompt content under the menu should no longer show through;
-  - the local top headers (chat actions and role drawer topbar) are transparent now, without a separate tinted strip or divider line;
+- the localhost role/personality dropdown now renders on an opaque surface with opaque option cards, so the prompt content under the menu should no longer show through;
+- the localhost prompt-drawer topbar is now explicitly layered above `.instruction-content`; future dropdown tweaks must preserve that separation so prompt-variation labels do not bleed through under the role selector menu;
+- the local top headers (chat actions and role drawer topbar) are transparent now, without a separate tinted strip or divider line;
   - localhost light theme now has dedicated warm overrides for the shell, history, start cards, composer, role drawer/dropdown, and settings drawer; it should no longer mix the new local shell with old dark legacy panels;
   - localhost light theme refinements should stay on a consistent warm-cream panel/elevated/hover stack for role drawer surfaces, dropdowns, history cards, and settings controls; avoid splitting those into unrelated whites/beiges;
   - localhost minimal UI hover tooltips are enabled again through the old custom tooltip layer; local CSS now only restyles that layer instead of suppressing it;
