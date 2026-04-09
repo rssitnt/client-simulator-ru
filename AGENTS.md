@@ -170,10 +170,7 @@
   - the frontend now gives auth restore a longer second window before showing the login form;
   - repeat login for an existing user no longer blocks on non-critical RTDB profile rewrites or access-mirror sync if Firebase Auth is already open.
   - opening Firebase Auth session now has a longer timeout and retries once on transient network errors.
-- Preview-role switching is now safer:
-  - the settings `Сменить` button no longer flips admin/user view immediately;
-  - it opens the confirm block first, and the actual switch happens only after explicit `OK`;
-  - this protects against accidental role flips from stray/overlapping clicks.
+- Переключение между админским и юзерским видом теперь происходит сразу по `Сменить`, без повторного запроса пароля; пароль нужен только один раз, чтобы получить админ-доступ.
 - In the local empty-state start cards, only the main titles remain visible; the lower subtitle lines under `Чат с клиентом / Голосовой звонок / Аттестация` were intentionally removed.
 - The local empty-state start cards are compact now: the card column is intentionally much narrower than before and the remaining titles are center-aligned. Do not stretch them back to full-width unless requested.
 - For local empty-state start cards, explicitly override the base `justify-content: flex-end`; these compact cards must stay vertically centered, not bottom-biased.

@@ -167,7 +167,7 @@
 - the localhost role/personality dropdown active item is neutral now in dark mode too; the earlier green highlight was removed on purpose;
 - the localhost role/personality dropdown is compact now: shorter cards, smaller padding, and a lower max-height; do not expand it back unless explicitly requested;
 - the prompt drawer context bar now shows only the role name and the active variation badge; the old explanatory role copy and `Новый вариант` action were removed;
-- preview-role switching is now two-step from settings: `Сменить` only opens the confirm block, and the actual admin/user view switch happens only on explicit `OK`; this avoids accidental mode flips from stray clicks;
+- preview-role switching is direct again: after the user already has admin access, `Сменить` flips admin/user view immediately without asking for the password again;
 - the local empty-state start cards now show only their main titles; the lower subtitle lines were removed for a cleaner compact layout;
 - the local empty-state start cards are compact and center-aligned now; they no longer span the wide rail width from earlier iterations;
 - the local empty-state start cards now explicitly center content vertically too; the old base `justify-content: flex-end` should not leak into the localhost variant;
