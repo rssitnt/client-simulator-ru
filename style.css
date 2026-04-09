@@ -12017,3 +12017,262 @@ body.local-minimal-ui.light-theme .dialog-history-item-meta,
 body.local-minimal-ui.light-theme .btn-start-meta {
     color: var(--local-text-muted-final) !important;
 }
+
+/* Final local admin panel harmonization */
+body.local-minimal-ui .admin-accordion {
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid var(--local-border-final);
+}
+
+body.local-minimal-ui .admin-accordion-trigger {
+    min-height: 34px;
+    color: var(--local-text-muted-final);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+body.local-minimal-ui .admin-accordion-trigger::after {
+    color: var(--local-text-soft-final);
+}
+
+body.local-minimal-ui .admin-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+body.local-minimal-ui .admin-panel-header {
+    margin: 0;
+    padding: 0 0 18px;
+}
+
+body.local-minimal-ui .admin-panel-title {
+    color: var(--local-text-muted-final);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+body.local-minimal-ui .admin-invite-form,
+body.local-minimal-ui .admin-hidden-prompt-section,
+body.local-minimal-ui .admin-hidden-prompt-body,
+body.local-minimal-ui .admin-users-access-body,
+body.local-minimal-ui .admin-webhook-debug-body {
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+
+body.local-minimal-ui .admin-invite-form {
+    grid-template-columns: minmax(0, 1fr) 132px auto;
+    gap: 12px;
+    margin: 0;
+    padding: 0 0 22px;
+    border-bottom: 1px solid var(--local-border-final) !important;
+}
+
+body.local-minimal-ui .admin-hidden-prompt-section {
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--local-border-final) !important;
+    overflow: visible;
+}
+
+body.local-minimal-ui .admin-hidden-prompt-section[open] {
+    padding-bottom: 20px;
+}
+
+body.local-minimal-ui .admin-hidden-prompt-summary {
+    min-height: 58px;
+    padding: 18px 2px;
+    color: var(--local-text-final);
+    font-size: 15px;
+    font-weight: 600;
+    background: transparent;
+}
+
+body.local-minimal-ui .admin-hidden-prompt-summary::after {
+    color: var(--local-text-soft-final);
+}
+
+body.local-minimal-ui .admin-hidden-prompt-body,
+body.local-minimal-ui .admin-users-access-body,
+body.local-minimal-ui .admin-webhook-debug-body {
+    margin: 0;
+    padding: 0 0 20px;
+}
+
+body.local-minimal-ui .admin-users-access-toolbar,
+body.local-minimal-ui .admin-hidden-prompt-actions,
+body.local-minimal-ui .admin-webhook-debug-toolbar {
+    margin-top: 14px;
+}
+
+body.local-minimal-ui .admin-hidden-prompt-hint,
+body.local-minimal-ui .admin-webhook-debug-meta {
+    color: var(--local-text-muted-final);
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+body.local-minimal-ui .admin-hidden-prompt-textarea {
+    min-height: 220px;
+    padding: 18px 20px;
+    border: 1px solid var(--local-border-final);
+    border-radius: 20px;
+    background: var(--local-surface-soft-final);
+    color: var(--local-text-final);
+    line-height: 1.6;
+}
+
+body.local-minimal-ui .admin-invite-input,
+body.local-minimal-ui .admin-invite-days,
+body.local-minimal-ui .admin-role-select {
+    min-height: 50px;
+    border-radius: 18px;
+    background: var(--local-surface-soft-final);
+    border: 1px solid var(--local-border-final);
+    color: var(--local-text-final);
+}
+
+body.local-minimal-ui .admin-invite-days-wrap {
+    min-height: 50px;
+    border-radius: 18px;
+    background: var(--local-surface-soft-final);
+    border: 1px solid var(--local-border-final);
+}
+
+body.local-minimal-ui .admin-invite-days-unit {
+    color: var(--local-text-muted-final);
+}
+
+body.local-minimal-ui .admin-invite-btn,
+body.local-minimal-ui .admin-user-action-group .btn-change,
+body.local-minimal-ui .admin-webhook-debug-actions .btn-change,
+body.local-minimal-ui .admin-hidden-prompt-actions .btn-change,
+body.local-minimal-ui .admin-users-access-toolbar .btn-change {
+    min-height: 48px;
+    border-radius: 18px;
+}
+
+body.local-minimal-ui .admin-table-wrap {
+    overflow-x: auto;
+    overflow-y: visible;
+    padding-bottom: 4px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(242, 238, 231, 0.16) transparent;
+}
+
+body.local-minimal-ui .admin-table-wrap::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+body.local-minimal-ui .admin-table-wrap::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+body.local-minimal-ui .admin-table-wrap::-webkit-scrollbar-thumb {
+    background: rgba(242, 238, 231, 0.16);
+    border-radius: 999px;
+}
+
+body.local-minimal-ui .admin-users-table {
+    min-width: 720px;
+    font-size: 13px;
+}
+
+body.local-minimal-ui .admin-users-table th,
+body.local-minimal-ui .admin-users-table td {
+    padding: 14px 12px;
+    color: var(--local-text-final);
+    border-bottom: 1px solid var(--local-border-final);
+}
+
+body.local-minimal-ui .admin-users-table th {
+    background: color-mix(in srgb, var(--local-surface-panel-final) 74%, transparent);
+    color: var(--local-text-muted-final);
+    backdrop-filter: blur(8px);
+}
+
+body.local-minimal-ui .admin-sort-btn {
+    color: var(--local-text-muted-final);
+}
+
+body.local-minimal-ui .admin-sort-btn.is-active,
+body.local-minimal-ui .admin-sort-btn:hover {
+    color: var(--local-text-final);
+}
+
+body.local-minimal-ui .admin-sort-icon {
+    color: var(--local-text-soft-final);
+}
+
+body.local-minimal-ui .admin-access-source,
+body.local-minimal-ui .admin-time,
+body.local-minimal-ui .admin-presence,
+body.local-minimal-ui .admin-muted,
+body.local-minimal-ui .admin-empty,
+body.local-minimal-ui .admin-webhook-debug-empty,
+body.local-minimal-ui .admin-webhook-debug-time,
+body.local-minimal-ui .admin-webhook-debug-label {
+    color: var(--local-text-muted-final) !important;
+}
+
+body.local-minimal-ui .admin-webhook-debug-list {
+    border: 1px solid var(--local-border-final);
+    border-radius: 20px;
+    background: var(--local-surface-soft-final);
+}
+
+body.local-minimal-ui .admin-webhook-debug-item {
+    background: transparent;
+    border-color: var(--local-border-final);
+}
+
+body.local-minimal-ui .admin-webhook-debug-title,
+body.local-minimal-ui .admin-webhook-debug-value {
+    color: var(--local-text-final);
+}
+
+body.local-minimal-ui.light-theme .admin-table-wrap {
+    scrollbar-color: rgba(139, 120, 94, 0.24) transparent;
+}
+
+body.local-minimal-ui.light-theme .admin-table-wrap::-webkit-scrollbar-thumb {
+    background: rgba(139, 120, 94, 0.24);
+}
+
+body.local-minimal-ui.light-theme .admin-users-table th {
+    background: color-mix(in srgb, #f7efe4 88%, transparent);
+}
+
+@media (max-width: 840px) {
+    body.local-minimal-ui .admin-invite-form {
+        grid-template-columns: 1fr;
+    }
+
+    body.local-minimal-ui .admin-users-table {
+        min-width: 0;
+    }
+
+    body.local-minimal-ui .admin-sort-btn {
+        border: 1px solid var(--local-border-final);
+        border-radius: 16px;
+        background: var(--local-surface-soft-final);
+    }
+
+    body.local-minimal-ui .admin-users-table tbody tr,
+    body.local-minimal-ui .admin-empty-row td {
+        background: var(--local-surface-soft-final);
+        border-color: var(--local-border-final) !important;
+    }
+}

@@ -112,6 +112,9 @@
 - The minimal shell now applies on `localhost/127.0.0.1` and on the production domains `client-simulator.ru` / `www.client-simulator.ru`:
   - enabled by `body.local-minimal-ui`;
   - keeps the current functionality/IDs, but swaps the shell to a much more minimal ChatGPT-like layout;
+  - the admin panel inside settings now uses the same warm divider-based visual system as the rest of the shell; the old nested dark boxes are intentionally flattened;
+  - the admin access table is allowed to scroll horizontally inside the drawer instead of forcing overflow/breakage in narrow layouts;
+  - the voice tech log styling bug was corrected at the selector level: the real body class is `.admin-webhook-debug-body`, not the stale typo `.admin-voice-debug-body`.
 - desktop uses a clean two-zone shell (`история + чат`), while the role/prompt panel opens as a right drawer instead of living as a permanent third column;
 - the localhost settings surface was also moved visually into that same shell language: it now reads as a warm right-side drawer instead of the old centered modal card;
   - the localhost settings top theme/close block is no longer sticky; it now scrolls away together with the rest of the settings content instead of staying pinned over the form;

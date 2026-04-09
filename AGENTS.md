@@ -136,6 +136,10 @@
   - it is now the intended production shell on the main domains; future fixes should treat the old grey shell as deprecated rather than as the primary interface.
   - the old grey production shell should not be restored on the main domain unless explicitly requested.
   - as of 2026-04-09, the chosen production host is still GitHub Pages for corporate-network compatibility; Vercel may still exist as a side deployment, but the main domain should continue serving from GitHub Pages unless the user explicitly asks to switch again.
+  - the admin panel inside settings now follows the same warm minimal shell language as the rest of the site:
+    - outer admin sections are flattened into divider-based blocks instead of heavy nested rectangles;
+    - the access table can scroll horizontally inside the drawer instead of blowing out the layout;
+    - the voice tech log uses the same local admin styling as the other sections again (`.admin-webhook-debug-body` is the real class; older `.admin-voice-debug-body` selectors were a dead typo).
 - Admins can view and delete foreign dialog history; users can manage only their own history.
 - Active time is now “real focused activity only”:
   - visible tab
