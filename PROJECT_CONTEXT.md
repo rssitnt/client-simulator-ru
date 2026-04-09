@@ -145,6 +145,7 @@
 - the localhost role/personality dropdown now uses a larger outer menu radius with slightly smaller inner option radii; preserve that nested-radius relationship so active cards do not look visually clipped in the corners;
 - the localhost role/personality dropdown menu now shows only role names; subtitle lines are intentionally hidden there for a cleaner compact list;
 - the localhost role/personality dropdown active item is neutral now in dark mode too; the earlier green highlight was removed on purpose;
+- the prompt drawer context bar now shows only the role name and the active variation badge; the old explanatory role copy and `Новый вариант` action were removed;
 - the local top headers (chat actions and role drawer topbar) are transparent now, without a separate tinted strip or divider line;
   - localhost light theme now has dedicated warm overrides for the shell, history, start cards, composer, role drawer/dropdown, and settings drawer; it should no longer mix the new local shell with old dark legacy panels;
   - localhost light theme refinements should stay on a consistent warm-cream panel/elevated/hover stack for role drawer surfaces, dropdowns, history cards, and settings controls; avoid splitting those into unrelated whites/beiges;

@@ -1691,9 +1691,7 @@ const instructionDropdownTrigger = instructionDropdown?.querySelector('.dropdown
 const instructionOptions = Array.from(document.querySelectorAll('#instructionOptions [data-value]'));
 const selectedInstructionText = document.getElementById('selectedInstructionText');
 const promptContextRoleName = document.getElementById('promptContextRoleName');
-const promptContextRoleDescription = document.getElementById('promptContextRoleDescription');
 const promptContextVariationBadge = document.getElementById('promptContextVariationBadge');
-const promptContextNewVariationBtn = document.getElementById('promptContextNewVariationBtn');
 const activeScenarioStrip = document.getElementById('activeScenarioStrip');
 const activeScenarioTitle = document.getElementById('activeScenarioTitle');
 const activeScenarioSummary = document.getElementById('activeScenarioSummary');
@@ -13193,14 +13191,6 @@ function getRoleLabel(role) {
     return role;
 }
 
-function getRoleDescription(role) {
-    if (role === 'client') return 'Сценарий переписки от лица клиента. Здесь задаётся его тон, цели и давление на менеджера.';
-    if (role === 'manager') return 'Промпт ассистента для текстового диалога. Определяет качество ответа менеджера в чате.';
-    if (role === 'manager_call') return 'Голосовой сценарий клиента. Определяет, как он говорит, спорит и завершает звонок.';
-    if (role === 'rater') return 'Правила разбора диалога и критерии оценки после завершения разговора.';
-    return '';
-}
-
 function getPromptHistoryKey(role, variationId) {
     return `${role}:${variationId}`;
 }
@@ -15049,9 +15039,6 @@ function renderPromptContextBar(role = getActiveRole()) {
     if (promptContextRoleName) {
         promptContextRoleName.textContent = getRoleLabel(role);
     }
-    if (promptContextRoleDescription) {
-        promptContextRoleDescription.textContent = getRoleDescription(role);
-    }
     if (promptContextVariationBadge) {
         const activeVariation = getActiveVariation(role);
         const badgeText = isLocalMinimalUiEnabled()
@@ -15062,9 +15049,6 @@ function renderPromptContextBar(role = getActiveRole()) {
                 ? `Вариант: ${getPromptVariationDisplayName(activeVariation)}`
                 : 'Вариант не выбран');
         promptContextVariationBadge.textContent = badgeText;
-    }
-    if (promptContextNewVariationBtn) {
-        promptContextNewVariationBtn.hidden = !isAdmin();
     }
 }
 
@@ -19515,7 +19499,6 @@ bindEvent(aiImproveBtn, 'click', showAiImproveModal);
 bindEvent(promptHistoryBtn, 'click', showPromptHistoryModal);
 bindEvent(promptCompareBtn, 'click', showPromptCompareModal);
 bindEvent(promptVisibilityBtn, 'click', toggleActivePromptVisibility);
-bindEvent(promptContextNewVariationBtn, 'click', () => addVariation(getActiveRole()));
 bindEvent(aiImproveModalClose, 'click', hideAiImproveModal);
 bindEvent(aiImproveCancel, 'click', hideAiImproveModal);
 bindEvent(aiImproveSubmit, 'click', improvePromptWithAI);
