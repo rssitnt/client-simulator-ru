@@ -101,7 +101,7 @@
   - the local history rail now owns its own left-edge collapse control; when collapsed it stays as a narrow ChatGPT-like rail with expand, new-chat, and search icons instead of disappearing completely;
   - the local history area no longer shows a visible `История` title above the list in the localhost prototype;
   - when the localhost history list is empty, it must stay visually empty; do not show the dashed `Пока пусто. Первый чат появится здесь.` placeholder card there anymore;
-  - the local history rail now uses one scrollbar for the full history column (`.history-panel`) instead of a nested list scrollbar; the scrollbar should match the settings drawer style and span the full panel height;
+- the local history rail now uses one scrollbar for the full history column (`.history-panel`) instead of a nested list scrollbar; the scrollbar should match the settings drawer style, span the full panel height, and keep native arrow buttons hidden;
   - the localhost role/personality dropdown now uses fully opaque cards and a higher stacking context so prompt content beneath it must not bleed through visually;
   - in the localhost role/personality dropdown, menu items must keep a stable tall two-line layout with the checkmark centered on the right; do not let the active role card collapse or show underlying variation text through it;
   - while the localhost role/personality dropdown is open, `.instruction-content` is intentionally hidden underneath it; keep that behavior so prompt variations and prompt copy cannot bleed through the menu even if browser stacking gets quirky;
@@ -179,7 +179,7 @@
 - The localhost `Роль` drawer is intentionally a bit wider than before: around 10% wider than the earlier 420px/34vw baseline. Keep that wider drawer unless the user asks to tighten it again.
 - Local settings sections are flat now: section wrappers should not render as separate rounded cards. Use only faint divider lines between sections; keep the inner controls/card-like inputs intact.
 - Вход в режим аттестации теперь тихий: он должен запускаться так же, как обычный вход в чат, без отдельного toast `Режим аттестации включен`.
-- В локальном минимальном UI скролл левой истории должен жить на всей колонке `.history-panel`, а не на внутреннем списке; по виду и геометрии он должен совпадать со скроллом панели настроек и тянуться на всю высоту панели.
+- В локальном минимальном UI скролл левой истории должен жить на всей колонке `.history-panel`, а не на внутреннем списке; по виду и геометрии он должен совпадать со скроллом панели настроек, тянуться на всю высоту панели и не показывать нативные стрелки.
 - Поиск по истории теперь должен понимать не только заголовок/превью, но и тип диалога (`чат` / `звонок`) и даты из меты; совпадения в карточках должны подсвечиваться.
 - В локальной админке блок `Выдача доступа` теперь должен быть более email-first: email-поле шире, блок дней компактнее, а кнопка `Выдать доступ` уже и может переноситься на две строки.
 - В локальном drawer роли сам текст промпта теперь должен лежать прямо на поверхности панели: без отдельной внутренней карточки/рамки вокруг `.prompt-wrapper`.
