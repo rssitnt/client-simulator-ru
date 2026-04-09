@@ -1295,25 +1295,32 @@ async function ensureFirebaseAuthPasswordSession(login, password) {
     }
 
     let lastError = null;
+    const waitForOpenedSession = async () => {
+        const matched = await waitForFirebaseAuthSessionForLogin(email, AUTH_SESSION_OPEN_TIMEOUT_MS);
+        if (matched || hasFirebaseAuthSessionForLogin(email)) {
+            return true;
+        }
+        return normalizeLogin(auth?.currentUser?.email || '') === email;
+    };
 
     try {
         await runAuthRequestWithRetry(() => signInWithEmailAndPassword(auth, email, password));
-        if (hasFirebaseAuthSessionForLogin(email)) {
+        if (await waitForOpenedSession()) {
             return true;
         }
     } catch (e1) {
         lastError = e1;
         try {
             await runAuthRequestWithRetry(() => createUserWithEmailAndPassword(auth, email, password));
-            if (hasFirebaseAuthSessionForLogin(email)) {
+            if (await waitForOpenedSession()) {
                 return true;
             }
         } catch (e2) {
             const c2 = String(e2?.code || '');
             if (c2 === 'auth/email-already-in-use') {
                 try {
-                    await signInWithEmailAndPassword(auth, email, password);
-                    if (hasFirebaseAuthSessionForLogin(email)) {
+                    await runAuthRequestWithRetry(() => signInWithEmailAndPassword(auth, email, password));
+                    if (await waitForOpenedSession()) {
                         return true;
                     }
                 } catch (e3) {
@@ -3569,7 +3576,7 @@ function getReadableFirebaseAuthError(error, context = 'generic') {
         return 'Email-подтверждение не настроено в Firebase. Включите Authentication -> Sign-in method -> Email link (passwordless) и добавьте домен сайта в Authorized domains.';
     }
     if (code === 'auth/invalid-credential' || code === 'auth/invalid-login-credentials' || code === 'auth/wrong-password') {
-        return 'Firebase Auth не смог открыть сессию по этому email/паролю. Выйдите и войдите заново. Если не поможет: в Firebase Authentication включите Email/Password и проверьте, что для этого email не остался старый пароль.';
+        return 'Не удалось открыть Firebase-сессию по этому email/паролю. Попробуйте войти ещё раз. Если ошибка повторяется только у одного сотрудника, проверьте в Firebase Authentication, не остался ли у этого email старый отдельный пароль.';
     }
     if (code === 'auth/email-already-in-use') {
         return 'Для этого email уже есть отдельный аккаунт в Firebase Auth с другим паролем. Нужен вход тем паролем или сброс/очистка этого аккаунта в Firebase Authentication.';

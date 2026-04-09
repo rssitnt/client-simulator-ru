@@ -101,7 +101,7 @@
   - the local history rail now owns its own left-edge collapse control; when collapsed it stays as a narrow ChatGPT-like rail with expand, new-chat, and search icons instead of disappearing completely;
   - the local history area no longer shows a visible `История` title above the list in the localhost prototype;
   - when the localhost history list is empty, it must stay visually empty; do not show the dashed `Пока пусто. Первый чат появится здесь.` placeholder card there anymore;
-- the local history rail now uses one scrollbar for the full history column (`.history-panel`) instead of a nested list scrollbar; the scrollbar should match the settings drawer style, span the full panel height, and keep native arrow buttons hidden;
+- the local history rail now uses one scrollbar for the full history column (`.history-panel`) instead of a nested list scrollbar; the scrollbar should match the settings drawer style exactly and span the full panel height.
   - the localhost role/personality dropdown now uses fully opaque cards and a higher stacking context so prompt content beneath it must not bleed through visually;
   - in the localhost role/personality dropdown, menu items must keep a stable tall two-line layout with the checkmark centered on the right; do not let the active role card collapse or show underlying variation text through it;
   - while the localhost role/personality dropdown is open, `.instruction-content` is intentionally hidden underneath it; keep that behavior so prompt variations and prompt copy cannot bleed through the menu even if browser stacking gets quirky;
@@ -169,7 +169,8 @@
   - the saved session is no longer wiped just because Firebase restored slowly after hard refresh;
   - the frontend now gives auth restore a longer second window before showing the login form;
   - repeat login for an existing user no longer blocks on non-critical RTDB profile rewrites or access-mirror sync if Firebase Auth is already open.
-  - opening Firebase Auth session now has a longer timeout and retries once on transient network errors.
+- opening Firebase Auth session now has a longer timeout and retries once on transient network errors.
+- password login now also waits for the matching Firebase Auth session after `signIn/createUser`, instead of assuming the browser exposes `currentUser.email` instantly; keep that wait to avoid intermittent session-open failures on slower machines/browsers.
 - Переключение между админским и юзерским видом теперь происходит сразу по `Сменить`, без повторного запроса пароля; пароль нужен только один раз, чтобы получить админ-доступ.
 - In the local empty-state start cards, only the main titles remain visible; the lower subtitle lines under `Чат с клиентом / Голосовой звонок / Аттестация` were intentionally removed.
 - The local empty-state start cards are compact now: the card column is intentionally much narrower than before and the remaining titles are center-aligned. Do not stretch them back to full-width unless requested.

@@ -59,7 +59,8 @@
   - non-critical user/profile mirror sync can continue best-effort after login instead of blocking access on an 8-second RTDB write timeout.
 - Hardened Firebase Auth open step:
   - the Firebase Auth open step now retries once on `auth/network-request-failed`;
-  - the timeout for opening Firebase Auth is longer and the message no longer blames email/password on a timeout.
+- the timeout for opening Firebase Auth is longer and the message no longer blames email/password on a timeout.
+- password-based Firebase login now waits for the matching auth session after `signIn/createUser`, which should reduce intermittent failures where the credentials are valid but the browser exposes the session slightly later.
 - Gemini Live early reconnect is now more tolerant (longer window and 2 attempts) to survive slow/failed WS handshakes.
 - Voice token header prep now times out fast on auth/AppCheck so the call doesn't stall ~30s before connecting.
 - Voice token endpoint timeout reduced to 15s to avoid long first-load stalls; fallback transcript now merges with any early partial preview to avoid missing leading words.
@@ -191,7 +192,7 @@
   - the localhost accent has been neutralized too: old green accent states for selected rows, prompt chips, voice pills, and focus outlines were replaced with warm neutral taupe-based states;
 - the auth/start modal was simplified too: the long welcome/explanation block was removed, the card now uses the same shell surface language as the rest of the UI, and the normal desktop path should no longer need an internal modal scrollbar;
 - entering attestation mode is silent now: it should open like the normal chat path and must not show the old `Режим аттестации включен` toast;
-- the left history rail now uses the same thin full-height scrollbar model as settings: the scrollbar belongs to `.history-panel`, the inner history list should no longer create its own shorter nested scrollbar, and native arrow buttons should stay hidden there too;
+- the left history rail scrollbar should now be styled by the same minimal rule shape as settings itself: the scroll lives on `.history-panel`, spans the full panel height, and the inner history list must not create its own nested scrollbar.
 - dialog-history search is broader now: it matches title, preview, dialog type (`чат` / `звонок`), and date variants from history meta; matching visible fragments inside the card are highlighted instead of only filtering silently;
 - the local admin `Выдача доступа` row is rebalanced now: the email field gets more width, the days field is narrower, and the invite button is compact enough to wrap onto two lines if needed;
 - the local role drawer prompt text is flattened now too: `.prompt-wrapper` should not render as a separate inner card, and the prompt content should sit directly on the drawer surface;
