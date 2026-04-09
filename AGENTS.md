@@ -158,6 +158,8 @@
   - then the saved device id;
   - then a unique label match;
   - it should no longer silently jump to the first enumerated microphone just because the list refreshed.
+- Gemini microphone fallback is now resynced after live capture too:
+  - if the saved microphone is unavailable and capture falls back to a real available input, the picker/cache must be updated to the actual captured device instead of still showing the stale saved one.
 - Hard refresh auth restore is now more tolerant:
   - a 10-second restore timeout is treated as a soft timeout, not as proof of logout;
   - the saved session is no longer wiped just because Firebase restored slowly after hard refresh;

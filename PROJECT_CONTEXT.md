@@ -27,6 +27,8 @@
   - then a unique label match;
   - only with no prior preference does it default to the first device.
   This is meant to stop the settings UI from silently switching to the wrong mic during refresh.
+- Gemini microphone fallback is also resynced after live capture now:
+  - if the saved microphone is unavailable and Gemini Live capture falls back to a real available input, the frontend updates the picker/cache to that actual captured device instead of leaving a stale saved microphone selected in the UI.
 - Fixed a race where the first client reply could be dropped if Gemini emitted client output before the first manager transcript reached the frontend.
 - The frontend now buffers this early first client reply instead of treating it as orphan output.
 - Audio for that first client reply can still start immediately.

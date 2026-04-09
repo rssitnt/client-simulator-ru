@@ -15448,7 +15448,9 @@ function setGeminiAudioInputOptions(devices = [], options = {}) {
         } else {
             geminiAudioInputDeviceInput.selectedIndex = -1;
         }
-        if (configured && selectedValue !== configured) {
+        if (selectedValue) {
+            setCachedStorageValue(GEMINI_LIVE_AUDIO_INPUT_DEVICE_STORAGE_KEY, selectedValue);
+        } else if (configured && selectedValue !== configured) {
             removeCachedStorageValue(GEMINI_LIVE_AUDIO_INPUT_DEVICE_STORAGE_KEY);
         }
     } else {
@@ -18431,6 +18433,8 @@ async function initGeminiVoiceCapture() {
         }
         : baseAudioConstraints;
 
+    let didFallbackToDefaultInput = false;
+
     try {
         geminiVoiceInputStream = await mediaDevices.getUserMedia({
             audio: requestedAudioConstraints
@@ -18446,10 +18450,8 @@ async function initGeminiVoiceCapture() {
             throw error;
         }
         console.warn('Selected microphone is unavailable, falling back to the current real input:', error);
+        didFallbackToDefaultInput = true;
         removeCachedStorageValue(GEMINI_LIVE_AUDIO_INPUT_DEVICE_STORAGE_KEY);
-        refreshGeminiAudioInputOptions({ force: true }).catch((refreshError) => {
-            console.warn('Failed to refresh audio input picker after microphone fallback:', refreshError);
-        });
         showCopyNotification('Выбранный микрофон недоступен. Переключил звонок на доступный вход.');
         recordVoiceDebugEvent('capture_fallback_default', {
             status: 'error',
@@ -18459,6 +18461,12 @@ async function initGeminiVoiceCapture() {
             audio: baseAudioConstraints
         });
     }
+
+    const activeAudioTrack = geminiVoiceInputStream?.getAudioTracks?.()[0] || null;
+    const activeAudioInputDevice = await syncGeminiAudioInputSelectionFromTrack(activeAudioTrack, {
+        refresh: didFallbackToDefaultInput,
+        clearWhenUnmatched: didFallbackToDefaultInput
+    });
 
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (typeof AudioCtx !== 'function') {
@@ -18477,8 +18485,13 @@ async function initGeminiVoiceCapture() {
     resetGeminiVoiceMicMeter();
     recordVoiceDebugEvent('capture_ready', {
         status: 'ok',
-        micLabel: normalizeGeminiAudioInputLabel(geminiVoiceInputStream?.getAudioTracks?.()[0]?.label || ''),
-        micDeviceId: selectedAudioInputDeviceId
+        micLabel: normalizeGeminiAudioInputLabel(activeAudioTrack?.label || ''),
+        micDeviceId: String(
+            activeAudioInputDevice?.deviceId
+            || activeAudioTrack?.getSettings?.()?.deviceId
+            || selectedAudioInputDeviceId
+            || ''
+        ).trim()
     });
 
     geminiVoiceProcessorNode.onaudioprocess = (event) => {
