@@ -11004,7 +11004,7 @@ body.local-minimal-ui.light-theme .btn-input-action {
 
 body.local-minimal-ui.light-theme .btn-input-action:hover {
     color: var(--local-text-final);
-    background: rgba(109, 98, 85, 0.08);
+    background: transparent;
 }
 
 body.local-minimal-ui.light-theme .btn-send {
@@ -11504,6 +11504,26 @@ body.local-minimal-ui.light-theme .btn-send {
     border-color: #3a3127;
     background: #3a3127;
     color: #fff9f2;
+}
+
+body.local-minimal-ui .btn-input-action,
+body.local-minimal-ui .btn-input-action:hover,
+body.local-minimal-ui .btn-input-action:focus,
+body.local-minimal-ui .btn-input-action:focus-visible,
+body.local-minimal-ui .btn-input-action:active,
+body.local-minimal-ui .btn-input-action.loading,
+body.local-minimal-ui .btn-input-action.recording,
+body.local-minimal-ui.light-theme .btn-input-action,
+body.local-minimal-ui.light-theme .btn-input-action:hover,
+body.local-minimal-ui.light-theme .btn-input-action:focus,
+body.local-minimal-ui.light-theme .btn-input-action:focus-visible,
+body.local-minimal-ui.light-theme .btn-input-action:active,
+body.local-minimal-ui.light-theme .btn-input-action.loading,
+body.local-minimal-ui.light-theme .btn-input-action.recording {
+    background: transparent !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
 }
 
 body.local-minimal-ui.light-theme .btn-send:disabled {

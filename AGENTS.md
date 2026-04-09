@@ -103,6 +103,7 @@
   - the current local light-theme repair also depends on a final bottom-of-file harmonization layer in `style.css`; prefer editing that tail block instead of reviving conflicting earlier light overrides higher in the file;
   - the local light-theme start cards also depend on a late override for `#startBtn / #startVoiceBtn / #startAttestationBtn`, because an old global `body.light-theme #startBtn { ... !important }` rule otherwise makes only `Чат с клиентом` look different from the other two cards;
   - the local light-theme composer field also depends on a late override for `#userInput` and `#userInput:focus`, because old global `body.light-theme #userInput` / `textarea:focus` rules otherwise paint a colder inner rounded rectangle inside the warm input shell;
+  - local input-tool buttons should stay icon-only in all states; do not reintroduce square hover/focus/selected fills around `rate / AI / mic` in the composer, only color changes are intended there;
   - the localhost minimal UI uses the old custom tooltip system again for hover help on icon/ambiguous controls; the local override no longer disables tooltip rendering globally;
   - in localhost minimal UI, clicking a tooltip-enabled button must immediately hide its tooltip and suppress re-show on that same hovered/focused button until the pointer/focus leaves it;
   - localhost chat messages in the minimal shell are now laid out as side-aligned rows again: client/assistant on the left, manager/user on the right; they should no longer appear as one centered conversation column;
