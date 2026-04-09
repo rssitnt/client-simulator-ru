@@ -12606,7 +12606,10 @@ body.local-minimal-ui.light-theme .admin-users-table th {
 
 /* Final local history scrollbar behavior */
 body.local-minimal-ui .history-panel-main {
+    display: flex;
+    flex-direction: column;
     min-height: 0;
+    height: 100%;
     overflow-y: auto;
     overflow-x: hidden;
     scrollbar-width: thin;
@@ -12626,8 +12629,19 @@ body.local-minimal-ui .history-panel-main::-webkit-scrollbar-thumb {
     border-radius: 999px;
 }
 
+body.local-minimal-ui .history-panel-main::-webkit-scrollbar-button,
+body.local-minimal-ui .history-panel-main::-webkit-scrollbar-corner {
+    display: none;
+    width: 0;
+    height: 0;
+    background: transparent;
+}
+
 body.local-minimal-ui .history-panel-body {
+    flex: 1 1 auto;
     min-height: auto;
+    overflow: visible;
+    scrollbar-width: auto;
 }
 
 body.local-minimal-ui .dialog-history-list-wrap,
