@@ -194,6 +194,7 @@
 - the left history rail now uses the same thin full-height scrollbar model as settings: the scrollbar belongs to `.history-panel-main`, and the inner history list should no longer create its own shorter nested scrollbar;
 - dialog-history search is broader now: it matches title, preview, dialog type (`чат` / `звонок`), and date variants from history meta; matching visible fragments inside the card are highlighted instead of only filtering silently;
 - the local admin `Выдача доступа` row is rebalanced now: the email field gets more width, the days field is narrower, and the invite button is compact enough to wrap onto two lines if needed;
+- the local role drawer prompt text is flattened now too: `.prompt-wrapper` should not render as a separate inner card, and the prompt content should sit directly on the drawer surface;
 - production token routing is now stricter: if `client-simulator.ru` / `www.client-simulator.ru` still has a saved same-origin `/api/gemini-live-token` in local/shared config, the frontend coerces back to the remote token server and no longer adds the known-bad same-origin `405` route as a production fallback candidate;
   - tooltip globals were switched away from TDZ-sensitive `let` storage because early local drawer init was able to throw `ReferenceError: Cannot access 'tooltipLayer' before initialization` and silently break later UI bindings;
   - on mobile the local shell panels now stretch to the full viewport width, and the same empty-prompt start flow redirects to the `Роль` tab;

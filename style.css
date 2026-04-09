@@ -11056,10 +11056,10 @@ body.local-minimal-ui .toolbar-btn:hover {
 }
 
 body.local-minimal-ui .prompt-wrapper {
-    border: 1px solid var(--local-border-final);
-    border-radius: 18px;
-    background: #1a1815;
-    overflow: hidden;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
 }
 
 body.local-minimal-ui .prompt-preview,
@@ -11070,7 +11070,7 @@ body.local-minimal-ui .prompt-editor {
 body.local-minimal-ui .prompt-preview {
     width: 100%;
     min-height: 100%;
-    padding: 18px;
+    padding: 8px 0 0;
     border-radius: 0;
     box-sizing: border-box;
 }
