@@ -12623,7 +12623,6 @@ function setAttestationMode(enabled) {
         if (startAttestationBtn) {
             startAttestationBtn.style.display = 'none';
         }
-        showCopyNotification('Режим аттестации включен');
     } else {
         if (attestationPrevState) {
             promptsData.client.activeId = attestationPrevState.client;

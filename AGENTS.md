@@ -181,6 +181,7 @@
 - In the localhost role/prompt editor, the prompt preview should read as one full-width block inside `.prompt-wrapper`, not as a smaller nested card. Keep the wrapper clipping the edges and the preview itself flat/full-width.
 - The localhost `Роль` drawer is intentionally a bit wider than before: around 10% wider than the earlier 420px/34vw baseline. Keep that wider drawer unless the user asks to tighten it again.
 - Local settings sections are flat now: section wrappers should not render as separate rounded cards. Use only faint divider lines between sections; keep the inner controls/card-like inputs intact.
+- Вход в режим аттестации теперь тихий: он должен запускаться так же, как обычный вход в чат, без отдельного toast `Режим аттестации включен`.
 
 ## Architecture Notes
 ### Dialog History
@@ -223,4 +224,5 @@
 - If the first client reply disappears again, look in the admin tech log for `assistant_output_buffered_before_user_turn`, `assistant_output_waiting_for_user_turn`, and `assistant_output_released_after_user_turn`.
 - If dialog history acts like a permissions problem, verify both Firebase rules and fresh auth token state.
 - If a hard refresh looks like a logout, first check whether Firebase Auth simply restored too slowly; soft timeout alone should not wipe the browser session anymore.
+- Если пользователь снова пожалуется на аттестацию, сначала проверь, не вернулся ли toast `Режим аттестации включен`: вход в этот режим теперь должен быть silent.
 - When updating context again, prefer replacing old bullets instead of appending another long timeline.

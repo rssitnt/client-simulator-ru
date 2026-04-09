@@ -190,6 +190,7 @@
   - the local shell palette is now intentionally warmer (`body` about `rgb(20,19,16)`, surfaces about `rgb(26,25,23)`), not blue-gray;
   - the localhost accent has been neutralized too: old green accent states for selected rows, prompt chips, voice pills, and focus outlines were replaced with warm neutral taupe-based states;
 - the auth/start modal was simplified too: the long welcome/explanation block was removed, the card now uses the same shell surface language as the rest of the UI, and the normal desktop path should no longer need an internal modal scrollbar;
+- entering attestation mode is silent now: it should open like the normal chat path and must not show the old `Режим аттестации включен` toast;
 - production token routing is now stricter: if `client-simulator.ru` / `www.client-simulator.ru` still has a saved same-origin `/api/gemini-live-token` in local/shared config, the frontend coerces back to the remote token server and no longer adds the known-bad same-origin `405` route as a production fallback candidate;
   - tooltip globals were switched away from TDZ-sensitive `let` storage because early local drawer init was able to throw `ReferenceError: Cannot access 'tooltipLayer' before initialization` and silently break later UI bindings;
   - on mobile the local shell panels now stretch to the full viewport width, and the same empty-prompt start flow redirects to the `Роль` tab;
@@ -211,6 +212,7 @@
 - Passed: `node --check script.js`
 - Passed: `node --check scripts/smoke-e2e.mjs`
 - Passed: `npm run test:smoke`
+- QA note: entering attestation mode should not produce any `Режим аттестации включен` toast.
 - Passed: headless localhost check confirms localhost dev auth now gets non-empty default prompts for all four roles without remote prompt data
 - Observed on 2026-04-09:
   - repeated Vercel `Authorization successful` tabs were caused by a stuck local `npx vercel domains inspect www.client-simulator.ru` process chain;
