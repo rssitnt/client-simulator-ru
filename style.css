@@ -12276,3 +12276,45 @@ body.local-minimal-ui.light-theme .admin-users-table th {
         border-color: var(--local-border-final) !important;
     }
 }
+
+/* Final local history scrollbar behavior */
+body.local-minimal-ui .history-panel-main {
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(242, 238, 231, 0.16) transparent;
+}
+
+body.local-minimal-ui .history-panel-main::-webkit-scrollbar {
+    width: 10px;
+}
+
+body.local-minimal-ui .history-panel-main::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+body.local-minimal-ui .history-panel-main::-webkit-scrollbar-thumb {
+    background: rgba(242, 238, 231, 0.16);
+    border-radius: 999px;
+}
+
+body.local-minimal-ui .history-panel-body {
+    min-height: auto;
+}
+
+body.local-minimal-ui .dialog-history-list-wrap,
+body.local-minimal-ui .history-thread-list.dialog-history-list,
+body.local-minimal-ui .dialog-history-list {
+    max-height: none !important;
+    overflow: visible !important;
+    padding-right: 0 !important;
+}
+
+body.local-minimal-ui.light-theme .history-panel-main {
+    scrollbar-color: rgba(139, 120, 94, 0.24) transparent;
+}
+
+body.local-minimal-ui.light-theme .history-panel-main::-webkit-scrollbar-thumb {
+    background: rgba(139, 120, 94, 0.24);
+}

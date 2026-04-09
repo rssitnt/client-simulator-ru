@@ -100,6 +100,7 @@
   - the local history rail now owns its own left-edge collapse control; when collapsed it stays as a narrow ChatGPT-like rail with expand, new-chat, and search icons instead of disappearing completely;
   - the local history area no longer shows a visible `История` title above the list in the localhost prototype;
   - when the localhost history list is empty, it must stay visually empty; do not show the dashed `Пока пусто. Первый чат появится здесь.` placeholder card there anymore;
+  - the local history rail now uses one scrollbar for the full main history column (`history-panel-main`), not a separate inner scrollbar only on the dialog list; the scrollbar should match the settings drawer style;
   - the localhost role/personality dropdown now uses fully opaque cards and a higher stacking context so prompt content beneath it must not bleed through visually;
   - in the localhost role/personality dropdown, menu items must keep a stable tall two-line layout with the checkmark centered on the right; do not let the active role card collapse or show underlying variation text through it;
   - while the localhost role/personality dropdown is open, `.instruction-content` is intentionally hidden underneath it; keep that behavior so prompt variations and prompt copy cannot bleed through the menu even if browser stacking gets quirky;

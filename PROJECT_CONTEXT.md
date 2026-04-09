@@ -115,6 +115,7 @@
   - the admin panel inside settings now uses the same warm divider-based visual system as the rest of the shell; the old nested dark boxes are intentionally flattened;
   - the admin access table is allowed to scroll horizontally inside the drawer instead of forcing overflow/breakage in narrow layouts;
   - the voice tech log styling bug was corrected at the selector level: the real body class is `.admin-webhook-debug-body`, not the stale typo `.admin-voice-debug-body`.
+  - the local history rail scroll now belongs to the whole main history column instead of the inner dialog list only, so the scrollbar starts at the full panel and matches the settings drawer styling.
 - desktop uses a clean two-zone shell (`история + чат`), while the role/prompt panel opens as a right drawer instead of living as a permanent third column;
 - the localhost settings surface was also moved visually into that same shell language: it now reads as a warm right-side drawer instead of the old centered modal card;
   - the localhost settings top theme/close block is no longer sticky; it now scrolls away together with the rest of the settings content instead of staying pinned over the form;
