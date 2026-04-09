@@ -10112,6 +10112,7 @@ body.local-minimal-ui .btn-start {
     box-shadow: none;
     gap: 4px;
     align-items: center;
+    justify-content: center;
     text-align: center;
 }
 

@@ -149,6 +149,7 @@
   - this protects against accidental role flips from stray/overlapping clicks.
 - In the local empty-state start cards, only the main titles remain visible; the lower subtitle lines under `Чат с клиентом / Голосовой звонок / Аттестация` were intentionally removed.
 - The local empty-state start cards are compact now: the card column is intentionally much narrower than before and the remaining titles are center-aligned. Do not stretch them back to full-width unless requested.
+- For local empty-state start cards, explicitly override the base `justify-content: flex-end`; these compact cards must stay vertically centered, not bottom-biased.
 
 ## Architecture Notes
 ### Dialog History
