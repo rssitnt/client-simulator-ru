@@ -150,6 +150,7 @@
 - In the local empty-state start cards, only the main titles remain visible; the lower subtitle lines under `Чат с клиентом / Голосовой звонок / Аттестация` were intentionally removed.
 - The local empty-state start cards are compact now: the card column is intentionally much narrower than before and the remaining titles are center-aligned. Do not stretch them back to full-width unless requested.
 - For local empty-state start cards, explicitly override the base `justify-content: flex-end`; these compact cards must stay vertically centered, not bottom-biased.
+- The whole localhost empty-state start stack is centered now, not just the text inside the cards. Keep the wrapper/content centered so the column does not drift toward the left edge.
 
 ## Architecture Notes
 ### Dialog History

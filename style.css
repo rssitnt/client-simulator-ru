@@ -10058,13 +10058,15 @@ body.local-minimal-ui .start-conversation {
     min-height: clamp(320px, 54vh, 560px);
     padding: 28px 0 24px;
     gap: 20px;
-    align-items: flex-start;
+    align-items: center;
     justify-content: center;
 }
 
 body.local-minimal-ui .start-conversation-copy {
     gap: 10px;
     max-width: 520px;
+    align-items: center;
+    text-align: center;
 }
 
 body.local-minimal-ui .start-conversation-eyebrow {
