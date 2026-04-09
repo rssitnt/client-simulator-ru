@@ -4291,12 +4291,12 @@ body.local-minimal-ui .modal-overlay {
 }
 
 body.local-minimal-ui #nameModal .auth-modal-content {
-    width: min(100%, 480px);
+    width: min(100%, 460px);
     border: 1px solid var(--local-border);
     border-radius: 28px !important;
-    background: linear-gradient(180deg, #171717 0%, #131313 100%);
-    box-shadow: 0 32px 80px rgba(0, 0, 0, 0.42);
-    padding: 34px 30px 28px;
+    background: var(--local-surface-raised);
+    box-shadow: 0 24px 56px rgba(0, 0, 0, 0.34);
+    padding: 28px 24px 24px;
 }
 
 body.local-minimal-ui #nameModal h3 {
@@ -4312,12 +4312,26 @@ body.local-minimal-ui #nameModal li {
     color: var(--local-text-muted);
 }
 
+body.local-minimal-ui #nameModal .auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
 body.local-minimal-ui #nameModal .auth-modal-content input {
-    min-height: 54px;
+    min-height: 52px;
     border-radius: 16px;
     border: 1px solid var(--local-border);
-    background: #1d1d1d !important;
+    background: var(--local-surface-soft) !important;
     color: var(--local-text);
+    margin-bottom: 0;
+}
+
+body.local-minimal-ui #nameModal .auth-password-wrap,
+body.local-minimal-ui #nameModal .auth-dev-actions,
+body.local-minimal-ui #nameModal .auth-mail-help {
+    margin-top: 0;
+    margin-bottom: 0;
 }
 
 body.local-minimal-ui #nameModal .btn-modal-submit,
@@ -9450,11 +9464,11 @@ body.chat-empty-state .btn-clear-floating {
     width: min(760px, 100%);
     max-width: 760px;
     height: auto;
-    max-height: min(880px, calc(100dvh - 36px));
+    max-height: calc(100dvh - 36px);
     margin: 0;
     padding: clamp(24px, 3vw, 36px);
     border-radius: 30px !important;
-    overflow: auto;
+    overflow: hidden;
     display: block;
 }
 
@@ -11860,7 +11874,7 @@ body.local-minimal-ui.light-theme .dialog-history-item-meta {
 }
 
 body.local-minimal-ui.light-theme #nameModal .auth-modal-content {
-    background: #fbf7f0;
+    background: var(--local-surface-raised-final);
     color: var(--local-text-final);
     box-shadow: 0 24px 60px rgba(63, 48, 30, 0.14);
 }
@@ -11873,7 +11887,7 @@ body.local-minimal-ui.light-theme #nameModal li {
 
 body.local-minimal-ui.light-theme #nameModal .auth-modal-content input,
 body.local-minimal-ui.light-theme #nameModal .auth-password-wrap {
-    background: #f2eadf;
+    background: var(--local-surface-soft-final);
     border-color: var(--local-border-final);
     color: var(--local-text-final);
 }
