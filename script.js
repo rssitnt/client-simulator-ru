@@ -7819,14 +7819,113 @@ function renderDialogHistoryScopeMeta() {
     });
 }
 
+function getDialogHistorySearchTokens(query = '') {
+    const normalized = normalizeDialogHistoryText(query || '').toLowerCase();
+    if (!normalized) return [];
+    return Array.from(new Set(
+        normalized
+            .split(/\s+/)
+            .map((part) => part.trim())
+            .filter(Boolean)
+    ));
+}
+
+function buildDialogHistorySearchDateVariants(dateLike = '') {
+    const ts = parseIsoMs(dateLike);
+    if (!ts) return [];
+    const date = new Date(ts);
+    const dd = String(date.getDate()).padStart(2, '0');
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const yyyy = String(date.getFullYear());
+    const hh = String(date.getHours()).padStart(2, '0');
+    const min = String(date.getMinutes()).padStart(2, '0');
+    return [
+        `${dd}.${mm}`,
+        `${dd}.${mm}.${yyyy}`,
+        `${dd}.${mm}, ${hh}:${min}`,
+        `${dd}.${mm}.${yyyy}, ${hh}:${min}`,
+        `${yyyy}-${mm}-${dd}`,
+        `${yyyy}-${mm}-${dd} ${hh}:${min}`
+    ];
+}
+
+function getDialogHistoryRecordSearchHaystack(record = null) {
+    if (!record) return '';
+    const title = getDialogHistoryRecordEffectiveTitle(record);
+    const preview = String(record?.preview || '');
+    const modeLabel = record?.mode === 'voice' ? 'звонок' : 'чат';
+    const updatedAt = buildDialogHistorySearchDateVariants(record?.updatedAt || '');
+    const createdAt = buildDialogHistorySearchDateVariants(record?.createdAt || '');
+    const ratingLabel = record?.hasRating ? 'есть оценка оценка' : '';
+    return normalizeDialogHistoryText([
+        title,
+        preview,
+        modeLabel,
+        ...updatedAt,
+        ...createdAt,
+        ratingLabel
+    ].join('\n')).toLowerCase();
+}
+
+function buildDialogHistoryHighlightRanges(text = '', query = '') {
+    const source = String(text || '');
+    const tokens = getDialogHistorySearchTokens(query).filter((token) => token.length >= 2);
+    if (!source || !tokens.length) return [];
+    const lower = source.toLowerCase();
+    const ranges = [];
+    tokens
+        .sort((a, b) => b.length - a.length)
+        .forEach((token) => {
+            let startIndex = 0;
+            while (startIndex < lower.length) {
+                const foundAt = lower.indexOf(token, startIndex);
+                if (foundAt === -1) break;
+                ranges.push([foundAt, foundAt + token.length]);
+                startIndex = foundAt + token.length;
+            }
+        });
+    if (!ranges.length) return [];
+    ranges.sort((a, b) => a[0] - b[0]);
+    const merged = [];
+    for (const [start, end] of ranges) {
+        const last = merged[merged.length - 1];
+        if (!last || start > last[1]) {
+            merged.push([start, end]);
+        } else if (end > last[1]) {
+            last[1] = end;
+        }
+    }
+    return merged;
+}
+
+function renderDialogHistoryHighlightedText(text = '', query = '') {
+    const source = String(text || '');
+    const ranges = buildDialogHistoryHighlightRanges(source, query);
+    if (!ranges.length) {
+        return escapeHtml(source);
+    }
+    let result = '';
+    let cursor = 0;
+    for (const [start, end] of ranges) {
+        if (start > cursor) {
+            result += escapeHtml(source.slice(cursor, start));
+        }
+        result += `<mark class="dialog-history-search-highlight">${escapeHtml(source.slice(start, end))}</mark>`;
+        cursor = end;
+    }
+    if (cursor < source.length) {
+        result += escapeHtml(source.slice(cursor));
+    }
+    return result;
+}
+
 function getFilteredDialogHistoryRecords() {
     const records = Array.isArray(dialogHistoryScopeRecords) ? dialogHistoryScopeRecords : [];
-    const query = normalizeDialogHistoryText(dialogHistorySearchQuery || '').toLowerCase();
-    if (!query) return records;
+    const tokens = getDialogHistorySearchTokens(dialogHistorySearchQuery || '');
+    if (!tokens.length) return records;
     return records.filter((record) => {
-        const title = String(record?.title || record?.autoTitle || '').toLowerCase();
-        const preview = String(record?.preview || '').toLowerCase();
-        return title.includes(query) || preview.includes(query);
+        const haystack = getDialogHistoryRecordSearchHaystack(record);
+        return tokens.every((token) => haystack.includes(token));
     });
 }
 
@@ -8102,7 +8201,7 @@ function renderDialogHistoryListInto(ui) {
     visibleRecords.forEach((record) => {
         const isCompactRail = ui.list === mainDialogHistoryList;
         const item = document.createElement('div');
-        item.className = `dialog-history-item${dialogHistorySelectedId === record.id ? ' is-active' : ''}${dialogHistoryMenuOpenId === record.id ? ' is-menu-open' : ''}`;
+        item.className = `dialog-history-item${dialogHistorySelectedId === record.id ? ' is-active' : ''}${dialogHistoryMenuOpenId === record.id ? ' is-menu-open' : ''}${dialogHistorySearchQuery ? ' is-search-match' : ''}`;
         const updatedDate = new Date(parseIsoMs(record.updatedAt || '') || Date.now());
         const modeLabel = record.mode === 'voice' ? 'Звонок' : 'Чат';
         const metaDate = isCompactRail
@@ -8118,13 +8217,13 @@ function renderDialogHistoryListInto(ui) {
         mainButton.className = 'dialog-history-item-main';
         mainButton.innerHTML = `
             <div class="dialog-history-item-title-row">
-                <div class="dialog-history-item-title">${escapeHtml(getDialogHistoryRecordEffectiveTitle(record))}</div>
+                <div class="dialog-history-item-title">${renderDialogHistoryHighlightedText(getDialogHistoryRecordEffectiveTitle(record), dialogHistorySearchQuery)}</div>
                 ${record.pinnedAt ? '<span class="dialog-history-item-pin" aria-hidden="true">★</span>' : ''}
             </div>
-            ${isCompactRail ? '' : `<div class="dialog-history-item-preview">${escapeHtml(record.preview || 'Без текста')}</div>`}
+            ${isCompactRail ? '' : `<div class="dialog-history-item-preview">${renderDialogHistoryHighlightedText(record.preview || 'Без текста', dialogHistorySearchQuery)}</div>`}
             <div class="dialog-history-item-meta">
-                <span class="dialog-history-pill ${record.mode === 'voice' ? 'is-voice' : 'is-text'}">${modeLabel}</span>
-                <span>${metaDate}</span>
+                <span class="dialog-history-pill ${record.mode === 'voice' ? 'is-voice' : 'is-text'}">${renderDialogHistoryHighlightedText(modeLabel, dialogHistorySearchQuery)}</span>
+                <span>${renderDialogHistoryHighlightedText(metaDate, dialogHistorySearchQuery)}</span>
                 <span>${record.messageCount} репл.</span>
                 ${record.hasRating ? '<span>Есть оценка</span>' : ''}
             </div>

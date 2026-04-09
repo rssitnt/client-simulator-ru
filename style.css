@@ -9965,6 +9965,10 @@ body.local-minimal-ui .dialog-history-item.is-active {
     background: #24211e;
 }
 
+body.local-minimal-ui .dialog-history-item.is-search-match:not(.is-active) {
+    background: rgba(255, 245, 230, 0.028);
+}
+
 body.local-minimal-ui .dialog-history-item-main {
     gap: 4px;
     padding: 12px 56px 12px 12px;
@@ -9985,6 +9989,13 @@ body.local-minimal-ui .dialog-history-item-meta {
     gap: 6px;
     color: var(--local-text-soft-final);
     font-size: 11px;
+}
+
+body.local-minimal-ui .dialog-history-search-highlight {
+    padding: 0 3px;
+    border-radius: 6px;
+    background: rgba(214, 191, 152, 0.18);
+    color: var(--local-text-final);
 }
 
 body.local-minimal-ui .dialog-history-pill {
@@ -11660,6 +11671,10 @@ body.local-minimal-ui.light-theme .dialog-history-item.is-active {
     background: #e7ddd0;
 }
 
+body.local-minimal-ui.light-theme .dialog-history-item.is-search-match:not(.is-active) {
+    background: rgba(168, 140, 102, 0.08);
+}
+
 body.local-minimal-ui.light-theme .dialog-history-pill {
     border-color: #d6ccbe;
     color: #7b6f61;
@@ -11669,6 +11684,11 @@ body.local-minimal-ui.light-theme .dialog-history-pill.is-voice {
     background: #efe6da;
     border-color: #d9cebf;
     color: #655a4d;
+}
+
+body.local-minimal-ui.light-theme .dialog-history-search-highlight {
+    background: rgba(168, 140, 102, 0.16);
+    color: var(--local-text-final);
 }
 
 body.local-minimal-ui.light-theme .dialog-history-item-menu-toggle {

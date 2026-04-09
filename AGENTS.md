@@ -183,6 +183,7 @@
 - Local settings sections are flat now: section wrappers should not render as separate rounded cards. Use only faint divider lines between sections; keep the inner controls/card-like inputs intact.
 - Вход в режим аттестации теперь тихий: он должен запускаться так же, как обычный вход в чат, без отдельного toast `Режим аттестации включен`.
 - В локальном минимальном UI скролл левой истории должен жить на всей колонке `.history-panel-main`, а не на внутреннем списке; по виду и геометрии он должен совпадать со скроллом панели настроек.
+- Поиск по истории теперь должен понимать не только заголовок/превью, но и тип диалога (`чат` / `звонок`) и даты из меты; совпадения в карточках должны подсвечиваться.
 
 ## Architecture Notes
 ### Dialog History
