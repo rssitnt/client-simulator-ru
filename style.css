@@ -12628,36 +12628,40 @@ body.local-minimal-ui.light-theme .admin-users-table th {
 }
 
 /* Final local history scrollbar behavior */
-body.local-minimal-ui .history-panel-main {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    height: 100%;
+body.local-minimal-ui .history-panel {
     overflow-y: auto;
     overflow-x: hidden;
     scrollbar-width: thin;
     scrollbar-color: rgba(242, 238, 231, 0.16) transparent;
 }
 
-body.local-minimal-ui .history-panel-main::-webkit-scrollbar {
+body.local-minimal-ui .history-panel::-webkit-scrollbar {
     width: 10px;
 }
 
-body.local-minimal-ui .history-panel-main::-webkit-scrollbar-track {
+body.local-minimal-ui .history-panel::-webkit-scrollbar-track {
     background: transparent;
 }
 
-body.local-minimal-ui .history-panel-main::-webkit-scrollbar-thumb {
+body.local-minimal-ui .history-panel::-webkit-scrollbar-thumb {
     background: rgba(242, 238, 231, 0.16);
     border-radius: 999px;
 }
 
-body.local-minimal-ui .history-panel-main::-webkit-scrollbar-button,
-body.local-minimal-ui .history-panel-main::-webkit-scrollbar-corner {
+body.local-minimal-ui .history-panel::-webkit-scrollbar-button,
+body.local-minimal-ui .history-panel::-webkit-scrollbar-corner {
     display: none;
     width: 0;
     height: 0;
     background: transparent;
+}
+
+body.local-minimal-ui .history-panel-main {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    overflow: visible;
 }
 
 body.local-minimal-ui .history-panel-body {
@@ -12675,10 +12679,10 @@ body.local-minimal-ui .dialog-history-list {
     padding-right: 0 !important;
 }
 
-body.local-minimal-ui.light-theme .history-panel-main {
+body.local-minimal-ui.light-theme .history-panel {
     scrollbar-color: rgba(139, 120, 94, 0.24) transparent;
 }
 
-body.local-minimal-ui.light-theme .history-panel-main::-webkit-scrollbar-thumb {
+body.local-minimal-ui.light-theme .history-panel::-webkit-scrollbar-thumb {
     background: rgba(139, 120, 94, 0.24);
 }
