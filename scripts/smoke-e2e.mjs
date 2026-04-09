@@ -1742,6 +1742,7 @@ async function runRolePreviewVisibilityFlow(browser, baseUrl) {
 
         await openSettings(page);
         await page.click('#changeRoleBtn');
+        await page.click('#roleChangeConfirmBtn');
         await page.waitForFunction(() => {
             return (document.getElementById('currentRoleDisplay')?.textContent || '').includes('Юзер');
         });
@@ -1756,6 +1757,7 @@ async function runRolePreviewVisibilityFlow(browser, baseUrl) {
 
         await openSettings(page);
         await page.click('#changeRoleBtn');
+        await page.click('#roleChangeConfirmBtn');
         await page.waitForFunction(() => {
             return (document.getElementById('currentRoleDisplay')?.textContent || '').includes('Админ');
         });

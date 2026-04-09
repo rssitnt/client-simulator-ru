@@ -19942,7 +19942,11 @@ if (savedTheme === 'light') {
 
 // Change role button
 changeRoleBtn.addEventListener('click', () => {
-    toggleAdminPreviewMode();
+    if (!canUseAdminPreviewControls()) return;
+    roleChangePassword.style.display = 'block';
+    roleChangePasswordInput.value = '';
+    roleChangeError.style.display = 'none';
+    roleChangePasswordInput.focus();
 });
 
 bindEvent(adminPreviewToggleBtn, 'click', toggleAdminPreviewMode);
@@ -19981,7 +19985,8 @@ roleChangeConfirmBtn.addEventListener('click', async () => {
     }
 
     try {
-        switchRole('admin');
+        const currentRole = normalizeRole(selectedRole || getCachedStorageValue(USER_ROLE_KEY, 'admin') || currentUser?.role || 'admin');
+        switchRole(currentRole === 'admin' ? 'user' : 'admin');
         roleChangePassword.style.display = 'none';
         roleChangePasswordInput.value = '';
         roleChangeError.style.display = 'none';
