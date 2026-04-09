@@ -18,6 +18,15 @@
 
 ## Relevant Current Fixes
 - Token server now respects the requested Gemini voice from the frontend (limited to the allowed list) instead of forcing a single server-side voice.
+- Voice settings save scope was corrected:
+  - changing only the Gemini voice or only the microphone now reports a local-device save;
+  - the old shared/global `для всех пользователей` toast should appear only when the token endpoint itself is really changed.
+- Gemini microphone picker refresh is safer now:
+  - when the browser re-enumerates devices, the frontend first preserves the current selected device if it still exists;
+  - if not, it tries the saved device id;
+  - then a unique label match;
+  - only with no prior preference does it default to the first device.
+  This is meant to stop the settings UI from silently switching to the wrong mic during refresh.
 - Fixed a race where the first client reply could be dropped if Gemini emitted client output before the first manager transcript reached the frontend.
 - The frontend now buffers this early first client reply instead of treating it as orphan output.
 - Audio for that first client reply can still start immediately.

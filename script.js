@@ -15409,6 +15409,17 @@ function setGeminiAudioInputOptions(devices = [], options = {}) {
     geminiAudioInputDevices = nextDevices;
     const fragment = document.createDocumentFragment();
     if (nextDevices.length) {
+        const currentSelectedOption = geminiAudioInputDeviceInput.selectedOptions?.[0]
+            || geminiAudioInputDeviceInput.options?.[geminiAudioInputDeviceInput.selectedIndex]
+            || null;
+        const currentSelectedValue = currentSelectedOption && !currentSelectedOption.disabled
+            ? String(geminiAudioInputDeviceInput.value || '').trim()
+            : '';
+        const currentSelectedLabel = normalizeGeminiAudioInputLabel(
+            currentSelectedOption?.dataset?.pickerName
+            || currentSelectedOption?.textContent
+            || ''
+        );
         nextDevices.forEach((device) => {
             const option = document.createElement('option');
             option.value = device.deviceId;
@@ -15417,11 +15428,26 @@ function setGeminiAudioInputOptions(devices = [], options = {}) {
             fragment.appendChild(option);
         });
         const configured = getConfiguredGeminiAudioInputDeviceId();
-        const selectedValue = nextDevices.some((device) => device.deviceId === configured)
-            ? configured
-            : nextDevices[0].deviceId;
+        const hasPriorPreference = !!(currentSelectedValue || configured || currentSelectedLabel);
+        let selectedValue = '';
+        if (currentSelectedValue && nextDevices.some((device) => device.deviceId === currentSelectedValue)) {
+            selectedValue = currentSelectedValue;
+        } else if (configured && nextDevices.some((device) => device.deviceId === configured)) {
+            selectedValue = configured;
+        } else if (currentSelectedLabel) {
+            const matchedByLabel = nextDevices.filter((device) => normalizeGeminiAudioInputLabel(device.label) === currentSelectedLabel);
+            if (matchedByLabel.length === 1) {
+                selectedValue = matchedByLabel[0].deviceId;
+            }
+        } else if (!hasPriorPreference) {
+            selectedValue = nextDevices[0].deviceId;
+        }
         geminiAudioInputDeviceInput.replaceChildren(fragment);
-        geminiAudioInputDeviceInput.value = selectedValue;
+        if (selectedValue) {
+            geminiAudioInputDeviceInput.value = selectedValue;
+        } else {
+            geminiAudioInputDeviceInput.selectedIndex = -1;
+        }
         if (configured && selectedValue !== configured) {
             removeCachedStorageValue(GEMINI_LIVE_AUDIO_INPUT_DEVICE_STORAGE_KEY);
         }
@@ -15541,6 +15567,112 @@ function getSelectedGeminiAudioInputDeviceId() {
         return String(geminiAudioInputDeviceInput.value || '').trim();
     }
     return getConfiguredGeminiAudioInputDeviceId();
+}
+
+function findGeminiAudioInputDeviceForTrack(track = null, devices = []) {
+    const normalizedDevices = Array.isArray(devices) ? devices : [];
+    if (!track || !normalizedDevices.length) return null;
+
+    const settingsDeviceId = String(track?.getSettings?.()?.deviceId || '').trim();
+    if (settingsDeviceId) {
+        const exactDevice = normalizedDevices.find((device) => String(device?.deviceId || '').trim() === settingsDeviceId);
+        if (exactDevice) return exactDevice;
+    }
+
+    const trackLabel = normalizeGeminiAudioInputLabel(track?.label || '');
+    if (!trackLabel) return null;
+
+    const exactLabelDevice = normalizedDevices.find((device) => {
+        return normalizeGeminiAudioInputLabel(device?.label || '') === trackLabel;
+    });
+    if (exactLabelDevice) return exactLabelDevice;
+
+    return normalizedDevices.find((device) => {
+        const deviceLabel = normalizeGeminiAudioInputLabel(device?.label || '');
+        return deviceLabel && (deviceLabel.includes(trackLabel) || trackLabel.includes(deviceLabel));
+    }) || null;
+}
+
+async function syncGeminiAudioInputSelectionFromTrack(track = null, options = {}) {
+    if (!geminiAudioInputDeviceInput || !track) return null;
+
+    const { refresh = false, clearWhenUnmatched = false } = options || {};
+    let devices = geminiAudioInputDevices;
+
+    if ((refresh || !devices.length) && navigator.mediaDevices?.enumerateDevices) {
+        try {
+            const enumeratedDevices = await navigator.mediaDevices.enumerateDevices();
+            const normalizedDevices = normalizeGeminiAudioInputDevices(enumeratedDevices);
+            if (normalizedDevices.length) {
+                devices = setGeminiAudioInputOptions(normalizedDevices);
+            }
+        } catch (error) {
+            console.warn('Failed to resync audio input list from active track:', error);
+        }
+    }
+
+    const matchedDevice = findGeminiAudioInputDeviceForTrack(track, devices);
+    if (matchedDevice) {
+        if (geminiAudioInputDeviceInput.value !== matchedDevice.deviceId) {
+            geminiAudioInputDeviceInput.value = matchedDevice.deviceId;
+        }
+        setCachedStorageValue(GEMINI_LIVE_AUDIO_INPUT_DEVICE_STORAGE_KEY, matchedDevice.deviceId);
+    } else if (clearWhenUnmatched) {
+        removeCachedStorageValue(GEMINI_LIVE_AUDIO_INPUT_DEVICE_STORAGE_KEY);
+    }
+
+    syncGeminiAudioInputPickerFromSelect();
+    return matchedDevice;
+}
+
+function buildGeminiLiveSaveNotificationMessage(options = {}) {
+    const {
+        saveSource = 'manual',
+        endpointChanged = false,
+        voiceChanged = false,
+        audioInputChanged = false,
+        sharedSaved = false,
+        hasTokenEndpoint = false,
+        hasVoiceName = false,
+        hasAudioInputDeviceId = false,
+        hasApiKey = false
+    } = options || {};
+
+    if (!hasTokenEndpoint && !hasVoiceName && !hasAudioInputDeviceId) {
+        return hasApiKey
+            ? 'API key в браузере больше не используется. Настройте token endpoint.'
+            : 'Настройки голосового режима очищены';
+    }
+
+    if (saveSource === 'voice') {
+        return voiceChanged ? 'Голос Gemini Live сохранён на этом устройстве' : 'Голос Gemini Live уже выбран на этом устройстве';
+    }
+
+    if (saveSource === 'audio') {
+        return audioInputChanged ? 'Микрофон Gemini Live сохранён на этом устройстве' : 'Этот микрофон уже выбран на этом устройстве';
+    }
+
+    if (saveSource === 'endpoint') {
+        if (sharedSaved) return 'Адрес Gemini Live сохранён для всех пользователей';
+        return endpointChanged ? 'Адрес Gemini Live сохранён на этом устройстве' : 'Адрес Gemini Live уже сохранён';
+    }
+
+    if (sharedSaved && (voiceChanged || audioInputChanged)) {
+        return 'Общий адрес Gemini Live сохранён. Голос и микрофон сохранены на этом устройстве.';
+    }
+    if (sharedSaved) {
+        return 'Настройки Gemini Live сохранены для всех пользователей';
+    }
+    if (endpointChanged && (voiceChanged || audioInputChanged)) {
+        return 'Настройки Gemini Live сохранены на этом устройстве';
+    }
+    if (endpointChanged) {
+        return 'Адрес Gemini Live сохранён на этом устройстве';
+    }
+    if (voiceChanged || audioInputChanged) {
+        return 'Локальные настройки Gemini Live сохранены';
+    }
+    return 'Настройки Gemini Live уже сохранены';
 }
 
 function populateVoiceConfigFields() {
@@ -15669,6 +15801,11 @@ async function resetHiddenRaterPromptToDefault() {
 
 async function saveVoiceModeConfigFromInputs() {
     const apiKey = String(geminiApiKeyInput?.value || '').trim();
+    const previousTokenEndpoint = sanitizeGeminiTokenEndpointOrThrow(getConfiguredGeminiTokenEndpoint(), {
+        source: 'Current voice token endpoint'
+    });
+    const previousVoiceName = getConfiguredGeminiVoiceName();
+    const previousAudioInputDeviceId = getConfiguredGeminiAudioInputDeviceId();
     const tokenEndpoint = sanitizeGeminiTokenEndpointOrThrow(geminiTokenEndpointInput?.value || '', {
         source: 'Voice token endpoint'
     });
@@ -15678,6 +15815,9 @@ async function saveVoiceModeConfigFromInputs() {
     const audioInputDeviceId = selectedAudioInputOption && !selectedAudioInputOption.disabled
         ? String(geminiAudioInputDeviceInput?.value || '').trim()
         : '';
+    const tokenEndpointChanged = tokenEndpoint !== previousTokenEndpoint;
+    const voiceNameChanged = voiceName !== previousVoiceName;
+    const audioInputDeviceIdChanged = audioInputDeviceId !== previousAudioInputDeviceId;
 
     removeCachedStorageValue(LEGACY_GEMINI_LIVE_API_KEY_STORAGE_KEY);
 
@@ -15700,18 +15840,37 @@ async function saveVoiceModeConfigFromInputs() {
     }
 
     let sharedSaved = false;
-    try {
-        sharedSaved = await saveSharedGeminiTokenEndpointConfig(tokenEndpoint);
-    } catch (error) {
-        console.warn('Failed to save shared Gemini token endpoint:', error);
+    if (tokenEndpointChanged) {
+        try {
+            sharedSaved = await saveSharedGeminiTokenEndpointConfig(tokenEndpoint);
+        } catch (error) {
+            console.warn('Failed to save shared Gemini token endpoint:', error);
+        }
     }
 
-    if (tokenEndpoint || voiceName) {
-        showCopyNotification(sharedSaved ? 'Настройки Gemini Live сохранены для всех пользователей' : 'Настройки Gemini Live сохранены');
+    if (tokenEndpointChanged) {
+        const endpointMessage = sharedSaved
+            ? (tokenEndpoint ? 'Token endpoint Gemini Live сохранён для всех пользователей' : 'Общий token endpoint Gemini Live очищен')
+            : (tokenEndpoint ? 'Token endpoint Gemini Live сохранён на этом устройстве' : 'Token endpoint Gemini Live очищен на этом устройстве');
+        if (voiceNameChanged && audioInputDeviceIdChanged) {
+            showCopyNotification(`${endpointMessage}. Голос и микрофон сохранены на этом устройстве.`);
+        } else if (voiceNameChanged) {
+            showCopyNotification(`${endpointMessage}. Голос сохранён на этом устройстве.`);
+        } else if (audioInputDeviceIdChanged) {
+            showCopyNotification(`${endpointMessage}. Микрофон сохранён на этом устройстве.`);
+        } else {
+            showCopyNotification(endpointMessage);
+        }
+    } else if (voiceNameChanged && audioInputDeviceIdChanged) {
+        showCopyNotification('Голос и микрофон Gemini Live сохранены на этом устройстве');
+    } else if (voiceNameChanged) {
+        showCopyNotification('Голос Gemini Live сохранён на этом устройстве');
+    } else if (audioInputDeviceIdChanged) {
+        showCopyNotification('Микрофон Gemini Live сохранён на этом устройстве');
     } else if (apiKey) {
         showCopyNotification('API key в браузере больше не используется. Настройте token endpoint.');
     } else {
-        showCopyNotification('Настройки голосового режима очищены');
+        showCopyNotification('Настройки Gemini Live не изменились');
     }
 }
 

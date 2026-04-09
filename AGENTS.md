@@ -150,6 +150,14 @@
 - Roles are enforced via Firebase Custom Claims.
 - App Check is enabled in the frontend/token-server flow.
 - Default Gemini voice is `Enceladus`; the token server now respects the user-selected Gemini voice (from the allowlist) instead of forcing a single server-side voice.
+- Voice settings save scope is now split correctly:
+  - changing only the Gemini voice or microphone must show a local-device save message, not `сохранены для всех пользователей`;
+  - only a real token-endpoint change may produce the shared/global save message.
+- Gemini microphone selection is now safer during device-list refresh:
+  - the picker first tries to preserve the current real selection;
+  - then the saved device id;
+  - then a unique label match;
+  - it should no longer silently jump to the first enumerated microphone just because the list refreshed.
 - Hard refresh auth restore is now more tolerant:
   - a 10-second restore timeout is treated as a soft timeout, not as proof of logout;
   - the saved session is no longer wiped just because Firebase restored slowly after hard refresh;
