@@ -10097,11 +10097,13 @@ body.local-minimal-ui .start-conversation-description.is-warning {
 }
 
 body.local-minimal-ui .start-conversation-actions {
-    width: min(540px, 100%);
+    width: min(280px, 100%);
     gap: 10px;
+    justify-items: center;
 }
 
 body.local-minimal-ui .btn-start {
+    width: 100%;
     min-height: 68px;
     padding: 14px 16px;
     border: 1px solid var(--local-border-final);
@@ -10109,6 +10111,8 @@ body.local-minimal-ui .btn-start {
     background: var(--local-surface-final);
     box-shadow: none;
     gap: 4px;
+    align-items: center;
+    text-align: center;
 }
 
 body.local-minimal-ui .btn-start:hover {
@@ -10122,6 +10126,7 @@ body.local-minimal-ui .btn-start-label {
     font-size: 18px;
     font-weight: 600;
     letter-spacing: -0.03em;
+    text-align: center;
 }
 
 body.local-minimal-ui .btn-start-meta {
