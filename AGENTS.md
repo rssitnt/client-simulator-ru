@@ -153,6 +153,7 @@
 - The whole localhost empty-state start stack is centered now, not just the text inside the cards. Keep the wrapper/content centered so the column does not drift toward the left edge.
 - In the localhost role/prompt editor, the prompt preview should read as one full-width block inside `.prompt-wrapper`, not as a smaller nested card. Keep the wrapper clipping the edges and the preview itself flat/full-width.
 - The localhost `Роль` drawer is intentionally a bit wider than before: around 10% wider than the earlier 420px/34vw baseline. Keep that wider drawer unless the user asks to tighten it again.
+- Local settings sections are flat now: section wrappers should not render as separate rounded cards. Use only faint divider lines between sections; keep the inner controls/card-like inputs intact.
 
 ## Architecture Notes
 ### Dialog History

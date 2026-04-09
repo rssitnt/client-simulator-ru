@@ -10286,11 +10286,12 @@ body.local-minimal-ui .settings-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: 10px;
-    margin-bottom: 14px;
-    padding: 16px;
-    border: 1px solid var(--local-border-final);
-    border-radius: 18px;
-    background: rgb(30, 28, 25);
+    margin-bottom: 0;
+    padding: 18px 0;
+    border: none;
+    border-bottom: 1px solid rgba(242, 238, 231, 0.08);
+    border-radius: 0;
+    background: transparent;
 }
 
 body.local-minimal-ui .settings-label {
@@ -10306,6 +10307,9 @@ body.local-minimal-ui .settings-label {
 body.local-minimal-ui .account-block {
     display: grid;
     gap: 12px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
 }
 
 body.local-minimal-ui .account-line {
@@ -10384,10 +10388,11 @@ body.local-minimal-ui .export-row {
     grid-template-columns: 1fr;
     gap: 10px;
     margin-top: 0;
-    padding: 16px;
-    border: 1px solid var(--local-border-final);
-    border-radius: 18px;
-    background: rgb(30, 28, 25);
+    padding: 18px 0;
+    border: none;
+    border-bottom: 1px solid rgba(242, 238, 231, 0.08);
+    border-radius: 0;
+    background: transparent;
 }
 
 body.local-minimal-ui .export-dropdown {
@@ -10401,6 +10406,9 @@ body.local-minimal-ui .voice-row {
 body.local-minimal-ui .voice-config-block {
     max-width: none;
     gap: 10px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
 }
 
 body.local-minimal-ui .voice-picker-trigger {
@@ -11476,6 +11484,21 @@ body.local-minimal-ui.light-theme .local-shell-action-btn:hover {
     color: var(--local-text-final) !important;
 }
 
+body.local-minimal-ui.light-theme .settings-row,
+body.local-minimal-ui.light-theme .export-row {
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 1px solid rgba(157, 136, 109, 0.18) !important;
+    border-radius: 0 !important;
+}
+
+body.local-minimal-ui.light-theme .account-block,
+body.local-minimal-ui.light-theme .voice-config-block {
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+}
+
 body.local-minimal-ui.light-theme .dialog-history-empty {
     background: var(--local-surface-muted-final);
     border-color: var(--local-border-final);
@@ -11776,6 +11799,21 @@ body.local-minimal-ui.light-theme .settings-modal-close {
     background: #fcf8f2;
     border-color: #ddd0c0;
     color: var(--local-text-final);
+}
+
+body.local-minimal-ui.light-theme .settings-row,
+body.local-minimal-ui.light-theme .export-row {
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 1px solid rgba(157, 136, 109, 0.18) !important;
+    border-radius: 0 !important;
+}
+
+body.local-minimal-ui.light-theme .account-block,
+body.local-minimal-ui.light-theme .voice-config-block {
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
 }
 
 body.local-minimal-ui.light-theme .history-panel-action:hover,
