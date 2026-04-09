@@ -126,6 +126,7 @@
   - composer tool buttons (`rate`, `AI`, `mic`) should remain backgroundless in local minimal UI even on hover/focus/active/loading/recording; the intended feedback is icon color only, because square fills looked broken inside the rounded composer shell;
   - the composer host strip itself should also stay transparent in local minimal UI; an earlier gradient/background on `.chat-input-container` created a visible dark block between the dialog and the rounded input shell, so that container is now intended to render without its own background or top border.
   - chat scroll and history scroll in the local minimal shell now intentionally reuse the same rounded thin scrollbar language as the settings drawer instead of using separate scrollbar styles.
+  - the voice-stop primary action in local minimal UI was redesigned away from the old generic white circular send-button look with an outlined stop square; it now uses a larger dedicated stop button with a filled rounded-square icon so the end-call action reads as intentional, not like a default placeholder.
   - local shell hides the old floating clear/history/settings controls and uses inline header actions instead;
   - desktop history width is locked to the grid so the rail no longer visually overlaps the chat column;
   - if the client prompt is still empty, pressing `Чат с клиентом` now opens the role/scenario UI instead of dropping a red inline error into the chat;

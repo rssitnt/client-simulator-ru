@@ -1729,8 +1729,8 @@ const VOICE_MODE_BUTTON_ICON = `
     </svg>
 `;
 const VOICE_MODE_STOP_ICON = `
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <rect x="6" y="6" width="12" height="12" rx="2" ry="2"></rect>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">
+        <rect x="7" y="7" width="10" height="10" rx="2.5" ry="2.5"></rect>
     </svg>
 `;
 

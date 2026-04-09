@@ -106,6 +106,7 @@
   - local input-tool buttons should stay icon-only in all states; do not reintroduce square hover/focus/selected fills around `rate / AI / mic` in the composer, only color changes are intended there;
   - the local chat composer should not sit on its own extra strip or gradient block above the rounded input shell; `body.local-minimal-ui .chat-input-container` is intended to stay transparent now, with only the actual `input-wrapper` visible.
   - chat and history scrollbars in the local minimal shell are now aligned to the settings drawer scrollbar; keep their width/thumb language in sync instead of styling each area separately.
+  - the local voice-stop primary action is no longer the old small white circle with a thin outlined square; it now uses a larger dedicated stop treatment with a filled rounded-square glyph, so do not revert it to the old generic send-button style unless requested.
   - the localhost minimal UI uses the old custom tooltip system again for hover help on icon/ambiguous controls; the local override no longer disables tooltip rendering globally;
   - in localhost minimal UI, clicking a tooltip-enabled button must immediately hide its tooltip and suppress re-show on that same hovered/focused button until the pointer/focus leaves it;
   - localhost chat messages in the minimal shell are now laid out as side-aligned rows again: client/assistant on the left, manager/user on the right; they should no longer appear as one centered conversation column;
