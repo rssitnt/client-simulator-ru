@@ -7762,6 +7762,28 @@ body.light-theme .admin-role-select {
     border: 1px solid #ddd;
 }
 
+body.light-theme .admin-role-picker-trigger {
+    background: #ffffff;
+    color: #222;
+    border-color: #ddd;
+}
+
+body.light-theme .admin-role-picker-menu {
+    background: #ffffff;
+    border-color: #ddd;
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.12);
+}
+
+body.light-theme .admin-role-picker-option {
+    color: #222;
+}
+
+body.light-theme .admin-role-picker-option:hover,
+body.light-theme .admin-role-picker-option.active {
+    background: #f4efe6;
+    border-color: #e2d8c8;
+}
+
 body.light-theme .admin-invite-input,
 body.light-theme .admin-invite-days {
     background: #ffffff;

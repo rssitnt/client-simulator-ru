@@ -6684,6 +6684,38 @@ function createAdminUsersTableRow(login) {
     return row;
 }
 
+function setAdminRolePickerOpen(picker, isOpen) {
+    if (!picker?.root || !picker?.trigger || !picker?.menu) return;
+    const nextOpen = !!isOpen;
+    picker.root.classList.toggle('is-open', nextOpen);
+    picker.trigger.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+    picker.menu.hidden = !nextOpen;
+}
+
+function closeAdminRolePickers(exceptRoot = null) {
+    document.querySelectorAll('.admin-role-picker.is-open').forEach((root) => {
+        if (exceptRoot && root === exceptRoot) return;
+        const trigger = root.querySelector('.admin-role-picker-trigger');
+        const menu = root.querySelector('.admin-role-picker-menu');
+        root.classList.remove('is-open');
+        trigger?.setAttribute('aria-expanded', 'false');
+        if (menu) menu.hidden = true;
+    });
+}
+
+function syncAdminRolePickerState(picker, role, disabled = false) {
+    if (!picker?.root || !picker?.trigger || !picker?.label || !picker?.optionButtons) return;
+    const normalizedRole = normalizeRole(role);
+    picker.label.textContent = getRoleLabelUi(normalizedRole);
+    picker.trigger.disabled = !!disabled;
+    picker.optionButtons.forEach((button, value) => {
+        const isActive = value === normalizedRole;
+        button.classList.toggle('active', isActive);
+        button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        button.disabled = !!disabled;
+    });
+}
+
 function updateAdminUsersTableRow(row, rowData) {
     row._adminData = rowData;
     row.dataset.login = rowData.login;
@@ -6702,46 +6734,102 @@ function updateAdminUsersTableRow(row, rowData) {
     loginCell.textContent = rowData.login;
 
     if (rowData.user) {
-        if (!row._adminRoleSelect) {
-            const roleSelect = document.createElement('select');
-            roleSelect.className = 'admin-role-select';
-            roleSelect.innerHTML = `
-                <option value="user">Юзер</option>
-                <option value="admin">Админ</option>
-            `;
-            roleSelect.addEventListener('change', async () => {
-                const currentRowData = row._adminData;
-                if (!currentRowData?.user) return;
-                const nextRole = normalizeRole(roleSelect.value);
-                roleSelect.disabled = true;
-                try {
-                    await patchUserRecord(currentRowData.user.login, {
-                        role: nextRole,
-                        lastSeenAt: new Date().toISOString()
-                    });
+        if (!row._adminRolePicker) {
+            const pickerRoot = document.createElement('div');
+            pickerRoot.className = 'admin-role-picker';
 
-                    if (currentUser && currentRowData.user.login === currentUser.login) {
-                        const previousCurrentUserRole = normalizeRole(currentUser.role);
-                        currentUser.role = nextRole;
-                        syncSelectedRole(nextRole);
-                        void ensureCurrentUserAccessMirror(currentUser);
-                        if (previousCurrentUserRole !== nextRole) {
-                            syncCurrentUserSettingsState();
-                            syncCurrentUserPresenceState(true);
-                        }
-                        applyRoleRestrictions();
+            const pickerTrigger = document.createElement('button');
+            pickerTrigger.type = 'button';
+            pickerTrigger.className = 'admin-role-picker-trigger';
+            pickerTrigger.setAttribute('aria-haspopup', 'listbox');
+            pickerTrigger.setAttribute('aria-expanded', 'false');
+
+            const pickerLabel = document.createElement('span');
+            pickerLabel.className = 'admin-role-picker-label';
+
+            const pickerChevron = document.createElement('span');
+            pickerChevron.className = 'admin-role-picker-chevron';
+            pickerChevron.setAttribute('aria-hidden', 'true');
+            pickerChevron.textContent = '⌄';
+
+            pickerTrigger.append(pickerLabel, pickerChevron);
+
+            const pickerMenu = document.createElement('div');
+            pickerMenu.className = 'admin-role-picker-menu';
+            pickerMenu.hidden = true;
+            pickerMenu.setAttribute('role', 'listbox');
+
+            const optionButtons = new Map();
+            ['user', 'admin'].forEach((roleValue) => {
+                const optionButton = document.createElement('button');
+                optionButton.type = 'button';
+                optionButton.className = 'admin-role-picker-option';
+                optionButton.dataset.value = roleValue;
+                optionButton.setAttribute('role', 'option');
+                optionButton.textContent = getRoleLabelUi(roleValue);
+                optionButton.addEventListener('click', async (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const currentRowData = row._adminData;
+                    if (!currentRowData?.user) return;
+                    const nextRole = normalizeRole(roleValue);
+                    if (nextRole === normalizeRole(currentRowData.user.role)) {
+                        setAdminRolePickerOpen(row._adminRolePicker, false);
+                        return;
                     }
-                    showCopyNotification(`Роль ${currentRowData.user.login} обновлена`);
-                    refreshAdminUsersTableAfterMutation();
-                } finally {
-                    roleSelect.disabled = false;
-                }
+                    syncAdminRolePickerState(row._adminRolePicker, currentRowData.user.role, true);
+                    try {
+                        await patchUserRecord(currentRowData.user.login, {
+                            role: nextRole,
+                            lastSeenAt: new Date().toISOString()
+                        });
+
+                        if (currentUser && currentRowData.user.login === currentUser.login) {
+                            const previousCurrentUserRole = normalizeRole(currentUser.role);
+                            currentUser.role = nextRole;
+                            syncSelectedRole(nextRole);
+                            void ensureCurrentUserAccessMirror(currentUser);
+                            if (previousCurrentUserRole !== nextRole) {
+                                syncCurrentUserSettingsState();
+                                syncCurrentUserPresenceState(true);
+                            }
+                            applyRoleRestrictions();
+                        }
+                        setAdminRolePickerOpen(row._adminRolePicker, false);
+                        showCopyNotification(`Роль ${currentRowData.user.login} обновлена`);
+                        refreshAdminUsersTableAfterMutation();
+                    } finally {
+                        syncAdminRolePickerState(row._adminRolePicker, nextRole, false);
+                    }
+                });
+                optionButtons.set(roleValue, optionButton);
+                pickerMenu.appendChild(optionButton);
             });
-            row._adminRoleSelect = roleSelect;
+
+            pickerTrigger.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                const nextOpen = !pickerRoot.classList.contains('is-open');
+                closeAdminRolePickers(nextOpen ? pickerRoot : null);
+                setAdminRolePickerOpen(row._adminRolePicker, nextOpen);
+            });
+
+            pickerMenu.addEventListener('click', (event) => {
+                event.stopPropagation();
+            });
+
+            pickerRoot.append(pickerTrigger, pickerMenu);
+            row._adminRolePicker = {
+                root: pickerRoot,
+                trigger: pickerTrigger,
+                label: pickerLabel,
+                menu: pickerMenu,
+                optionButtons
+            };
         }
         roleCell.className = '';
-        row._adminRoleSelect.value = normalizeRole(rowData.user.role);
-        roleCell.replaceChildren(row._adminRoleSelect);
+        syncAdminRolePickerState(row._adminRolePicker, rowData.user.role, false);
+        roleCell.replaceChildren(row._adminRolePicker.root);
     } else {
         roleCell.replaceChildren();
         roleCell.className = 'admin-muted';
@@ -20033,6 +20121,19 @@ document.addEventListener('click', (event) => {
 document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape' || !dialogHistoryMenuOpenId) return;
     closeDialogHistoryItemMenu();
+});
+
+document.addEventListener('click', (event) => {
+    const target = event.target;
+    if (target instanceof Element && target.closest('.admin-role-picker')) {
+        return;
+    }
+    closeAdminRolePickers();
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    closeAdminRolePickers();
 });
 
 window.addEventListener('resize', () => {
