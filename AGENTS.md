@@ -144,7 +144,8 @@
     - outer admin sections are flattened into divider-based blocks instead of heavy nested rectangles;
     - the `Выдача доступа` days control must stay as one shell: `.admin-invite-days-wrap` is the outer surface and the inner `.admin-invite-days` input stays transparent/borderless so it does not render as a smaller field inside;
     - the admin role selector should keep a theme-matched dropdown surface too: do not leave it as a dark trigger with a bright native white popup underneath;
-    - the admin users list should stay compact now: tighter table-cell padding, a slightly shorter role trigger, and wrapped right-side access/status text so rows do not get huge vertical gaps or clip past the drawer edge;
+- the admin users list should stay compact now: tighter table-cell padding, a slightly shorter role trigger, and wrapped right-side access/status text so rows do not get huge vertical gaps or clip past the drawer edge;
+- the desktop admin access table now relies on a real horizontal-scroll container plus a larger minimum table width; do not squeeze it back to `width: 100%` with tiny percentage columns, or the `Статус` text and right-side action buttons will clip again.
     - the access table can scroll horizontally inside the drawer instead of blowing out the layout;
     - the voice tech log uses the same local admin styling as the other sections again (`.admin-webhook-debug-body` is the real class; older `.admin-voice-debug-body` selectors were a dead typo).
 - Admins can view and delete foreign dialog history; users can manage only their own history.

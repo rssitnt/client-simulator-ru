@@ -12444,14 +12444,14 @@ body.local-minimal-ui .admin-table-wrap::-webkit-scrollbar-thumb {
 
 body.local-minimal-ui .admin-users-table {
     width: 100%;
-    min-width: 0;
+    min-width: 1120px;
     table-layout: fixed;
     font-size: 13px;
 }
 
 body.local-minimal-ui .admin-users-table th,
 body.local-minimal-ui .admin-users-table td {
-    padding: 6px 10px;
+    padding: 14px 12px;
     color: var(--local-text-final);
     border-bottom: 1px solid var(--local-border-final);
     vertical-align: middle;
@@ -12490,32 +12490,38 @@ body.local-minimal-ui .admin-webhook-debug-label {
 
 body.local-minimal-ui .admin-users-table th:nth-child(1),
 body.local-minimal-ui .admin-users-table td:nth-child(1) {
-    width: 30%;
+    width: 28%;
+    min-width: 260px;
 }
 
 body.local-minimal-ui .admin-users-table th:nth-child(2),
 body.local-minimal-ui .admin-users-table td:nth-child(2) {
     width: 12%;
+    min-width: 120px;
 }
 
 body.local-minimal-ui .admin-users-table th:nth-child(3),
 body.local-minimal-ui .admin-users-table td:nth-child(3) {
-    width: 28%;
+    width: 24%;
+    min-width: 210px;
 }
 
 body.local-minimal-ui .admin-users-table th:nth-child(4),
 body.local-minimal-ui .admin-users-table td:nth-child(4) {
     width: 10%;
+    min-width: 110px;
 }
 
 body.local-minimal-ui .admin-users-table th:nth-child(5),
 body.local-minimal-ui .admin-users-table td:nth-child(5) {
-    width: 12%;
+    width: 14%;
+    min-width: 170px;
 }
 
 body.local-minimal-ui .admin-users-table th:nth-child(6),
 body.local-minimal-ui .admin-users-table td:nth-child(6) {
-    width: 8%;
+    width: 12%;
+    min-width: 220px;
 }
 
 body.local-minimal-ui .admin-access-source,
@@ -12528,8 +12534,9 @@ body.local-minimal-ui .admin-presence {
 }
 
 body.local-minimal-ui .admin-role-picker-trigger {
-    min-height: 32px;
-    padding: 0 10px;
+    min-height: 38px;
+    min-width: 108px;
+    padding: 0 12px;
     border-radius: 13px;
 }
 
@@ -12545,6 +12552,23 @@ body.local-minimal-ui .admin-webhook-debug-list {
     border: 1px solid var(--local-border-final);
     border-radius: 20px;
     background: var(--local-surface-soft-final);
+}
+
+body.local-minimal-ui .admin-users-table td:last-child {
+    white-space: normal;
+}
+
+body.local-minimal-ui .admin-user-action-group {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(96px, 1fr));
+    gap: 8px;
+    width: 100%;
+    justify-content: stretch;
+}
+
+body.local-minimal-ui .admin-user-action-group .btn-change {
+    width: 100%;
+    min-width: 0;
 }
 
 body.local-minimal-ui .admin-invite-form {
