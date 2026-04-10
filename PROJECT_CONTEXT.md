@@ -129,7 +129,9 @@
   - the `Выдача доступа` row in that admin panel no longer uses a nested-number-field look: the outer days shell owns the visual chrome, while the inner numeric input stays transparent/borderless;
 - the admin role selector in the user list now also forces a theme-matched dropdown treatment, so the dark trigger should no longer open into a bright native-looking white menu in dark mode;
 - the local admin users table should now fit the settings drawer more gracefully: use auto table layout, saner column mins, wrapped access/status text, and vertical action buttons so the rightmost controls are not cut off;
+- the desktop look of that table is intentionally compact too: `Активное время` was shortened to `Активность`, the top `Обновить` button should not stretch across the whole drawer, and the role dropdown menu should stay visually small rather than ballooning inside the row;
 - the admin user list was compacted too: tighter row padding, a shorter role trigger, and wrapped access/status copy so the right-side text stays inside the drawer instead of clipping past the boundary;
+- the local desktop admin rows also now rely on shorter row copy (`До ...`, `Закрыть`, `Открыть`) and a fixed-width role dropdown; keep that compact rhythm instead of letting the role picker or access text bloat the row again;
 - the desktop admin access table now needs a larger minimum width with horizontal scrolling on the wrapper; the right action column must stay wide enough for both buttons, otherwise `Статус` and actions collapse into each other again.
   - the admin access table is allowed to scroll horizontally inside the drawer instead of forcing overflow/breakage in narrow layouts;
   - the voice tech log styling bug was corrected at the selector level: the real body class is `.admin-webhook-debug-body`, not the stale typo `.admin-voice-debug-body`.

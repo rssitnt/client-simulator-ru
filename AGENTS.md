@@ -146,6 +146,8 @@
 - the admin role selector should keep a theme-matched dropdown surface too: do not leave it as a dark trigger with a bright native white popup underneath;
 - the admin users list should stay compact now: tighter table-cell padding, a slightly shorter role trigger, wrapped access/status text, and drawer-safe column sizing so the right side does not get clipped;
 - in `Пользователи и доступ`, action buttons should stack vertically inside the actions cell instead of trying to share one narrow row;
+- that same table should also keep a compact desktop rhythm: shorter header labels, smaller uppercase header typography, a non-full-width `Обновить` button, and a tighter role dropdown menu so the section does not look oversized inside the settings drawer;
+- in the local desktop admin table, the role trigger/menu should stay on a small fixed width and the table itself should prefer horizontal scroll over crushing the `Доступ / Статус` columns; short labels like `До ...`, `Закрыть`, `Открыть` are intentional there to keep the row clean;
 - the desktop admin access table now relies on a real horizontal-scroll container plus a larger minimum table width; do not squeeze it back to `width: 100%` with tiny percentage columns, or the `Статус` text and right-side action buttons will clip again.
     - the access table can scroll horizontally inside the drawer instead of blowing out the layout;
     - the voice tech log uses the same local admin styling as the other sections again (`.admin-webhook-debug-body` is the real class; older `.admin-voice-debug-body` selectors were a dead typo).

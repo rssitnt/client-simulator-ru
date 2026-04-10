@@ -5639,7 +5639,7 @@ function getAccessSourceLabel(login, user, invite, accessRevocation = null) {
     }
 
     if (invite) {
-        return invite.expiresAt ? `По ссылке до ${formatInviteExpiry(invite.expiresAt)}` : 'По ссылке';
+        return invite.expiresAt ? `До ${formatInviteExpiry(invite.expiresAt)}` : 'По ссылке';
     }
 
     if (isCorporateEmail(login)) return 'По корпоративному email';
@@ -6853,7 +6853,7 @@ function updateAdminUsersTableRow(row, rowData) {
     presenceText.textContent = presenceMeta.label;
 
     actionBtn.className = `btn-change ${rowData.accessState.active ? 'btn-danger-subtle' : ''}`.trim();
-    actionBtn.textContent = rowData.accessState.active ? 'Закрыть доступ' : 'Открыть доступ';
+    actionBtn.textContent = rowData.accessState.active ? 'Закрыть' : 'Открыть';
     historyBtn.disabled = !isValidLogin(rowData.login);
 }
 

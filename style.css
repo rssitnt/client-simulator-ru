@@ -12270,6 +12270,10 @@ body.local-minimal-ui .admin-users-access-toolbar,
 body.local-minimal-ui .admin-hidden-prompt-actions,
 body.local-minimal-ui .admin-webhook-debug-toolbar {
     margin-top: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
 }
 
 body.local-minimal-ui .admin-hidden-prompt-hint,
@@ -12301,15 +12305,29 @@ body.local-minimal-ui .admin-role-picker-trigger {
 }
 
 body.local-minimal-ui .admin-role-picker-menu {
+    left: 0;
+    right: auto;
+    z-index: 240;
     border-color: var(--local-border-final);
     border-radius: 20px;
     background: var(--local-surface-soft-final);
+    min-width: max-content;
+    width: max-content;
+    max-width: 170px;
+    gap: 2px;
+    padding: 5px;
+    box-sizing: border-box;
+    box-shadow: 0 18px 34px rgba(0, 0, 0, 0.24);
+    white-space: nowrap;
 }
 
 body.local-minimal-ui .admin-role-picker-option {
-    min-height: 44px;
-    border-radius: 14px;
+    min-height: 34px;
+    padding: 0 14px;
+    border-radius: 15px;
     color: var(--local-text-final);
+    justify-content: flex-start;
+    white-space: nowrap;
 }
 
 body.local-minimal-ui .admin-role-picker-option:hover {
@@ -12444,24 +12462,31 @@ body.local-minimal-ui .admin-table-wrap::-webkit-scrollbar-thumb {
 
 body.local-minimal-ui .admin-users-table {
     width: 100%;
-    min-width: 0;
-    table-layout: auto;
-    font-size: 13px;
+    min-width: 860px;
+    table-layout: fixed;
+    overflow: hidden;
+    font-size: 12px;
 }
 
 body.local-minimal-ui .admin-users-table th,
 body.local-minimal-ui .admin-users-table td {
-    padding: 10px 12px;
+    padding: 8px 10px;
     color: var(--local-text-final);
     border-bottom: 1px solid var(--local-border-final);
     vertical-align: top;
     min-width: 0;
+    max-width: 0;
+    overflow-wrap: anywhere;
 }
 
 body.local-minimal-ui .admin-users-table th {
     background: color-mix(in srgb, var(--local-surface-panel-final) 74%, transparent);
     color: var(--local-text-muted-final);
     backdrop-filter: blur(8px);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
 }
 
 body.local-minimal-ui .admin-sort-btn {
@@ -12491,37 +12516,37 @@ body.local-minimal-ui .admin-webhook-debug-label {
 body.local-minimal-ui .admin-users-table th:nth-child(1),
 body.local-minimal-ui .admin-users-table td:nth-child(1) {
     width: 31%;
-    min-width: 220px;
+    min-width: 236px;
 }
 
 body.local-minimal-ui .admin-users-table th:nth-child(2),
 body.local-minimal-ui .admin-users-table td:nth-child(2) {
-    width: 12%;
-    min-width: 96px;
+    width: 13%;
+    min-width: 124px;
 }
 
 body.local-minimal-ui .admin-users-table th:nth-child(3),
 body.local-minimal-ui .admin-users-table td:nth-child(3) {
-    width: 22%;
-    min-width: 160px;
+    width: 19%;
+    min-width: 146px;
 }
 
 body.local-minimal-ui .admin-users-table th:nth-child(4),
 body.local-minimal-ui .admin-users-table td:nth-child(4) {
-    width: 11%;
-    min-width: 88px;
+    width: 10%;
+    min-width: 92px;
 }
 
 body.local-minimal-ui .admin-users-table th:nth-child(5),
 body.local-minimal-ui .admin-users-table td:nth-child(5) {
-    width: 14%;
-    min-width: 128px;
+    width: 19%;
+    min-width: 148px;
 }
 
 body.local-minimal-ui .admin-users-table th:nth-child(6),
 body.local-minimal-ui .admin-users-table td:nth-child(6) {
-    width: 10%;
-    min-width: 132px;
+    width: 8%;
+    min-width: 92px;
 }
 
 body.local-minimal-ui .admin-access-source,
@@ -12534,11 +12559,13 @@ body.local-minimal-ui .admin-presence {
 }
 
 body.local-minimal-ui .admin-role-picker-trigger {
-    min-height: 38px;
+    min-height: 40px;
     min-width: 0;
     width: 100%;
-    padding: 0 12px;
-    border-radius: 13px;
+    max-width: 100%;
+    padding: 0 14px;
+    border-radius: 16px;
+    justify-content: space-between;
 }
 
 body.local-minimal-ui .admin-role-picker-label,
@@ -12546,7 +12573,8 @@ body.local-minimal-ui .admin-access-source,
 body.local-minimal-ui .admin-status-main,
 body.local-minimal-ui .admin-presence,
 body.local-minimal-ui .admin-time {
-    font-size: 12px;
+    font-size: 11px;
+    line-height: 1.3;
 }
 
 body.local-minimal-ui .admin-sort-btn {
@@ -12554,12 +12582,29 @@ body.local-minimal-ui .admin-sort-btn {
     align-items: center;
     gap: 6px;
     white-space: nowrap;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
 }
 
 body.local-minimal-ui .admin-status-main,
 body.local-minimal-ui .admin-presence,
 body.local-minimal-ui .admin-access-source {
     max-width: 100%;
+}
+
+body.local-minimal-ui .admin-time {
+    white-space: nowrap;
+}
+
+body.local-minimal-ui .admin-users-table td:first-child {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    line-height: 1.3;
+}
+
+body.local-minimal-ui .admin-users-table td:nth-child(2) {
+    white-space: nowrap;
 }
 
 body.local-minimal-ui .admin-webhook-debug-list {
@@ -12570,12 +12615,14 @@ body.local-minimal-ui .admin-webhook-debug-list {
 
 body.local-minimal-ui .admin-users-table td:last-child {
     white-space: normal;
+    overflow: hidden;
+    text-align: right;
 }
 
 body.local-minimal-ui .admin-user-action-group {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
     width: 100%;
     align-items: stretch;
 }
@@ -12583,8 +12630,21 @@ body.local-minimal-ui .admin-user-action-group {
 body.local-minimal-ui .admin-user-action-group .btn-change {
     width: 100%;
     min-width: 0;
+    min-height: 34px;
     justify-content: center;
     text-align: center;
+    padding: 0 8px;
+    border-radius: 14px;
+    font-size: 11px;
+}
+
+body.local-minimal-ui .admin-users-access-toolbar .btn-change {
+    width: auto !important;
+    min-width: 132px;
+    max-width: 180px;
+    flex: 0 0 auto;
+    align-self: flex-start;
+    padding-inline: 18px;
 }
 
 body.local-minimal-ui .admin-invite-form {
@@ -12648,6 +12708,158 @@ body.local-minimal-ui.light-theme .admin-table-wrap::-webkit-scrollbar-thumb {
 
 body.local-minimal-ui.light-theme .admin-users-table th {
     background: color-mix(in srgb, #f7efe4 88%, transparent);
+}
+
+/* Final compact admin access layout for the settings drawer */
+body.local-minimal-ui .admin-table-wrap {
+    overflow: visible;
+    padding-bottom: 0;
+}
+
+body.local-minimal-ui .admin-users-table {
+    display: block;
+    min-width: 0;
+    width: 100%;
+    table-layout: auto;
+    overflow: visible;
+}
+
+body.local-minimal-ui .admin-users-table thead {
+    display: block;
+    margin-bottom: 14px;
+}
+
+body.local-minimal-ui .admin-users-table thead tr {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+body.local-minimal-ui .admin-users-table thead th {
+    display: none;
+    padding: 0;
+    border: none;
+    background: transparent;
+    backdrop-filter: none;
+}
+
+body.local-minimal-ui .admin-users-table thead th:nth-child(2),
+body.local-minimal-ui .admin-users-table thead th:nth-child(3),
+body.local-minimal-ui .admin-users-table thead th:nth-child(4) {
+    display: block;
+}
+
+body.local-minimal-ui .admin-users-table tbody {
+    display: block;
+}
+
+body.local-minimal-ui .admin-users-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    margin-bottom: 12px;
+    padding: 16px 18px;
+    border: 1px solid var(--local-border-final);
+    border-radius: 22px;
+    background: var(--local-surface-soft-final);
+}
+
+body.local-minimal-ui .admin-users-table tbody tr:last-child {
+    margin-bottom: 0;
+}
+
+body.local-minimal-ui .admin-users-table tbody td {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 0;
+    border: none;
+    min-width: 0;
+    max-width: none;
+    overflow: visible;
+}
+
+body.local-minimal-ui .admin-users-table tbody td::before {
+    content: attr(data-label);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--local-text-muted-final);
+}
+
+body.local-minimal-ui .admin-users-table th:nth-child(1),
+body.local-minimal-ui .admin-users-table td:nth-child(1),
+body.local-minimal-ui .admin-users-table th:nth-child(2),
+body.local-minimal-ui .admin-users-table td:nth-child(2),
+body.local-minimal-ui .admin-users-table th:nth-child(3),
+body.local-minimal-ui .admin-users-table td:nth-child(3),
+body.local-minimal-ui .admin-users-table th:nth-child(4),
+body.local-minimal-ui .admin-users-table td:nth-child(4),
+body.local-minimal-ui .admin-users-table th:nth-child(5),
+body.local-minimal-ui .admin-users-table td:nth-child(5),
+body.local-minimal-ui .admin-users-table th:nth-child(6),
+body.local-minimal-ui .admin-users-table td:nth-child(6) {
+    width: auto;
+    min-width: 0;
+}
+
+body.local-minimal-ui .admin-users-table td:first-child,
+body.local-minimal-ui .admin-access-source,
+body.local-minimal-ui .admin-status-main,
+body.local-minimal-ui .admin-presence,
+body.local-minimal-ui .admin-time {
+    overflow-wrap: break-word;
+    word-break: normal;
+    white-space: normal;
+    line-height: 1.4;
+}
+
+body.local-minimal-ui .admin-role-picker {
+    width: 100%;
+    max-width: 168px;
+}
+
+body.local-minimal-ui .admin-role-picker-trigger {
+    width: 100%;
+    min-width: 0;
+    max-width: 168px;
+}
+
+body.local-minimal-ui .admin-role-picker-menu {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+}
+
+body.local-minimal-ui .admin-users-table td:last-child {
+    text-align: left;
+}
+
+body.local-minimal-ui .admin-user-action-group {
+    display: grid;
+    grid-template-columns: 1fr;
+}
+
+body.local-minimal-ui .admin-empty-row {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+}
+
+body.local-minimal-ui .admin-empty-row td {
+    display: block !important;
+    padding: 18px 14px !important;
+    border: 1px solid var(--local-border-final) !important;
+    border-radius: 18px;
+    background: var(--local-surface-soft-final);
+}
+
+body.local-minimal-ui .admin-empty-row td::before {
+    display: none;
 }
 
 @media (max-width: 840px) {
