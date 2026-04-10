@@ -109,9 +109,10 @@
   - keep the localhost role/personality dropdown radii nested cleanly: the menu uses a larger outer radius and option cards use a slightly smaller inner radius so active cards do not look clipped or oddly squared at the corners;
   - the localhost role/personality dropdown now shows only the role names inside the menu; keep the subtitle/description lines hidden there unless the user explicitly asks to restore them;
   - the localhost role/personality dropdown selected item is intentionally neutral now; do not restore the old green active card unless the user explicitly asks for an accent state there;
-  - the localhost role/personality dropdown is intentionally compact now: shorter option height, tighter inner padding, and a smaller max-height than before;
-  - the prompt drawer context bar now shows only the role name and active variation badge; the old per-role explanatory text and `Новый вариант` button were intentionally removed;
-  - the local top action/header areas are now transparent surfaces; do not reintroduce a tinted header strip above the chat or inside the role drawer unless requested;
+- the localhost role/personality dropdown is intentionally compact now: shorter option height, tighter inner padding, and a smaller max-height than before;
+- the prompt drawer context bar now shows only the role name and active variation badge; the old per-role explanatory text and `Новый вариант` button were intentionally removed;
+- closing the localhost role drawer must also force-close the role dropdown itself; do not leave `.custom-instruction-dropdown.active` hanging after the drawer closes, or the next open can come back in a broken half-open state;
+- the local top action/header areas are now transparent surfaces; do not reintroduce a tinted header strip above the chat or inside the role drawer unless requested;
   - localhost light theme now has its own warm overrides for the shell, history rail, start cards, composer, role drawer, role dropdown, and settings drawer; it should no longer fall back to the broken old dark/white mixed styles;
   - when adjusting localhost light theme, keep the role drawer, history rail, dropdown menus, and settings controls on one shared warm-cream surface ladder so it does not drift into mismatched whites after dark-theme fixes;
   - the current local light-theme repair also depends on a final bottom-of-file harmonization layer in `style.css`; prefer editing that tail block instead of reviving conflicting earlier light overrides higher in the file;
@@ -151,6 +152,7 @@
 - the admin user rows no longer show a separate `История` action button in `Действия`; keep only the access toggle there unless the user explicitly asks to bring history actions back in another place;
 - the local admin panel is intentionally denser now: tighter accordion headers, a more compact `Выдача доступа` row, and two-column user cards with a small access action aligned to the bottom-right; do not let it drift back into tall mobile-like cards on desktop widths;
 - the desktop admin access table now relies on a real horizontal-scroll container plus a larger minimum table width; do not squeeze it back to `width: 100%` with tiny percentage columns, or the `Статус` text and right-side access action will clip again.
+- the admin role picker menu now opens as a floating fixed layer and closes on scroll/resize; keep that behavior so the compact settings drawer/table wrapper cannot clip the menu vertically.
     - the access table can scroll horizontally inside the drawer instead of blowing out the layout;
     - the voice tech log uses the same local admin styling as the other sections again (`.admin-webhook-debug-body` is the real class; older `.admin-voice-debug-body` selectors were a dead typo).
 - Admins can view and delete foreign dialog history; users can manage only their own history.

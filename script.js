@@ -2342,6 +2342,10 @@ function dismissTransientUiHints() {
 function setLocalPromptDrawerOpen(nextOpen) {
     dismissTransientUiHints();
     const shouldOpen = shouldUseLocalPromptDrawer() ? !!nextOpen : false;
+    if (!shouldOpen && instructionDropdown) {
+        instructionDropdown.classList.remove('active');
+        instructionDropdownTrigger?.setAttribute('aria-expanded', 'false');
+    }
     document.body?.classList.toggle('local-prompt-open', shouldOpen);
     updateLocalPromptDrawerUi();
 }
@@ -6700,7 +6704,50 @@ function setAdminRolePickerOpen(picker, isOpen) {
     const nextOpen = !!isOpen;
     picker.root.classList.toggle('is-open', nextOpen);
     picker.trigger.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
-    picker.menu.hidden = !nextOpen;
+    if (nextOpen) {
+        picker.menu.hidden = false;
+        positionAdminRolePickerMenu(picker);
+        return;
+    }
+    clearAdminRolePickerMenuPosition(picker);
+    picker.menu.hidden = true;
+}
+
+function clearAdminRolePickerMenuPosition(picker) {
+    const menu = picker?.menu;
+    if (!menu) return;
+    menu.dataset.floating = 'false';
+    menu.style.position = '';
+    menu.style.top = '';
+    menu.style.left = '';
+    menu.style.right = '';
+    menu.style.width = '';
+    menu.style.minWidth = '';
+    menu.style.maxWidth = '';
+    menu.style.zIndex = '';
+}
+
+function positionAdminRolePickerMenu(picker) {
+    if (!picker?.trigger || !picker?.menu) return;
+    const triggerRect = picker.trigger.getBoundingClientRect();
+    if (!triggerRect.width && !triggerRect.height) return;
+    const viewportWidth = Math.max(document.documentElement?.clientWidth || 0, window.innerWidth || 0);
+    const minMenuWidth = Math.max(136, Math.round(triggerRect.width));
+    const maxMenuWidth = Math.max(160, Math.min(220, viewportWidth - 24));
+    const menuWidth = Math.max(minMenuWidth, Math.min(maxMenuWidth, viewportWidth - 24));
+    const maxLeft = Math.max(12, viewportWidth - menuWidth - 12);
+    const left = Math.min(Math.max(12, triggerRect.right - menuWidth), maxLeft);
+    const top = Math.max(12, triggerRect.bottom + 8);
+
+    picker.menu.dataset.floating = 'true';
+    picker.menu.style.position = 'fixed';
+    picker.menu.style.top = `${Math.round(top)}px`;
+    picker.menu.style.left = `${Math.round(left)}px`;
+    picker.menu.style.right = 'auto';
+    picker.menu.style.width = `${Math.round(menuWidth)}px`;
+    picker.menu.style.minWidth = `${Math.round(menuWidth)}px`;
+    picker.menu.style.maxWidth = `${Math.round(menuWidth)}px`;
+    picker.menu.style.zIndex = '1200';
 }
 
 function closeAdminRolePickers(exceptRoot = null) {
@@ -6710,7 +6757,18 @@ function closeAdminRolePickers(exceptRoot = null) {
         const menu = root.querySelector('.admin-role-picker-menu');
         root.classList.remove('is-open');
         trigger?.setAttribute('aria-expanded', 'false');
-        if (menu) menu.hidden = true;
+        if (menu) {
+            menu.dataset.floating = 'false';
+            menu.style.position = '';
+            menu.style.top = '';
+            menu.style.left = '';
+            menu.style.right = '';
+            menu.style.width = '';
+            menu.style.minWidth = '';
+            menu.style.maxWidth = '';
+            menu.style.zIndex = '';
+            menu.hidden = true;
+        }
     });
 }
 
@@ -20328,11 +20386,13 @@ document.addEventListener('keydown', (event) => {
 });
 
 window.addEventListener('resize', () => {
+    closeAdminRolePickers();
     if (!dialogHistoryMenuOpenId) return;
     closeDialogHistoryItemMenu();
 });
 
 document.addEventListener('scroll', () => {
+    closeAdminRolePickers();
     if (!dialogHistoryMenuOpenId) return;
     closeDialogHistoryItemMenu();
 }, true);
