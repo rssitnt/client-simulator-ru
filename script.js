@@ -6619,23 +6619,6 @@ function createAdminUsersTableRow(login) {
     const actionGroup = document.createElement('div');
     actionGroup.className = 'admin-user-action-group';
     const actionBtn = document.createElement('button');
-    const historyBtn = document.createElement('button');
-    historyBtn.type = 'button';
-    historyBtn.className = 'btn-change admin-user-history-btn';
-    historyBtn.textContent = 'История';
-    historyBtn.addEventListener('click', () => {
-        const currentRowData = row._adminData;
-        const targetLogin = normalizeLogin(currentRowData?.login || '');
-        if (!targetLogin) return;
-        openDialogHistoryScope(targetLogin, {
-            openSettingsModal: true,
-            openAccordion: true,
-            selectCurrentDialog: false
-        }).catch((error) => {
-            console.error('Failed to open dialog history scope:', error);
-            showCopyNotification(error?.message || 'Не удалось открыть историю диалогов');
-        });
-    });
     actionBtn.addEventListener('click', async () => {
         const rowData = row._adminData;
         if (!rowData) return;
@@ -6663,7 +6646,6 @@ function createAdminUsersTableRow(login) {
             actionBtn.disabled = false;
         }
     });
-    actionGroup.appendChild(historyBtn);
     actionGroup.appendChild(actionBtn);
     actionCell.appendChild(actionGroup);
 
@@ -6676,8 +6658,7 @@ function createAdminUsersTableRow(login) {
         statusMain,
         presenceText,
         actionCell,
-        actionBtn,
-        historyBtn
+        actionBtn
     };
 
     row.appendChild(loginCell);
@@ -6734,8 +6715,7 @@ function updateAdminUsersTableRow(row, rowData) {
         statusCell,
         statusMain,
         presenceText,
-        actionBtn,
-        historyBtn
+        actionBtn
     } = row._adminCells;
 
     loginCell.textContent = rowData.login;
@@ -6854,7 +6834,6 @@ function updateAdminUsersTableRow(row, rowData) {
 
     actionBtn.className = `btn-change ${rowData.accessState.active ? 'btn-danger-subtle' : ''}`.trim();
     actionBtn.textContent = rowData.accessState.active ? 'Закрыть' : 'Открыть';
-    historyBtn.disabled = !isValidLogin(rowData.login);
 }
 
 function getDialogHistoryOwnerLogin(login = currentUser?.login || '') {

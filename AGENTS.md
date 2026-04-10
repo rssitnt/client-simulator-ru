@@ -148,6 +148,7 @@
 - in `Пользователи и доступ`, action buttons should stack vertically inside the actions cell instead of trying to share one narrow row;
 - that same table should also keep a compact desktop rhythm: shorter header labels, smaller uppercase header typography, a non-full-width `Обновить` button, and a tighter role dropdown menu so the section does not look oversized inside the settings drawer;
 - in the local desktop admin table, the role trigger/menu should stay on a small fixed width and the table itself should prefer horizontal scroll over crushing the `Доступ / Статус` columns; short labels like `До ...`, `Закрыть`, `Открыть` are intentional there to keep the row clean;
+- the admin user rows no longer show a separate `История` action button in `Действия`; keep only the access toggle there unless the user explicitly asks to bring history actions back in another place;
 - the desktop admin access table now relies on a real horizontal-scroll container plus a larger minimum table width; do not squeeze it back to `width: 100%` with tiny percentage columns, or the `Статус` text and right-side action buttons will clip again.
     - the access table can scroll horizontally inside the drawer instead of blowing out the layout;
     - the voice tech log uses the same local admin styling as the other sections again (`.admin-webhook-debug-body` is the real class; older `.admin-voice-debug-body` selectors were a dead typo).

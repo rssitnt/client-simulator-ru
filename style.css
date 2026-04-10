@@ -12852,8 +12852,8 @@ body.local-minimal-ui .admin-users-table td:last-child {
 
 body.local-minimal-ui .admin-user-action-group {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
 }
 
 body.local-minimal-ui .admin-empty-row {
