@@ -180,6 +180,13 @@ export async function sendSignInLinkToEmail() {
   }
   return null;
 }
+export async function sendPasswordResetEmail() {
+  const delayMs = Number(globalThis.__codexAuthSendLinkDelayMs || 0);
+  if (delayMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  return null;
+}
 export function isSignInWithEmailLink() { return false; }
 export async function signInWithEmailLink() {
   return { user: null };
@@ -2437,6 +2444,47 @@ async function runEmailAuthVerificationFlow(browser, baseUrl) {
     }
 }
 
+async function runAuthPasswordResetFlow(browser, baseUrl) {
+    const scenario = createIdleScenario();
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
+    await installCommonRoutes(context, scenario);
+    await seedAuthFlowState(context, {
+        authUsers: {},
+        authSession: null,
+        sendDelayMs: 250
+    });
+    const page = await context.newPage();
+
+    try {
+        logStep('run auth password reset flow');
+        await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('#nameModal.active');
+        await page.fill('#modalLoginInput', 'resettest@tradicia-k.ru');
+        await page.click('#authResetPasswordBtn');
+
+        await page.waitForFunction(() => {
+            const btn = document.getElementById('authResetPasswordBtn');
+            return !!btn && /Отправляем/.test(String(btn.textContent || ''));
+        });
+
+        await page.waitForFunction(() => {
+            const notification = document.querySelector('.copy-notification');
+            return !!notification && /письмо для сброса/i.test(String(notification.textContent || ''));
+        });
+
+        const buttonLabel = await page.locator('#authResetPasswordBtn').textContent();
+        expect(String(buttonLabel || '').trim() === 'Сбросить пароль', 'Reset password button label must reset after send');
+        const submitDisabled = await page.locator('#modalNameSubmit').evaluate((node) => node.disabled);
+        expect(!submitDisabled, 'Auth submit button must be re-enabled after password reset flow');
+    } catch (error) {
+        await ensureOutputDir();
+        await page.screenshot({ path: path.join(outputDir, 'smoke-auth-password-reset-failure.png'), fullPage: true });
+        throw error;
+    } finally {
+        await context.close();
+    }
+}
+
 async function runLocalhostDevAuthFlow(browser, baseUrl) {
     const scenario = createIdleScenario();
     const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
@@ -2607,6 +2655,7 @@ async function main() {
         await runEndConversationFlow(browser, baseUrl);
         await runGoSilentFlow(browser, baseUrl);
         await runEmailAuthVerificationFlow(browser, baseUrl);
+        await runAuthPasswordResetFlow(browser, baseUrl);
         await runLocalhostDevAuthFlow(browser, baseUrl);
         await runLocalMinimalLayoutRegressionFlow(browser, baseUrl);
         logStep('all smoke scenarios passed');

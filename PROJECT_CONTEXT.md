@@ -23,6 +23,11 @@
 - Password login no longer blindly falls through into `createUserWithEmailAndPassword()` after any Firebase sign-in error.
 - Create-user fallback is now limited to credential-like failures only.
 - If Firebase already has the same email with a stale/different password, the UI now returns an explicit conflict message instead of a vague generic login failure.
+- The auth modal now has a dedicated password-reset action:
+  - only email is required there;
+  - current passwords are not stored in plaintext anywhere in the frontend flow;
+  - reset is sent through Firebase `sendPasswordResetEmail()`;
+  - smoke now verifies that the reset button restores its label and does not leave the main login submit disabled.
 - Session restore no longer destroys the saved browser session immediately just because the Firebase auth session came back but the user profile read still returned empty once; that path is now treated as a soft restore miss first.
 
 ## Still watch

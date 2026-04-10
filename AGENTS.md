@@ -196,6 +196,10 @@
   - a failed Firebase password sign-in no longer always falls through into `createUserWithEmailAndPassword`;
   - create-user fallback is allowed only for credential-like cases (`user-not-found / invalid-credential / wrong-password`);
   - if Firebase already has this email but its password diverged from the local access record, the frontend now surfaces an explicit conflict error instead of looping through misleading create/retry behavior.
+- В auth-модалке теперь есть отдельный `Сбросить пароль`:
+  - он требует только корректный email, не требует ФИО и не пытается узнать/показать старый пароль;
+  - отправка идёт через Firebase `sendPasswordResetEmail`;
+  - UI всегда возвращает generic-success toast в духе `если аккаунт существует, письмо уже отправлено`, чтобы не полагаться на раскрытие существования аккаунта.
 - Переключение между админским и юзерским видом теперь происходит сразу по `Сменить`, без повторного запроса пароля; пароль нужен только один раз, чтобы получить админ-доступ.
 - In the local empty-state start cards, only the main titles remain visible; the lower subtitle lines under `Чат с клиентом / Голосовой звонок / Аттестация` were intentionally removed.
 - The local empty-state start cards are compact now: the card column is intentionally much narrower than before and the remaining titles are center-aligned. Do not stretch them back to full-width unless requested.
@@ -216,6 +220,7 @@
 - Для localhost smoke теперь есть отдельные layout-регрессии:
   - свернутая `.history-panel` должна оставаться без вертикального скролла;
   - desktop-админка `Пользователи и доступ` должна оставаться настоящей таблицей (`table / table-row`) с layout-флагом `desktop`, а не срываться обратно в карточки;
+  - auth reset-flow должен проходить отдельно: кнопка `Сбросить пароль` обязана возвращать исходный label и не оставлять disabled submit после отправки;
   - тестовые layout-hooks живут в `window.__CLIENT_SIMULATOR_TEST_HOOKS__` и предназначены только для localhost/smoke.
 
 ## Architecture Notes

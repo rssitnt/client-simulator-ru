@@ -3,6 +3,7 @@ import { getDatabase, ref, onValue, onDisconnect, set, get, update, serverTimest
 import {
     getAuth,
     sendSignInLinkToEmail,
+    sendPasswordResetEmail,
     isSignInWithEmailLink,
     signInWithEmailLink,
     signInWithEmailAndPassword,
@@ -759,11 +760,29 @@ async function runAuthRequestWithRetry(requestFactory, retryDelayMs = 1200) {
 }
 
 function setAuthSubmitState(isLoading = false, label = AUTH_SUBMIT_DEFAULT_LABEL) {
-    if (!modalNameSubmit) return;
-    modalNameSubmit.disabled = !!isLoading;
-    modalNameSubmit.textContent = String(label || AUTH_SUBMIT_DEFAULT_LABEL).trim() || AUTH_SUBMIT_DEFAULT_LABEL;
-    modalNameSubmit.dataset.loading = isLoading ? 'true' : 'false';
-    modalNameSubmit.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+    isAuthSubmitLoading = !!isLoading;
+    if (modalNameSubmit) {
+        modalNameSubmit.disabled = isAuthSubmitLoading || isAuthResetLoading;
+        modalNameSubmit.textContent = String(label || AUTH_SUBMIT_DEFAULT_LABEL).trim() || AUTH_SUBMIT_DEFAULT_LABEL;
+        modalNameSubmit.dataset.loading = isAuthSubmitLoading ? 'true' : 'false';
+        modalNameSubmit.setAttribute('aria-busy', isAuthSubmitLoading ? 'true' : 'false');
+    }
+    if (authResetPasswordBtn) {
+        authResetPasswordBtn.disabled = isAuthSubmitLoading || isAuthResetLoading;
+    }
+}
+
+function setAuthResetPasswordState(isLoading = false, label = AUTH_RESET_PASSWORD_DEFAULT_LABEL) {
+    isAuthResetLoading = !!isLoading;
+    if (authResetPasswordBtn) {
+        authResetPasswordBtn.disabled = isAuthSubmitLoading || isAuthResetLoading;
+        authResetPasswordBtn.textContent = String(label || AUTH_RESET_PASSWORD_DEFAULT_LABEL).trim() || AUTH_RESET_PASSWORD_DEFAULT_LABEL;
+        authResetPasswordBtn.dataset.loading = isAuthResetLoading ? 'true' : 'false';
+        authResetPasswordBtn.setAttribute('aria-busy', isAuthResetLoading ? 'true' : 'false');
+    }
+    if (modalNameSubmit) {
+        modalNameSubmit.disabled = isAuthSubmitLoading || isAuthResetLoading;
+    }
 }
 
 async function runAuthStep(label, promiseFactory, timeoutMs = AUTH_FLOW_STEP_TIMEOUT_MS, timeoutMessage = '') {
@@ -1557,6 +1576,7 @@ const modalLoginInput = document.getElementById('modalLoginInput');
 const modalNameSubmit = document.getElementById('modalNameSubmit');
 const nameModalStep1 = document.getElementById('nameModalStep1');
 const modalPasswordInput = document.getElementById('modalPasswordInput');
+const authResetPasswordBtn = document.getElementById('authResetPasswordBtn');
 const authMailHelp = document.getElementById('authMailHelp');
 const authMailHelpImage = document.getElementById('authMailHelpImage');
 const localhostDevAuthActions = document.getElementById('localhostDevAuthActions');
@@ -1567,6 +1587,9 @@ const promptVariationsContainer = document.getElementById('promptVariations');
 const promptSyncConflictNotice = document.getElementById('promptSyncConflictNotice');
 const promptLengthInfo = document.getElementById('promptLengthInfo');
 const AUTH_SUBMIT_DEFAULT_LABEL = String(modalNameSubmit?.textContent || 'Войти').trim() || 'Войти';
+const AUTH_RESET_PASSWORD_DEFAULT_LABEL = String(authResetPasswordBtn?.textContent || 'Сбросить пароль').trim() || 'Сбросить пароль';
+let isAuthSubmitLoading = false;
+let isAuthResetLoading = false;
 
 // AI Improve Modal Elements
 const aiImproveBtn = document.getElementById('aiImproveBtn');
@@ -3661,6 +3684,7 @@ function getReadableFirebaseAuthError(error, context = 'generic') {
     const fallback = String(error?.message || '').trim();
     if (!fallback) {
         if (context === 'invite') return 'Не удалось отправить инвайт-письмо.';
+        if (context === 'reset-password') return 'Не удалось отправить письмо для сброса пароля.';
         if (context === 'verify') return 'Не удалось отправить письмо подтверждения.';
         return 'Ошибка авторизации.';
     }
@@ -3696,6 +3720,22 @@ async function sendMagicLinkToEmail(email, purpose = 'verify') {
         purpose,
         sentAt: new Date().toISOString()
     });
+}
+
+async function sendPasswordResetLinkToEmail(email) {
+    const normalizedEmail = normalizeLogin(email);
+    if (!isValidLogin(normalizedEmail)) {
+        throw new Error('Укажите корректный email.');
+    }
+    if (!auth) {
+        throw new Error('Сервис сброса пароля не инициализирован. Проверьте Firebase Auth.');
+    }
+
+    await withPromiseTimeout(
+        runAuthRequestWithRetry(() => sendPasswordResetEmail(auth, normalizedEmail)),
+        AUTH_MAGIC_LINK_SEND_TIMEOUT_MS,
+        `Не удалось дождаться письма для сброса (${AUTH_MAGIC_LINK_SEND_TIMEOUT_MS / 1000}с).`
+    );
 }
 
 function normalizePartnerInvite(raw, loginFallback = '', loginKey = '') {
@@ -9300,6 +9340,35 @@ async function handleAuthSubmit() {
     }
 }
 
+async function handleAuthPasswordReset() {
+    cancelPendingAuthSessionRestore();
+    setAuthMailHelpVisible(false);
+    const login = normalizeLogin(modalLoginInput?.value || '');
+    if (!isValidLogin(login)) {
+        setAuthError('Сначала введите корректный email.');
+        modalLoginInput?.focus();
+        return;
+    }
+
+    setAuthError('');
+    setAuthResetPasswordState(true, 'Отправляем...');
+
+    try {
+        await sendPasswordResetLinkToEmail(login);
+        showCopyNotification(`Если аккаунт ${login} существует, письмо для сброса уже отправлено.`);
+    } catch (error) {
+        const code = String(error?.code || '').trim();
+        if (code === 'auth/user-not-found') {
+            showCopyNotification(`Если аккаунт ${login} существует, письмо для сброса уже отправлено.`);
+        } else {
+            console.error('Password reset error:', error);
+            setAuthError(getReadableFirebaseAuthError(error, 'reset-password'));
+        }
+    } finally {
+        setAuthResetPasswordState(false);
+    }
+}
+
 async function restoreAuthSession() {
     const restoreAttemptId = ++activeAuthRestoreAttemptId;
     const isStaleRestoreAttempt = () => restoreAttemptId !== activeAuthRestoreAttemptId;
@@ -14860,6 +14929,11 @@ if (togglePasswordVisibilityBtn) {
         const nextVisible = modalPasswordInput?.type === 'password';
         setPasswordVisibility(nextVisible);
         modalPasswordInput?.focus();
+    });
+}
+if (authResetPasswordBtn) {
+    authResetPasswordBtn.addEventListener('click', () => {
+        void handleAuthPasswordReset();
     });
 }
 if (authMailHelpImage) {
