@@ -64,6 +64,9 @@
   - the Firebase Auth open step now retries once on `auth/network-request-failed`;
 - the timeout for opening Firebase Auth is longer and the message no longer blames email/password on a timeout.
 - password-based Firebase login now waits for the matching auth session after `signIn/createUser`, which should reduce intermittent failures where the credentials are valid but the browser exposes the session slightly later.
+- password-based Firebase login is now also more tolerant when Firebase already returned the right user but `auth.currentUser` still lags:
+  - successful password auth no longer fails just because session exposure in the browser is a bit late;
+  - protected prompt/config reconnect now briefly waits for that expected login instead of racing ahead without it.
 - Gemini Live early reconnect is now more tolerant (longer window and 2 attempts) to survive slow/failed WS handshakes.
 - Voice token header prep now times out fast on auth/AppCheck so the call doesn't stall ~30s before connecting.
 - Voice token endpoint timeout reduced to 15s to avoid long first-load stalls; fallback transcript now merges with any early partial preview to avoid missing leading words.

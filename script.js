@@ -1268,6 +1268,27 @@ async function waitForFirebaseAuthSessionForLogin(login = '', timeoutMs = AUTH_S
     return hasFirebaseAuthSessionForLogin(normalizedLogin);
 }
 
+async function settleFirebaseAuthPasswordSession(authResult, login = '', timeoutMs = AUTH_SESSION_OPEN_TIMEOUT_MS) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!normalizedLogin) return false;
+    const authResultUser = authResult?.user || null;
+    const authResultLogin = normalizeLogin(authResultUser?.email || '');
+
+    if (authResultUser && authResultLogin === normalizedLogin) {
+        try {
+            await authResultUser.getIdToken(true);
+        } catch (error) {
+            console.warn('Firebase ID token refresh after password auth failed:', error);
+        }
+    }
+
+    const matched = await waitForFirebaseAuthSessionForLogin(normalizedLogin, timeoutMs);
+    if (matched || hasFirebaseAuthSessionForLogin(normalizedLogin)) {
+        return true;
+    }
+    return authResultLogin === normalizedLogin;
+}
+
 async function ensureFirebaseAuthPasswordSession(login, password) {
     if (!auth || !login || !password) {
         throw new Error('Firebase Auth недоступен для открытия сессии.');
@@ -1297,31 +1318,27 @@ async function ensureFirebaseAuthPasswordSession(login, password) {
 
     let lastError = null;
     const waitForOpenedSession = async () => {
-        const matched = await waitForFirebaseAuthSessionForLogin(email, AUTH_SESSION_OPEN_TIMEOUT_MS);
-        if (matched || hasFirebaseAuthSessionForLogin(email)) {
-            return true;
-        }
-        return normalizeLogin(auth?.currentUser?.email || '') === email;
+        return settleFirebaseAuthPasswordSession(null, email, AUTH_SESSION_OPEN_TIMEOUT_MS);
     };
 
     try {
-        await runAuthRequestWithRetry(() => signInWithEmailAndPassword(auth, email, password));
-        if (await waitForOpenedSession()) {
+        const signInResult = await runAuthRequestWithRetry(() => signInWithEmailAndPassword(auth, email, password));
+        if (await settleFirebaseAuthPasswordSession(signInResult, email, AUTH_SESSION_OPEN_TIMEOUT_MS)) {
             return true;
         }
     } catch (e1) {
         lastError = e1;
         try {
-            await runAuthRequestWithRetry(() => createUserWithEmailAndPassword(auth, email, password));
-            if (await waitForOpenedSession()) {
+            const createResult = await runAuthRequestWithRetry(() => createUserWithEmailAndPassword(auth, email, password));
+            if (await settleFirebaseAuthPasswordSession(createResult, email, AUTH_SESSION_OPEN_TIMEOUT_MS)) {
                 return true;
             }
         } catch (e2) {
             const c2 = String(e2?.code || '');
             if (c2 === 'auth/email-already-in-use') {
                 try {
-                    await runAuthRequestWithRetry(() => signInWithEmailAndPassword(auth, email, password));
-                    if (await waitForOpenedSession()) {
+                    const retrySignInResult = await runAuthRequestWithRetry(() => signInWithEmailAndPassword(auth, email, password));
+                    if (await settleFirebaseAuthPasswordSession(retrySignInResult, email, AUTH_SESSION_OPEN_TIMEOUT_MS)) {
                         return true;
                     }
                 } catch (e3) {
@@ -1340,6 +1357,9 @@ async function ensureFirebaseAuthPasswordSession(login, password) {
 
     if (lastError) {
         throw lastError;
+    }
+    if (await waitForOpenedSession()) {
+        return true;
     }
     throw new Error('Не удалось открыть Firebase Auth-сессию.');
 }
@@ -9123,7 +9143,7 @@ async function handleAuthSubmit() {
         setAuthSubmitState(true, 'Входим...');
         await runAuthStep(
             'Подключаем промпты...',
-            () => refreshProtectedFirebaseDataAfterAuth(),
+            () => refreshProtectedFirebaseDataAfterAuth(login),
             AUTH_FLOW_STEP_TIMEOUT_MS,
             'Firebase-сессия открыта, но не удалось заново подключить промпты. Обновите страницу и повторите вход.'
         );
@@ -14329,9 +14349,13 @@ function setupPromptsAndConfigListeners() {
     }
 }
 
-async function refreshProtectedFirebaseDataAfterAuth() {
+async function refreshProtectedFirebaseDataAfterAuth(expectedLogin = '') {
     if (!db) return false;
     await waitForFirebaseAuthReady();
+    const normalizedExpectedLogin = normalizeLogin(expectedLogin);
+    if (normalizedExpectedLogin && !hasFirebaseAuthSessionForLogin(normalizedExpectedLogin)) {
+        await waitForFirebaseAuthSessionForLogin(normalizedExpectedLogin, 5000);
+    }
     setupPromptsAndConfigListeners();
     const bootstrapped = await bootstrapPromptsViaRestFallback();
     return bootstrapped || promptsStateHasMeaningfulContent();

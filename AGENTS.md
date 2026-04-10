@@ -181,6 +181,9 @@
   - repeat login for an existing user no longer blocks on non-critical RTDB profile rewrites or access-mirror sync if Firebase Auth is already open.
 - opening Firebase Auth session now has a longer timeout and retries once on transient network errors.
 - password login now also waits for the matching Firebase Auth session after `signIn/createUser`, instead of assuming the browser exposes `currentUser.email` instantly; keep that wait to avoid intermittent session-open failures on slower machines/browsers.
+- password login is now slightly more tolerant to delayed Firebase session exposure:
+  - if `signInWithEmailAndPassword` / `createUserWithEmailAndPassword` already returned the correct Firebase user, the frontend no longer treats the login as failed only because `auth.currentUser` lagged behind for a moment;
+  - after password auth, protected prompt/config reconnect now briefly waits for that expected login too instead of reconnecting blindly.
 - Переключение между админским и юзерским видом теперь происходит сразу по `Сменить`, без повторного запроса пароля; пароль нужен только один раз, чтобы получить админ-доступ.
 - In the local empty-state start cards, only the main titles remain visible; the lower subtitle lines under `Чат с клиентом / Голосовой звонок / Аттестация` were intentionally removed.
 - The local empty-state start cards are compact now: the card column is intentionally much narrower than before and the remaining titles are center-aligned. Do not stretch them back to full-width unless requested.
