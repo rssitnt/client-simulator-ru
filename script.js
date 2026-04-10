@@ -9309,7 +9309,7 @@ async function restoreAuthSession() {
     const user = await getUserRecordByLogin(session.login);
     if (isStaleRestoreAttempt()) return false;
     if (!user) {
-        clearAuthSession();
+        pendingAuthRestoreMessage = 'Не удалось быстро подтянуть профиль пользователя после обновления. Сессия сохранена, попробуйте обновить страницу ещё раз или войти повторно только если доступ сам не вернётся.';
         return false;
     }
     if (isSessionRevokedForSignedAt(session.signedAt, user.sessionRevokedAt)) {

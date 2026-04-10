@@ -181,6 +181,9 @@
   - the saved session is no longer wiped just because Firebase restored slowly after hard refresh;
   - the frontend now gives auth restore a longer second window before showing the login form;
   - repeat login for an existing user no longer blocks on non-critical RTDB profile rewrites or access-mirror sync if Firebase Auth is already open.
+- Session restore is also softer when Firebase auth is already alive but the user profile is late:
+  - if the Firebase session for this login already exists but `getUserRecordByLogin(...)` still returns empty during restore, the frontend must not immediately wipe the saved browser session;
+  - it should show a soft retry-style message first instead of turning a transient RTDB/profile read miss into a forced logout.
 - opening Firebase Auth session now has a longer timeout and retries once on transient network errors.
 - password login now also waits for the matching Firebase Auth session after `signIn/createUser`, instead of assuming the browser exposes `currentUser.email` instantly; keep that wait to avoid intermittent session-open failures on slower machines/browsers.
 - password login is now slightly more tolerant to delayed Firebase session exposure:

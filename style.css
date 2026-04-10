@@ -13493,6 +13493,16 @@ body.local-minimal-ui .admin-invite-btn {
         max-width: 188px !important;
     }
 
+    body.local-minimal-ui .admin-status-main,
+    body.local-minimal-ui .admin-presence {
+        display: inline;
+        vertical-align: baseline;
+    }
+
+    body.local-minimal-ui .admin-presence {
+        margin-top: 0;
+    }
+
     body.local-minimal-ui .admin-role-picker-label,
     body.local-minimal-ui .admin-access-source,
     body.local-minimal-ui .admin-status-main,

@@ -20,6 +20,7 @@
 - Password login no longer blindly falls through into `createUserWithEmailAndPassword()` after any Firebase sign-in error.
 - Create-user fallback is now limited to credential-like failures only.
 - If Firebase already has the same email with a stale/different password, the UI now returns an explicit conflict message instead of a vague generic login failure.
+- Session restore no longer destroys the saved browser session immediately just because the Firebase auth session came back but the user profile read still returned empty once; that path is now treated as a soft restore miss first.
 
 ## Still watch
 - If one employee still cannot log in while others can, first check Firebase Authentication for an old standalone account or stale password on that exact email.
