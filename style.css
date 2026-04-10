@@ -13810,3 +13810,11 @@ body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admi
     min-height: 26px;
     min-width: 84px;
 }
+
+body.local-minimal-ui #adminPanel > .admin-invite-form {
+    border-bottom: none !important;
+}
+
+body.local-minimal-ui #adminPanel > #adminHiddenClientPromptAccordion.admin-hidden-prompt-section {
+    border-top: none !important;
+}
