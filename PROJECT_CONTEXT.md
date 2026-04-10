@@ -127,7 +127,8 @@
   - keeps the current functionality/IDs, but swaps the shell to a much more minimal ChatGPT-like layout;
   - the admin panel inside settings now uses the same warm divider-based visual system as the rest of the shell; the old nested dark boxes are intentionally flattened;
   - the `Выдача доступа` row in that admin panel no longer uses a nested-number-field look: the outer days shell owns the visual chrome, while the inner numeric input stays transparent/borderless;
-  - the admin role selector in the user list now also forces a theme-matched dropdown treatment, so the dark trigger should no longer open into a bright native-looking white menu in dark mode;
+- the admin role selector in the user list now also forces a theme-matched dropdown treatment, so the dark trigger should no longer open into a bright native-looking white menu in dark mode;
+- the local admin users table should now fit the settings drawer more gracefully: use auto table layout, saner column mins, wrapped access/status text, and vertical action buttons so the rightmost controls are not cut off;
 - the admin user list was compacted too: tighter row padding, a shorter role trigger, and wrapped access/status copy so the right-side text stays inside the drawer instead of clipping past the boundary;
 - the desktop admin access table now needs a larger minimum width with horizontal scrolling on the wrapper; the right action column must stay wide enough for both buttons, otherwise `Статус` and actions collapse into each other again.
   - the admin access table is allowed to scroll horizontally inside the drawer instead of forcing overflow/breakage in narrow layouts;

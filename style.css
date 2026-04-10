@@ -12444,17 +12444,17 @@ body.local-minimal-ui .admin-table-wrap::-webkit-scrollbar-thumb {
 
 body.local-minimal-ui .admin-users-table {
     width: 100%;
-    min-width: 1120px;
-    table-layout: fixed;
+    min-width: 0;
+    table-layout: auto;
     font-size: 13px;
 }
 
 body.local-minimal-ui .admin-users-table th,
 body.local-minimal-ui .admin-users-table td {
-    padding: 14px 12px;
+    padding: 10px 12px;
     color: var(--local-text-final);
     border-bottom: 1px solid var(--local-border-final);
-    vertical-align: middle;
+    vertical-align: top;
     min-width: 0;
 }
 
@@ -12490,38 +12490,38 @@ body.local-minimal-ui .admin-webhook-debug-label {
 
 body.local-minimal-ui .admin-users-table th:nth-child(1),
 body.local-minimal-ui .admin-users-table td:nth-child(1) {
-    width: 28%;
-    min-width: 260px;
+    width: 31%;
+    min-width: 220px;
 }
 
 body.local-minimal-ui .admin-users-table th:nth-child(2),
 body.local-minimal-ui .admin-users-table td:nth-child(2) {
     width: 12%;
-    min-width: 120px;
+    min-width: 96px;
 }
 
 body.local-minimal-ui .admin-users-table th:nth-child(3),
 body.local-minimal-ui .admin-users-table td:nth-child(3) {
-    width: 24%;
-    min-width: 210px;
+    width: 22%;
+    min-width: 160px;
 }
 
 body.local-minimal-ui .admin-users-table th:nth-child(4),
 body.local-minimal-ui .admin-users-table td:nth-child(4) {
-    width: 10%;
-    min-width: 110px;
+    width: 11%;
+    min-width: 88px;
 }
 
 body.local-minimal-ui .admin-users-table th:nth-child(5),
 body.local-minimal-ui .admin-users-table td:nth-child(5) {
     width: 14%;
-    min-width: 170px;
+    min-width: 128px;
 }
 
 body.local-minimal-ui .admin-users-table th:nth-child(6),
 body.local-minimal-ui .admin-users-table td:nth-child(6) {
-    width: 12%;
-    min-width: 220px;
+    width: 10%;
+    min-width: 132px;
 }
 
 body.local-minimal-ui .admin-access-source,
@@ -12535,7 +12535,8 @@ body.local-minimal-ui .admin-presence {
 
 body.local-minimal-ui .admin-role-picker-trigger {
     min-height: 38px;
-    min-width: 108px;
+    min-width: 0;
+    width: 100%;
     padding: 0 12px;
     border-radius: 13px;
 }
@@ -12546,6 +12547,19 @@ body.local-minimal-ui .admin-status-main,
 body.local-minimal-ui .admin-presence,
 body.local-minimal-ui .admin-time {
     font-size: 12px;
+}
+
+body.local-minimal-ui .admin-sort-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+body.local-minimal-ui .admin-status-main,
+body.local-minimal-ui .admin-presence,
+body.local-minimal-ui .admin-access-source {
+    max-width: 100%;
 }
 
 body.local-minimal-ui .admin-webhook-debug-list {
@@ -12559,16 +12573,18 @@ body.local-minimal-ui .admin-users-table td:last-child {
 }
 
 body.local-minimal-ui .admin-user-action-group {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(96px, 1fr));
+    display: flex;
+    flex-direction: column;
     gap: 8px;
     width: 100%;
-    justify-content: stretch;
+    align-items: stretch;
 }
 
 body.local-minimal-ui .admin-user-action-group .btn-change {
     width: 100%;
     min-width: 0;
+    justify-content: center;
+    text-align: center;
 }
 
 body.local-minimal-ui .admin-invite-form {
