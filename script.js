@@ -84,6 +84,7 @@ const GEMINI_LIVE_MEDIA_RESOLUTION = 'MEDIA_RESOLUTION_LOW';
 const GEMINI_LIVE_THINKING_BUDGET = 0;
 const GEMINI_LIVE_VAD_PREFIX_PADDING_MS = 120;
 const GEMINI_LIVE_VAD_SILENCE_DURATION_MS = 700;
+const GEMINI_LIVE_CLIENT_ACTIVITY_END_IDLE_MS = 900;
 const GEMINI_VOICE_EARLY_ASSISTANT_REPLY_USER_GRACE_MS = 1200;
 const GEMINI_VOICE_EARLY_ASSISTANT_BUFFER_WINDOW_MS = 45000;
 const GEMINI_VOICE_RECENT_SPEECH_ACTIVITY_WINDOW_MS = 2500;
@@ -1905,6 +1906,8 @@ let geminiVoiceFallbackTranscriptTimerId = 0;
 let geminiVoiceMicLevelNormalized = 0;
 let geminiVoiceMicMeterReady = false;
 let geminiVoiceLastSpeechActivityAt = 0;
+let geminiVoiceClientActivityOpen = false;
+let geminiVoiceClientActivityEndTimerId = 0;
 let geminiVoicePendingAssistantBeforeFirstUserTurn = false;
 let voiceAuthWarmupPromise = null;
 let voiceAuthCachedIdToken = '';
@@ -12901,6 +12904,56 @@ function updateGeminiVoiceMicMeterFromSamples(inputChannel) {
         geminiVoiceLastSpeechActivityAt = Date.now();
     }
     updateVoiceConnectMeterUi();
+    return normalizedLevel >= GEMINI_LIVE_AUDIO_INPUT_ACTIVITY_THRESHOLD;
+}
+
+function clearGeminiVoiceClientActivityEndTimer() {
+    if (geminiVoiceClientActivityEndTimerId) {
+        clearTimeout(geminiVoiceClientActivityEndTimerId);
+        geminiVoiceClientActivityEndTimerId = 0;
+    }
+}
+
+function sendGeminiVoiceRealtimeActivityMarker(type = 'start', reason = '') {
+    if (!geminiLiveSession || typeof geminiLiveSession.sendRealtimeInput !== 'function') return false;
+    try {
+        geminiLiveSession.sendRealtimeInput(type === 'end' ? { activityEnd: {} } : { activityStart: {} });
+        recordVoiceDebugEvent(type === 'end' ? 'client_activity_end' : 'client_activity_start', {
+            status: 'info',
+            message: reason || ''
+        });
+        return true;
+    } catch (error) {
+        console.warn(`Failed to send Gemini Live ${type} activity marker:`, error);
+        recordVoiceDebugEvent(type === 'end' ? 'client_activity_end_failed' : 'client_activity_start_failed', {
+            status: 'error',
+            message: error?.message || `${type} marker failed`
+        });
+        return false;
+    }
+}
+
+function closeGeminiVoiceClientActivity(reason = 'speech_end') {
+    clearGeminiVoiceClientActivityEndTimer();
+    if (!geminiVoiceClientActivityOpen) return false;
+    geminiVoiceClientActivityOpen = false;
+    return sendGeminiVoiceRealtimeActivityMarker('end', reason);
+}
+
+function openGeminiVoiceClientActivity(reason = 'speech_start') {
+    clearGeminiVoiceClientActivityEndTimer();
+    if (geminiVoiceClientActivityOpen) return false;
+    geminiVoiceClientActivityOpen = true;
+    return sendGeminiVoiceRealtimeActivityMarker('start', reason);
+}
+
+function scheduleGeminiVoiceClientActivityEnd(reason = 'speech_idle') {
+    if (!geminiVoiceClientActivityOpen) return;
+    clearGeminiVoiceClientActivityEndTimer();
+    geminiVoiceClientActivityEndTimerId = setTimeout(() => {
+        geminiVoiceClientActivityEndTimerId = 0;
+        closeGeminiVoiceClientActivity(reason);
+    }, GEMINI_LIVE_CLIENT_ACTIVITY_END_IDLE_MS);
 }
 
 function clearGeminiPendingAssistantFinalizeTimer() {
@@ -17132,6 +17185,7 @@ function beginGeminiAssistantVoiceOutput(trigger = 'transcript') {
     clearGeminiVoiceLateTranscriptWait();
     geminiVoiceAssistantTurnInProgress = true;
     clearGeminiVoiceMicUnlockTimer();
+    closeGeminiVoiceClientActivity('assistant_output_started');
     if (geminiVoiceMicInputEnabled) {
         setGeminiVoiceMicInputEnabled(false);
         recordVoiceDebugEvent('mic_blocked_for_assistant', {
@@ -17751,6 +17805,7 @@ function resetGeminiVoiceDialogBuffer() {
     cancelGeminiVoiceAutoStop();
     clearGeminiVoiceLateTranscriptWait();
     clearGeminiPendingAssistantFinalizeTimer();
+    closeGeminiVoiceClientActivity('reset');
     resetGeminiAssistantTurnAudioState();
     geminiVoiceDialogLines = [];
     geminiVoiceDialogSyncedCount = 0;
@@ -17766,6 +17821,8 @@ function resetGeminiVoiceDialogBuffer() {
     geminiVoiceAssistantCurrentTurnId = 0;
     geminiVoiceAssistantLastFinalizedTurnId = 0;
     geminiVoiceLastSpeechActivityAt = 0;
+    geminiVoiceClientActivityOpen = false;
+    clearGeminiVoiceClientActivityEndTimer();
     geminiVoicePendingAssistantBeforeFirstUserTurn = false;
     setGeminiVoiceMicInputEnabled(false);
     clearGeminiVoiceMicUnlockTimer();
@@ -18680,8 +18737,16 @@ async function initGeminiVoiceCapture() {
 
     geminiVoiceProcessorNode.onaudioprocess = (event) => {
         const inputChannel = event.inputBuffer?.getChannelData?.(0);
+        const hasAudioActivity = inputChannel?.length
+            ? !!updateGeminiVoiceMicMeterFromSamples(inputChannel)
+            : false;
         if (inputChannel?.length) {
-            updateGeminiVoiceMicMeterFromSamples(inputChannel);
+            if (hasAudioActivity && geminiVoiceMicInputEnabled) {
+                openGeminiVoiceClientActivity('speech_detected');
+                scheduleGeminiVoiceClientActivityEnd('speech_idle');
+            } else if (geminiVoiceClientActivityOpen) {
+                scheduleGeminiVoiceClientActivityEnd('speech_idle');
+            }
         }
         if (
             !isGeminiVoiceActive ||
@@ -18689,6 +18754,9 @@ async function initGeminiVoiceCapture() {
             !geminiLiveSession ||
             typeof geminiLiveSession.sendRealtimeInput !== 'function'
         ) {
+            if (geminiVoiceClientActivityOpen) {
+                closeGeminiVoiceClientActivity('mic_locked');
+            }
             return;
         }
         try {
@@ -18723,6 +18791,9 @@ async function initGeminiVoiceCapture() {
 
 function teardownGeminiVoiceCapture() {
     resetGeminiVoiceMicMeter();
+    closeGeminiVoiceClientActivity('capture_teardown');
+    geminiVoiceClientActivityOpen = false;
+    clearGeminiVoiceClientActivityEndTimer();
     if (geminiVoiceProcessorNode) {
         try {
             geminiVoiceProcessorNode.onaudioprocess = null;

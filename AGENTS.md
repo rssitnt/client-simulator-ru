@@ -150,7 +150,7 @@
 - in the local desktop admin table, the role trigger/menu should stay on a small fixed width and the table itself should prefer horizontal scroll over crushing the `Доступ / Статус` columns; short labels like `До ...`, `Закрыть`, `Открыть` are intentional there to keep the row clean;
 - the admin user rows no longer show a separate `История` action button in `Действия`; keep only the access toggle there unless the user explicitly asks to bring history actions back in another place;
 - the local admin panel is intentionally denser now: tighter accordion headers, a more compact `Выдача доступа` row, and two-column user cards with a small access action aligned to the bottom-right; do not let it drift back into tall mobile-like cards on desktop widths;
-- the desktop admin access table now relies on a real horizontal-scroll container plus a larger minimum table width; do not squeeze it back to `width: 100%` with tiny percentage columns, or the `Статус` text and right-side action buttons will clip again.
+- the desktop admin access table now relies on a real horizontal-scroll container plus a larger minimum table width; do not squeeze it back to `width: 100%` with tiny percentage columns, or the `Статус` text and right-side access action will clip again.
     - the access table can scroll horizontally inside the drawer instead of blowing out the layout;
     - the voice tech log uses the same local admin styling as the other sections again (`.admin-webhook-debug-body` is the real class; older `.admin-voice-debug-body` selectors were a dead typo).
 - Admins can view and delete foreign dialog history; users can manage only their own history.
@@ -171,6 +171,9 @@
   - it should no longer silently jump to the first enumerated microphone just because the list refreshed.
 - Gemini microphone fallback is now resynced after live capture too:
   - if the saved microphone is unavailable and capture falls back to a real available input, the picker/cache must be updated to the actual captured device instead of still showing the stale saved one.
+- Gemini Live client turns now also use explicit realtime microphone activity markers:
+  - the browser sends `activityStart` on real detected client speech;
+  - the browser sends `activityEnd` shortly after speech fades (~900ms idle), instead of relying only on SDK-side VAD to close the client turn.
 - Hard refresh auth restore is now more tolerant:
   - a 10-second restore timeout is treated as a soft timeout, not as proof of logout;
   - the saved session is no longer wiped just because Firebase restored slowly after hard refresh;

@@ -15,6 +15,9 @@
 - Client text is assembled from `outputTranscription`, `text` parts, or fallback transcription via `/api/gemini-live-transcribe`.
 - Assistant/client playback is half-duplex: microphone input is blocked while client audio is speaking and restored after playback.
 - Gemini Live session config now explicitly enables aggressive automatic activity detection (`high/high`, ~700ms silence) so a manager turn closes faster and the client can start replying without hanging on SDK defaults.
+- Gemini Live client turns now also use explicit browser-side activity boundaries:
+  - the frontend emits realtime `activityStart` on detected client speech;
+  - the frontend emits realtime `activityEnd` shortly after speech fades (~900ms idle), so the client turn closes more reliably even when SDK-only VAD hesitates.
 
 ## Relevant Current Fixes
 - Token server now respects the requested Gemini voice from the frontend (limited to the allowed list) instead of forcing a single server-side voice.
@@ -213,6 +216,7 @@
   - compacted admin users row/card rhythm in `style.css` (local minimal UI) by reducing row padding/margins and cell spacing in the final density pass;
   - tightened the `Выдача доступа` controls: wider email column, narrower days field, smaller compact invite button and two-line-capable invite label;
   - aligned panel rhythm in admin headers/buttons by small final-step adjustments in the same `Final admin density pass` block;
+  - the per-user `История` action was removed from `Действия`; only the access action remains in that compact drawer table;
   - no changes to `index.html` or `script.js` were required for these visual-only fixes.
 
 ## Useful Debug Markers
