@@ -2540,8 +2540,10 @@ async function runLocalMinimalLayoutRegressionFlow(browser, baseUrl) {
         expect(adminState.admin.settingsOpen, 'Settings modal must be open in admin layout smoke');
         expect(adminState.admin.panelVisible, 'Admin accordion must be visible in admin layout smoke');
         expect(adminState.admin.accessOpen, 'Users/access section must be open in admin layout smoke');
+        expect(adminState.admin.layout === 'desktop', `Desktop admin layout flag must stay desktop, got ${adminState.admin.layout}`);
         expect(adminState.admin.rowCount >= 1, 'Admin users table must render at least one row in admin layout smoke');
         expect(adminState.admin.tableDisplay === 'table', `Desktop admin users table must render as table, got ${adminState.admin.tableDisplay}`);
+        expect(adminState.admin.tableWrapDisplay === 'block' || adminState.admin.tableWrapDisplay === 'grid', `Admin table wrapper must stay block-like container, got ${adminState.admin.tableWrapDisplay}`);
         expect(adminState.admin.firstRowDisplay === 'table-row', `Desktop admin row must stay a table-row, got ${adminState.admin.firstRowDisplay}`);
         expect(String(adminState.admin.tableMinWidth || '').includes('px'), `Desktop admin table must keep a min-width, got ${adminState.admin.tableMinWidth}`);
         expect(Number(adminState.admin.inviteHeight || 0) > 0 && Number(adminState.admin.inviteHeight || 0) <= 64, `Invite row height must stay compact, got ${adminState.admin.inviteHeight}`);

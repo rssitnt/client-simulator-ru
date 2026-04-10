@@ -13559,3 +13559,254 @@ body.local-minimal-ui .admin-invite-btn {
         min-width: 84px;
     }
 }
+
+/* Explicit admin users layout mode: desktop table vs mobile cards */
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-table-wrap {
+    display: block;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 0;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table {
+    display: table;
+    width: 100%;
+    min-width: 780px;
+    table-layout: fixed;
+    overflow: visible;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table thead {
+    display: table-header-group;
+    margin-bottom: 0;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table tbody,
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table tfoot {
+    display: table-row-group;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table tr,
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table thead tr,
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table tbody tr,
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table tfoot tr {
+    display: table-row;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table th,
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table td {
+    display: table-cell;
+    vertical-align: top;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table tbody td {
+    padding: 7px 8px;
+    border-bottom: 1px solid var(--local-border-final);
+    gap: 0;
+    align-self: auto;
+    justify-self: auto;
+    overflow: visible;
+    background: transparent;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table tbody td::before {
+    display: none;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table td:first-child,
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table td:nth-child(6) {
+    grid-column: auto;
+    align-self: auto;
+    justify-self: auto;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table th:nth-child(1),
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table td:nth-child(1) {
+    width: 34%;
+    min-width: 220px;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table th:nth-child(2),
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table td:nth-child(2) {
+    width: 12%;
+    min-width: 104px;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table th:nth-child(3),
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table td:nth-child(3) {
+    width: 18%;
+    min-width: 132px;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table th:nth-child(4),
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table td:nth-child(4) {
+    width: 11%;
+    min-width: 88px;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table th:nth-child(5),
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table td:nth-child(5) {
+    width: 17%;
+    min-width: 124px;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table th:nth-child(6),
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table td:nth-child(6) {
+    width: 8%;
+    min-width: 88px;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-role-picker,
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-role-picker-trigger {
+    width: 104px;
+    min-width: 104px;
+    max-width: 104px;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-role-picker-trigger {
+    min-height: 36px;
+    padding-inline: 12px;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-status-main,
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-presence {
+    display: inline;
+    vertical-align: baseline;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-presence {
+    margin-top: 0;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-role-picker-label,
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-access-source,
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-status-main,
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-presence,
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-time {
+    font-size: 10px;
+    line-height: 1.24;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-user-action-group {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    width: 100%;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-user-action-group .btn-change {
+    width: auto;
+    min-width: 88px;
+    max-width: 108px;
+    min-height: 30px;
+    padding: 0 8px;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admin-table-wrap {
+    display: block;
+    overflow: visible;
+    padding-bottom: 0;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admin-users-table {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    table-layout: auto;
+    overflow: visible;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admin-users-table thead {
+    display: none;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admin-users-table tbody {
+    display: block;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admin-users-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px 8px;
+    margin: 0 0 6px;
+    padding: 8px 10px;
+    border: 1px solid var(--local-border-final);
+    border-radius: 14px;
+    background: var(--local-surface-soft-final);
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admin-users-table tbody tr:last-child {
+    margin-bottom: 0;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admin-users-table tbody td {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+    border: none;
+    min-width: 0;
+    max-width: none;
+    overflow: visible;
+    text-align: left;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admin-users-table tbody td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 2px;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--local-text-muted-final);
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admin-users-table th:nth-child(1),
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admin-users-table td:nth-child(1),
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admin-users-table th:nth-child(2),
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admin-users-table td:nth-child(2),
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admin-users-table th:nth-child(3),
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admin-users-table td:nth-child(3),
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admin-users-table th:nth-child(4),
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admin-users-table td:nth-child(4),
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admin-users-table th:nth-child(5),
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admin-users-table td:nth-child(5),
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admin-users-table th:nth-child(6),
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admin-users-table td:nth-child(6) {
+    width: auto;
+    min-width: 0;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admin-role-picker {
+    width: 112px;
+    min-width: 112px;
+    max-width: 112px;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admin-role-picker-trigger {
+    width: 112px;
+    min-width: 112px;
+    max-width: 112px;
+    min-height: 32px;
+    padding-inline: 9px;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admin-user-action-group {
+    display: flex;
+    justify-content: flex-start;
+    align-items: stretch;
+    width: 100%;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="mobile"] .admin-user-action-group .btn-change {
+    min-height: 26px;
+    min-width: 84px;
+}

@@ -1708,6 +1708,9 @@ const adminSortRoleBtn = document.getElementById('adminSortRoleBtn');
 const adminSortAccessBtn = document.getElementById('adminSortAccessBtn');
 const adminSortActiveBtn = document.getElementById('adminSortActiveBtn');
 const adminUsersTableBody = document.getElementById('adminUsersTableBody');
+const adminUsersAccessBody = adminUsersAccessAccordion?.querySelector('.admin-users-access-body') || null;
+const adminUsersTableWrap = adminUsersAccessAccordion?.querySelector('.admin-table-wrap') || null;
+const adminUsersTableElement = adminUsersAccessAccordion?.querySelector('.admin-users-table') || null;
 const dialogHistoryPinBtn = document.getElementById('dialogHistoryPinBtn');
 const dialogHistoryUiSets = [
     {
@@ -6645,6 +6648,26 @@ function setAdminUsersTableEmptyState(text) {
     adminUsersTableBody.appendChild(row);
 }
 
+function getAdminUsersAccessLayoutMode() {
+    if (typeof window === 'undefined') {
+        return 'desktop';
+    }
+    if (typeof window.matchMedia === 'function') {
+        return window.matchMedia('(max-width: 700px)').matches ? 'mobile' : 'desktop';
+    }
+    return window.innerWidth <= 700 ? 'mobile' : 'desktop';
+}
+
+function syncAdminUsersAccessLayoutMode() {
+    const mode = getAdminUsersAccessLayoutMode();
+    [adminUsersAccessAccordion, adminUsersAccessBody, adminUsersTableWrap, adminUsersTableElement].forEach((node) => {
+        if (node instanceof Element) {
+            node.dataset.adminLayout = mode;
+        }
+    });
+    return mode;
+}
+
 function createAdminUsersTableRow(login) {
     const row = document.createElement('tr');
     row.dataset.login = login;
@@ -8788,6 +8811,7 @@ async function startFreshDialogFromHistory() {
 async function renderAdminUsersTable() {
     if (!adminPanel || !adminUsersTableBody) return;
     if (adminUsersTableRenderInProgress) return;
+    syncAdminUsersAccessLayoutMode();
 
     if (!isSettingsModalOpen()) {
         stopAdminRealtimeSync();
@@ -19713,6 +19737,7 @@ function showSettingsModal(options = {}) {
     });
     populateHiddenClientPromptField();
     populateHiddenRaterPromptField();
+    syncAdminUsersAccessLayoutMode();
     settingsModal.classList.add('active');
     [adminHiddenClientPromptAccordion, adminHiddenRaterPromptAccordion, adminUsersAccessAccordion, adminVoiceDebugAccordion]
         .forEach((accordion) => {
@@ -23461,6 +23486,8 @@ if (window.innerWidth <= 1024) {
 
 syncHistorySidebarResponsiveState();
 window.addEventListener('resize', syncHistorySidebarResponsiveState);
+window.addEventListener('resize', syncAdminUsersAccessLayoutMode);
+syncAdminUsersAccessLayoutMode();
 
 function isSelectionInsideTag(preview, tagName) {
     const selection = window.getSelection();
@@ -23566,6 +23593,7 @@ function installLocalhostTestHooks() {
         async openSettingsAdminForTest() {
             showSettingsModal();
             syncCurrentUserSettingsState();
+            syncAdminUsersAccessLayoutMode();
             if (adminPanelAccordion) {
                 adminPanelAccordion.style.display = '';
                 adminPanelAccordion.setAttribute('open', '');
@@ -23581,6 +23609,8 @@ function installLocalhostTestHooks() {
             const historyPanelStyle = historyPanel ? getComputedStyle(historyPanel) : null;
             const adminTable = document.querySelector('.admin-users-table');
             const adminTableStyle = adminTable ? getComputedStyle(adminTable) : null;
+            const adminTableWrap = document.querySelector('.admin-table-wrap');
+            const adminTableWrapStyle = adminTableWrap ? getComputedStyle(adminTableWrap) : null;
             const adminFirstRow = document.querySelector('.admin-users-table tbody tr');
             const adminFirstRowStyle = adminFirstRow ? getComputedStyle(adminFirstRow) : null;
             const inviteForm = document.querySelector('.admin-invite-form');
@@ -23598,8 +23628,10 @@ function installLocalhostTestHooks() {
                     settingsOpen: isSettingsModalOpen(),
                     panelVisible: (adminPanelAccordion?.style?.display || '') !== 'none',
                     accessOpen: !!adminUsersAccessAccordion?.open,
+                    layout: accessBody?.dataset?.adminLayout || adminTableWrap?.dataset?.adminLayout || adminTable?.dataset?.adminLayout || '',
                     rowCount: document.querySelectorAll('.admin-users-table tbody tr').length,
                     tableDisplay: adminTableStyle?.display || '',
+                    tableWrapDisplay: adminTableWrapStyle?.display || '',
                     tableMinWidth: adminTableStyle?.minWidth || '',
                     firstRowDisplay: adminFirstRowStyle?.display || '',
                     inviteHeight: inviteForm ? Math.round(inviteForm.getBoundingClientRect().height) : 0,
