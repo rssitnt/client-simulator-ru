@@ -6651,21 +6651,31 @@ function createAdminUsersTableRow(login) {
 
     const loginCell = document.createElement('td');
     loginCell.dataset.label = 'Логин';
+    const loginText = document.createElement('span');
+    loginText.className = 'admin-user-login';
+    loginCell.appendChild(loginText);
+
     const roleCell = document.createElement('td');
     roleCell.dataset.label = 'Роль';
+
     const sourceCell = document.createElement('td');
     sourceCell.dataset.label = 'Доступ';
     sourceCell.className = 'admin-access-source';
+
     const timeCell = document.createElement('td');
     timeCell.dataset.label = 'Активность';
     timeCell.className = 'admin-time';
+
     const statusCell = document.createElement('td');
     statusCell.dataset.label = 'Статус';
     const statusMain = document.createElement('div');
     statusMain.className = 'admin-status-main';
-    const presenceText = document.createElement('div');
+    const presenceText = document.createElement('span');
+    presenceText.className = 'admin-presence';
+    presenceText.style.display = 'inline';
     statusCell.appendChild(statusMain);
     statusCell.appendChild(presenceText);
+
     const actionCell = document.createElement('td');
     actionCell.dataset.label = 'Действия';
     const actionGroup = document.createElement('div');
@@ -6703,6 +6713,7 @@ function createAdminUsersTableRow(login) {
 
     row._adminCells = {
         loginCell,
+        loginText,
         roleCell,
         sourceCell,
         timeCell,
@@ -6815,6 +6826,7 @@ function updateAdminUsersTableRow(row, rowData) {
     row.dataset.login = rowData.login;
     const {
         loginCell,
+        loginText,
         roleCell,
         sourceCell,
         timeCell,
@@ -6824,7 +6836,8 @@ function updateAdminUsersTableRow(row, rowData) {
         actionBtn
     } = row._adminCells;
 
-    loginCell.textContent = rowData.login;
+    loginText.textContent = rowData.login;
+    loginCell.title = rowData.login;
 
     if (rowData.user) {
         if (!row._adminRolePicker) {
@@ -6935,8 +6948,13 @@ function updateAdminUsersTableRow(row, rowData) {
     statusCell.className = `admin-access-status ${rowData.accessState.active ? 'is-active' : 'is-blocked'}`;
     statusMain.textContent = rowData.accessState.label;
     const presenceMeta = getAdminPresenceMeta(rowData.login, rowData.user, rowData.presence);
-    presenceText.className = `admin-presence ${presenceMeta.className}`.trim();
-    presenceText.textContent = presenceMeta.label;
+    if (presenceMeta.label) {
+        presenceText.className = `admin-presence ${presenceMeta.className}`.trim();
+        presenceText.textContent = ` • ${presenceMeta.label}`;
+        presenceText.hidden = false;
+    } else {
+        presenceText.hidden = true;
+    }
 
     actionBtn.className = `btn-change ${rowData.accessState.active ? 'btn-danger-subtle' : ''}`.trim();
     actionBtn.textContent = rowData.accessState.active ? 'Закрыть' : 'Открыть';
