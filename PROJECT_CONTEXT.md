@@ -209,6 +209,11 @@
   - desktop defaults to an open history rail locally, while production keeps the current default behavior until an explicit rollout.
   - this shell is now the intended production UI on the main domain; the older grey production shell is deprecated and should not be treated as the target experience anymore.
   - a side Vercel deployment of the new shell exists from 2026-04-09, but the production path remains GitHub Pages because Vercel was not reliably reachable for all users in the company environment.
+- 2026-04-10 local admin side-review pass:
+  - compacted admin users row/card rhythm in `style.css` (local minimal UI) by reducing row padding/margins and cell spacing in the final density pass;
+  - tightened the `Выдача доступа` controls: wider email column, narrower days field, smaller compact invite button and two-line-capable invite label;
+  - aligned panel rhythm in admin headers/buttons by small final-step adjustments in the same `Final admin density pass` block;
+  - no changes to `index.html` or `script.js` were required for these visual-only fixes.
 
 ## Useful Debug Markers
 - `assistant_output_buffered_before_user_turn`
