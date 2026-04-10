@@ -12756,11 +12756,11 @@ body.local-minimal-ui .admin-users-table tbody {
 body.local-minimal-ui .admin-users-table tbody tr {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px 16px;
-    margin-bottom: 10px;
-    padding: 14px 16px;
+    gap: 8px 12px;
+    margin-bottom: 8px;
+    padding: 10px 12px;
     border: 1px solid var(--local-border-final);
-    border-radius: 20px;
+    border-radius: 16px;
     background: var(--local-surface-soft-final);
 }
 
@@ -12772,7 +12772,7 @@ body.local-minimal-ui .admin-users-table tbody td {
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: 4px;
+    gap: 3px;
     padding: 0;
     border: none;
     min-width: 0;
@@ -12887,10 +12887,58 @@ body.local-minimal-ui .admin-time {
 }
 
 body.local-minimal-ui .admin-user-action-group .btn-change {
-    min-height: 32px;
+    min-height: 30px;
     padding: 0 10px;
     border-radius: 12px;
     font-size: 10px;
+}
+
+body.local-minimal-ui .admin-invite-form {
+    grid-template-columns: minmax(0, 1.7fr) 92px 1fr;
+    gap: 10px;
+    align-items: stretch;
+}
+
+body.local-minimal-ui .admin-invite-days-wrap {
+    min-height: 44px;
+    padding: 0 10px;
+    gap: 8px;
+}
+
+body.local-minimal-ui .admin-invite-days {
+    flex: 0 0 46px;
+    width: 46px !important;
+    max-width: 46px;
+    min-width: 46px;
+}
+
+body.local-minimal-ui .admin-invite-btn {
+    min-height: 34px;
+    padding: 8px 10px;
+    border-radius: 13px;
+    line-height: 1.2;
+}
+
+body.local-minimal-ui .admin-users-access-toolbar .btn-change {
+    max-width: 126px;
+}
+
+body.local-minimal-ui .admin-accordion {
+    margin-top: 16px;
+    padding-top: 14px;
+}
+
+body.local-minimal-ui .admin-accordion-trigger {
+    min-height: 30px;
+    font-size: 11px;
+}
+
+body.local-minimal-ui .admin-panel-header {
+    padding: 0 0 14px;
+}
+
+body.local-minimal-ui .admin-panel-title {
+    font-size: 11px;
 }
 
 body.local-minimal-ui .admin-users-table tbody td:nth-child(2),
@@ -12932,6 +12980,180 @@ body.local-minimal-ui .admin-users-table tbody td:nth-child(5) {
 
     body.local-minimal-ui .admin-user-action-group {
         grid-template-columns: 1fr;
+    }
+}
+
+/* Final admin density pass */
+body.local-minimal-ui .admin-panel-header {
+    padding-bottom: 12px;
+}
+
+body.local-minimal-ui .admin-panel-title {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+}
+
+body.local-minimal-ui .admin-invite-form {
+    grid-template-columns: minmax(0, 2fr) 82px 88px;
+    gap: 9px;
+    padding-bottom: 16px;
+}
+
+body.local-minimal-ui .admin-hidden-prompt-summary {
+    min-height: 50px;
+    padding: 13px 2px;
+    font-size: 14px;
+}
+
+body.local-minimal-ui .admin-hidden-prompt-body,
+body.local-minimal-ui .admin-users-access-body,
+body.local-minimal-ui .admin-webhook-debug-body {
+    padding-bottom: 14px;
+}
+
+body.local-minimal-ui .admin-users-access-toolbar,
+body.local-minimal-ui .admin-hidden-prompt-actions,
+body.local-minimal-ui .admin-webhook-debug-toolbar {
+    margin-top: 10px;
+}
+
+body.local-minimal-ui .admin-invite-input,
+body.local-minimal-ui .admin-invite-days-wrap,
+body.local-minimal-ui .admin-role-picker-trigger,
+body.local-minimal-ui .admin-invite-btn,
+body.local-minimal-ui .admin-users-access-toolbar .btn-change {
+    min-height: 40px;
+    border-radius: 15px;
+}
+
+body.local-minimal-ui .admin-invite-days-wrap {
+    padding: 0 8px;
+    gap: 5px;
+    min-height: 38px;
+}
+
+body.local-minimal-ui .admin-invite-days {
+    width: 38px !important;
+    min-width: 38px !important;
+    max-width: 38px !important;
+}
+
+body.local-minimal-ui .admin-invite-btn,
+body.local-minimal-ui .admin-users-access-toolbar .btn-change {
+    font-size: 11px;
+}
+
+body.local-minimal-ui .admin-users-access-toolbar .btn-change {
+    min-width: 112px;
+    max-width: 144px;
+    padding-inline: 12px;
+}
+
+body.local-minimal-ui .admin-invite-btn {
+    white-space: normal;
+    line-height: 1.15;
+    padding: 8px 10px;
+    min-height: 38px;
+}
+
+body.local-minimal-ui .admin-users-table thead {
+    margin-bottom: 8px;
+}
+
+body.local-minimal-ui .admin-users-table thead tr {
+    gap: 6px;
+}
+
+body.local-minimal-ui .admin-users-table tbody tr {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 10px;
+    margin-bottom: 7px;
+    padding: 10px 12px;
+    border-radius: 16px;
+}
+
+body.local-minimal-ui .admin-users-table tbody td {
+    gap: 1px;
+}
+
+body.local-minimal-ui .admin-users-table tbody td::before {
+    font-size: 9px;
+    letter-spacing: 0.05em;
+}
+
+body.local-minimal-ui .admin-users-table td:first-child {
+    grid-column: 1 / -1;
+    font-size: 12px;
+}
+
+body.local-minimal-ui .admin-users-table td:nth-child(6) {
+    grid-column: auto;
+    align-self: end;
+    justify-self: end;
+}
+
+body.local-minimal-ui .admin-role-picker {
+    max-width: 124px;
+}
+
+body.local-minimal-ui .admin-role-picker-trigger {
+    max-width: 124px;
+    padding-inline: 10px;
+    min-height: 34px;
+    border-radius: 13px;
+}
+
+body.local-minimal-ui .admin-role-picker-menu {
+    max-width: 148px;
+}
+
+body.local-minimal-ui .admin-presence,
+body.local-minimal-ui .admin-access-source,
+body.local-minimal-ui .admin-time,
+body.local-minimal-ui .admin-status-main {
+    font-size: 11px;
+    line-height: 1.24;
+}
+
+body.local-minimal-ui .admin-panel-header {
+    padding-bottom: 10px;
+}
+
+body.local-minimal-ui .admin-panel-title {
+    letter-spacing: 0.11em;
+}
+
+body.local-minimal-ui .admin-user-action-group {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+}
+
+body.local-minimal-ui .admin-user-action-group .btn-change {
+    min-height: 28px;
+    min-width: 92px;
+    width: auto;
+    padding: 0 10px;
+    border-radius: 11px;
+    font-size: 10px;
+}
+
+@media (max-width: 700px) {
+    body.local-minimal-ui .admin-invite-form {
+        grid-template-columns: 1fr;
+    }
+
+    body.local-minimal-ui .admin-users-table tbody tr {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    body.local-minimal-ui .admin-users-table td:nth-child(6) {
+        grid-column: auto;
+        justify-self: start;
+    }
+
+    body.local-minimal-ui .admin-user-action-group {
+        justify-content: flex-start;
     }
 }
 

@@ -133,6 +133,7 @@
 - the admin user list was compacted too: tighter row padding, a shorter role trigger, and wrapped access/status copy so the right-side text stays inside the drawer instead of clipping past the boundary;
 - the local desktop admin rows also now rely on shorter row copy (`До ...`, `Закрыть`, `Открыть`) and a fixed-width role dropdown; keep that compact rhythm instead of letting the role picker or access text bloat the row again;
 - the separate admin-row `История` button was removed from the `Действия` column because it was not giving a reliable visible result in this compact settings layout; only the access action remains there now;
+- the local admin panel density was tightened again: on desktop-like widths, user cards are now compact two-column rows with the login spanning full width and the single access button tucked to the bottom-right; the invite row and accordion headers are smaller too;
 - the desktop admin access table now needs a larger minimum width with horizontal scrolling on the wrapper; the right action column must stay wide enough for both buttons, otherwise `Статус` and actions collapse into each other again.
   - the admin access table is allowed to scroll horizontally inside the drawer instead of forcing overflow/breakage in narrow layouts;
   - the voice tech log styling bug was corrected at the selector level: the real body class is `.admin-webhook-debug-body`, not the stale typo `.admin-voice-debug-body`.
