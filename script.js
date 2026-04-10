@@ -23559,6 +23559,56 @@ function installLocalhostTestHooks() {
     if (!isLocalhostAdminPreviewHost()) return;
 
     window.__CLIENT_SIMULATOR_TEST_HOOKS__ = {
+        setHistorySidebarCollapsedForTest(collapsed = true) {
+            applyHistorySidebarCollapsed(!!collapsed, { persist: false });
+            return document.body.classList.contains('history-sidebar-collapsed');
+        },
+        async openSettingsAdminForTest() {
+            showSettingsModal();
+            syncCurrentUserSettingsState();
+            if (adminPanelAccordion) {
+                adminPanelAccordion.style.display = '';
+                adminPanelAccordion.setAttribute('open', '');
+            }
+            if (adminUsersAccessAccordion) {
+                adminUsersAccessAccordion.setAttribute('open', '');
+            }
+            await renderAdminUsersTable();
+            return true;
+        },
+        getLocalLayoutMetricsForTest() {
+            const historyPanel = document.getElementById('historyPanel');
+            const historyPanelStyle = historyPanel ? getComputedStyle(historyPanel) : null;
+            const adminTable = document.querySelector('.admin-users-table');
+            const adminTableStyle = adminTable ? getComputedStyle(adminTable) : null;
+            const adminFirstRow = document.querySelector('.admin-users-table tbody tr');
+            const adminFirstRowStyle = adminFirstRow ? getComputedStyle(adminFirstRow) : null;
+            const inviteForm = document.querySelector('.admin-invite-form');
+            const roleTrigger = document.querySelector('.admin-role-picker-trigger');
+            const accessBody = document.querySelector('.admin-users-access-body');
+            return {
+                history: {
+                    collapsed: document.body.classList.contains('history-sidebar-collapsed'),
+                    overflowY: historyPanelStyle?.overflowY || '',
+                    scrollbarWidth: historyPanelStyle?.scrollbarWidth || '',
+                    clientWidth: historyPanel?.clientWidth || 0,
+                    offsetWidth: historyPanel?.offsetWidth || 0
+                },
+                admin: {
+                    settingsOpen: isSettingsModalOpen(),
+                    panelVisible: (adminPanelAccordion?.style?.display || '') !== 'none',
+                    accessOpen: !!adminUsersAccessAccordion?.open,
+                    rowCount: document.querySelectorAll('.admin-users-table tbody tr').length,
+                    tableDisplay: adminTableStyle?.display || '',
+                    tableMinWidth: adminTableStyle?.minWidth || '',
+                    firstRowDisplay: adminFirstRowStyle?.display || '',
+                    inviteHeight: inviteForm ? Math.round(inviteForm.getBoundingClientRect().height) : 0,
+                    accessBodyPadding: accessBody ? getComputedStyle(accessBody).padding : '',
+                    roleTriggerWidth: roleTrigger ? getComputedStyle(roleTrigger).width : '',
+                    roleTriggerMinHeight: roleTrigger ? getComputedStyle(roleTrigger).minHeight : ''
+                }
+            };
+        },
         getPublicPromptsSnapshot() {
             return JSON.parse(JSON.stringify(buildPromptsSyncPayload(PROMPT_ROLES)));
         },

@@ -1578,6 +1578,203 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
     }
 }
 
+async function enforceHistoryPanelCollapsedState(page, collapsed = true) {
+    const isCollapsed = await page.evaluate(() => document.body.classList.contains('history-sidebar-collapsed'));
+    if (isCollapsed === collapsed) return;
+
+    const toggleLocator = page.locator('#historySidebarToggle');
+    const hasToggle = (await toggleLocator.count()) > 0;
+    if (hasToggle) {
+        await toggleLocator.click();
+        await page.waitForFunction((targetState) => {
+            return document.body.classList.contains('history-sidebar-collapsed') === targetState;
+        }, collapsed);
+        return;
+    }
+
+    await page.evaluate((targetState) => {
+        document.body.classList.toggle('history-sidebar-collapsed', targetState);
+    }, collapsed);
+    await page.waitForFunction((targetState) => {
+        return document.body.classList.contains('history-sidebar-collapsed') === targetState;
+    }, collapsed);
+}
+
+async function runCollapsedHistoryPanelNoScrollbarFlow(browser, baseUrl) {
+    const scenario = createIdleScenario();
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
+    await installCommonRoutes(context, scenario);
+    await seedLocalState(context);
+    const page = await context.newPage();
+
+    try {
+        logStep('run local collapsed history no-scrollbar scenario');
+        await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+        await waitForChatReady(page);
+
+        const isLocalMinimal = await page.evaluate(() => document.body.classList.contains('local-minimal-ui'));
+        expect(isLocalMinimal, 'Collapsed-history scrollbar regression requires local-minimal-ui');
+
+        await enforceHistoryPanelCollapsedState(page, true);
+        await page.waitForFunction(() => document.body.classList.contains('history-sidebar-collapsed'));
+
+        await page.waitForSelector('#historyPanel');
+        const historyMetrics = await page.evaluate(() => {
+            const panel = document.getElementById('historyPanel');
+            const listWrap = document.querySelector('#historyPanel .history-thread-list-wrap, #historyPanel .dialog-history-list-wrap');
+            const list = document.getElementById('mainDialogHistoryList');
+            const compute = (node) => {
+                if (!node) {
+                    return null;
+                }
+                const style = getComputedStyle(node);
+                return {
+                    tagName: node.tagName,
+                    overflowX: style.overflowX,
+                    overflowY: style.overflowY,
+                    scrollWidth: node.scrollWidth,
+                    clientWidth: node.clientWidth,
+                    scrollHeight: node.scrollHeight,
+                    clientHeight: node.clientHeight,
+                    scrollTop: node.scrollTop
+                };
+            };
+
+            const panelBefore = compute(panel);
+            const wrapBefore = compute(listWrap);
+            const listBefore = compute(list);
+            if (panel) panel.scrollTop = 9;
+            if (listWrap) listWrap.scrollTop = 9;
+            if (list) list.scrollTop = 9;
+
+            return {
+                panel,
+                wrap: listWrap,
+                list,
+                panelAfter: compute(panel),
+                wrapAfter: compute(listWrap),
+                listAfter: compute(list),
+                collapsed: document.body.classList.contains('history-sidebar-collapsed')
+            };
+        });
+
+        expect(historyMetrics.collapsed, 'History panel must be collapsed for this check');
+
+        const noScrollbarTargets = [historyMetrics.panelAfter, historyMetrics.wrapAfter, historyMetrics.listAfter].filter(Boolean);
+        for (const target of noScrollbarTargets) {
+            expect(
+                target.overflowY === 'hidden' || target.overflowY === 'clip' || target.overflowY === 'visible',
+                'Collapsed history panel or its descendants must not expose vertical overflow'
+            );
+            expect(
+                target.scrollHeight <= (target.clientHeight + 1),
+                'Collapsed history structure must not stay scrollable vertically'
+            );
+            expect(
+                target.scrollTop === 0,
+                'Collapsed history panel/descendants must ignore manual vertical scroll attempts'
+            );
+        }
+    } catch (error) {
+        await ensureOutputDir();
+        await page.screenshot({ path: path.join(outputDir, 'smoke-collapsed-history-no-scrollbar-failure.png'), fullPage: true });
+        throw error;
+    } finally {
+        await context.close();
+    }
+}
+
+async function runAdminUsersDesktopTableLayoutFlow(browser, baseUrl) {
+    const scenario = createIdleScenario();
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
+    await installCommonRoutes(context, scenario);
+    await seedLocalState(context);
+    const page = await context.newPage();
+
+    try {
+        logStep('run admin users desktop table layout scenario');
+        await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+        await waitForChatReady(page);
+
+        await openSettings(page);
+        await ensureDetailsOpen(page, '#adminUsersAccessAccordion');
+        await page.waitForFunction(() => {
+            const details = document.querySelector('#adminUsersAccessAccordion');
+            return !!details && details.open === true;
+        });
+
+        await page.waitForFunction(() => {
+            const rows = document.querySelectorAll('#adminUsersTableBody tr');
+            return rows && rows.length > 0;
+        });
+
+        const tableDisplayState = await page.evaluate(() => {
+            const table = document.querySelector('.admin-users-table');
+            const tableWrap = document.querySelector('.admin-table-wrap');
+            if (!table || !tableWrap) return null;
+
+            const headerRow = table.querySelector('thead tr');
+            const rowElements = Array.from(table.querySelectorAll('thead tr, tbody tr'));
+            const headCellElements = Array.from(table.querySelectorAll('thead th'));
+            const bodyCellElements = Array.from(table.querySelectorAll('tbody td'));
+            const headerCellTagNames = headerRow
+                ? Array.from(headerRow.children).map((node) => node?.tagName?.toLowerCase() || '')
+                : [];
+
+            const displayOf = (node) => getComputedStyle(node).display;
+            return {
+                tableDisplay: getComputedStyle(table).display,
+                headDisplay: getComputedStyle(table.querySelector('thead')).display,
+                bodyDisplay: getComputedStyle(table.querySelector('tbody')).display,
+                rowDisplays: rowElements.map((row) => displayOf(row)),
+                headCellDisplays: headCellElements.map((cell) => displayOf(cell)),
+                bodyCellDisplays: bodyCellElements.map((cell) => displayOf(cell)),
+                headerCellTagNames,
+                bodyCellTagNames: bodyCellElements.map((cell) => cell?.tagName?.toLowerCase() || ''),
+                wrapOverflowX: getComputedStyle(tableWrap).overflowX,
+                wrapDisplay: getComputedStyle(tableWrap).display,
+                wrapScrollWidth: tableWrap.scrollWidth,
+                wrapClientWidth: tableWrap.clientWidth
+            };
+        });
+
+        expect(!!tableDisplayState, 'Admin users table must be in DOM');
+        expect(tableDisplayState.tableDisplay === 'table', 'Admin users table layout must remain native table');
+        expect(
+            tableDisplayState.headDisplay === 'table-header-group' || tableDisplayState.headDisplay === 'table-row-group' || tableDisplayState.headDisplay === 'table-row',
+            'Admin users table header must remain table-like'
+        );
+        expect(
+            tableDisplayState.bodyDisplay === 'table-row-group' || tableDisplayState.bodyDisplay === 'table',
+            'Admin users table body must remain table-like'
+        );
+        expect(tableDisplayState.rowDisplays.length > 0, 'Admin table must expose real table rows in desktop view');
+        expect(tableDisplayState.rowDisplays.every((value) => value === 'table-row'), 'Admin users table rows must stay table-row');
+        expect(
+            tableDisplayState.headerCellTagNames.length > 0 && tableDisplayState.headerCellTagNames.every((name) => name === 'th'),
+            'Admin table header row must keep semantic table headers'
+        );
+        expect(
+            tableDisplayState.bodyCellTagNames.length > 0 && tableDisplayState.bodyCellTagNames.every((name) => name === 'td'),
+            'Admin users table body must keep semantic table cells'
+        );
+        expect(tableDisplayState.wrapDisplay === 'block' || tableDisplayState.wrapDisplay === 'grid', 'Admin table wrapper must remain block-based container');
+        expect(tableDisplayState.wrapOverflowX === 'auto' || tableDisplayState.wrapOverflowX === 'scroll', 'Admin users table wrapper must remain horizontally scrollable, not card-grid');
+        expect(tableDisplayState.wrapScrollWidth >= tableDisplayState.wrapClientWidth, 'Admin users table wrapper width must keep expected horizontal surface');
+
+        await closeSettings(page);
+    } catch (error) {
+        await ensureOutputDir();
+        await page.screenshot({ path: path.join(outputDir, 'smoke-admin-users-desktop-table-failure.png'), fullPage: true });
+        try {
+            await closeSettings(page);
+        } catch {}
+        throw error;
+    } finally {
+        await context.close();
+    }
+}
+
 async function runHiddenClientPromptFlow(browser, baseUrl) {
     const scenario = createIdleScenario();
     const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
@@ -2306,6 +2503,57 @@ async function runLocalhostDevAuthFlow(browser, baseUrl) {
     }
 }
 
+async function runLocalMinimalLayoutRegressionFlow(browser, baseUrl) {
+    const scenario = createIdleScenario();
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
+    await installCommonRoutes(context, scenario);
+    await seedLocalState(context);
+    const page = await context.newPage();
+
+    try {
+        logStep('run local minimal layout regression scenario');
+        await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+        await waitForChatReady(page);
+
+        const collapsedState = await page.evaluate(() => {
+            const hooks = window.__CLIENT_SIMULATOR_TEST_HOOKS__;
+            if (!hooks?.setHistorySidebarCollapsedForTest || !hooks?.getLocalLayoutMetricsForTest) {
+                return null;
+            }
+            hooks.setHistorySidebarCollapsedForTest(true);
+            return hooks.getLocalLayoutMetricsForTest();
+        });
+        expect(!!collapsedState, 'Local test hooks for layout regression are missing');
+        expect(collapsedState.history.collapsed, 'History sidebar must switch into collapsed state in local layout smoke');
+        expect(collapsedState.history.overflowY === 'hidden', `Collapsed history sidebar must hide vertical overflow, got ${collapsedState.history.overflowY}`);
+        expect(collapsedState.history.scrollbarWidth === 'none', `Collapsed history sidebar must hide scrollbar width, got ${collapsedState.history.scrollbarWidth}`);
+
+        const adminState = await page.evaluate(async () => {
+            const hooks = window.__CLIENT_SIMULATOR_TEST_HOOKS__;
+            if (!hooks?.openSettingsAdminForTest || !hooks?.getLocalLayoutMetricsForTest) {
+                return null;
+            }
+            await hooks.openSettingsAdminForTest();
+            return hooks.getLocalLayoutMetricsForTest();
+        });
+        expect(!!adminState, 'Local test hooks for admin layout regression are missing');
+        expect(adminState.admin.settingsOpen, 'Settings modal must be open in admin layout smoke');
+        expect(adminState.admin.panelVisible, 'Admin accordion must be visible in admin layout smoke');
+        expect(adminState.admin.accessOpen, 'Users/access section must be open in admin layout smoke');
+        expect(adminState.admin.rowCount >= 1, 'Admin users table must render at least one row in admin layout smoke');
+        expect(adminState.admin.tableDisplay === 'table', `Desktop admin users table must render as table, got ${adminState.admin.tableDisplay}`);
+        expect(adminState.admin.firstRowDisplay === 'table-row', `Desktop admin row must stay a table-row, got ${adminState.admin.firstRowDisplay}`);
+        expect(String(adminState.admin.tableMinWidth || '').includes('px'), `Desktop admin table must keep a min-width, got ${adminState.admin.tableMinWidth}`);
+        expect(Number(adminState.admin.inviteHeight || 0) > 0 && Number(adminState.admin.inviteHeight || 0) <= 64, `Invite row height must stay compact, got ${adminState.admin.inviteHeight}`);
+    } catch (error) {
+        await ensureOutputDir();
+        await page.screenshot({ path: path.join(outputDir, 'smoke-local-minimal-layout-failure.png'), fullPage: true });
+        throw error;
+    } finally {
+        await context.close();
+    }
+}
+
 async function main() {
     await ensureOutputDir();
     const { server, baseUrl } = await createStaticFileServer(projectRoot);
@@ -2322,6 +2570,8 @@ async function main() {
         await runPromptConflictRecoveryFlow(browser, baseUrl);
         await runPromptWorkflowFlow(browser, baseUrl);
         await runDialogHistoryPersistenceFlow(browser, baseUrl);
+        await runCollapsedHistoryPanelNoScrollbarFlow(browser, baseUrl);
+        await runAdminUsersDesktopTableLayoutFlow(browser, baseUrl);
         await runGeminiVoiceModeSmokeFlow(browser, baseUrl);
         await runGeminiVoiceModeSmokeFlow(browser, baseUrl, {
             voiceScenario: 'assistant-interrupted-first-reply',
@@ -2356,6 +2606,7 @@ async function main() {
         await runGoSilentFlow(browser, baseUrl);
         await runEmailAuthVerificationFlow(browser, baseUrl);
         await runLocalhostDevAuthFlow(browser, baseUrl);
+        await runLocalMinimalLayoutRegressionFlow(browser, baseUrl);
         logStep('all smoke scenarios passed');
     } finally {
         await browser.close();

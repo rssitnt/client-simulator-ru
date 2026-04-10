@@ -155,6 +155,9 @@
 - the admin role picker menu now opens as a floating fixed layer and closes on scroll/resize; keep that behavior so the compact settings drawer/table wrapper cannot clip the menu vertically.
     - the access table can scroll horizontally inside the drawer instead of blowing out the layout;
     - the voice tech log uses the same local admin styling as the other sections again (`.admin-webhook-debug-body` is the real class; older `.admin-voice-debug-body` selectors were a dead typo).
+- smoke now explicitly guards two recent local desktop UI regressions:
+  - collapsed history rail must not stay vertically scrollable or show a usable scrollbar target;
+  - `Пользователи и доступ` on desktop must stay a real table inside a horizontal-scroll wrapper, not collapse back into the tall card/grid fallback.
 - Admins can view and delete foreign dialog history; users can manage only their own history.
 - Active time is now “real focused activity only”:
   - visible tab
@@ -208,6 +211,11 @@
 - В локальной админке блок `Выдача доступа` теперь должен быть более email-first: email-поле шире, блок дней компактнее, а кнопка `Выдать доступ` уже и может переноситься на две строки.
 - В локальном drawer роли сам текст промпта теперь должен лежать прямо на поверхности панели: без отдельной внутренней карточки/рамки вокруг `.prompt-wrapper`.
 - У локальной админки теперь есть ещё один самый поздний density-pass внизу `style.css`: именно он должен удерживать компактные размеры `Выдача доступа`, таблицы пользователей и role-trigger; не оживляй старые дубли выше по файлу, если снова поедет высота/ширины.
+- В desktop-версии локальной админки `Статус` и presence теперь должны идти в одну строку внутри ячейки; не возвращай старый `margin-top`/блочную раскладку для `.admin-presence`, иначе строки снова раздуются по высоте.
+- Для localhost smoke теперь есть отдельные layout-регрессии:
+  - скрытый сценарий проверяет, что у свернутой левой истории реально нет вертикального скролла;
+  - отдельный сценарий проверяет, что desktop-админка `Пользователи и доступ` остаётся настоящей таблицей, а не разваливается обратно в карточки;
+  - тестовые layout-hooks живут в `window.__CLIENT_SIMULATOR_TEST_HOOKS__` и предназначены только для localhost/smoke.
 
 ## Architecture Notes
 ### Dialog History

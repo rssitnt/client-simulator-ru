@@ -14,6 +14,8 @@
 - Voice mode is Gemini Live through the token server; first-turn handling and mic/voice settings were recently stabilized.
 - The local left history rail now uses the settings-style thin scrollbar on the whole `.history-panel`, and in collapsed state that scrollbar is forced fully hidden.
 - The local admin panel now also relies on a final bottom-of-file density pass in `C:\projects\sites\client-simulator\style.css` for compact invite/table/dropdown sizing; future tweaks should start there, not in older duplicate blocks above.
+- Smoke coverage now explicitly includes both the collapsed-history no-scrollbar case and the desktop admin-users real-table layout, so regressions there should fail `C:\projects\sites\client-simulator\scripts\smoke-e2e.mjs`.
+- In the local desktop admin table, the `Статус` label and presence text are now intentionally inline in one row to keep user lines compact; avoid restoring the old stacked status layout there.
 
 ## Current auth state
 - Password login now waits more patiently for the matching Firebase session instead of failing too early on delayed session exposure.
