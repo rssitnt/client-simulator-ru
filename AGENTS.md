@@ -186,6 +186,10 @@
 - password login is now slightly more tolerant to delayed Firebase session exposure:
   - if `signInWithEmailAndPassword` / `createUserWithEmailAndPassword` already returned the correct Firebase user, the frontend no longer treats the login as failed only because `auth.currentUser` lagged behind for a moment;
   - after password auth, protected prompt/config reconnect now briefly waits for that expected login too instead of reconnecting blindly.
+- password auth fallback is stricter now:
+  - a failed Firebase password sign-in no longer always falls through into `createUserWithEmailAndPassword`;
+  - create-user fallback is allowed only for credential-like cases (`user-not-found / invalid-credential / wrong-password`);
+  - if Firebase already has this email but its password diverged from the local access record, the frontend now surfaces an explicit conflict error instead of looping through misleading create/retry behavior.
 - Переключение между админским и юзерским видом теперь происходит сразу по `Сменить`, без повторного запроса пароля; пароль нужен только один раз, чтобы получить админ-доступ.
 - In the local empty-state start cards, only the main titles remain visible; the lower subtitle lines under `Чат с клиентом / Голосовой звонок / Аттестация` were intentionally removed.
 - The local empty-state start cards are compact now: the card column is intentionally much narrower than before and the remaining titles are center-aligned. Do not stretch them back to full-width unless requested.

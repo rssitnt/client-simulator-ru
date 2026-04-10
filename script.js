@@ -1289,7 +1289,29 @@ async function settleFirebaseAuthPasswordSession(authResult, login = '', timeout
     return authResultLogin === normalizedLogin;
 }
 
-async function ensureFirebaseAuthPasswordSession(login, password) {
+function shouldTryFirebaseCreateAfterPasswordSignInError(error) {
+    const code = String(error?.code || '').trim();
+    return (
+        code === 'auth/user-not-found'
+        || code === 'auth/invalid-credential'
+        || code === 'auth/invalid-login-credentials'
+        || code === 'auth/wrong-password'
+    );
+}
+
+function buildFirebasePasswordConflictError(originalError = null) {
+    const error = new Error(
+        'Для этого email локальный пароль уже принят, но Firebase Auth видит другой пароль или старый отдельный аккаунт.'
+    );
+    error.code = 'auth/firebase-password-conflict';
+    if (originalError) {
+        error.originalError = originalError;
+        error.originalCode = String(originalError?.code || '').trim();
+    }
+    return error;
+}
+
+async function ensureFirebaseAuthPasswordSession(login, password, options = {}) {
     if (!auth || !login || !password) {
         throw new Error('Firebase Auth недоступен для открытия сессии.');
     }
@@ -1297,6 +1319,7 @@ async function ensureFirebaseAuthPasswordSession(login, password) {
     if (!isValidLogin(email)) {
         throw new Error('Укажите корректный email для Firebase Auth.');
     }
+    const allowCreateOnPasswordFailure = options?.allowCreateOnPasswordFailure !== false;
 
     await waitForFirebaseAuthReady();
 
@@ -1328,6 +1351,9 @@ async function ensureFirebaseAuthPasswordSession(login, password) {
         }
     } catch (e1) {
         lastError = e1;
+        if (!allowCreateOnPasswordFailure || !shouldTryFirebaseCreateAfterPasswordSignInError(e1)) {
+            throw e1;
+        }
         try {
             const createResult = await runAuthRequestWithRetry(() => createUserWithEmailAndPassword(auth, email, password));
             if (await settleFirebaseAuthPasswordSession(createResult, email, AUTH_SESSION_OPEN_TIMEOUT_MS)) {
@@ -1336,18 +1362,11 @@ async function ensureFirebaseAuthPasswordSession(login, password) {
         } catch (e2) {
             const c2 = String(e2?.code || '');
             if (c2 === 'auth/email-already-in-use') {
-                try {
-                    const retrySignInResult = await runAuthRequestWithRetry(() => signInWithEmailAndPassword(auth, email, password));
-                    if (await settleFirebaseAuthPasswordSession(retrySignInResult, email, AUTH_SESSION_OPEN_TIMEOUT_MS)) {
-                        return true;
-                    }
-                } catch (e3) {
-                    lastError = e3;
-                    console.warn(
-                        'Firebase Auth: аккаунт уже существует, но пароль не подошёл (возможен только вход по ссылке из письма).',
-                        e3?.code || e3
-                    );
-                }
+                lastError = buildFirebasePasswordConflictError(e2);
+                console.warn(
+                    'Firebase Auth password conflict for existing email:',
+                    lastError.originalCode || c2 || e2
+                );
             } else {
                 lastError = e2;
                 console.warn('ensureFirebaseAuthPasswordSession:', c2 || e2);
@@ -3599,6 +3618,9 @@ function cleanupEmailLinkUrl() {
 
 function getReadableFirebaseAuthError(error, context = 'generic') {
     const code = String(error?.code || '').trim();
+    if (code === 'auth/firebase-password-conflict') {
+        return 'Для этого email в Firebase остался другой пароль или старый отдельный аккаунт. Нужно либо войти тем старым паролем, либо сбросить/очистить этот email в Firebase Authentication.';
+    }
     if (code === 'auth/configuration-not-found' || code === 'auth/operation-not-allowed') {
         return 'Email-подтверждение не настроено в Firebase. Включите Authentication -> Sign-in method -> Email link (passwordless) и добавьте домен сайта в Authorized domains.';
     }
@@ -3607,6 +3629,9 @@ function getReadableFirebaseAuthError(error, context = 'generic') {
     }
     if (code === 'auth/email-already-in-use') {
         return 'Для этого email уже есть отдельный аккаунт в Firebase Auth с другим паролем. Нужен вход тем паролем или сброс/очистка этого аккаунта в Firebase Authentication.';
+    }
+    if (code === 'auth/weak-password') {
+        return 'Firebase не принял пароль. Скорее всего он слишком короткий для Firebase Auth.';
     }
     if (code === 'auth/unauthorized-domain') {
         return 'Домен сайта не разрешен в Firebase Auth. Добавьте текущий домен в Authorized domains.';
