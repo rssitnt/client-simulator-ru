@@ -12755,12 +12755,12 @@ body.local-minimal-ui .admin-users-table tbody {
 
 body.local-minimal-ui .admin-users-table tbody tr {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
-    margin-bottom: 12px;
-    padding: 16px 18px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 16px;
+    margin-bottom: 10px;
+    padding: 14px 16px;
     border: 1px solid var(--local-border-final);
-    border-radius: 22px;
+    border-radius: 20px;
     background: var(--local-surface-soft-final);
 }
 
@@ -12772,7 +12772,7 @@ body.local-minimal-ui .admin-users-table tbody td {
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: 6px;
+    gap: 4px;
     padding: 0;
     border: none;
     min-width: 0;
@@ -12780,11 +12780,16 @@ body.local-minimal-ui .admin-users-table tbody td {
     overflow: visible;
 }
 
+body.local-minimal-ui .admin-users-table tbody td:nth-child(1),
+body.local-minimal-ui .admin-users-table tbody td:nth-child(6) {
+    grid-column: 1 / -1;
+}
+
 body.local-minimal-ui .admin-users-table tbody td::before {
     content: attr(data-label);
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.07em;
     text-transform: uppercase;
     color: var(--local-text-muted-final);
 }
@@ -12813,18 +12818,26 @@ body.local-minimal-ui .admin-time {
     overflow-wrap: break-word;
     word-break: normal;
     white-space: normal;
-    line-height: 1.4;
+    line-height: 1.32;
+}
+
+body.local-minimal-ui .admin-users-table td:first-child {
+    gap: 3px;
+    padding-bottom: 2px;
 }
 
 body.local-minimal-ui .admin-role-picker {
     width: 100%;
-    max-width: 168px;
+    max-width: 156px;
 }
 
 body.local-minimal-ui .admin-role-picker-trigger {
     width: 100%;
     min-width: 0;
-    max-width: 168px;
+    max-width: 156px;
+    min-height: 36px;
+    padding: 0 12px;
+    border-radius: 14px;
 }
 
 body.local-minimal-ui .admin-role-picker-menu {
@@ -12839,7 +12852,8 @@ body.local-minimal-ui .admin-users-table td:last-child {
 
 body.local-minimal-ui .admin-user-action-group {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
 }
 
 body.local-minimal-ui .admin-empty-row {
@@ -12862,6 +12876,30 @@ body.local-minimal-ui .admin-empty-row td::before {
     display: none;
 }
 
+body.local-minimal-ui .admin-status-main {
+    font-weight: 600;
+}
+
+body.local-minimal-ui .admin-presence,
+body.local-minimal-ui .admin-access-source,
+body.local-minimal-ui .admin-time {
+    font-size: 12px;
+}
+
+body.local-minimal-ui .admin-user-action-group .btn-change {
+    min-height: 32px;
+    padding: 0 10px;
+    border-radius: 12px;
+    font-size: 10px;
+}
+
+body.local-minimal-ui .admin-users-table tbody td:nth-child(2),
+body.local-minimal-ui .admin-users-table tbody td:nth-child(3),
+body.local-minimal-ui .admin-users-table tbody td:nth-child(4),
+body.local-minimal-ui .admin-users-table tbody td:nth-child(5) {
+    align-self: start;
+}
+
 @media (max-width: 840px) {
     body.local-minimal-ui .admin-invite-form {
         grid-template-columns: 1fr;
@@ -12881,6 +12919,19 @@ body.local-minimal-ui .admin-empty-row td::before {
     body.local-minimal-ui .admin-empty-row td {
         background: var(--local-surface-soft-final);
         border-color: var(--local-border-final) !important;
+    }
+
+    body.local-minimal-ui .admin-users-table tbody tr {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    body.local-minimal-ui .admin-users-table tbody td:nth-child(1),
+    body.local-minimal-ui .admin-users-table tbody td:nth-child(6) {
+        grid-column: auto;
+    }
+
+    body.local-minimal-ui .admin-user-action-group {
+        grid-template-columns: 1fr;
     }
 }
 

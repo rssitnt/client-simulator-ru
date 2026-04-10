@@ -6605,7 +6605,7 @@ function createAdminUsersTableRow(login) {
     sourceCell.dataset.label = 'Доступ';
     sourceCell.className = 'admin-access-source';
     const timeCell = document.createElement('td');
-    timeCell.dataset.label = 'Активное время';
+    timeCell.dataset.label = 'Активность';
     timeCell.className = 'admin-time';
     const statusCell = document.createElement('td');
     statusCell.dataset.label = 'Статус';
