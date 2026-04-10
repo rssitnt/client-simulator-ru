@@ -12,6 +12,8 @@
 - Main UI target is the warm minimal shell; the old grey shell stays deprecated.
 - Production hosting should remain GitHub Pages unless the user explicitly asks to switch again.
 - Voice mode is Gemini Live through the token server; first-turn handling and mic/voice settings were recently stabilized.
+- The local left history rail now uses the settings-style thin scrollbar on the whole `.history-panel`, and in collapsed state that scrollbar is forced fully hidden.
+- The local admin panel now also relies on a final bottom-of-file density pass in `C:\projects\sites\client-simulator\style.css` for compact invite/table/dropdown sizing; future tweaks should start there, not in older duplicate blocks above.
 
 ## Current auth state
 - Password login now waits more patiently for the matching Firebase session instead of failing too early on delayed session exposure.

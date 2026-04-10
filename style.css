@@ -13161,15 +13161,38 @@ body.local-minimal-ui .admin-user-action-group .btn-change {
 body.local-minimal-ui .history-panel {
     overflow-y: auto;
     overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(242, 238, 231, 0.16) transparent;
 }
 
 body.local-minimal-ui .history-panel::-webkit-scrollbar {
     width: 10px;
 }
 
+body.local-minimal-ui .history-panel::-webkit-scrollbar-track {
+    background: transparent;
+}
+
 body.local-minimal-ui .history-panel::-webkit-scrollbar-thumb {
     background: rgba(242, 238, 231, 0.16);
     border-radius: 999px;
+}
+
+body.local-minimal-ui.history-sidebar-collapsed .history-panel {
+    overflow-y: hidden !important;
+    scrollbar-width: none !important;
+    scrollbar-gutter: auto !important;
+}
+
+body.local-minimal-ui.history-sidebar-collapsed .history-panel::-webkit-scrollbar,
+body.local-minimal-ui.history-sidebar-collapsed .history-panel::-webkit-scrollbar-track,
+body.local-minimal-ui.history-sidebar-collapsed .history-panel::-webkit-scrollbar-thumb,
+body.local-minimal-ui.history-sidebar-collapsed .history-panel::-webkit-scrollbar-button,
+body.local-minimal-ui.history-sidebar-collapsed .history-panel::-webkit-scrollbar-corner {
+    width: 0 !important;
+    height: 0 !important;
+    background: transparent !important;
+    display: none !important;
 }
 
 body.local-minimal-ui .history-panel-main {
@@ -13382,5 +13405,147 @@ body.local-minimal-ui .admin-invite-btn {
 @media (max-width: 840px) {
     body.local-minimal-ui .admin-invite-form {
         grid-template-columns: 1fr;
+    }
+}
+
+/* Final local admin density pass */
+body.local-minimal-ui .admin-users-access-body {
+    padding: 12px 14px 14px;
+}
+
+body.local-minimal-ui .admin-invite-input,
+body.local-minimal-ui .admin-invite-days-wrap,
+body.local-minimal-ui .admin-role-picker-trigger,
+body.local-minimal-ui .admin-invite-btn {
+    min-height: 38px;
+    border-radius: 14px;
+}
+
+body.local-minimal-ui .admin-invite-btn {
+    font-size: 11px;
+}
+
+@media (min-width: 701px) {
+    body.local-minimal-ui .admin-invite-form {
+        grid-template-columns: minmax(0, 2.65fr) minmax(96px, 108px) 92px;
+        gap: 8px;
+    }
+
+    body.local-minimal-ui .admin-users-table {
+        min-width: 780px;
+    }
+
+    body.local-minimal-ui .admin-users-table th,
+    body.local-minimal-ui .admin-users-table td,
+    body.local-minimal-ui .admin-users-table tbody td {
+        padding: 7px 8px;
+    }
+
+    body.local-minimal-ui .admin-users-table th:nth-child(1),
+    body.local-minimal-ui .admin-users-table td:nth-child(1) {
+        width: 34%;
+        min-width: 220px;
+    }
+
+    body.local-minimal-ui .admin-users-table th:nth-child(2),
+    body.local-minimal-ui .admin-users-table td:nth-child(2) {
+        width: 12%;
+        min-width: 104px;
+    }
+
+    body.local-minimal-ui .admin-users-table th:nth-child(3),
+    body.local-minimal-ui .admin-users-table td:nth-child(3) {
+        width: 18%;
+        min-width: 132px;
+    }
+
+    body.local-minimal-ui .admin-users-table th:nth-child(4),
+    body.local-minimal-ui .admin-users-table td:nth-child(4) {
+        width: 11%;
+        min-width: 88px;
+    }
+
+    body.local-minimal-ui .admin-users-table th:nth-child(5),
+    body.local-minimal-ui .admin-users-table td:nth-child(5) {
+        width: 17%;
+        min-width: 124px;
+    }
+
+    body.local-minimal-ui .admin-users-table th:nth-child(6),
+    body.local-minimal-ui .admin-users-table td:nth-child(6) {
+        width: 8%;
+        min-width: 88px;
+    }
+
+    body.local-minimal-ui .admin-role-picker,
+    body.local-minimal-ui .admin-role-picker-trigger {
+        width: 104px;
+        min-width: 104px;
+        max-width: 104px;
+    }
+
+    body.local-minimal-ui .admin-role-picker-trigger {
+        min-height: 36px;
+        padding-inline: 12px;
+    }
+
+    body.local-minimal-ui .admin-role-picker-menu[data-floating="true"] {
+        max-width: 188px !important;
+    }
+
+    body.local-minimal-ui .admin-role-picker-label,
+    body.local-minimal-ui .admin-access-source,
+    body.local-minimal-ui .admin-status-main,
+    body.local-minimal-ui .admin-presence,
+    body.local-minimal-ui .admin-time {
+        font-size: 10px;
+        line-height: 1.24;
+    }
+
+    body.local-minimal-ui .admin-user-action-group {
+        gap: 4px;
+    }
+
+    body.local-minimal-ui .admin-user-action-group .btn-change {
+        min-height: 30px;
+        min-width: 88px;
+        max-width: 108px;
+        padding: 0 8px;
+    }
+}
+
+@media (max-width: 700px) {
+    body.local-minimal-ui .admin-users-access-body {
+        padding: 10px 12px 12px;
+    }
+
+    body.local-minimal-ui .admin-users-table tbody tr {
+        gap: 4px 8px;
+        margin-bottom: 6px;
+        padding: 8px 10px;
+        border-radius: 14px;
+    }
+
+    body.local-minimal-ui .admin-users-table tbody td {
+        gap: 0;
+    }
+
+    body.local-minimal-ui .admin-users-table tbody td::before {
+        font-size: 8px;
+    }
+
+    body.local-minimal-ui .admin-role-picker {
+        max-width: 112px;
+    }
+
+    body.local-minimal-ui .admin-role-picker-trigger {
+        max-width: 112px;
+        min-height: 32px;
+        padding-inline: 9px;
+    }
+
+    body.local-minimal-ui .admin-user-action-group .btn-change {
+        min-height: 26px;
+        min-width: 84px;
     }
 }
