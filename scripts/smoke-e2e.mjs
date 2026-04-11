@@ -2887,13 +2887,13 @@ async function runAttestationStartFlow(browser, baseUrl) {
 
         const attestationState = await page.evaluate(() => ({
             isAttestationMode: document.body.classList.contains('attestation-mode'),
-            exitVisible: getComputedStyle(document.getElementById('exitAttestationBtn')).display !== 'none',
-            inputDisabled: !!document.getElementById('userInput')?.disabled
+            inputDisabled: !!document.getElementById('userInput')?.disabled,
+            exitBtnExists: !!document.getElementById('exitAttestationBtn')
         }));
 
         expect(attestationState.isAttestationMode, 'Attestation mode was not enabled after clicking the start card');
-        expect(attestationState.exitVisible, 'Attestation exit button must be visible after entering attestation mode');
         expect(!attestationState.inputDisabled, 'Composer must stay enabled after entering attestation mode');
+        expect(!attestationState.exitBtnExists, 'Attestation exit button must stay removed from the chat header');
 
         const startRequest = scenario.requests.find((item) => item.payload.requestType === 'chat_start' && item.payload.chatInput === '/start');
         expect(!!startRequest, 'Attestation start must trigger the same /start chat flow');

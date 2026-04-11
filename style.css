@@ -993,16 +993,8 @@ body.attestation-mode .chat-panel {
     border-color: #4f8d6b;
 }
 
-.btn-attestation-exit {
-    display: none;
-}
-
 body.attestation-mode .btn-attestation {
     display: none;
-}
-
-body.attestation-mode .btn-attestation-exit {
-    display: inline-flex;
 }
 
 /* Export buttons always visible */
