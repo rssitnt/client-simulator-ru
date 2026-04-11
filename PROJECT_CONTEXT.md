@@ -63,6 +63,9 @@
 - Fullscreen settings in light theme now also have a final settings/admin harmony pass at the bottom of `C:\projects\sites\client-simulator\style.css`:
   - panel background, invite row, accordions, dropdowns, users table, and tech logs should stay in one calm cream/stone palette;
   - future settings-only white-theme fixes should land there first.
+- The fullscreen settings header is sticky again:
+  - `C:\projects\sites\client-simulator\style.css` keeps `.theme-color-section` pinned to the top of the scrolling settings panel;
+  - the close button is part of that header, not a separate viewport-fixed element.
 - In the left history rail, dialog rows are intentionally transparent at rest now:
   - active/search rows should not keep a permanent filled rectangle;
   - the visible card-like highlight is meant to appear only on hover/focus interaction.

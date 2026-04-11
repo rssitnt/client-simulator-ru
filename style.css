@@ -10565,7 +10565,7 @@ body.local-minimal-ui #settingsModal .settings-panel {
     min-height: 100dvh;
     max-height: 100dvh;
     margin: 0;
-    padding: 18px 28px max(26px, env(safe-area-inset-bottom, 0px) + 18px);
+    padding: 0 28px max(26px, env(safe-area-inset-bottom, 0px) + 18px);
     border: none;
     border-radius: 0;
     background: rgb(24, 22, 19);
@@ -10574,14 +10574,15 @@ body.local-minimal-ui #settingsModal .settings-panel {
 }
 
 body.local-minimal-ui .theme-color-section {
-    position: relative;
-    top: auto;
-    z-index: auto;
-    margin: -18px -18px 18px;
-    padding: max(18px, env(safe-area-inset-top, 0px) + 18px) 18px 16px;
+    position: sticky;
+    top: 0;
+    z-index: 24;
+    margin: 0 -28px 18px;
+    padding: max(16px, env(safe-area-inset-top, 0px) + 16px) 28px 16px;
     background: rgba(24, 22, 19, 0.94);
     backdrop-filter: blur(14px);
     border-bottom: 1px solid rgba(242, 238, 231, 0.08);
+    box-shadow: 0 10px 28px rgba(12, 10, 8, 0.14);
 }
 
 body.local-minimal-ui .theme-color-row {
@@ -10599,9 +10600,9 @@ body.local-minimal-ui .theme-toggle {
 
 body.local-minimal-ui .settings-modal-close {
     display: inline-flex;
-    position: fixed;
-    top: 14px;
-    right: 22px;
+    position: relative;
+    justify-self: end;
+    align-self: center;
     margin-left: 0;
     width: 36px;
     height: 36px;
@@ -10610,7 +10611,7 @@ body.local-minimal-ui .settings-modal-close {
     background: transparent;
     color: var(--local-text-soft-final);
     box-shadow: none;
-    z-index: 1205;
+    z-index: 1;
 }
 
 body.local-minimal-ui .settings-modal-close:hover {
@@ -14840,8 +14841,9 @@ body.local-minimal-ui.light-theme #settingsModal .settings-panel {
 }
 
 body.local-minimal-ui.light-theme #settingsModal .theme-color-section {
-    background: rgba(252, 249, 244, 0.96) !important;
-    border-bottom-color: rgba(117, 103, 84, 0.12) !important;
+    background: rgba(252, 249, 244, 0.98) !important;
+    border-bottom-color: rgba(117, 103, 84, 0.10) !important;
+    box-shadow: 0 10px 24px rgba(87, 71, 50, 0.08) !important;
 }
 
 body.local-minimal-ui.light-theme #settingsModal .settings-content,
