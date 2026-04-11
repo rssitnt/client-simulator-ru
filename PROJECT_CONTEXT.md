@@ -60,6 +60,9 @@
 - The light theme now also has a final neutral palette pass at the bottom of `C:\projects\sites\client-simulator\style.css`:
   - intended direction is GPT-like warm-neutral cream/stone surfaces rather than mixed legacy reds, blues, or cold whites;
   - history, chat, composer, fullscreen settings, and admin controls should keep one shared palette ladder.
+- Fullscreen settings in light theme now also have a final settings/admin harmony pass at the bottom of `C:\projects\sites\client-simulator\style.css`:
+  - panel background, invite row, accordions, dropdowns, users table, and tech logs should stay in one calm cream/stone palette;
+  - future settings-only white-theme fixes should land there first.
 - In the left history rail, dialog rows are intentionally transparent at rest now:
   - active/search rows should not keep a permanent filled rectangle;
   - the visible card-like highlight is meant to appear only on hover/focus interaction.
