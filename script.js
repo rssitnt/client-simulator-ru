@@ -88,7 +88,8 @@ const GEMINI_LIVE_VAD_SILENCE_DURATION_MS = 700;
 const GEMINI_LIVE_CLIENT_ACTIVITY_END_IDLE_MS = 900;
 const GEMINI_VOICE_USER_TURN_IDLE_WATCHDOG_MS = 1350;
 const GEMINI_VOICE_ASSISTANT_RESPONSE_WATCHDOG_MS = 3200;
-const GEMINI_VOICE_ASSISTANT_RESPONSE_WATCHDOG_MAX_RETRIES = 1;
+const GEMINI_VOICE_ASSISTANT_RESPONSE_WATCHDOG_MAX_RETRIES = 2;
+const GEMINI_VOICE_ASSISTANT_RESPONSE_STALL_RECOVERY_MS = 7600;
 const GEMINI_VOICE_EARLY_ASSISTANT_REPLY_USER_GRACE_MS = 1200;
 const GEMINI_VOICE_EARLY_ASSISTANT_BUFFER_WINDOW_MS = 45000;
 const GEMINI_VOICE_RECENT_SPEECH_ACTIVITY_WINDOW_MS = 2500;
@@ -2097,6 +2098,8 @@ let geminiVoiceClientActivityEndTimerId = 0;
 let geminiVoiceUserTurnIdleWatchdogTimerId = 0;
 let geminiVoiceAssistantResponseWatchdogTimerId = 0;
 let geminiVoiceAssistantResponseWatchdogRetryCount = 0;
+let geminiVoiceAssistantResponseStallRecoveryTimerId = 0;
+let geminiVoiceAssistantResponsePendingSince = 0;
 let geminiVoicePendingAssistantBeforeFirstUserTurn = false;
 let voiceAuthWarmupPromise = null;
 let voiceAuthCachedIdToken = '';
@@ -13790,9 +13793,18 @@ function clearGeminiVoiceAssistantResponseWatchdog() {
     }
 }
 
+function clearGeminiVoiceAssistantResponseStallRecovery() {
+    if (geminiVoiceAssistantResponseStallRecoveryTimerId) {
+        clearTimeout(geminiVoiceAssistantResponseStallRecoveryTimerId);
+        geminiVoiceAssistantResponseStallRecoveryTimerId = 0;
+    }
+}
+
 function resetGeminiVoiceAssistantResponseWatchdog() {
     clearGeminiVoiceAssistantResponseWatchdog();
+    clearGeminiVoiceAssistantResponseStallRecovery();
     geminiVoiceAssistantResponseWatchdogRetryCount = 0;
+    geminiVoiceAssistantResponsePendingSince = 0;
 }
 
 function hasPendingGeminiVoiceAssistantResponseGap() {
@@ -13901,6 +13913,30 @@ function scheduleGeminiVoiceAssistantResponseWatchdog(reason = 'user_turn_finali
         setVoiceModeStatus(getVoiceModeStatusCopy('clientThinking', 'Клиент обрабатывает ваш ответ…'), 'waiting');
         scheduleGeminiVoiceAssistantResponseWatchdog(`${reason}_retry`);
     }, GEMINI_VOICE_ASSISTANT_RESPONSE_WATCHDOG_MS);
+}
+
+function scheduleGeminiVoiceAssistantResponseStallRecovery(reason = 'user_turn_finalized') {
+    clearGeminiVoiceAssistantResponseStallRecovery();
+    if (!isGeminiVoiceActive && !isGeminiVoiceConnecting) return;
+    if (!hasPendingGeminiVoiceAssistantResponseGap()) return;
+
+    geminiVoiceAssistantResponseStallRecoveryTimerId = setTimeout(() => {
+        geminiVoiceAssistantResponseStallRecoveryTimerId = 0;
+        if (!isGeminiVoiceActive && !isGeminiVoiceConnecting) return;
+        if (!hasPendingGeminiVoiceAssistantResponseGap()) return;
+        const pendingForMs = geminiVoiceAssistantResponsePendingSince
+            ? Math.max(0, Date.now() - geminiVoiceAssistantResponsePendingSince)
+            : 0;
+        sendGeminiVoiceRealtimeActivityMarker('end', `${reason}_stall_recovery`);
+        recordVoiceDebugEvent('assistant_response_stall_recovery', {
+            status: 'warn',
+            message: reason,
+            pendingForMs
+        });
+        showVoiceCallNotice('Клиент задерживается с ответом. Повторно подталкиваю реплику…');
+        setVoiceModeStatus('Клиент задерживается с ответом. Повторно подталкиваю реплику…', 'waiting');
+        scheduleGeminiVoiceAssistantResponseWatchdog(`${reason}_stall_recovery`);
+    }, GEMINI_VOICE_ASSISTANT_RESPONSE_STALL_RECOVERY_MS);
 }
 
 function clearGeminiPendingAssistantFinalizeTimer() {
@@ -18210,6 +18246,7 @@ function scheduleGeminiVoiceLateTranscriptWait(reason = 'waiting_for_input') {
 function beginGeminiAssistantVoiceOutput(trigger = 'transcript') {
     if (!isGeminiVoiceActive && !isGeminiVoiceConnecting) return;
     resetGeminiVoiceAssistantResponseWatchdog();
+    geminiVoiceAssistantResponsePendingSince = 0;
     const wasInProgress = geminiVoiceAssistantTurnInProgress;
     const shouldReusePendingTurn =
         !wasInProgress &&
@@ -19103,8 +19140,10 @@ function finalizeGeminiUserTurn(sourceText) {
     geminiVoiceConversationFinished = false;
     geminiVoiceUserTurnFinalized = true;
     if (isGeminiVoiceConnecting || isGeminiVoiceActive) {
+        geminiVoiceAssistantResponsePendingSince = Date.now();
         setVoiceModeStatus(getShortStatusText('Вы:', completedUserText), 'listening', { lockMs: 1200 });
         scheduleGeminiVoiceAssistantResponseWatchdog('user_turn_finalized');
+        scheduleGeminiVoiceAssistantResponseStallRecovery('user_turn_finalized');
     }
     return true;
 }
@@ -19120,6 +19159,8 @@ function finalizeGeminiAssistantTurn(sourceText, options = {}) {
     );
     clearGeminiVoiceLateTranscriptWait();
     clearGeminiPendingAssistantFinalizeTimer();
+    clearGeminiVoiceAssistantResponseStallRecovery();
+    geminiVoiceAssistantResponsePendingSince = 0;
     geminiVoicePendingAssistantBeforeFirstUserTurn = false;
     geminiVoiceAssistantPreview = '';
     geminiVoiceAssistantDraft = '';

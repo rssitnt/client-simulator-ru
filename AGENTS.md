@@ -297,6 +297,9 @@
 - On `client-simulator.ru` / `www.client-simulator.ru`, same-origin `/api/gemini-live-token` is now treated as an invalid production route even if it was saved in local/shared config earlier; production token fetches should stay on the remote token server and must not fall back into the known-bad same-origin `405` path.
 - If repeated Vercel `Authorization successful / You can close this tab` pages start opening, first check for a stuck local `npx vercel ...` process (for example `vercel domains inspect ...`) and kill that process instead of approving more tabs; Vercel is not the primary production path right now.
 - If the first client reply disappears again, look in the admin tech log for `assistant_output_buffered_before_user_turn`, `assistant_output_waiting_for_user_turn`, and `assistant_output_released_after_user_turn`.
+- If Gemini accepts the manager turn but then goes silent, the current recovery contract is two-stage:
+  - a soft assistant-response watchdog retries the manager `activityEnd` boundary more than once;
+  - if the reply still does not start, a later hard stall-recovery retry fires and writes `assistant_response_stall_recovery` into the voice tech log instead of leaving the call silently hanging.
 - If dialog history acts like a permissions problem, verify both Firebase rules and fresh auth token state.
 - If a hard refresh looks like a logout, first check whether Firebase Auth simply restored too slowly; soft timeout alone should not wipe the browser session anymore.
 - Если пользователь снова пожалуется на аттестацию, сначала проверь, не вернулся ли toast `Режим аттестации включен`: вход в этот режим теперь должен быть silent.

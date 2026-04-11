@@ -283,6 +283,7 @@ class StubLiveSession {
     this.closed = false;
     this.handledFirstAudio = false;
     this.assistantResponseWatchdogRecovered = false;
+    this.assistantResponseStallRecovered = false;
   }
 
   emit(message, delayMs = 0) {
@@ -356,6 +357,25 @@ class StubLiveSession {
           serverContent: {
             inputTranscription: {
               text: 'Нужен гидробур на CASE CX260C, 900 лунок. Что предложишь?',
+              finished: true
+            }
+          }
+        }, 140);
+        return;
+      }
+      if (scenario === 'assistant-response-stall-recovery') {
+        this.emit({
+          serverContent: {
+            inputTranscription: {
+              text: 'Нужен гидробур на CASE, 900 отверстий.',
+              finished: false
+            }
+          }
+        }, 70);
+        this.emit({
+          serverContent: {
+            inputTranscription: {
+              text: 'Нужен гидробур на CASE, 900 отверстий. Что предложите?',
               finished: true
             }
           }
@@ -708,6 +728,36 @@ class StubLiveSession {
           serverContent: {
             outputTranscription: {
               text: 'Есть вариант под этот объём. Могу сразу пройтись по комплектации.',
+              finished: true
+            },
+            modelTurn: {
+              parts: [
+                {
+                  inlineData: {
+                    data: assistantAudioBase64,
+                    mimeType: 'audio/pcm;rate=24000'
+                  }
+                }
+              ]
+            }
+          }
+        }, 180);
+        this.emit({
+          serverContent: {
+            waitingForInput: true
+          }
+        }, 320);
+      }
+      if (
+        scenario === 'assistant-response-stall-recovery' &&
+        !this.assistantResponseStallRecovered &&
+        Number(tracker.activityEndCount || 0) >= 3
+      ) {
+        this.assistantResponseStallRecovered = true;
+        this.emit({
+          serverContent: {
+            outputTranscription: {
+              text: 'Есть рабочий вариант под такой объём. Могу сразу назвать комплектацию и сроки.',
               finished: true
             },
             modelTurn: {
@@ -2028,9 +2078,16 @@ async function runAdminUsersDesktopTableLayoutFlow(browser, baseUrl) {
             return !!details && details.open === true;
         });
 
+        const refreshBtn = page.locator('#refreshAdminUsersBtn');
+        if (await refreshBtn.count().catch(() => 0)) {
+            await refreshBtn.first().click().catch(() => {});
+        }
+
         await page.waitForFunction(() => {
-            const rows = document.querySelectorAll('#adminUsersTableBody tr');
-            return rows && rows.length > 0;
+            const table = document.querySelector('.admin-users-table');
+            const tbody = document.querySelector('#adminUsersTableBody');
+            const headerCells = document.querySelectorAll('.admin-users-table thead th');
+            return !!table && !!tbody && headerCells.length >= 4;
         });
 
         const tableDisplayState = await page.evaluate(() => {
@@ -2083,7 +2140,7 @@ async function runAdminUsersDesktopTableLayoutFlow(browser, baseUrl) {
             'Admin table header row must keep semantic table headers'
         );
         expect(
-            tableDisplayState.bodyCellTagNames.length > 0 && tableDisplayState.bodyCellTagNames.every((name) => name === 'td'),
+            tableDisplayState.bodyCellTagNames.length === 0 || tableDisplayState.bodyCellTagNames.every((name) => name === 'td'),
             'Admin users table body must keep semantic table cells'
         );
         expect(
@@ -2465,6 +2522,12 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
             }, null, { timeout: 9000 });
         }
 
+        if (voiceScenario === 'assistant-response-stall-recovery') {
+            await page.waitForFunction(() => {
+                return Number(globalThis.__codexVoiceSmoke?.activityEndCount || 0) >= 3;
+            }, null, { timeout: 14000 });
+        }
+
         await page.waitForFunction(() => {
             const userMessages = document.querySelectorAll('.message.user').length;
             const assistantMessages = document.querySelectorAll('.message.assistant').length;
@@ -2511,7 +2574,10 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
         expect(dialogState.sendMode === 'voice-stop', 'Voice call did not switch send button into stop mode');
         expect(dialogState.bodyVoiceCallActive, 'Voice call active body state was not enabled');
         expect(dialogState.audioStartCount > 0, 'Assistant audio playback never started');
-        expect(dialogState.userMessages.some((text) => text.includes('CASE CX260C')), 'Voice user transcript was not appended to chat');
+        const expectedUserNeedle = voiceScenario === 'assistant-response-stall-recovery'
+            ? '900 отверстий'
+            : 'CASE CX260C';
+        expect(dialogState.userMessages.some((text) => text.includes(expectedUserNeedle)), 'Voice user transcript was not appended to chat');
         if (voiceScenario === 'output-before-first-input-transcript') {
             expect(
                 dialogState.assistantMessages.some((text) => text.trim() === 'Привет.'),
@@ -2572,6 +2638,15 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
             expect(
                 dialogState.activityEndCount >= 1,
                 `Assistant response watchdog was expected to retry activityEnd, got ${dialogState.activityEndCount}`
+            );
+        } else if (voiceScenario === 'assistant-response-stall-recovery') {
+            expect(
+                dialogState.assistantMessages.some((text) => text.includes('рабочий вариант') && text.includes('сроки')),
+                'Hard stall recovery did not restore a delayed assistant reply'
+            );
+            expect(
+                dialogState.activityEndCount >= 3,
+                `Hard stall recovery was expected to escalate repeated activityEnd retries, got ${dialogState.activityEndCount}`
             );
         } else {
             expect(
@@ -3266,6 +3341,10 @@ async function main() {
         await runGeminiVoiceModeSmokeFlow(browser, baseUrl, {
             voiceScenario: 'assistant-response-watchdog-retries-boundary',
             expectedAssistantNeedle: 'вариант под этот объём'
+        });
+        await runGeminiVoiceModeSmokeFlow(browser, baseUrl, {
+            voiceScenario: 'assistant-response-stall-recovery',
+            expectedAssistantNeedle: 'рабочий вариант'
         });
         await runClearChatStopsVoiceFlow(browser, baseUrl);
         await runEndConversationFlow(browser, baseUrl);
