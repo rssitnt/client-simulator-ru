@@ -52,6 +52,7 @@
 - Voice debug log loading is intentionally independent from the local JSON cache bootstrap so startup diagnostics do not break on localStorage init order.
 - Settings on mobile are a full-screen sheet with a fixed close button.
 - The local/settings surface is fullscreen on desktop now too; treat settings as a full-viewport panel rather than a fixed-width right drawer.
+- Inside that fullscreen settings surface, the admin panel content should stay on a centered working width instead of stretching edge-to-edge; `Выдача доступа`, hidden prompts, users table, and debug sections should read like one compact admin workspace, not like separate elements scattered across the whole screen.
 - `Пользователи и доступ` has a dedicated mobile card layout; desktop table remains unchanged.
 - Persistent dialog history is stored in RTDB:
   - index: `dialog_history_index/{loginKey}/{dialogId}`

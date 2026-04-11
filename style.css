@@ -14235,3 +14235,88 @@ body.local-minimal-ui #adminPanel > .admin-invite-form {
 body.local-minimal-ui #adminPanel > #adminHiddenClientPromptAccordion.admin-hidden-prompt-section {
     border-top: none !important;
 }
+
+/* Fullscreen settings: keep admin content on a sane working width */
+body.local-minimal-ui #settingsModal .settings-panel #adminPanelAccordion {
+    width: 100%;
+}
+
+body.local-minimal-ui #settingsModal .settings-panel #adminPanel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+
+body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-panel-header,
+body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-invite-form,
+body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-hidden-prompt-section,
+body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-users-access-body,
+body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-webhook-debug-body {
+    width: min(100%, 1180px);
+}
+
+body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-panel-header {
+    padding-bottom: 14px;
+}
+
+body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-invite-form {
+    grid-template-columns: minmax(360px, 560px) 150px 164px;
+    justify-content: start;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 18px;
+}
+
+body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-hidden-prompt-section {
+    overflow: visible;
+}
+
+body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-hidden-prompt-section > .admin-hidden-prompt-summary,
+body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-hidden-prompt-section > .admin-hidden-prompt-body {
+    width: 100%;
+}
+
+body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-users-access-body {
+    padding-top: 8px;
+}
+
+body.local-minimal-ui #settingsModal .settings-panel .admin-users-access-toolbar {
+    margin-top: 0;
+    margin-bottom: 12px;
+}
+
+body.local-minimal-ui #settingsModal .settings-panel .admin-users-access-toolbar .btn-change {
+    width: auto;
+    min-width: 132px;
+    padding-inline: 18px;
+}
+
+body.local-minimal-ui #settingsModal .settings-panel .admin-users-access-body[data-admin-layout="desktop"] .admin-table-wrap {
+    width: 100%;
+    max-width: 100%;
+}
+
+body.local-minimal-ui #settingsModal .settings-panel .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table {
+    min-width: 980px;
+}
+
+@media (max-width: 1100px) {
+    body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-invite-form {
+        grid-template-columns: minmax(0, 1fr) 132px 152px;
+    }
+}
+
+@media (max-width: 840px) {
+    body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-invite-form {
+        grid-template-columns: 1fr;
+        width: 100%;
+    }
+
+    body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-panel-header,
+    body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-hidden-prompt-section,
+    body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-users-access-body,
+    body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-webhook-debug-body {
+        width: 100%;
+    }
+}
