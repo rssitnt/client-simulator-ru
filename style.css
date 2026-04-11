@@ -259,6 +259,125 @@ body.light-theme #modalLoginInput:-webkit-autofill:active {
 
 /* Old settings styles removed */
 
+/* Global borderless pass */
+body {
+    --color-border: transparent;
+    --color-border-light: transparent;
+}
+
+body.local-minimal-ui,
+body.local-minimal-ui.light-theme {
+    --local-border: transparent;
+    --local-border-strong: transparent;
+}
+
+body .panel,
+body .panel-header,
+body .chat-panel,
+body .chat-messages,
+body .chat-input-container,
+body .input-wrapper,
+body .message,
+body .modal-content,
+body .auth-modal-content,
+body .instruction-content,
+body .prompt-input,
+body .prompt-preview,
+body .custom-select,
+body .custom-select-trigger,
+body .custom-select-menu,
+body .dropdown-options,
+body .dropdown-option,
+body .btn,
+body .btn-icon,
+body .btn-export,
+body .btn-attestation,
+body .btn-scope-toggle,
+body .btn-input-action,
+body button,
+body input,
+body textarea,
+body select {
+    border-color: transparent !important;
+}
+
+body .panel,
+body .panel-header,
+body .chat-panel,
+body .chat-messages,
+body .chat-input-container,
+body .input-wrapper,
+body .message,
+body .modal-content,
+body .auth-modal-content,
+body .instruction-content,
+body .prompt-input,
+body .prompt-preview,
+body .custom-select,
+body .custom-select-trigger,
+body .custom-select-menu,
+body .dropdown-options,
+body .dropdown-option,
+body .btn,
+body .btn-icon,
+body .btn-export,
+body .btn-attestation,
+body .btn-scope-toggle,
+body .btn-input-action,
+body button,
+body input,
+body textarea,
+body select {
+    border-width: 0 !important;
+    outline: none !important;
+}
+
+body.local-minimal-ui .history-panel,
+body.local-minimal-ui .history-shell,
+body.local-minimal-ui .history-list,
+body.local-minimal-ui .history-item,
+body.local-minimal-ui .history-search,
+body.local-minimal-ui .history-toggle-btn,
+body.local-minimal-ui .local-shell-main,
+body.local-minimal-ui .local-shell-header,
+body.local-minimal-ui .local-start-card,
+body.local-minimal-ui #startBtn,
+body.local-minimal-ui #startVoiceBtn,
+body.local-minimal-ui #startAttestationBtn,
+body.local-minimal-ui .local-prompt-drawer,
+body.local-minimal-ui .local-settings-drawer,
+body.local-minimal-ui .personality-selector-menu,
+body.local-minimal-ui .personality-selector-trigger,
+body.local-minimal-ui .personality-selector-option,
+body.local-minimal-ui .voice-call-note,
+body.local-minimal-ui .voice-call-finished-note,
+body.local-minimal-ui .conversation-action-note-box,
+body.local-minimal-ui .admin-table-wrap,
+body.local-minimal-ui .admin-user-card,
+body.local-minimal-ui .admin-access-table,
+body.local-minimal-ui .admin-access-table th,
+body.local-minimal-ui .admin-access-table td,
+body.local-minimal-ui .admin-accordion,
+body.local-minimal-ui .admin-invite-row,
+body.local-minimal-ui .admin-invite-days-wrap,
+body.local-minimal-ui .admin-invite-days,
+body.local-minimal-ui .admin-role-trigger,
+body.local-minimal-ui .admin-role-menu,
+body.local-minimal-ui .admin-role-option {
+    border: none !important;
+    outline: none !important;
+}
+
+body.local-minimal-ui .admin-access-table,
+body.local-minimal-ui .admin-access-table th,
+body.local-minimal-ui .admin-access-table td,
+body.local-minimal-ui .history-panel,
+body.local-minimal-ui .local-shell-main,
+body.local-minimal-ui .local-settings-drawer,
+body.local-minimal-ui .local-prompt-drawer {
+    box-shadow: none !important;
+}
+
 body.light-theme .dropdown-menu {
     background: #ffffff;
     border-color: #ddd;
@@ -13343,9 +13462,18 @@ body.local-minimal-ui .history-panel::-webkit-scrollbar-track {
     background: transparent;
 }
 
+body.local-minimal-ui .history-panel::-webkit-scrollbar-button,
+body.local-minimal-ui .history-panel::-webkit-scrollbar-corner {
+    width: 0 !important;
+    height: 0 !important;
+    display: none !important;
+    background: transparent !important;
+}
+
 body.local-minimal-ui .history-panel::-webkit-scrollbar-thumb {
     background: rgba(242, 238, 231, 0.16);
     border-radius: 999px;
+    border: none !important;
 }
 
 body.local-minimal-ui.history-sidebar-collapsed .history-panel {

@@ -8135,7 +8135,7 @@ function updateHistorySidebarToggleUi() {
     if (historySidebarToggleText) {
         historySidebarToggleText.textContent = collapsed ? 'Показать историю' : 'Скрыть историю';
     }
-    setCustomTooltip(historySidebarToggleBtn, label);
+    historySidebarToggleBtn.removeAttribute('data-tooltip');
     if (historyRailSearchBtn) {
         historyRailSearchBtn.hidden = !isLocalMinimalUiEnabled() || !collapsed;
     }
@@ -24178,7 +24178,6 @@ bindEvent(historyRailNewBtn, 'click', () => {
 bindEvent(historyRailSearchBtn, 'click', () => {
     openHistorySidebarAndFocusSearch();
 });
-setCustomTooltip(historySidebarToggleBtn, 'Скрыть историю');
 setCustomTooltip(historyRailNewBtn, 'Новый диалог');
 setCustomTooltip(historyRailSearchBtn, 'Поиск по диалогам');
 setCustomTooltip(localPromptToggleBtn, 'Открыть роль');
