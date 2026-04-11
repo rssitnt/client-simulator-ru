@@ -2443,6 +2443,12 @@ function syncLocalMinimalChatHeader() {
     }
 }
 
+function syncChatPanelHeadingMode() {
+    const eyebrow = document.querySelector('#chatPanel .panel-heading-chat .panel-eyebrow');
+    if (!eyebrow) return;
+    eyebrow.textContent = isAttestationMode ? 'Аттестация' : 'Чат';
+}
+
 function revealLocalMinimalPromptSetup(role = 'client', message = 'Сначала выберите роль и сценарий справа.') {
     if (!isLocalMinimalUiEnabled()) return false;
     const normalizedRole = PROMPT_ROLES.includes(role) ? role : 'client';
@@ -13545,6 +13551,7 @@ function setAttestationMode(enabled) {
         if (startAttestationBtn) {
             startAttestationBtn.style.display = 'none';
         }
+        syncChatPanelHeadingMode();
         return true;
     } else {
         if (attestationPrevState) {
@@ -13560,6 +13567,7 @@ function setAttestationMode(enabled) {
         if (startAttestationBtn) {
             startAttestationBtn.style.display = '';
         }
+        syncChatPanelHeadingMode();
         showCopyNotification('Режим аттестации выключен');
         return true;
     }
@@ -24779,6 +24787,7 @@ function installLocalhostTestHooks() {
 setChatLoadingState(true);
 installLocalhostTestHooks();
 loadAttestationQueue();
+syncChatPanelHeadingMode();
 loadPrompts()
     .catch((error) => {
         console.error('Initialization auth/prompts error:', error);
