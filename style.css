@@ -14114,7 +14114,11 @@ body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .adm
 }
 
 body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table tbody tr:hover td:nth-child(6)::after,
-body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table tbody tr:focus-within td:nth-child(6)::after {
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table tbody tr:focus-within td:nth-child(6)::after,
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table tbody td:nth-child(6):hover::after,
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table tbody td:nth-child(6):focus-within::after,
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table tbody td:nth-child(6):has(.admin-user-action-group:hover)::after,
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table tbody td:nth-child(6):has(.admin-user-action-group:focus-within)::after {
     opacity: 1;
     transform: translateY(-50%) translateX(-2px);
 }
@@ -14690,4 +14694,95 @@ body.local-minimal-ui #settingsModal .admin-users-table:has(.admin-empty-row) .a
 
 body.local-minimal-ui.light-theme #settingsModal .admin-users-table:has(.admin-empty-row) .admin-empty-row td {
     color: rgba(84, 69, 51, 0.76) !important;
+}
+
+/* Final light-theme settings/admin polish */
+body.local-minimal-ui.light-theme #settingsModal .settings-panel {
+    background:
+        linear-gradient(180deg, rgba(255, 252, 247, 0.98) 0%, rgba(245, 239, 230, 0.98) 100%) !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .settings-content,
+body.local-minimal-ui.light-theme #settingsModal #adminPanel {
+    max-width: 1240px;
+    margin-inline: auto;
+}
+
+body.local-minimal-ui.light-theme #settingsModal #adminPanel > .admin-panel-header,
+body.local-minimal-ui.light-theme #settingsModal #adminPanel > .admin-invite-form,
+body.local-minimal-ui.light-theme #settingsModal #adminPanel > .admin-hidden-prompt-section,
+body.local-minimal-ui.light-theme #settingsModal #adminPanel > .admin-users-access-body,
+body.local-minimal-ui.light-theme #settingsModal #adminPanel > .admin-webhook-debug-body {
+    max-width: 1240px;
+    margin-inline: auto;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-panel-title,
+body.local-minimal-ui.light-theme #settingsModal .admin-hidden-prompt-summary,
+body.local-minimal-ui.light-theme #settingsModal .admin-accordion-trigger {
+    color: #2d261f !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-hidden-prompt-summary,
+body.local-minimal-ui.light-theme #settingsModal .admin-accordion-trigger {
+    min-height: 48px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal #adminPanel > .admin-invite-form {
+    grid-template-columns: minmax(320px, 1.6fr) minmax(132px, 0.34fr) auto;
+    align-items: center;
+    column-gap: 14px;
+    row-gap: 12px;
+    padding-top: 8px;
+    padding-bottom: 18px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-input,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-days-wrap,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-btn {
+    background: rgba(255, 251, 245, 0.92) !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-days-wrap {
+    border: 1px solid rgba(132, 115, 93, 0.18) !important;
+    box-shadow: none !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-days {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-toolbar {
+    margin-bottom: 12px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-toolbar .btn-change {
+    min-width: 108px;
+    max-width: 124px;
+    min-height: 38px;
+    background: rgba(255, 251, 245, 0.92) !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body[data-admin-layout="desktop"] .admin-table-wrap {
+    padding-right: 2px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table tbody td:nth-child(6):hover::after,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table tbody td:nth-child(6):focus-within::after,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table tbody tr:hover > td:nth-child(6)::after,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table tbody tr:focus-within > td:nth-child(6)::after {
+    opacity: 1;
+    transform: translateY(-50%) translateX(-2px);
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-users-table:has(.admin-empty-row) .admin-empty-row td {
+    padding-top: 10px !important;
+    color: rgba(72, 60, 45, 0.82) !important;
+    font-size: 15px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-users-table:has(.admin-empty-row) .admin-empty-row td::before {
+    display: none !important;
 }

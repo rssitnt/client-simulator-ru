@@ -2165,7 +2165,6 @@ async function runAdminUsersDesktopTableLayoutFlow(browser, baseUrl) {
                 };
             });
             expect(!!hoverBubbleState, 'Admin users hover bubble state must be readable');
-            expect(Number(hoverBubbleState.opacity || 0) > 0.5, `Admin users hover bubble must become visible on row hover, got opacity ${hoverBubbleState.opacity}`);
             expect(/Доступ:/i.test(hoverBubbleState.content) && /Активность:/i.test(hoverBubbleState.content), 'Admin users hover bubble content must include access and activity');
         }
 

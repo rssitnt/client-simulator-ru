@@ -152,6 +152,7 @@
     - outer admin sections are flattened into divider-based blocks instead of heavy nested rectangles;
     - the `Выдача доступа` days control must stay as one shell: `.admin-invite-days-wrap` is the outer surface and the inner `.admin-invite-days` input stays transparent/borderless so it does not render as a smaller field inside;
 - the admin role selector should keep a theme-matched dropdown surface too: do not leave it as a dark trigger with a bright native white popup underneath;
+- the fullscreen light-theme settings/admin view now depends on the latest bottom-of-file harmonization layer in `C:\projects\sites\client-simulator\style.css`; keep future white-theme fixes there so `Выдача доступа`, admin accordions, empty/error states, and the users table stay in one warm cream palette instead of partially falling back to dark/default control styles.
 - the admin users list should stay compact now: tighter table-cell padding, a slightly shorter role trigger, wrapped access/status text, and drawer-safe column sizing so the right side does not get clipped;
 - in `Пользователи и доступ`, action buttons should stack vertically inside the actions cell instead of trying to share one narrow row;
 - that same table should also keep a compact desktop rhythm: shorter header labels, smaller uppercase header typography, a non-full-width `Обновить` button, and a tighter role dropdown menu so the section does not look oversized inside the settings drawer;
@@ -160,6 +161,7 @@
 - the local admin panel is intentionally denser now: tighter accordion headers, a more compact `Выдача доступа` row, and two-column user cards with a small access action aligned to the bottom-right; do not let it drift back into tall mobile-like cards on desktop widths;
 - the desktop admin access table now relies on a real horizontal-scroll container plus a larger minimum table width; do not squeeze it back to `width: 100%` with tiny percentage columns, or the `Статус` text and right-side access action will clip again.
 - the desktop admin access table also now uses fixed pixel-based column widths in that final stabilization layer; `Логин / Роль / Доступ / Активность / Статус / Действия` should prefer horizontal scroll over any cross-column overlap or header/text collision inside the drawer.
+- an admin-users render regression was fixed in `updateAdminUsersTableRow(...)`: the action cell must stay destructured from `row._adminCells`, otherwise the users table throws during row hydration and falls into the generic `Ошибка загрузки таблицы пользователей...` empty state even when Firebase data is present.
 - desktop `Пользователи и доступ` is intentionally quieter now:
   - visible `Доступ` and `Активность` columns are removed from the desktop table row/header;
   - those two values now live in a hover/focus bubble attached to the row action cell instead of taking permanent horizontal space;

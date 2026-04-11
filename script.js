@@ -7032,6 +7032,7 @@ function updateAdminUsersTableRow(row, rowData) {
         statusCell,
         statusMain,
         presenceText,
+        actionCell,
         actionBtn
     } = row._adminCells;
 
