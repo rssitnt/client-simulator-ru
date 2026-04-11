@@ -1,6 +1,6 @@
 {
-  "name": "TI Client Simulator Studio",
-  "short_name": "TI Simulator",
+    "name": "client simulator",
+    "short_name": "client simulator",
   "icons": [
     {
       "src": "android-chrome-192x192.png",
