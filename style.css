@@ -14473,3 +14473,86 @@ body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body[data-a
     box-shadow: 0 16px 36px rgba(76, 61, 42, 0.10) !important;
     color: #2d261f !important;
 }
+
+/* Final light-theme admin density pass */
+body.local-minimal-ui.light-theme #settingsModal #adminPanel > .admin-panel-header {
+    padding-bottom: 10px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-panel-title {
+    color: rgba(84, 69, 51, 0.62) !important;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+}
+
+body.local-minimal-ui.light-theme #settingsModal #adminPanel > .admin-invite-form {
+    gap: 10px;
+    padding-bottom: 14px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-input,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-days-wrap,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-days,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-btn,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-toolbar .btn-change,
+body.local-minimal-ui.light-theme #settingsModal .admin-role-picker-trigger {
+    min-height: 42px;
+    border-radius: 16px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-btn,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-toolbar .btn-change {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-hidden-prompt-summary {
+    min-height: 52px;
+    padding: 14px 2px;
+    font-size: 14px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-hidden-prompt-section[open] {
+    padding-bottom: 14px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body {
+    padding-top: 4px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-toolbar {
+    margin-bottom: 10px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-users-table th,
+body.local-minimal-ui.light-theme #settingsModal .admin-sort-btn {
+    color: rgba(84, 69, 51, 0.80) !important;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table tbody td {
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body[data-admin-layout="desktop"] .admin-role-picker,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body[data-admin-layout="desktop"] .admin-role-picker-trigger {
+    width: 124px;
+    min-width: 124px;
+    max-width: 124px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body[data-admin-layout="desktop"] .admin-role-picker-trigger {
+    min-height: 34px;
+    padding-inline: 11px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body[data-admin-layout="desktop"] .admin-user-action-group .btn-change {
+    min-height: 28px;
+    min-width: 84px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-webhook-debug-item {
+    border-radius: 16px;
+}
