@@ -171,6 +171,9 @@
 - Voice settings save scope is now split correctly:
   - changing only the Gemini voice or microphone must show a local-device save message, not `сохранены для всех пользователей`;
   - only a real token-endpoint change may produce the shared/global save message.
+- Финальный статус голосового звонка больше не должен жить наверху чата:
+  - верхняя voice status panel теперь только для активного/подключающегося звонка;
+  - после завершения звонка карточка `Звонок завершён / Разговор сохранён` должна рендериться последним элементом внизу переписки.
 - Gemini microphone selection is now safer during device-list refresh:
   - the picker first tries to preserve the current real selection;
   - then the saved device id;

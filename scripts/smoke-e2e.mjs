@@ -2213,6 +2213,10 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
         voiceStatus: String(document.getElementById('voiceModeStatus')?.textContent || '').trim(),
         callNoticeText: String(document.querySelector('.voice-call-note .conversation-action-note-text')?.textContent || '').trim(),
         audioStartCount: Number(globalThis.__codexVoiceSmoke?.audioStartCount || 0),
+        lastMessageClassName: String(document.querySelector('#chatMessages .message:last-child')?.className || '').trim(),
+        lastMessageText: String(document.querySelector('#chatMessages .message:last-child')?.textContent || '').trim(),
+        finishedNoticeCount: document.querySelectorAll('#chatMessages .voice-call-finished-note').length,
+        finishedNoticeText: String(document.querySelector('#chatMessages .voice-call-finished-note')?.textContent || '').trim(),
         rateVisible: (() => {
             const btn = document.getElementById('voiceModeRateBtn');
             return !!btn && !btn.hidden;
@@ -2381,6 +2385,8 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
 
         expect(stopState.sendMode !== 'voice-stop', 'Voice call did not leave stop mode after ending');
         expect(!stopState.bodyVoiceCallActive, 'Voice call active body state did not clear after ending');
+        expect(stopState.lastMessageClassName.includes('voice-call-finished-note'), 'Voice end notice is not rendered as the last dialog item');
+        expect(stopState.lastMessageText.includes('Разговор сохранён'), 'Final voice notice text is missing at the end of the dialog');
     } catch (error) {
         await ensureOutputDir();
         await page.screenshot({ path: path.join(outputDir, 'smoke-gemini-voice-failure.png'), fullPage: true });

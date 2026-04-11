@@ -2064,6 +2064,7 @@ let geminiVoiceSetupComplete = false;
 let geminiVoiceAudioReady = false;
 let geminiVoiceUserTurnFinalized = false;
 let geminiVoiceCallNotice = null;
+let geminiVoiceFinishedNotice = null;
 let geminiVoiceAutoStopTimerId = 0;
 let geminiVoiceAutoStopRequested = false;
 let geminiVoiceConversationFinished = false;
@@ -8065,6 +8066,8 @@ function renderSelectedDialogHistoryIntoMainChat() {
     const persistedClosedAt = String(payload?.closedAt || record?.closedAt || '').trim() || null;
     const persistedRatedAt = String(payload?.ratedAt || record?.ratedAt || payload?.rating?.createdAt || '').trim() || null;
     const persistedRatingText = payload?.rating?.text ? String(payload.rating.text || '').trim() : null;
+    const selectedDialogMode = String(payload?.mode || record?.mode || '').trim().toLowerCase();
+    const shouldShowVoiceFinishedSummary = selectedDialogMode === 'voice' && !!persistedClosedAt && messages.length > 0;
     currentDialogHistoryClosedAt = isOwnedSelection ? null : persistedClosedAt;
     currentDialogHistoryRatedAt = isOwnedSelection ? null : persistedRatedAt;
     currentDialogHistoryHistoricalRatingText = isOwnedSelection ? persistedRatingText : null;
@@ -8081,6 +8084,7 @@ function renderSelectedDialogHistoryIntoMainChat() {
     isDialogRated = !isOwnedSelection && !!lastRating;
 
     chatMessages.innerHTML = '';
+    clearGeminiVoiceFinishedNotice();
     if (startDiv) {
         startDiv.style.display = 'none';
     }
@@ -8091,6 +8095,14 @@ function renderSelectedDialogHistoryIntoMainChat() {
 
     if (persistedRatingText) {
         addMessage(persistedRatingText, 'rating', true);
+    }
+
+    if (shouldShowVoiceFinishedSummary) {
+        showGeminiVoiceFinishedNotice({
+            eyebrow: 'Звонок завершён',
+            title: 'Разговор сохранён',
+            subtext: 'Можно оценить диалог или очистить чат для нового звонка.'
+        });
     }
 
     if (!isOwnedSelection) {
@@ -15810,14 +15822,6 @@ function getVoiceModeStatusCopy(key, fallback = '') {
 function getVoiceConnectPanelPresentation() {
     const currentStatusText = String(currentVoiceModeStatusText || '').trim();
     const statusState = String(currentVoiceModeStatusState || '').trim();
-    if (geminiVoiceConversationFinished) {
-        return {
-            eyebrow: 'Звонок завершён',
-            title: 'Разговор сохранён',
-            subtext: currentStatusText || 'Можно оценить диалог или очистить чат для нового звонка.',
-            state: 'finished'
-        };
-    }
     if (isGeminiVoiceConnecting) {
         return {
             eyebrow: 'Подключение',
@@ -15885,8 +15889,7 @@ function setVoiceModeStatus(text, state = 'idle', options = {}) {
         forceShow ||
         state === 'error' ||
         isGeminiVoiceConnecting ||
-        isGeminiVoiceActive ||
-        geminiVoiceConversationFinished;
+        isGeminiVoiceActive;
     if (!trimmedText || !shouldShow) {
         currentVoiceModeStatusText = '';
         currentVoiceModeStatusState = 'idle';
@@ -18748,6 +18751,7 @@ function resetGeminiVoiceDialogBuffer() {
     setGeminiVoiceMicInputEnabled(false);
     clearGeminiVoiceMicUnlockTimer();
     clearVoiceCallNotice();
+    clearGeminiVoiceFinishedNotice();
     openAiPendingUserTurn = '';
     openAiResponsePending = false;
     openAiResponseQueued = false;
@@ -18838,7 +18842,62 @@ function appendGeminiVoiceDialogToChat() {
         setVoiceModeStatus(getVoiceModeStatusCopy('yourTurn', 'Слушаю вас… Говорите.'), 'listening');
     }
 
+    if (geminiVoiceCallNotice?.parentNode === chatMessages) {
+        chatMessages.appendChild(geminiVoiceCallNotice);
+    }
+
     return appendedCount;
+}
+
+function buildGeminiVoiceFinishedNoticePayload() {
+    return {
+        eyebrow: 'Звонок завершён',
+        title: 'Разговор сохранён',
+        subtext: String(currentVoiceModeStatusText || '').trim()
+            || 'Можно оценить диалог или очистить чат для нового звонка.'
+    };
+}
+
+function showGeminiVoiceFinishedNotice(payload = null) {
+    if (!chatMessages) return;
+    const notice = payload && typeof payload === 'object'
+        ? payload
+        : buildGeminiVoiceFinishedNoticePayload();
+    const eyebrow = String(notice.eyebrow || '').trim();
+    const title = String(notice.title || '').trim();
+    const subtext = String(notice.subtext || '').trim();
+    if (!eyebrow && !title && !subtext) return;
+    if (!geminiVoiceFinishedNotice) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'message conversation-action-note voice-call-finished-note';
+        wrapper.innerHTML = `
+            <div class="conversation-action-note-box">
+                <div class="conversation-action-note-badge"></div>
+                <div class="conversation-action-note-text"></div>
+                <div class="conversation-action-note-meta"></div>
+            </div>
+        `;
+        geminiVoiceFinishedNotice = wrapper;
+    }
+    const badgeEl = geminiVoiceFinishedNotice.querySelector('.conversation-action-note-badge');
+    const textEl = geminiVoiceFinishedNotice.querySelector('.conversation-action-note-text');
+    const metaEl = geminiVoiceFinishedNotice.querySelector('.conversation-action-note-meta');
+    if (badgeEl) badgeEl.textContent = eyebrow;
+    if (textEl) textEl.textContent = title;
+    if (metaEl) metaEl.textContent = subtext;
+    if (!geminiVoiceFinishedNotice.isConnected) {
+        chatMessages.appendChild(geminiVoiceFinishedNotice);
+    } else if (geminiVoiceFinishedNotice.parentNode === chatMessages) {
+        chatMessages.appendChild(geminiVoiceFinishedNotice);
+    }
+    scrollChatToMessage(geminiVoiceFinishedNotice);
+}
+
+function clearGeminiVoiceFinishedNotice() {
+    if (geminiVoiceFinishedNotice?.parentNode) {
+        geminiVoiceFinishedNotice.parentNode.removeChild(geminiVoiceFinishedNotice);
+    }
+    geminiVoiceFinishedNotice = null;
 }
 
 function buildGeminiVoiceSystemInstruction(baseInstructions = '') {
@@ -18961,6 +19020,7 @@ function finalizeGeminiAssistantTurn(sourceText, options = {}) {
 function showVoiceCallNotice(text) {
     const safeText = String(text || '').trim();
     if (!safeText || !chatMessages) return;
+    clearGeminiVoiceFinishedNotice();
     if (!geminiVoiceCallNotice) {
         const wrapper = document.createElement('div');
         wrapper.className = 'message conversation-action-note voice-call-note';
@@ -18975,6 +19035,9 @@ function showVoiceCallNotice(text) {
     const textEl = geminiVoiceCallNotice.querySelector('.conversation-action-note-text');
     if (textEl) {
         textEl.textContent = safeText;
+    }
+    if (geminiVoiceCallNotice.parentNode === chatMessages) {
+        chatMessages.appendChild(geminiVoiceCallNotice);
     }
     scrollChatToMessage(geminiVoiceCallNotice);
 }
@@ -19789,8 +19852,12 @@ async function stopGeminiVoiceMode(options = {}) {
         status: 'info',
         message: silent ? 'Тихая остановка' : 'Обычная остановка'
     });
-    const shouldPreserveDialog = !!preserveDialogForRating && hasBufferedVoiceDialog();
+    const hasDialogToPersist = hasBufferedVoiceDialog();
+    const shouldPreserveDialog = !!preserveDialogForRating && hasDialogToPersist;
     const shouldRenderDialog = !silent && !shouldPreserveDialog;
+    const finishedDialogNoticePayload = shouldRenderDialog
+        ? buildGeminiVoiceFinishedNoticePayload()
+        : null;
     geminiVoiceTransportOpened = false;
 
     if (!isGeminiVoiceActive && !isGeminiVoiceConnecting && !geminiLiveSession) {
@@ -19813,14 +19880,18 @@ async function stopGeminiVoiceMode(options = {}) {
     teardownGeminiVoiceCapture();
     updateVoiceModeControls();
 
+    let appendedVoiceDialogCount = 0;
     if (shouldRenderDialog) {
-        appendGeminiVoiceDialogToChat();
+        appendedVoiceDialogCount = appendGeminiVoiceDialogToChat();
     }
 
     if (shouldPreserveDialog) {
         flushGeminiVoiceDraftLine('user');
         flushGeminiVoiceDraftLine('assistant');
         geminiVoiceConversationFinished = hasBufferedVoiceDialog();
+        const preservedFinishedDialogNoticePayload = geminiVoiceConversationFinished
+            ? buildGeminiVoiceFinishedNoticePayload()
+            : null;
         if (geminiVoiceConversationFinished) {
             currentDialogHistoryClosedAt = currentDialogHistoryClosedAt || new Date().toISOString();
             await saveCurrentDialogHistoryNow({
@@ -19831,25 +19902,33 @@ async function stopGeminiVoiceMode(options = {}) {
         }
         updateVoiceModeRateButtonState();
         if (!silent) {
-            setVoiceModeStatus(
-                geminiVoiceConversationFinished
-                    ? getVoiceModeStatusCopy('stoppedReady', 'Диалог остановлен. Можно оценить звонок.')
-                    : getVoiceModeStatusCopy('stoppedEmpty', 'Диалог остановлен. Реплики не найдены.'),
-                geminiVoiceConversationFinished ? 'ready' : 'error'
-            );
+            if (preservedFinishedDialogNoticePayload) {
+                showGeminiVoiceFinishedNotice(preservedFinishedDialogNoticePayload);
+                setVoiceModeStatus('', 'idle');
+            } else {
+                setVoiceModeStatus(
+                    getVoiceModeStatusCopy('stoppedEmpty', 'Диалог остановлен. Реплики не найдены.'),
+                    'error'
+                );
+            }
         }
         return;
     }
 
     resetGeminiVoiceDialogBuffer();
     geminiVoiceConversationFinished = false;
+    const hasRenderedVoiceMessages = appendedVoiceDialogCount > 0
+        || !!chatMessages?.querySelector('.message.user, .message.assistant');
+    if (finishedDialogNoticePayload && hasRenderedVoiceMessages) {
+        showGeminiVoiceFinishedNotice(finishedDialogNoticePayload);
+    }
     recordVoiceDebugEvent('stopped', {
         status: 'ok',
         message: shouldPreserveDialog ? 'Звонок остановлен, диалог сохранён' : 'Звонок остановлен'
     });
 
     if (!silent) {
-        setVoiceModeStatus('Голосовой режим остановлен.', 'idle');
+        setVoiceModeStatus('', 'idle');
     }
 }
 
@@ -21578,6 +21657,9 @@ function scrollChatToMessage(messageEl, options = {}) {
 }
 
 function addMessage(content, role, isMarkdown = false) {
+    if ((role === 'user' || role === 'assistant') && geminiVoiceFinishedNotice?.parentNode === chatMessages) {
+        clearGeminiVoiceFinishedNotice();
+    }
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
     

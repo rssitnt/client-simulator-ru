@@ -13,6 +13,9 @@
 - Production hosting should remain GitHub Pages unless the user explicitly asks to switch again.
 - Voice mode is Gemini Live through the token server; first-turn handling and mic/voice settings were recently stabilized.
 - Voice mode now also has a local idle-boundary watchdog: if Gemini fails to emit an explicit end-of-manager-turn boundary (`input finished / waitingForInput`), the frontend retries `activityEnd`, finalizes the pending manager turn locally, and keeps the call in a waiting state instead of leaving the turn stuck in preview forever.
+- The final voice-call summary card is now meant to live at the bottom of chat, not in the top voice status panel:
+  - the top voice status panel is only for active/connecting call states;
+  - after a call ends, `Звонок завершён / Разговор сохранён` should be the last dialog card appended after the messages.
 - The local left history rail now uses the settings-style thin scrollbar on the whole `.history-panel`, and in collapsed state that scrollbar is forced fully hidden.
 - Opening a saved dialog from the history rail now reuses the same main `#chatMessages` renderer as a fresh/new chat, so old records no longer fall back to a separate legacy viewer layout.
 - For the owner, a saved dialog opened from history is now the same live workspace as a new chat: the main composer stays usable, new text messages append into the same stored `dialogId`, and starting voice from that opened dialog continues the same conversation instead of resetting into a new one. Foreign/admin-opened dialogs remain read-only.
