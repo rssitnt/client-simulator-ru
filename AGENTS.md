@@ -161,6 +161,10 @@
   - collapsed history rail must not stay vertically scrollable or show a usable scrollbar target;
   - `Пользователи и доступ` on desktop must stay a real table inside a horizontal-scroll wrapper, not collapse back into the tall card/grid fallback.
 - Admins can view and delete foreign dialog history; users can manage only their own history.
+- Saved dialogs opened in the main workspace must keep their original history mode (`text` / `voice`) even after rehydration from RTDB; do not let reopened voice dialogs silently fall back to `text`.
+- History parity contract:
+  - owned saved text/voice/rated dialogs open in the same main `#chatMessages` workspace and remain writable like a fresh chat;
+  - foreign/admin-opened dialogs use that same renderer too, but must stay read-only (`locked-dialog`, send disabled, voice disabled).
 - Active time is now “real focused activity only”:
   - visible tab
   - focused window

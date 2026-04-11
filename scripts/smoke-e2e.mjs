@@ -1477,6 +1477,7 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
             .join('_');
         const ownKey = loginToStorageKey(ownLogin);
         const foreignKey = loginToStorageKey(foreignLogin);
+        const ownVoiceDialogId = 'dlg_own_voice_1';
         const authUsers = JSON.parse(localStorage.getItem('authUsers:v1') || '{}');
         authUsers[foreignKey] = {
             uid: 'foreign-user-1',
@@ -1607,6 +1608,55 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
                 }
             };
         }
+        if (!dbState.data.dialog_history_index[ownKey][ownVoiceDialogId]) {
+            dbState.data.dialog_history_index[ownKey][ownVoiceDialogId] = {
+                id: ownVoiceDialogId,
+                login: ownLogin,
+                uid: 'smoke-admin-1',
+                mode: 'voice',
+                title: 'Свой голосовой диалог',
+                autoTitle: 'Свой голосовой диалог',
+                titleEdited: false,
+                preview: 'Созвон по гидробуру',
+                messageCount: 2,
+                hasRating: true,
+                createdAt: nowIso,
+                updatedAt: nowIso,
+                lastMessageAt: nowIso,
+                closedAt: nowIso,
+                ratedAt: nowIso
+            };
+        }
+        if (!dbState.data.dialog_history_messages[ownKey][ownVoiceDialogId]) {
+            dbState.data.dialog_history_messages[ownKey][ownVoiceDialogId] = {
+                id: ownVoiceDialogId,
+                login: ownLogin,
+                uid: 'smoke-admin-1',
+                mode: 'voice',
+                createdAt: nowIso,
+                updatedAt: nowIso,
+                closedAt: nowIso,
+                ratedAt: nowIso,
+                messages: {
+                    m_0001: {
+                        id: 'm_0001',
+                        seq: 1,
+                        role: 'user',
+                        content: 'Добрый день. Нужен гидробур на CASE CX260C.'
+                    },
+                    m_0002: {
+                        id: 'm_0002',
+                        seq: 2,
+                        role: 'assistant',
+                        content: 'Да, подскажу по комплекту и срокам.'
+                    }
+                },
+                rating: {
+                    text: 'Диалог уже оценён.',
+                    createdAt: nowIso
+                }
+            };
+        }
     });
     const page = await context.newPage();
 
@@ -1705,8 +1755,8 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
                 messageEntries: Object.keys(ownMessages[0]?.messages || {}).length
             };
         });
-        expect(ownHistoryState.indexCount === 1, 'Own dialog history index must contain one saved dialog');
-        expect(ownHistoryState.messagesCount === 1, 'Own dialog history messages must contain one saved dialog');
+        expect(ownHistoryState.indexCount >= 2, `Own dialog history index must contain seeded dialogs plus the continued one, got ${ownHistoryState.indexCount}`);
+        expect(ownHistoryState.messagesCount >= 2, `Own dialog history messages must contain seeded dialogs plus the continued one, got ${ownHistoryState.messagesCount}`);
         expect(ownHistoryState.dialogId === 'dlg_own_1', `Continuation must stay in the same dialog id, got ${ownHistoryState.dialogId}`);
         expect(ownHistoryState.messageEntries >= 3, `Continuation must append messages into the same dialog payload, got ${ownHistoryState.messageEntries}`);
         expect(ownHistoryState.title.includes('Мой тестовый диалог'), 'Renamed dialog title must persist into RTDB state');
@@ -1719,6 +1769,64 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
             const listTitle = document.querySelector('#mainDialogHistoryList .dialog-history-item-title');
             const text = String(listTitle?.textContent || '');
             return text.includes('Мой тестовый диалог') || /гидробур|case/i.test(text);
+        });
+
+        await page.evaluate(async () => {
+            const hooks = window.__CLIENT_SIMULATOR_TEST_HOOKS__;
+            if (!hooks?.loadDialogHistorySelectionForTest || !hooks?.openDialogHistoryScopeForTest || !hooks?.getDialogWorkspaceStateForTest) {
+                throw new Error('Dialog history parity test hooks are missing');
+            }
+            await hooks.loadDialogHistorySelectionForTest('dlg_own_voice_1');
+        });
+
+        await page.waitForFunction(() => {
+            const hooks = window.__CLIENT_SIMULATOR_TEST_HOOKS__;
+            const state = hooks?.getDialogWorkspaceStateForTest?.();
+            return !!state
+                && state.selectedId === 'dlg_own_voice_1'
+                && state.currentDialogHistoryId === 'dlg_own_voice_1'
+                && state.currentDialogHistoryMode === 'voice'
+                && state.continuationPending === true
+                && state.inputDisabled === false
+                && state.inputLocked === false
+                && state.stageHidden === true
+                && state.chatHidden === false
+                && state.finishedNoticeCount >= 1
+                && state.ratingMessageCount >= 1;
+        });
+
+        await page.fill('#userInput', 'Продолжаю сохранённый звонок');
+        await page.click('#sendBtn');
+        await page.waitForFunction(() => {
+            return Array.from(document.querySelectorAll('#chatMessages .message .message-content'))
+                .some((node) => String(node.textContent || '').includes('Продолжаю сохранённый звонок'));
+        });
+
+        await page.evaluate(async () => {
+            const hooks = window.__CLIENT_SIMULATOR_TEST_HOOKS__;
+            await hooks.openDialogHistoryScopeForTest('foreign.user@tradicia-k.ru', {
+                autoSelectFirst: true,
+                selectCurrentDialog: false
+            });
+        });
+
+        await page.waitForFunction(() => {
+            const hooks = window.__CLIENT_SIMULATOR_TEST_HOOKS__;
+            const state = hooks?.getDialogWorkspaceStateForTest?.();
+            return !!state
+                && state.scopeLogin === 'foreign.user@tradicia-k.ru'
+                && state.selectedId === 'dlg_foreign_1'
+                && state.currentDialogHistoryId === ''
+                && state.currentDialogHistoryMode === 'voice'
+                && state.continuationPending === false
+                && state.inputDisabled === true
+                && state.inputLocked === true
+                && state.sendDisabled === true
+                && state.voiceDisabled === true
+                && state.stageHidden === true
+                && state.chatHidden === false
+                && state.finishedNoticeCount >= 1
+                && state.ratingMessageCount >= 1;
         });
     } catch (error) {
         await ensureOutputDir();

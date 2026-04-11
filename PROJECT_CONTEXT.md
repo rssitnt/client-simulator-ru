@@ -19,6 +19,12 @@
 - The local left history rail now uses the settings-style thin scrollbar on the whole `.history-panel`, and in collapsed state that scrollbar is forced fully hidden.
 - Opening a saved dialog from the history rail now reuses the same main `#chatMessages` renderer as a fresh/new chat, so old records no longer fall back to a separate legacy viewer layout.
 - For the owner, a saved dialog opened from history is now the same live workspace as a new chat: the main composer stays usable, new text messages append into the same stored `dialogId`, and starting voice from that opened dialog continues the same conversation instead of resetting into a new one. Foreign/admin-opened dialogs remain read-only.
+- Reopened saved dialogs now also preserve their stored mode on hydration:
+  - a voice dialog reopened from history keeps `currentDialogHistoryMode = voice`;
+  - this prevents continued work from history from silently drifting into text-mode bookkeeping.
+- Smoke now also covers dialog-history parity explicitly:
+  - owned saved voice/rated dialogs must reopen in the same writable main workspace with the finished-call footer preserved;
+  - foreign voice/rated dialogs must render through the same main workspace but stay locked/read-only.
 - The local admin panel now relies on an explicit final stabilization layer in `C:\projects\sites\client-simulator\style.css`: compact sizing lives there, and the users table now switches by `data-admin-layout="desktop|mobile"` instead of relying on ambiguous shared selectors.
 - The desktop admin users table now also has fixed pixel-based column widths in that final stabilization layer, so the drawer keeps a clean compact table and falls back to horizontal scroll instead of letting `Роль / Доступ / Статус` overlap each other.
 - The invite row in the local admin panel intentionally has no standalone divider under it before the first admin accordion section.

@@ -8068,6 +8068,7 @@ function renderSelectedDialogHistoryIntoMainChat() {
     const persistedRatingText = payload?.rating?.text ? String(payload.rating.text || '').trim() : null;
     const selectedDialogMode = String(payload?.mode || record?.mode || '').trim().toLowerCase();
     const shouldShowVoiceFinishedSummary = selectedDialogMode === 'voice' && !!persistedClosedAt && messages.length > 0;
+    currentDialogHistoryMode = selectedDialogMode === 'voice' ? 'voice' : 'text';
     currentDialogHistoryClosedAt = isOwnedSelection ? null : persistedClosedAt;
     currentDialogHistoryRatedAt = isOwnedSelection ? null : persistedRatedAt;
     currentDialogHistoryHistoricalRatingText = isOwnedSelection ? persistedRatingText : null;
@@ -24492,6 +24493,21 @@ function installLocalhostTestHooks() {
             await renderAdminUsersTable();
             return true;
         },
+        async openDialogHistoryScopeForTest(login = '', options = {}) {
+            await openDialogHistoryScope(login, {
+                openSettingsModal: false,
+                openAccordion: false,
+                selectCurrentDialog: options.selectCurrentDialog !== false,
+                autoSelectFirst: options.autoSelectFirst === true,
+                preferredDialogId: options.preferredDialogId || '',
+                resetVisibleCount: options.resetVisibleCount !== false
+            });
+            return true;
+        },
+        async loadDialogHistorySelectionForTest(dialogId = '') {
+            await loadDialogHistorySelection(dialogId);
+            return true;
+        },
         getLocalLayoutMetricsForTest() {
             const historyPanel = document.getElementById('historyPanel');
             const historyPanelStyle = historyPanel ? getComputedStyle(historyPanel) : null;
@@ -24527,6 +24543,29 @@ function installLocalhostTestHooks() {
                     roleTriggerWidth: roleTrigger ? getComputedStyle(roleTrigger).width : '',
                     roleTriggerMinHeight: roleTrigger ? getComputedStyle(roleTrigger).minHeight : ''
                 }
+            };
+        },
+        getDialogWorkspaceStateForTest() {
+            return {
+                selectedId: String(dialogHistorySelectedId || '').trim(),
+                scopeLogin: String(dialogHistoryScopeLogin || '').trim(),
+                currentDialogHistoryId: String(currentDialogHistoryId || '').trim(),
+                currentDialogHistoryMode: String(currentDialogHistoryMode || '').trim(),
+                continuationPending: !!currentDialogHistoryContinuationPending,
+                inputDisabled: !!userInput?.disabled,
+                inputLocked: userInput?.classList?.contains('locked-dialog') === true,
+                sendDisabled: !!sendBtn?.disabled,
+                voiceDisabled: !!voiceBtn?.disabled,
+                stageHidden: !!mainDialogHistoryStage?.hidden,
+                chatHidden: !!chatMessages?.hidden,
+                finishedNoticeCount: document.querySelectorAll('#chatMessages .voice-call-finished-note').length,
+                ratingMessageCount: document.querySelectorAll('#chatMessages .message.rating').length,
+                messageRoles: Array.from(document.querySelectorAll('#chatMessages .message.user, #chatMessages .message.assistant, #chatMessages .message.rating'))
+                    .map((node) => node.classList.contains('assistant')
+                        ? 'assistant'
+                        : node.classList.contains('rating')
+                            ? 'rating'
+                            : 'user')
             };
         },
         getPublicPromptsSnapshot() {
