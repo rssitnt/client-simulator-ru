@@ -60,6 +60,9 @@
 - The light theme now also has a final neutral palette pass at the bottom of `C:\projects\sites\client-simulator\style.css`:
   - intended direction is GPT-like warm-neutral cream/stone surfaces rather than mixed legacy reds, blues, or cold whites;
   - history, chat, composer, fullscreen settings, and admin controls should keep one shared palette ladder.
+- In the left history rail, dialog rows are intentionally transparent at rest now:
+  - active/search rows should not keep a permanent filled rectangle;
+  - the visible card-like highlight is meant to appear only on hover/focus interaction.
 - Smoke coverage now explicitly includes the collapsed-history no-scrollbar case and the desktop admin-users real-table layout/desktop layout-flag case, so regressions there should fail `C:\projects\sites\client-simulator\scripts\smoke-e2e.mjs`.
 - That desktop admin-users smoke now also guards the new compact behavior:
   - separate `Доступ / Активность` headers must stay hidden on desktop;

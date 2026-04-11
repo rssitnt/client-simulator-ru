@@ -10157,11 +10157,11 @@ body.local-minimal-ui .dialog-history-item:hover {
 }
 
 body.local-minimal-ui .dialog-history-item.is-active {
-    background: #24211e;
+    background: transparent;
 }
 
 body.local-minimal-ui .dialog-history-item.is-search-match:not(.is-active) {
-    background: rgba(255, 245, 230, 0.028);
+    background: transparent;
 }
 
 body.local-minimal-ui .dialog-history-item-main {
@@ -11923,11 +11923,11 @@ body.local-minimal-ui.light-theme .dialog-history-item:hover {
 }
 
 body.local-minimal-ui.light-theme .dialog-history-item.is-active {
-    background: #e7ddd0;
+    background: transparent;
 }
 
 body.local-minimal-ui.light-theme .dialog-history-item.is-search-match:not(.is-active) {
-    background: rgba(168, 140, 102, 0.08);
+    background: transparent;
 }
 
 body.local-minimal-ui.light-theme .dialog-history-pill {
