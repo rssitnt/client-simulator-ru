@@ -13492,30 +13492,17 @@ body.local-minimal-ui .admin-user-action-group .btn-change {
 body.local-minimal-ui .history-panel {
     overflow-y: auto;
     overflow-x: hidden;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(242, 238, 231, 0.16) transparent;
+    scrollbar-width: auto;
+    scrollbar-color: rgba(242, 238, 231, 0.16) auto;
 }
 
 body.local-minimal-ui .history-panel::-webkit-scrollbar {
     width: 10px;
 }
 
-body.local-minimal-ui .history-panel::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-body.local-minimal-ui .history-panel::-webkit-scrollbar-button,
-body.local-minimal-ui .history-panel::-webkit-scrollbar-corner {
-    width: 0 !important;
-    height: 0 !important;
-    display: none !important;
-    background: transparent !important;
-}
-
 body.local-minimal-ui .history-panel::-webkit-scrollbar-thumb {
     background: rgba(242, 238, 231, 0.16);
     border-radius: 999px;
-    border: none !important;
 }
 
 body.local-minimal-ui.history-sidebar-collapsed .history-panel {
