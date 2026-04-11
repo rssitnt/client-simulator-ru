@@ -41,6 +41,9 @@
   - owned saved voice/rated dialogs must reopen in the same writable main workspace with the finished-call footer preserved;
   - foreign voice/rated dialogs must render through the same main workspace but stay locked/read-only.
 - The local admin panel now relies on an explicit final stabilization layer in `C:\projects\sites\client-simulator\style.css`: compact sizing lives there, and the users table now switches by `data-admin-layout="desktop|mobile"` instead of relying on ambiguous shared selectors.
+- The local settings surface is fullscreen now, not a narrow right drawer:
+  - `#settingsModal .settings-panel` should occupy the full viewport width and height;
+  - do not reintroduce the old ~480px right-column drawer width unless explicitly requested.
 - The desktop admin users table now also has fixed pixel-based column widths in that final stabilization layer, so the drawer keeps a clean compact table and falls back to horizontal scroll instead of letting `Роль / Доступ / Статус` overlap each other.
 - On desktop, the admin users table is intentionally less noisy now:
   - visible `Доступ` and `Активность` columns are hidden from the permanent table layout;
