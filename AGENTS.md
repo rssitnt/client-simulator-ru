@@ -69,6 +69,7 @@
   - the desktop history rail starts collapsed by default and is reopened with a dedicated toggle.
   - the old saved-dialog header block is intentionally gone now: when a saved dialog is opened, the center view should start directly with the messages instead of rendering a separate `Сохранённый диалог` / title / meta / pin-delete section above them.
   - saved dialogs now render through the main `#chatMessages` message stack too, so old records and new/live chats share one visual language; do not revive the separate old saved-dialog viewer for normal opened history items.
+  - for the dialog owner, opening a saved dialog is now a true continuation path, not a frozen viewer: the same dialog can be continued from history with both normal text send and voice-call start, while foreign/admin-opened dialogs remain read-only.
 - A large from-scratch shell redesign was attempted on 2026-04-07 and reverted the same day because it created too many visual regressions at once; future redesigns should land in smaller passes or from a prototype branch first.
 - The current interface was then repaired in-place:
   - login is a centered modal card again;
@@ -229,6 +230,7 @@
   - свернутая `.history-panel` должна оставаться без вертикального скролла;
   - desktop-админка `Пользователи и доступ` должна оставаться настоящей таблицей (`table / table-row`) с layout-флагом `desktop`, а не срываться обратно в карточки;
   - auth reset-flow должен проходить отдельно: кнопка `Сбросить пароль` обязана возвращать исходный label и не оставлять disabled submit после отправки;
+  - продолжение своего сохранённого диалога тоже покрыто отдельно: открытие записи из истории должно разблокировать основной composer и записывать новое сообщение обратно в тот же `dialogId`, а запуск voice из такого диалога не должен создавать новый разговор;
   - light-theme mobile shell теперь тоже покрыт отдельно: стартовые карточки должны оставаться одного стиля, composer input и prompt wrapper должны быть прозрачными в local light theme, а активный mobile-tab не должен падать обратно в старый accent-blue;
   - тестовые layout-hooks живут в `window.__CLIENT_SIMULATOR_TEST_HOOKS__` и предназначены только для localhost/smoke.
 - Старые глобальные light-theme правила для `mobile-tabs`, `#startBtn` и generic dropdown active-state теперь не должны влиять на `body.local-minimal-ui`; если светлая local-версия снова “синеет” или берёт старые карточки, сначала проверяй именно эту изоляцию, а не добавляй ещё один поздний override поверх.

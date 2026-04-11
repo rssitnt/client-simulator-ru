@@ -2002,6 +2002,8 @@ let dialogHistorySearchQuery = '';
 let dialogHistorySelectedId = '';
 let dialogHistorySelectedRecord = null;
 let dialogHistorySelectedPayload = null;
+let currentDialogHistoryHistoricalRatingText = null;
+let currentDialogHistoryContinuationPending = false;
 let dialogHistoryViewerLoading = false;
 let dialogHistoryRevealTimer = 0;
 let dialogHistoryMenuOpenId = '';
@@ -7587,6 +7589,8 @@ function resetCurrentDialogHistoryState() {
     currentDialogHistoryCreatedAt = '';
     currentDialogHistoryClosedAt = null;
     currentDialogHistoryRatedAt = null;
+    currentDialogHistoryHistoricalRatingText = null;
+    currentDialogHistoryContinuationPending = false;
     currentDialogHistoryPinnedAt = null;
     currentDialogHistoryTitle = '';
     currentDialogHistoryAutoTitle = '';
@@ -7951,6 +7955,8 @@ function clearDialogHistorySelectionState() {
     dialogHistorySelectedRecord = null;
     dialogHistorySelectedPayload = null;
     dialogHistoryViewerLoading = false;
+    currentDialogHistoryHistoricalRatingText = null;
+    currentDialogHistoryContinuationPending = false;
 }
 
 function activateShellPanel(panelName = 'chat') {
@@ -7972,6 +7978,29 @@ function isSelectedDialogCurrentLiveConversation() {
         return false;
     }
     return conversationHistory.length > 0 || isGeminiVoiceConnecting || isGeminiVoiceActive || !!geminiLiveSession;
+}
+
+function canContinueSelectedDialogInMainChat() {
+    const scopeLogin = normalizeLogin(dialogHistoryScopeLogin || '');
+    if (!dialogHistorySelectedId || !dialogHistorySelectedRecord || !dialogHistorySelectedPayload) {
+        return false;
+    }
+    return isDialogHistoryScopeOwned(scopeLogin);
+}
+
+function prepareSelectedDialogContinuationState() {
+    if (!currentDialogHistoryContinuationPending || !canContinueSelectedDialogInMainChat()) return false;
+    currentDialogHistoryClosedAt = null;
+    currentDialogHistoryRatedAt = null;
+    currentDialogHistoryHistoricalRatingText = null;
+    currentDialogHistoryContinuationPending = false;
+    resetRatingUiForRerun();
+    clearConversationTerminalState();
+    unlockDialogInput();
+    updatePromptLock();
+    updateSendBtnState();
+    updateRateChatButtonState();
+    return true;
 }
 
 function shouldRenderSelectedDialogInMainChat() {
@@ -8031,8 +8060,13 @@ function renderSelectedDialogHistoryIntoMainChat() {
     currentDialogHistoryPinnedAt = isOwnedSelection
         ? (String(record?.pinnedAt || '').trim() || null)
         : null;
-    currentDialogHistoryClosedAt = String(payload?.closedAt || record?.closedAt || '').trim() || null;
-    currentDialogHistoryRatedAt = String(payload?.ratedAt || record?.ratedAt || payload?.rating?.createdAt || '').trim() || null;
+    const persistedClosedAt = String(payload?.closedAt || record?.closedAt || '').trim() || null;
+    const persistedRatedAt = String(payload?.ratedAt || record?.ratedAt || payload?.rating?.createdAt || '').trim() || null;
+    const persistedRatingText = payload?.rating?.text ? String(payload.rating.text || '').trim() : null;
+    currentDialogHistoryClosedAt = isOwnedSelection ? null : persistedClosedAt;
+    currentDialogHistoryRatedAt = isOwnedSelection ? null : persistedRatedAt;
+    currentDialogHistoryHistoricalRatingText = isOwnedSelection ? persistedRatingText : null;
+    currentDialogHistoryContinuationPending = !!isOwnedSelection;
 
     conversationHistory = messages.map((message) => ({
         role: message?.role === 'assistant' ? 'assistant' : 'user',
@@ -8041,8 +8075,8 @@ function renderSelectedDialogHistoryIntoMainChat() {
     conversationHistoryText = rebuildConversationHistoryTextFromEntries(conversationHistory);
     conversationHistoryRevision += 1;
 
-    lastRating = payload?.rating?.text ? String(payload.rating.text || '').trim() : null;
-    isDialogRated = !!lastRating;
+    lastRating = isOwnedSelection ? null : persistedRatingText;
+    isDialogRated = !isOwnedSelection && !!lastRating;
 
     chatMessages.innerHTML = '';
     if (startDiv) {
@@ -8053,11 +8087,11 @@ function renderSelectedDialogHistoryIntoMainChat() {
         addMessage(entry.content, entry.role, entry.role === 'assistant');
     });
 
-    if (lastRating) {
-        addMessage(lastRating, 'rating', true);
+    if (persistedRatingText) {
+        addMessage(persistedRatingText, 'rating', true);
     }
 
-    if (!isOwnedSelection || currentDialogHistoryClosedAt || isDialogRated) {
+    if (!isOwnedSelection) {
         lockDialogInput();
     } else {
         unlockDialogInput();
@@ -19776,7 +19810,11 @@ async function startGeminiVoiceMode() {
     }
 
     if (conversationHistory.length > 0 || hasBufferedVoiceDialog() || currentDialogHistoryId) {
-        resetChatForNewVoiceCall();
+        if (canContinueSelectedDialogInMainChat()) {
+            prepareSelectedDialogContinuationState();
+        } else {
+            resetChatForNewVoiceCall();
+        }
     }
 
     geminiVoiceCloseExpected = false;
@@ -21977,6 +22015,9 @@ async function sendMessage() {
     if (!isChatReady) return;
     const userMessage = userInput.value.trim();
     if (!userMessage || isProcessing || isDialogRated || isConversationClosed()) return;
+    if (canContinueSelectedDialogInMainChat()) {
+        prepareSelectedDialogContinuationState();
+    }
     const requestGuard = beginChatUiRequestGuard();
     if (!currentDialogHistoryId) {
         prepareCurrentDialogHistorySession('text');
