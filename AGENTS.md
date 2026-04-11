@@ -181,6 +181,9 @@
 - Gemini Live client turns now also use explicit realtime microphone activity markers:
   - the browser sends `activityStart` on real detected client speech;
   - the browser sends `activityEnd` shortly after speech fades (~900ms idle), instead of relying only on SDK-side VAD to close the client turn.
+- Gemini Live manager-turn closing now also has a local idle watchdog:
+  - if Gemini does not send an explicit `input finished / waitingForInput` boundary after the manager stopped speaking, the frontend must not leave that turn hanging forever in preview;
+  - after short idle the frontend retries `activityEnd`, finalizes the pending manager turn locally, and keeps the call in a `клиент думает` waiting state until the assistant reply arrives.
 - Hard refresh auth restore is now more tolerant:
   - a 10-second restore timeout is treated as a soft timeout, not as proof of logout;
   - the saved session is no longer wiped just because Firebase restored slowly after hard refresh;
@@ -231,6 +234,7 @@
   - desktop-админка `Пользователи и доступ` должна оставаться настоящей таблицей (`table / table-row`) с layout-флагом `desktop`, а не срываться обратно в карточки;
   - auth reset-flow должен проходить отдельно: кнопка `Сбросить пароль` обязана возвращать исходный label и не оставлять disabled submit после отправки;
   - продолжение своего сохранённого диалога тоже покрыто отдельно: открытие записи из истории должно разблокировать основной composer и записывать новое сообщение обратно в тот же `dialogId`, а запуск voice из такого диалога не должен создавать новый разговор;
+  - voice idle-boundary regression тоже покрыта отдельно: если Gemini не прислал `input finished / waitingForInput`, первый менеджерский ход всё равно должен выйти из preview в обычное сообщение до ответа клиента;
   - light-theme mobile shell теперь тоже покрыт отдельно: стартовые карточки должны оставаться одного стиля, composer input и prompt wrapper должны быть прозрачными в local light theme, а активный mobile-tab не должен падать обратно в старый accent-blue;
   - тестовые layout-hooks живут в `window.__CLIENT_SIMULATOR_TEST_HOOKS__` и предназначены только для localhost/smoke.
 - Старые глобальные light-theme правила для `mobile-tabs`, `#startBtn` и generic dropdown active-state теперь не должны влиять на `body.local-minimal-ui`; если светлая local-версия снова “синеет” или берёт старые карточки, сначала проверяй именно эту изоляцию, а не добавляй ещё один поздний override поверх.

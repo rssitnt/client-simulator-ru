@@ -613,6 +613,40 @@ class StubLiveSession {
         }, 620);
         return;
       }
+      if (scenario === 'idle-watchdog-finalizes-user-turn') {
+        this.emit({
+          serverContent: {
+            inputTranscription: {
+              text: 'CASE CX260C нужен срочно, 900 свай.',
+              finished: false
+            }
+          }
+        }, 230);
+        this.emit({
+          serverContent: {
+            outputTranscription: {
+              text: 'Понял. Могу предложить вариант под этот объём.',
+              finished: true
+            },
+            modelTurn: {
+              parts: [
+                {
+                  inlineData: {
+                    data: assistantAudioBase64,
+                    mimeType: 'audio/pcm;rate=24000'
+                  }
+                }
+              ]
+            }
+          }
+        }, 2050);
+        this.emit({
+          serverContent: {
+            waitingForInput: true
+          }
+        }, 2180);
+        return;
+      }
       this.emit({
         serverContent: {
           outputTranscription: {
@@ -2250,6 +2284,16 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
             }, null, { timeout: 12000 });
         }
 
+        if (voiceScenario === 'idle-watchdog-finalizes-user-turn') {
+            await page.waitForFunction(() => {
+                return Array.from(document.querySelectorAll('.message.user'))
+                    .some((node) => {
+                        const text = String(node.textContent || '').trim();
+                        return text.includes('CASE CX260C') && text.includes('900 свай');
+                    });
+            }, null, { timeout: 5000 });
+        }
+
         const dialogState = await readVoiceSmokeState();
 
         expect(capturedVoiceRequests.length > 0, 'Voice token endpoint was not called');
@@ -2297,6 +2341,17 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
             expect(
                 dialogState.assistantMessages.some((text) => text.includes('Здравствуйте.') && text.includes('срокам и сервису')),
                 'Fallback transcript did not restore the missing beginning of the first assistant reply'
+            );
+        } else if (voiceScenario === 'idle-watchdog-finalizes-user-turn') {
+            expect(
+                dialogState.userMessages.some((text) => text.includes('CASE CX260C') && text.includes('900 свай')),
+                'Manager turn stayed stuck in preview when Gemini did not send an explicit input boundary'
+            );
+            const firstUserIndex = dialogState.messageTimeline.findIndex((item) => item.role === 'user' && item.text.includes('900 свай'));
+            const firstAssistantIndex = dialogState.messageTimeline.findIndex((item) => item.role === 'assistant' && item.text.includes('Могу предложить вариант'));
+            expect(
+                firstUserIndex !== -1 && firstAssistantIndex !== -1 && firstUserIndex < firstAssistantIndex,
+                'Idle watchdog did not finalize the manager turn before the assistant reply'
             );
         } else {
             expect(
@@ -2981,6 +3036,10 @@ async function main() {
         await runGeminiVoiceModeSmokeFlow(browser, baseUrl, {
             voiceScenario: 'partial-first-reply-merged-with-fallback',
             expectedAssistantNeedle: 'срокам и сервису'
+        });
+        await runGeminiVoiceModeSmokeFlow(browser, baseUrl, {
+            voiceScenario: 'idle-watchdog-finalizes-user-turn',
+            expectedAssistantNeedle: 'вариант под этот объём'
         });
         await runClearChatStopsVoiceFlow(browser, baseUrl);
         await runEndConversationFlow(browser, baseUrl);

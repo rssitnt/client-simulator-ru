@@ -86,6 +86,7 @@ const GEMINI_LIVE_THINKING_BUDGET = 0;
 const GEMINI_LIVE_VAD_PREFIX_PADDING_MS = 120;
 const GEMINI_LIVE_VAD_SILENCE_DURATION_MS = 700;
 const GEMINI_LIVE_CLIENT_ACTIVITY_END_IDLE_MS = 900;
+const GEMINI_VOICE_USER_TURN_IDLE_WATCHDOG_MS = 1350;
 const GEMINI_VOICE_EARLY_ASSISTANT_REPLY_USER_GRACE_MS = 1200;
 const GEMINI_VOICE_EARLY_ASSISTANT_BUFFER_WINDOW_MS = 45000;
 const GEMINI_VOICE_RECENT_SPEECH_ACTIVITY_WINDOW_MS = 2500;
@@ -2090,6 +2091,7 @@ let geminiVoiceMicMeterReady = false;
 let geminiVoiceLastSpeechActivityAt = 0;
 let geminiVoiceClientActivityOpen = false;
 let geminiVoiceClientActivityEndTimerId = 0;
+let geminiVoiceUserTurnIdleWatchdogTimerId = 0;
 let geminiVoicePendingAssistantBeforeFirstUserTurn = false;
 let voiceAuthWarmupPromise = null;
 let voiceAuthCachedIdToken = '';
@@ -13754,6 +13756,13 @@ function clearGeminiVoiceClientActivityEndTimer() {
     }
 }
 
+function clearGeminiVoiceUserTurnIdleWatchdog() {
+    if (geminiVoiceUserTurnIdleWatchdogTimerId) {
+        clearTimeout(geminiVoiceUserTurnIdleWatchdogTimerId);
+        geminiVoiceUserTurnIdleWatchdogTimerId = 0;
+    }
+}
+
 function sendGeminiVoiceRealtimeActivityMarker(type = 'start', reason = '') {
     if (!geminiLiveSession || typeof geminiLiveSession.sendRealtimeInput !== 'function') return false;
     try {
@@ -13777,11 +13786,14 @@ function closeGeminiVoiceClientActivity(reason = 'speech_end') {
     clearGeminiVoiceClientActivityEndTimer();
     if (!geminiVoiceClientActivityOpen) return false;
     geminiVoiceClientActivityOpen = false;
-    return sendGeminiVoiceRealtimeActivityMarker('end', reason);
+    const sent = sendGeminiVoiceRealtimeActivityMarker('end', reason);
+    scheduleGeminiVoiceUserTurnIdleWatchdog(reason);
+    return sent;
 }
 
 function openGeminiVoiceClientActivity(reason = 'speech_start') {
     clearGeminiVoiceClientActivityEndTimer();
+    clearGeminiVoiceUserTurnIdleWatchdog();
     if (geminiVoiceClientActivityOpen) return false;
     geminiVoiceClientActivityOpen = true;
     return sendGeminiVoiceRealtimeActivityMarker('start', reason);
@@ -13794,6 +13806,32 @@ function scheduleGeminiVoiceClientActivityEnd(reason = 'speech_idle') {
         geminiVoiceClientActivityEndTimerId = 0;
         closeGeminiVoiceClientActivity(reason);
     }, GEMINI_LIVE_CLIENT_ACTIVITY_END_IDLE_MS);
+}
+
+function scheduleGeminiVoiceUserTurnIdleWatchdog(reason = 'speech_idle_watchdog') {
+    clearGeminiVoiceUserTurnIdleWatchdog();
+    if (!isGeminiVoiceActive || geminiVoiceClientActivityOpen) return;
+    geminiVoiceUserTurnIdleWatchdogTimerId = setTimeout(() => {
+        geminiVoiceUserTurnIdleWatchdogTimerId = 0;
+        if (!isGeminiVoiceActive || geminiVoiceClientActivityOpen) return;
+        if (geminiVoiceUserTurnFinalized) return;
+        if (geminiVoiceAssistantTurnInProgress || hasPendingGeminiAssistantTurn() || hasBufferedGeminiAssistantAudio()) return;
+        const pendingUserTranscript = normalizeVoiceDialogText(
+            geminiVoiceUserDraft.trim() ? geminiVoiceUserDraft : geminiVoiceUserPreview
+        );
+        if (!pendingUserTranscript) return;
+        sendGeminiVoiceRealtimeActivityMarker('end', `${reason}_retry`);
+        const finalized = finalizePendingGeminiUserTurnIfNeeded(reason);
+        if (finalized) {
+            recordVoiceDebugEvent('user_turn_idle_watchdog_finalized', {
+                status: 'ok',
+                message: reason
+            });
+            if (isGeminiVoiceActive) {
+                setVoiceModeStatus(getVoiceModeStatusCopy('clientThinking', 'Клиент обрабатывает ваш ответ…'), 'waiting');
+            }
+        }
+    }, GEMINI_VOICE_USER_TURN_IDLE_WATCHDOG_MS);
 }
 
 function clearGeminiPendingAssistantFinalizeTimer() {
@@ -18686,6 +18724,7 @@ function resetGeminiVoiceDialogBuffer() {
     cancelGeminiVoiceAutoStop();
     clearGeminiVoiceLateTranscriptWait();
     clearGeminiPendingAssistantFinalizeTimer();
+    clearGeminiVoiceUserTurnIdleWatchdog();
     closeGeminiVoiceClientActivity('reset');
     resetGeminiAssistantTurnAudioState();
     geminiVoiceDialogLines = [];
@@ -18704,6 +18743,7 @@ function resetGeminiVoiceDialogBuffer() {
     geminiVoiceLastSpeechActivityAt = 0;
     geminiVoiceClientActivityOpen = false;
     clearGeminiVoiceClientActivityEndTimer();
+    clearGeminiVoiceUserTurnIdleWatchdog();
     geminiVoicePendingAssistantBeforeFirstUserTurn = false;
     setGeminiVoiceMicInputEnabled(false);
     clearGeminiVoiceMicUnlockTimer();
@@ -18854,6 +18894,7 @@ function finalizeGeminiUserTurn(sourceText) {
     if (geminiVoiceUserTurnFinalized) return false;
     const completedUserText = sanitizeUserCompletedTranscript(sourceText || '');
     if (!completedUserText) return false;
+    clearGeminiVoiceUserTurnIdleWatchdog();
     const previewText = normalizeVoiceDialogText(geminiVoiceUserPreview);
     geminiVoiceUserPreview = '';
     const mergedUserTurnText = pickMoreCompleteVoiceTranscript(
@@ -19207,6 +19248,7 @@ async function handleGeminiLiveMessage(message) {
     const inputText = normalizeVoiceDialogText(serverContent?.inputTranscription?.text || '');
     const inputFinished = !!serverContent?.inputTranscription?.finished;
     if (inputText) {
+        clearGeminiVoiceUserTurnIdleWatchdog();
         if (hasPendingGeminiAssistantAudioOnlyTurn()) {
             scheduleGeminiAssistantFallbackTranscript('user_input_boundary', 0);
         }
@@ -19247,6 +19289,7 @@ async function handleGeminiLiveMessage(message) {
     const outputText = normalizeVoiceDialogText(serverContent?.outputTranscription?.text || '');
     const outputFinished = !!serverContent?.outputTranscription?.finished;
     if (outputText) {
+        clearGeminiVoiceUserTurnIdleWatchdog();
         const shouldBufferEarlyReply = shouldBufferEarlyGeminiAssistantReply();
         if (
             !geminiVoiceAssistantTurnInProgress &&
@@ -19312,13 +19355,14 @@ async function handleGeminiLiveMessage(message) {
                     !geminiVoiceUserDraft.trim() &&
                     !geminiVoiceUserTurnFinalized
                 ) {
-                    if (!shouldBufferEarlyReply) {
-                        recordVoiceDebugEvent('assistant_output_ignored', {
-                            status: 'info',
-                            message: 'orphan_audio_part'
-                        });
-                    } else {
-                        markGeminiPendingAssistantBeforeFirstUserTurn('audio_part');
+                if (!shouldBufferEarlyReply) {
+                    recordVoiceDebugEvent('assistant_output_ignored', {
+                        status: 'info',
+                        message: 'orphan_audio_part'
+                    });
+                } else {
+                    clearGeminiVoiceUserTurnIdleWatchdog();
+                    markGeminiPendingAssistantBeforeFirstUserTurn('audio_part');
                         beginGeminiAssistantVoiceOutput('audio_part');
                         appendGeminiAssistantAudioChunk(audioBase64, mimeType || 'audio/pcm;rate=24000');
                         recordGeminiFirstAudioChunkIfNeeded(audioBase64, mimeType);
@@ -19329,6 +19373,7 @@ async function handleGeminiLiveMessage(message) {
                         hasAudioChunk = true;
                     }
                 } else {
+                    clearGeminiVoiceUserTurnIdleWatchdog();
                     beginGeminiAssistantVoiceOutput('audio_part');
                     appendGeminiAssistantAudioChunk(audioBase64, mimeType || 'audio/pcm;rate=24000');
                     recordGeminiFirstAudioChunkIfNeeded(audioBase64, mimeType);
@@ -19361,6 +19406,7 @@ async function handleGeminiLiveMessage(message) {
                 }
                 markGeminiPendingAssistantBeforeFirstUserTurn('text_part');
             }
+            clearGeminiVoiceUserTurnIdleWatchdog();
             const shouldFinalizeLateTranscriptImmediately = geminiVoiceAwaitingLateAssistantTranscript;
             beginGeminiAssistantVoiceOutput('text_part');
             recordGeminiFirstAssistantTextIfNeeded(partText);
@@ -19401,6 +19447,7 @@ async function handleGeminiLiveMessage(message) {
                         message: 'orphan_output_audio'
                     });
                 } else {
+                    clearGeminiVoiceUserTurnIdleWatchdog();
                     markGeminiPendingAssistantBeforeFirstUserTurn('output_audio');
                     beginGeminiAssistantVoiceOutput('output_audio');
                     appendGeminiAssistantAudioChunk(audioBase64, mimeType || 'audio/pcm;rate=24000');
@@ -19411,6 +19458,7 @@ async function handleGeminiLiveMessage(message) {
                     scheduleGeminiAssistantFallbackTranscript('early_audio_only', GEMINI_VOICE_FALLBACK_TRANSCRIBE_HOLD_MS);
                 }
             } else {
+                clearGeminiVoiceUserTurnIdleWatchdog();
                 beginGeminiAssistantVoiceOutput('output_audio');
                 appendGeminiAssistantAudioChunk(audioBase64, mimeType || 'audio/pcm;rate=24000');
                 recordGeminiFirstAudioChunkIfNeeded(audioBase64, mimeType || 'audio/pcm;rate=24000');
@@ -19451,6 +19499,7 @@ async function handleGeminiLiveMessage(message) {
     }
 
     if (serverContent?.turnComplete || serverContent?.generationComplete) {
+        clearGeminiVoiceUserTurnIdleWatchdog();
         finalizePendingGeminiUserTurnIfNeeded('turn_complete');
         const shouldDelayCompletedAssistant =
             geminiVoicePendingAssistantBeforeFirstUserTurn && !geminiVoiceUserTurnFinalized;
@@ -19482,6 +19531,7 @@ async function handleGeminiLiveMessage(message) {
     }
 
     if (serverContent?.waitingForInput && isGeminiVoiceActive) {
+        clearGeminiVoiceUserTurnIdleWatchdog();
         finalizePendingGeminiUserTurnIfNeeded('waiting_for_input');
         const pendingAssistantTranscript = normalizeVoiceDialogText(
             geminiVoiceAssistantDraft.trim() ? geminiVoiceAssistantDraft : geminiVoiceAssistantPreview
@@ -19675,6 +19725,7 @@ function teardownGeminiVoiceCapture() {
     closeGeminiVoiceClientActivity('capture_teardown');
     geminiVoiceClientActivityOpen = false;
     clearGeminiVoiceClientActivityEndTimer();
+    clearGeminiVoiceUserTurnIdleWatchdog();
     if (geminiVoiceProcessorNode) {
         try {
             geminiVoiceProcessorNode.onaudioprocess = null;

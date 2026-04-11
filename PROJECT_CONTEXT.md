@@ -12,6 +12,7 @@
 - Main UI target is the warm minimal shell; the old grey shell stays deprecated.
 - Production hosting should remain GitHub Pages unless the user explicitly asks to switch again.
 - Voice mode is Gemini Live through the token server; first-turn handling and mic/voice settings were recently stabilized.
+- Voice mode now also has a local idle-boundary watchdog: if Gemini fails to emit an explicit end-of-manager-turn boundary (`input finished / waitingForInput`), the frontend retries `activityEnd`, finalizes the pending manager turn locally, and keeps the call in a waiting state instead of leaving the turn stuck in preview forever.
 - The local left history rail now uses the settings-style thin scrollbar on the whole `.history-panel`, and in collapsed state that scrollbar is forced fully hidden.
 - Opening a saved dialog from the history rail now reuses the same main `#chatMessages` renderer as a fresh/new chat, so old records no longer fall back to a separate legacy viewer layout.
 - For the owner, a saved dialog opened from history is now the same live workspace as a new chat: the main composer stays usable, new text messages append into the same stored `dialogId`, and starting voice from that opened dialog continues the same conversation instead of resetting into a new one. Foreign/admin-opened dialogs remain read-only.
@@ -21,6 +22,7 @@
 - Smoke coverage now explicitly includes the collapsed-history no-scrollbar case and the desktop admin-users real-table layout/desktop layout-flag case, so regressions there should fail `C:\projects\sites\client-simulator\scripts\smoke-e2e.mjs`.
 - Smoke coverage now also asserts that opening a saved dialog renders message bubbles in the main chat area and keeps `#mainDialogHistoryStage` hidden.
 - Smoke coverage now also asserts saved-dialog continuation: opening your own history item must leave the main composer enabled and persist the next outgoing message into the same saved dialog record.
+- Smoke coverage now also includes a voice idle-boundary case: the first manager turn must become a normal chat bubble even if Gemini only sent an unfinished input transcript and never sent the usual input boundary event.
 - Smoke coverage now also includes a dedicated light-theme mobile regression pass for the local shell:
   - all three start cards must keep the same warm light-theme surface;
   - the composer input and prompt wrapper must stay transparent/flat in local light theme;
