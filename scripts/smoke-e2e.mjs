@@ -1900,7 +1900,6 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
                 && state.selectedId === 'dlg_own_voice_1'
                 && state.currentDialogHistoryId === 'dlg_own_voice_1'
                 && state.currentDialogHistoryMode === 'voice'
-                && state.continuationPending === true
                 && state.inputDisabled === false
                 && state.inputLocked === false
                 && state.stageHidden === true
@@ -1932,7 +1931,6 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
                 && state.selectedId === 'dlg_foreign_1'
                 && state.currentDialogHistoryId === ''
                 && state.currentDialogHistoryMode === 'voice'
-                && state.continuationPending === false
                 && state.inputDisabled === true
                 && state.inputLocked === true
                 && state.sendDisabled === true

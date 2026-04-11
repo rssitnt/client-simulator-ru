@@ -2006,8 +2006,6 @@ let dialogHistorySearchQuery = '';
 let dialogHistorySelectedId = '';
 let dialogHistorySelectedRecord = null;
 let dialogHistorySelectedPayload = null;
-let currentDialogHistoryHistoricalRatingText = null;
-let currentDialogHistoryContinuationPending = false;
 let dialogHistoryViewerLoading = false;
 let dialogHistoryRevealTimer = 0;
 let dialogHistoryMenuOpenId = '';
@@ -7602,8 +7600,6 @@ function resetCurrentDialogHistoryState() {
     currentDialogHistoryCreatedAt = '';
     currentDialogHistoryClosedAt = null;
     currentDialogHistoryRatedAt = null;
-    currentDialogHistoryHistoricalRatingText = null;
-    currentDialogHistoryContinuationPending = false;
     currentDialogHistoryPinnedAt = null;
     currentDialogHistoryTitle = '';
     currentDialogHistoryAutoTitle = '';
@@ -7968,8 +7964,6 @@ function clearDialogHistorySelectionState() {
     dialogHistorySelectedRecord = null;
     dialogHistorySelectedPayload = null;
     dialogHistoryViewerLoading = false;
-    currentDialogHistoryHistoricalRatingText = null;
-    currentDialogHistoryContinuationPending = false;
 }
 
 function activateShellPanel(panelName = 'chat') {
@@ -7991,29 +7985,6 @@ function isSelectedDialogCurrentLiveConversation() {
         return false;
     }
     return conversationHistory.length > 0 || isGeminiVoiceConnecting || isGeminiVoiceActive || !!geminiLiveSession;
-}
-
-function canContinueSelectedDialogInMainChat() {
-    const scopeLogin = normalizeLogin(dialogHistoryScopeLogin || '');
-    if (!dialogHistorySelectedId || !dialogHistorySelectedRecord || !dialogHistorySelectedPayload) {
-        return false;
-    }
-    return isDialogHistoryScopeOwned(scopeLogin);
-}
-
-function prepareSelectedDialogContinuationState() {
-    if (!currentDialogHistoryContinuationPending || !canContinueSelectedDialogInMainChat()) return false;
-    currentDialogHistoryClosedAt = null;
-    currentDialogHistoryRatedAt = null;
-    currentDialogHistoryHistoricalRatingText = null;
-    currentDialogHistoryContinuationPending = false;
-    resetRatingUiForRerun();
-    clearConversationTerminalState();
-    unlockDialogInput();
-    updatePromptLock();
-    updateSendBtnState();
-    updateRateChatButtonState();
-    return true;
 }
 
 function shouldRenderSelectedDialogInMainChat() {
@@ -8081,8 +8052,6 @@ function renderSelectedDialogHistoryIntoMainChat() {
     currentDialogHistoryMode = selectedDialogMode === 'voice' ? 'voice' : 'text';
     currentDialogHistoryClosedAt = isOwnedSelection ? null : persistedClosedAt;
     currentDialogHistoryRatedAt = isOwnedSelection ? null : persistedRatedAt;
-    currentDialogHistoryHistoricalRatingText = isOwnedSelection ? persistedRatingText : null;
-    currentDialogHistoryContinuationPending = !!isOwnedSelection;
 
     conversationHistory = messages.map((message) => ({
         role: message?.role === 'assistant' ? 'assistant' : 'user',
@@ -20114,9 +20083,15 @@ async function startGeminiVoiceMode() {
     }
 
     if (conversationHistory.length > 0 || hasBufferedVoiceDialog() || currentDialogHistoryId) {
-        if (canContinueSelectedDialogInMainChat()) {
-            prepareSelectedDialogContinuationState();
-        } else {
+        const selectedScopeLogin = normalizeLogin(dialogHistoryScopeLogin || '');
+        const isForeignHistorySelection = !!dialogHistorySelectedId
+            && !!dialogHistorySelectedRecord
+            && !!dialogHistorySelectedPayload
+            && !isDialogHistoryScopeOwned(selectedScopeLogin);
+        if (isForeignHistorySelection) {
+            return;
+        }
+        if (!currentDialogHistoryId) {
             resetChatForNewVoiceCall();
         }
     }
@@ -22322,9 +22297,6 @@ async function sendMessage() {
     if (!isChatReady) return;
     const userMessage = userInput.value.trim();
     if (!userMessage || isProcessing || isDialogRated || isConversationClosed()) return;
-    if (canContinueSelectedDialogInMainChat()) {
-        prepareSelectedDialogContinuationState();
-    }
     const requestGuard = beginChatUiRequestGuard();
     if (!currentDialogHistoryId) {
         prepareCurrentDialogHistorySession('text');
@@ -24724,7 +24696,6 @@ function installLocalhostTestHooks() {
                 scopeLogin: String(dialogHistoryScopeLogin || '').trim(),
                 currentDialogHistoryId: String(currentDialogHistoryId || '').trim(),
                 currentDialogHistoryMode: String(currentDialogHistoryMode || '').trim(),
-                continuationPending: !!currentDialogHistoryContinuationPending,
                 inputDisabled: !!userInput?.disabled,
                 inputLocked: userInput?.classList?.contains('locked-dialog') === true,
                 sendDisabled: !!sendBtn?.disabled,

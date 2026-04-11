@@ -169,6 +169,7 @@
 - History parity contract:
   - owned saved text/voice/rated dialogs open in the same main `#chatMessages` workspace and remain writable like a fresh chat;
   - foreign/admin-opened dialogs use that same renderer too, but must stay read-only (`locked-dialog`, send disabled, voice disabled).
+  - there is no separate "continuation pending" phase anymore: once an owned saved dialog is opened from history, it is already the active live dialog entity for both text sends and voice start; do not reintroduce a first-action transition layer there.
 - Active time is now “real focused activity only”:
   - visible tab
   - focused window
