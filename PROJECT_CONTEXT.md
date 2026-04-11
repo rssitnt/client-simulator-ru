@@ -46,6 +46,7 @@
   - `#settingsModal .settings-panel` should occupy the full viewport width and height;
   - do not reintroduce the old ~480px right-column drawer width unless explicitly requested.
   - fullscreen settings should still keep the admin block on a centered working width; `Выдача доступа`, hidden prompts, users table, and debug logs are not meant to stretch edge-to-edge across the whole screen.
+  - light-theme settings now depend on a final fullscreen harmonization layer too: the sheet itself is warm/flat, while inputs, buttons, dropdowns, and admin controls share one cream surface language; avoid reviving older conflicting white/blue light-theme rules from higher in the file.
 - The desktop admin users table now also has fixed pixel-based column widths in that final stabilization layer, so the drawer keeps a clean compact table and falls back to horizontal scroll instead of letting `Роль / Доступ / Статус` overlap each other.
 - On desktop, the admin users table is intentionally less noisy now:
   - visible `Доступ` and `Активность` columns are hidden from the permanent table layout;

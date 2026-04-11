@@ -14253,7 +14253,7 @@ body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-invite
 body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-hidden-prompt-section,
 body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-users-access-body,
 body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-webhook-debug-body {
-    width: min(100%, 1180px);
+    width: min(100%, 980px);
 }
 
 body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-panel-header {
@@ -14261,8 +14261,8 @@ body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-panel-
 }
 
 body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-invite-form {
-    grid-template-columns: minmax(360px, 560px) 150px 164px;
-    justify-content: start;
+    grid-template-columns: minmax(320px, 1fr) 132px 170px;
+    justify-content: center;
     align-items: center;
     gap: 12px;
     padding-bottom: 18px;
@@ -14284,6 +14284,7 @@ body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-users-
 body.local-minimal-ui #settingsModal .settings-panel .admin-users-access-toolbar {
     margin-top: 0;
     margin-bottom: 12px;
+    justify-content: flex-start;
 }
 
 body.local-minimal-ui #settingsModal .settings-panel .admin-users-access-toolbar .btn-change {
@@ -14298,12 +14299,12 @@ body.local-minimal-ui #settingsModal .settings-panel .admin-users-access-body[da
 }
 
 body.local-minimal-ui #settingsModal .settings-panel .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table {
-    min-width: 980px;
+    min-width: 920px;
 }
 
 @media (max-width: 1100px) {
     body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-invite-form {
-        grid-template-columns: minmax(0, 1fr) 132px 152px;
+        grid-template-columns: minmax(0, 1fr) 124px 148px;
     }
 }
 
@@ -14319,4 +14320,156 @@ body.local-minimal-ui #settingsModal .settings-panel .admin-users-access-body[da
     body.local-minimal-ui #settingsModal .settings-panel #adminPanel > .admin-webhook-debug-body {
         width: 100%;
     }
+}
+
+/* Final fullscreen light-settings harmonization */
+body.local-minimal-ui.light-theme #settingsModal {
+    background: rgba(92, 78, 58, 0.14);
+    backdrop-filter: blur(10px);
+}
+
+body.local-minimal-ui.light-theme #settingsModal .settings-panel {
+    background: #f5efe6;
+    color: #2d261f;
+    border: none;
+    box-shadow: none;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .theme-color-section {
+    background: rgba(245, 239, 230, 0.92);
+    border-bottom: 1px solid rgba(132, 115, 93, 0.18);
+    backdrop-filter: blur(14px);
+}
+
+body.local-minimal-ui.light-theme #settingsModal .settings-modal-close {
+    color: rgba(72, 60, 45, 0.72);
+    background: transparent;
+    border-color: transparent;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .settings-modal-close:hover {
+    color: #2d261f;
+    background: rgba(132, 115, 93, 0.10);
+    border-color: rgba(132, 115, 93, 0.16);
+}
+
+body.local-minimal-ui.light-theme #settingsModal .settings-row,
+body.local-minimal-ui.light-theme #settingsModal .account-block,
+body.local-minimal-ui.light-theme #settingsModal .export-row,
+body.local-minimal-ui.light-theme #settingsModal .voice-config-block,
+body.local-minimal-ui.light-theme #settingsModal .admin-panel,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-form,
+body.local-minimal-ui.light-theme #settingsModal .admin-hidden-prompt-body,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body,
+body.local-minimal-ui.light-theme #settingsModal .admin-webhook-debug-body {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .settings-group,
+body.local-minimal-ui.light-theme #settingsModal .settings-section,
+body.local-minimal-ui.light-theme #settingsModal .settings-divider,
+body.local-minimal-ui.light-theme #settingsModal .admin-hidden-prompt-section {
+    border-color: rgba(132, 115, 93, 0.18) !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .settings-label,
+body.local-minimal-ui.light-theme #settingsModal .admin-panel-title,
+body.local-minimal-ui.light-theme #settingsModal .admin-hidden-prompt-hint,
+body.local-minimal-ui.light-theme #settingsModal .account-line,
+body.local-minimal-ui.light-theme #settingsModal .role-text,
+body.local-minimal-ui.light-theme #settingsModal .voice-picker-subtitle,
+body.local-minimal-ui.light-theme #settingsModal .admin-access-source,
+body.local-minimal-ui.light-theme #settingsModal .admin-time,
+body.local-minimal-ui.light-theme #settingsModal .admin-presence {
+    color: rgba(72, 60, 45, 0.68) !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .name-input,
+body.local-minimal-ui.light-theme #settingsModal .password-input,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-input,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-days,
+body.local-minimal-ui.light-theme #settingsModal .admin-role-select,
+body.local-minimal-ui.light-theme #settingsModal .admin-role-picker-trigger,
+body.local-minimal-ui.light-theme #settingsModal .voice-picker-trigger,
+body.local-minimal-ui.light-theme #settingsModal .dropdown-menu.dropdown-menu-settings,
+body.local-minimal-ui.light-theme #settingsModal .btn-change,
+body.local-minimal-ui.light-theme #settingsModal .btn-export,
+body.local-minimal-ui.light-theme #settingsModal .btn-cancel,
+body.local-minimal-ui.light-theme #settingsModal .btn-confirm,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-btn,
+body.local-minimal-ui.light-theme #settingsModal .account-actions .btn-logout {
+    background: #fbf7f1 !important;
+    color: #2d261f !important;
+    border: 1px solid rgba(132, 115, 93, 0.18) !important;
+    box-shadow: none !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .name-input::placeholder,
+body.local-minimal-ui.light-theme #settingsModal .password-input::placeholder,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-input::placeholder {
+    color: rgba(105, 92, 75, 0.52) !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .btn-change:hover,
+body.local-minimal-ui.light-theme #settingsModal .btn-export:hover,
+body.local-minimal-ui.light-theme #settingsModal .btn-cancel:hover,
+body.local-minimal-ui.light-theme #settingsModal .btn-confirm:hover,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-btn:hover,
+body.local-minimal-ui.light-theme #settingsModal .account-actions .btn-logout:hover,
+body.local-minimal-ui.light-theme #settingsModal .voice-picker-trigger:hover,
+body.local-minimal-ui.light-theme #settingsModal .admin-role-picker-trigger:hover {
+    background: #f0e6d8 !important;
+    border-color: rgba(120, 103, 81, 0.26) !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-role-picker-menu,
+body.local-minimal-ui.light-theme #settingsModal .voice-picker-menu,
+body.local-minimal-ui.light-theme #settingsModal .dropdown-menu.dropdown-menu-settings {
+    background: #fbf7f1 !important;
+    border: 1px solid rgba(132, 115, 93, 0.18) !important;
+    box-shadow: 0 16px 36px rgba(76, 61, 42, 0.10) !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-role-picker-option,
+body.local-minimal-ui.light-theme #settingsModal .voice-picker-option,
+body.local-minimal-ui.light-theme #settingsModal .dropdown-item {
+    color: #2d261f !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-role-picker-option:hover,
+body.local-minimal-ui.light-theme #settingsModal .admin-role-picker-option.active,
+body.local-minimal-ui.light-theme #settingsModal .voice-picker-option:hover,
+body.local-minimal-ui.light-theme #settingsModal .voice-picker-option[aria-selected="true"],
+body.local-minimal-ui.light-theme #settingsModal .dropdown-item:hover {
+    background: #f0e6d8 !important;
+    border-color: rgba(120, 103, 81, 0.16) !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-hidden-prompt-textarea,
+body.local-minimal-ui.light-theme #settingsModal .admin-webhook-debug-item,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body[data-admin-layout="mobile"] .admin-users-table tbody tr {
+    background: #fbf7f1 !important;
+    border: 1px solid rgba(132, 115, 93, 0.18) !important;
+    color: #2d261f !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-users-table th,
+body.local-minimal-ui.light-theme #settingsModal .admin-sort-btn,
+body.local-minimal-ui.light-theme #settingsModal .admin-status-main,
+body.local-minimal-ui.light-theme #settingsModal .admin-user-login {
+    color: #2d261f !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-users-table tbody td,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-table tbody td::before {
+    border-color: rgba(132, 115, 93, 0.18) !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table tbody td:nth-child(6)::after {
+    background: rgba(251, 247, 241, 0.98) !important;
+    border-color: rgba(132, 115, 93, 0.18) !important;
+    box-shadow: 0 16px 36px rgba(76, 61, 42, 0.10) !important;
+    color: #2d261f !important;
 }

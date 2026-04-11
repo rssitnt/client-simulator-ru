@@ -53,6 +53,7 @@
 - Settings on mobile are a full-screen sheet with a fixed close button.
 - The local/settings surface is fullscreen on desktop now too; treat settings as a full-viewport panel rather than a fixed-width right drawer.
 - Inside that fullscreen settings surface, the admin panel content should stay on a centered working width instead of stretching edge-to-edge; `Выдача доступа`, hidden prompts, users table, and debug sections should read like one compact admin workspace, not like separate elements scattered across the whole screen.
+- The fullscreen settings sheet now also relies on a final harmonization layer for light theme: rows/blocks in settings stay flat against the sheet, while inputs/buttons/dropdowns keep one shared warm-cream surface ladder. Do not revive older mixed white/grey/light-blue settings styles from earlier rules higher in `style.css`.
 - `Пользователи и доступ` has a dedicated mobile card layout; desktop table remains unchanged.
 - Persistent dialog history is stored in RTDB:
   - index: `dialog_history_index/{loginKey}/{dialogId}`
