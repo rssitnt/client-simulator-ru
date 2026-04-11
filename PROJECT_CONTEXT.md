@@ -49,6 +49,7 @@
   - light-theme settings now depend on a final fullscreen harmonization layer too: the sheet itself is warm/flat, while inputs, buttons, dropdowns, and admin controls share one cream surface language; avoid reviving older conflicting white/blue light-theme rules from higher in the file.
   - light-theme admin content in that fullscreen sheet now also has a separate density layer: invite controls, accordion rows, refresh/action buttons, and the desktop users table should look tighter than before and must not inherit giant dark-theme-like gaps.
   - the upper non-admin settings rows in light theme also now have their own density layer: account, role, export, voice, and microphone controls should stay more compact than the dark-theme defaults and align to the same cream input/button rhythm.
+  - the desktop admin empty/error state now has its own late override: if `Пользователи и доступ` renders only `admin-empty-row`, the table header should disappear and the error text should read like a simple inline note, but the underlying row must still remain a real `table-row` for smoke/layout checks.
 - The desktop admin users table now also has fixed pixel-based column widths in that final stabilization layer, so the drawer keeps a clean compact table and falls back to horizontal scroll instead of letting `Роль / Доступ / Статус` overlap each other.
 - On desktop, the admin users table is intentionally less noisy now:
   - visible `Доступ` and `Активность` columns are hidden from the permanent table layout;

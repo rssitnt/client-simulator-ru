@@ -14657,3 +14657,37 @@ body.local-minimal-ui.light-theme #settingsModal .voice-picker-subtitle {
         justify-content: stretch;
     }
 }
+
+/* Compact admin empty/error state */
+body.local-minimal-ui #settingsModal .admin-users-access-toolbar .btn-change {
+    min-height: 40px;
+    min-width: 116px;
+    max-width: 132px;
+    border-radius: 15px;
+    padding-inline: 16px;
+    font-size: 13px;
+}
+
+body.local-minimal-ui #settingsModal .admin-users-table:has(.admin-empty-row) {
+    width: 100% !important;
+    min-width: 0 !important;
+}
+
+body.local-minimal-ui #settingsModal .admin-users-table:has(.admin-empty-row) thead {
+    display: none !important;
+}
+
+body.local-minimal-ui #settingsModal .admin-users-table:has(.admin-empty-row) .admin-empty-row td {
+    display: table-cell !important;
+    padding: 14px 0 0 !important;
+    border: none !important;
+    background: transparent !important;
+    text-align: left !important;
+    color: var(--local-text-muted-final) !important;
+    font-size: 14px;
+    line-height: 1.55;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-users-table:has(.admin-empty-row) .admin-empty-row td {
+    color: rgba(84, 69, 51, 0.76) !important;
+}
