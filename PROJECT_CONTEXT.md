@@ -28,6 +28,8 @@
 - The start-screen `Аттестация` card now has the same entry contract as the normal chat card: it must both enable attestation prompts and immediately launch the main `/start` chat flow, hiding the start cards instead of only showing the top `Выход из аттестации` control.
 - The old top-right `Выход из аттестации` header button is intentionally removed from the main chat shell; entering attestation should not add a separate visible exit control there anymore.
 - The small chat eyebrow should now reflect mode too: `Чат` in normal mode and `Аттестация` while attestation mode is active.
+- The local empty-state start cards are title-only again: the subtitle/meta lines under `Чат с клиентом / Голосовой звонок / Аттестация` are intentionally removed.
+- The start-screen `Аттестация` card must stay visible as a normal third start action even if attestation mode is already active; do not hide it just because the mode flag is on.
 - Reopened saved dialogs now also preserve their stored mode on hydration:
   - a voice dialog reopened from history keeps `currentDialogHistoryMode = voice`;
   - this prevents continued work from history from silently drifting into text-mode bookkeeping.

@@ -9998,11 +9998,8 @@ function applyRoleRestrictions() {
             exportPromptSettings.style.display = 'none';
         }
 
-        if (exitAttestationBtn) {
-            exitAttestationBtn.style.display = '';
-        }
         if (startAttestationBtn) {
-            startAttestationBtn.style.display = isAttestationMode ? 'none' : '';
+            startAttestationBtn.style.display = '';
         }
         
     } else {
@@ -10028,11 +10025,8 @@ function applyRoleRestrictions() {
         if (exportPromptSettings) {
             exportPromptSettings.style.display = '';
         }
-        if (exitAttestationBtn) {
-            exitAttestationBtn.style.display = '';
-        }
         if (startAttestationBtn) {
-            startAttestationBtn.style.display = isAttestationMode ? 'none' : '';
+            startAttestationBtn.style.display = '';
         }
     }
 
@@ -13549,7 +13543,7 @@ function setAttestationMode(enabled) {
         }
         document.body.classList.add('attestation-mode');
         if (startAttestationBtn) {
-            startAttestationBtn.style.display = 'none';
+            startAttestationBtn.style.display = '';
         }
         syncChatPanelHeadingMode();
         return true;
@@ -22027,15 +22021,12 @@ function buildStartConversationMarkup() {
                 <div class="start-conversation-actions">
                     <button id="startBtn" class="btn-start" type="button">
                         <span class="btn-start-label">Чат с клиентом</span>
-                        <span class="btn-start-meta">Текстовая переписка</span>
                     </button>
                     <button id="startVoiceBtn" class="btn-start btn-start-voice" type="button">
                         <span class="btn-start-label">Голосовой звонок</span>
-                        <span class="btn-start-meta">Сразу открыть voice-режим</span>
                     </button>
                     <button id="startAttestationBtn" class="btn-start btn-start-attestation" type="button">
                         <span class="btn-start-label">Аттестация</span>
-                        <span class="btn-start-meta">Проверка ответа по регламенту</span>
                     </button>
                 </div>
             </div>
@@ -22143,7 +22134,7 @@ async function clearChat() {
     }
     const startAttestationBtnEl = document.getElementById('startAttestationBtn');
     if (startAttestationBtnEl) {
-        startAttestationBtnEl.style.display = isAttestationMode ? 'none' : '';
+        startAttestationBtnEl.style.display = '';
         startAttestationBtnEl.addEventListener('click', startAttestationHandler);
     }
     setStartButtonsEnabled(isChatReady);

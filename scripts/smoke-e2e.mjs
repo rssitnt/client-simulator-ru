@@ -2874,6 +2874,9 @@ async function runAttestationStartFlow(browser, baseUrl) {
         logStep('run attestation start flow');
         await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
         await waitForChatReady(page);
+        await page.waitForFunction(() => {
+            return !!document.getElementById('startAttestationBtn');
+        });
 
         await page.click('#startAttestationBtn');
         await page.waitForFunction(() => {
