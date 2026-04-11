@@ -11,6 +11,7 @@
 ## Current product state
 - Main UI target is the warm minimal shell; the old grey shell stays deprecated.
 - Production hosting should remain GitHub Pages unless the user explicitly asks to switch again.
+- Favicon now points to `C:\projects\sites\client-simulator\favicon\1.png` copied from `C:\Users\qwert\Downloads\1.png`; keep `index.html` icon links aligned to that file unless the user asks to change the source again.
 - Voice mode is Gemini Live through the token server; first-turn handling and mic/voice settings were recently stabilized.
 - Voice mode now also has a local idle-boundary watchdog: if Gemini fails to emit an explicit end-of-manager-turn boundary (`input finished / waitingForInput`), the frontend retries `activityEnd`, finalizes the pending manager turn locally, and keeps the call in a waiting state instead of leaving the turn stuck in preview forever.
 - Voice mode now also has a second recovery step after that: if the manager turn is already finalized but the assistant still does not start replying, the frontend does not stop at one blind retry anymore:
