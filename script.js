@@ -1318,6 +1318,17 @@ function shouldTryFirebaseCreateAfterPasswordSignInError(error) {
     );
 }
 
+function isFirebasePasswordCredentialError(error) {
+    const code = String(error?.code || '').trim();
+    return (
+        code === 'auth/user-not-found'
+        || code === 'auth/invalid-credential'
+        || code === 'auth/invalid-login-credentials'
+        || code === 'auth/wrong-password'
+        || code === 'auth/firebase-password-conflict'
+    );
+}
+
 function buildFirebasePasswordConflictError(originalError = null) {
     const error = new Error(
         'Для этого email локальный пароль уже принят, но Firebase Auth видит другой пароль или старый отдельный аккаунт.'
@@ -1400,6 +1411,29 @@ async function ensureFirebaseAuthPasswordSession(login, password, options = {}) 
         return true;
     }
     throw new Error('Не удалось открыть Firebase Auth-сессию.');
+}
+
+async function tryRecoverLocalPasswordHashViaFirebase(login, password) {
+    try {
+        await ensureFirebaseAuthPasswordSession(login, password, {
+            allowCreateOnPasswordFailure: false
+        });
+        return {
+            recovered: true,
+            error: null
+        };
+    } catch (error) {
+        if (isFirebasePasswordCredentialError(error)) {
+            return {
+                recovered: false,
+                error: null
+            };
+        }
+        return {
+            recovered: false,
+            error
+        };
+    }
 }
 
 function buildRequestId(prefix = 'req') {
@@ -3645,7 +3679,7 @@ function cleanupEmailLinkUrl() {
 function getReadableFirebaseAuthError(error, context = 'generic') {
     const code = String(error?.code || '').trim();
     if (code === 'auth/firebase-password-conflict') {
-        return 'Для этого email в Firebase остался другой пароль или старый отдельный аккаунт. Нужно либо войти тем старым паролем, либо сбросить/очистить этот email в Firebase Authentication.';
+        return 'Для этого email в Firebase остался старый пароль или старый отдельный аккаунт. Нужен сброс пароля через письмо, после чего вход новым паролем синхронизирует локальный пароль автоматически.';
     }
     if (code === 'auth/configuration-not-found' || code === 'auth/operation-not-allowed') {
         return 'Email-подтверждение не настроено в Firebase. Включите Authentication -> Sign-in method -> Email link (passwordless) и добавьте домен сайта в Authorized domains.';
@@ -4463,6 +4497,7 @@ function getLocalUserRecordByLogin(login) {
 async function saveUserRecord(record, options = {}) {
     const requireRemote = !!options.requireRemote;
     const skipRemote = !!options.skipRemote;
+    const flushLocal = !!options.flushLocal;
     const normalized = normalizeUserRecord(record, record?.login);
     if (!normalized) throw new Error('Invalid user record');
     const key = loginToStorageKey(normalized.login);
@@ -4514,6 +4549,9 @@ async function saveUserRecord(record, options = {}) {
     const localStore = loadLocalUsersStore();
     localStore[key] = toLocalUserCachePayload(payload);
     saveLocalUsersStore(localStore);
+    if (flushLocal) {
+        flushLocalJsonStorageCacheNow();
+    }
     return payload;
 }
 
@@ -9144,6 +9182,7 @@ async function handleAuthSubmit() {
                 !isPasswordValid &&
                 !!localhostLocalUser?.passwordHash &&
                 await verifyPasswordHash(login, password, localhostLocalUser.passwordHash);
+            let recoveredPasswordHashViaFirebase = false;
 
             if (canUseLocalhostPasswordFallback) {
                 existingUser = normalizeUserRecord({
@@ -9160,6 +9199,15 @@ async function handleAuthSubmit() {
             }
 
             if (shouldVerifyPassword && !isPasswordValid && !canUseLocalhostPasswordFallback) {
+                const firebasePasswordRecovery = await tryRecoverLocalPasswordHashViaFirebase(login, password);
+                if (firebasePasswordRecovery.recovered) {
+                    recoveredPasswordHashViaFirebase = true;
+                } else if (firebasePasswordRecovery.error) {
+                    throw firebasePasswordRecovery.error;
+                }
+            }
+
+            if (shouldVerifyPassword && !isPasswordValid && !canUseLocalhostPasswordFallback && !recoveredPasswordHashViaFirebase) {
                 const failedAttempts = Math.max(0, Number(existingUser.failedLoginAttempts) || 0) + 1;
                 const shouldBlock = failedAttempts >= MAX_FAILED_PASSWORD_ATTEMPTS;
                 const backoffMs = shouldBlock ? null : computeFailedLoginBackoffMs(failedAttempts);
@@ -9190,7 +9238,7 @@ async function handleAuthSubmit() {
 
             let nextPasswordHash = existingUser.passwordHash;
             const needsPasswordMigration = isPasswordHashNeedsMigration(existingUser.passwordHash);
-            if (needsPasswordMigration || passwordNeedsSetup || canSetPasswordAfterLink) {
+            if (needsPasswordMigration || passwordNeedsSetup || canSetPasswordAfterLink || recoveredPasswordHashViaFirebase) {
                 nextPasswordHash = await hashPassword(login, password);
             }
 
@@ -9262,8 +9310,8 @@ async function handleAuthSubmit() {
             () => saveUserRecord(
                 targetUser,
                 requireRemoteUserSave
-                    ? { requireRemote: true }
-                    : { skipRemote: true }
+                    ? { requireRemote: true, flushLocal: true }
+                    : { skipRemote: true, flushLocal: true }
             ),
             AUTH_FLOW_STEP_TIMEOUT_MS,
             'Не удалось сохранить аккаунт в Firebase. Проверьте RTDB Rules и повторите вход.'
@@ -9334,7 +9382,19 @@ async function handleAuthSubmit() {
         startActiveTimeTracking();
     } catch (error) {
         console.error('Auth error:', error);
-        setAuthError(getReadableFirebaseAuthError(error, 'login'));
+        const code = String(error?.code || '').trim();
+        if (code === 'auth/firebase-password-conflict' && isValidLogin(login)) {
+            try {
+                await sendPasswordResetLinkToEmail(login);
+                showCopyNotification(`На ${login} отправлено письмо для сброса пароля.`);
+                setAuthError('Для этого email в Firebase остался старый пароль. Я уже отправил письмо для сброса. Смените пароль по письму и затем войдите новым паролем — локальный пароль обновится автоматически.');
+            } catch (resetError) {
+                console.error('Auto password reset after Firebase conflict failed:', resetError);
+                setAuthError(`${getReadableFirebaseAuthError(error, 'login')} ${getReadableFirebaseAuthError(resetError, 'reset-password')}`);
+            }
+        } else {
+            setAuthError(getReadableFirebaseAuthError(error, 'login'));
+        }
     } finally {
         setAuthSubmitState(false);
     }

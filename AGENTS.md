@@ -200,6 +200,9 @@
   - он требует только корректный email, не требует ФИО и не пытается узнать/показать старый пароль;
   - отправка идёт через Firebase `sendPasswordResetEmail`;
   - UI всегда возвращает generic-success toast в духе `если аккаунт существует, письмо уже отправлено`, чтобы не полагаться на раскрытие существования аккаунта.
+- Если локальный `passwordHash` устарел, но Firebase уже принимает новый пароль сотрудника, вход теперь должен пройти и сразу переписать локальный хэш во время этого же логина.
+- Если локальный пароль ещё верный, а в Firebase на этом email остался старый standalone-пароль, login-flow теперь сам отправляет reset-письмо и показывает явное объяснение дальнейших шагов вместо тупикового generic-error.
+- Smoke теперь обязан проверять оба этих auth-ремонта отдельно: `firebase password recovery` и `firebase conflict auto-reset`.
 - Переключение между админским и юзерским видом теперь происходит сразу по `Сменить`, без повторного запроса пароля; пароль нужен только один раз, чтобы получить админ-доступ.
 - In the local empty-state start cards, only the main titles remain visible; the lower subtitle lines under `Чат с клиентом / Голосовой звонок / Аттестация` were intentionally removed.
 - The local empty-state start cards are compact now: the card column is intentionally much narrower than before and the remaining titles are center-aligned. Do not stretch them back to full-width unless requested.

@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
 import { createServer } from 'node:http';
+import { pbkdf2Sync } from 'node:crypto';
 import { mkdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -170,6 +171,27 @@ const firebaseAuthStub = `
 const authInstance = {
   currentUser: null
 };
+function normalizeEmail(value = '') {
+  return String(value || '').trim().toLowerCase();
+}
+function createAuthUser(email = '') {
+  return {
+    email,
+    async getIdToken() {
+      return 'smoke-firebase-token';
+    }
+  };
+}
+function getAuthBehavior(email = '') {
+  const behaviorMap = globalThis.__codexFirebaseAuthBehaviorByEmail || {};
+  const normalizedEmail = normalizeEmail(email);
+  return behaviorMap[normalizedEmail] || behaviorMap['*'] || null;
+}
+function buildFirebaseAuthError(code = 'auth/internal-error', message = '') {
+  const error = new Error(message || code);
+  error.code = code;
+  return error;
+}
 export function getAuth() {
   return authInstance;
 }
@@ -185,18 +207,37 @@ export async function sendPasswordResetEmail() {
   if (delayMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
+  const email = normalizeEmail(arguments[1]);
+  const history = globalThis.__codexPasswordResetEmails || (globalThis.__codexPasswordResetEmails = []);
+  if (email) {
+    history.push(email);
+  }
   return null;
 }
 export function isSignInWithEmailLink() { return false; }
 export async function signInWithEmailLink() {
   return { user: null };
 }
-export async function signInWithEmailAndPassword(_auth, email) {
-  authInstance.currentUser = { email };
+export async function signInWithEmailAndPassword(_auth, email, password) {
+  const behavior = getAuthBehavior(email);
+  if (behavior?.signInErrorCode) {
+    throw buildFirebaseAuthError(behavior.signInErrorCode, behavior.signInErrorMessage || behavior.signInErrorCode);
+  }
+  if (behavior?.expectedPassword && String(password) !== String(behavior.expectedPassword)) {
+    throw buildFirebaseAuthError('auth/wrong-password', 'auth/wrong-password');
+  }
+  authInstance.currentUser = createAuthUser(email);
   return { user: authInstance.currentUser };
 }
-export async function createUserWithEmailAndPassword(_auth, email) {
-  authInstance.currentUser = { email };
+export async function createUserWithEmailAndPassword(_auth, email, password) {
+  const behavior = getAuthBehavior(email);
+  if (behavior?.createErrorCode) {
+    throw buildFirebaseAuthError(behavior.createErrorCode, behavior.createErrorMessage || behavior.createErrorCode);
+  }
+  if (behavior?.createExpectedPassword && String(password) !== String(behavior.createExpectedPassword)) {
+    throw buildFirebaseAuthError('auth/weak-password', 'auth/weak-password');
+  }
+  authInstance.currentUser = createAuthUser(email);
   return { user: authInstance.currentUser };
 }
 export async function signOut() {
@@ -645,6 +686,14 @@ function loginToStorageKey(value) {
     return Array.from(String(value || '').trim().toLowerCase())
         .map((char) => char.codePointAt(0).toString(16))
         .join('_');
+}
+
+function buildPasswordHashForSmoke(loginValue, password, saltByte = 7) {
+    const normalizedLogin = String(loginValue || '').trim().toLowerCase();
+    const secret = `${normalizedLogin}::${String(password || '')}`;
+    const salt = Buffer.alloc(16, saltByte);
+    const derived = pbkdf2Sync(secret, salt, 120000, 32, 'sha256');
+    return `pbkdf2:v1|120000|${salt.toString('base64')}|${derived.toString('base64')}`;
 }
 
 function buildLocalPromptsStorageKey() {
@@ -1097,10 +1146,21 @@ async function seedAuthFlowState(context, options = {}) {
     const authUsers = options.authUsers || {};
     const authSession = options.authSession || null;
     const sendDelayMs = Number(options.sendDelayMs || 0);
+    const authBehaviorByEmail = options.authBehaviorByEmail || {};
 
     await context.addInitScript((payload) => {
+        const dbState = globalThis.__codexFirebaseDbState || (globalThis.__codexFirebaseDbState = {
+            data: {},
+            listeners: []
+        });
         if (sessionStorage.getItem('__codexAuthFlowSeeded') === '1') {
             globalThis.__codexAuthSendLinkDelayMs = payload.sendDelayMs || 0;
+            globalThis.__codexFirebaseAuthBehaviorByEmail = payload.authBehaviorByEmail || {};
+            globalThis.__codexPasswordResetEmails = [];
+            dbState.data = {
+                ...(dbState.data && typeof dbState.data === 'object' ? dbState.data : {}),
+                users: JSON.parse(JSON.stringify(payload.authUsers || {}))
+            };
             return;
         }
         sessionStorage.setItem('__codexAuthFlowSeeded', '1');
@@ -1113,10 +1173,17 @@ async function seedAuthFlowState(context, options = {}) {
             localStorage.setItem('authSession:v1', payload.authSession);
         }
         globalThis.__codexAuthSendLinkDelayMs = payload.sendDelayMs || 0;
+        globalThis.__codexFirebaseAuthBehaviorByEmail = payload.authBehaviorByEmail || {};
+        globalThis.__codexPasswordResetEmails = [];
+        dbState.data = {
+            ...(dbState.data && typeof dbState.data === 'object' ? dbState.data : {}),
+            users: JSON.parse(JSON.stringify(payload.authUsers || {}))
+        };
     }, {
         authUsers,
         authSession,
-        sendDelayMs
+        sendDelayMs,
+        authBehaviorByEmail
     });
 }
 
@@ -2485,6 +2552,162 @@ async function runAuthPasswordResetFlow(browser, baseUrl) {
     }
 }
 
+async function runAuthFirebasePasswordRecoveryFlow(browser, baseUrl) {
+    const scenario = createIdleScenario();
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
+    await installCommonRoutes(context, scenario);
+    const recoveryLogin = 'recovery@tradicia-k.ru';
+    const oldPasswordHash = buildPasswordHashForSmoke(recoveryLogin, 'OldPass123!', 11);
+    const nowIso = new Date().toISOString();
+    await seedAuthFlowState(context, {
+        authUsers: {
+            [loginToStorageKey(recoveryLogin)]: {
+                login: recoveryLogin,
+                fio: 'Восстановление Пароля',
+                role: 'user',
+                passwordHash: oldPasswordHash,
+                passwordNeedsSetup: false,
+                emailVerifiedAt: nowIso,
+                emailVerificationSentAt: null,
+                failedLoginAttempts: 0,
+                isBlocked: false,
+                blockedReason: null,
+                failedLoginBackoffUntil: null,
+                blockedAt: null,
+                sessionRevokedAt: null,
+                passwordHashScheme: 'pbkdf2:v1',
+                createdAt: nowIso,
+                lastLoginAt: nowIso,
+                lastSeenAt: nowIso,
+                activeMs: 0
+            }
+        },
+        authSession: null,
+        sendDelayMs: 0,
+        authBehaviorByEmail: {
+            [recoveryLogin]: {
+                expectedPassword: 'NewPass123!'
+            }
+        }
+    });
+    const page = await context.newPage();
+
+    try {
+        logStep('run auth firebase password recovery flow');
+        await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('#nameModal.active');
+        await page.fill('#modalNameInput', 'Восстановление Пароля');
+        await page.fill('#modalLoginInput', recoveryLogin);
+        await page.fill('#modalPasswordInput', 'NewPass123!');
+        await page.click('#modalNameSubmit');
+
+        await page.waitForFunction(() => !document.getElementById('nameModal')?.classList.contains('active'));
+
+        const result = await page.evaluate(() => {
+            const authUsers = JSON.parse(localStorage.getItem('authUsers:v1') || '{}');
+            const session = JSON.parse(localStorage.getItem('authSession:v1') || 'null');
+            const entry = authUsers['72_65_63_6f_76_65_72_79_40_74_72_61_64_69_63_69_61_2d_6b_2e_72_75'] || null;
+            const error = document.getElementById('passwordError');
+            return {
+                sessionLogin: session?.login || '',
+                passwordHash: String(entry?.passwordHash || ''),
+                errorVisible: !!error && getComputedStyle(error).display !== 'none' && String(error.textContent || '').trim().length > 0
+            };
+        });
+        expect(result.sessionLogin === recoveryLogin, 'Recovered Firebase password login did not open the session');
+        expect(result.passwordHash && result.passwordHash !== oldPasswordHash, 'Local password hash was not updated after Firebase recovery');
+        expect(!result.errorVisible, 'Recovered Firebase password flow still shows an auth error');
+    } catch (error) {
+        await ensureOutputDir();
+        await page.screenshot({ path: path.join(outputDir, 'smoke-auth-firebase-password-recovery-failure.png'), fullPage: true });
+        throw error;
+    } finally {
+        await context.close();
+    }
+}
+
+async function runAuthFirebaseConflictAutoResetFlow(browser, baseUrl) {
+    const scenario = createIdleScenario();
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
+    await installCommonRoutes(context, scenario);
+    const conflictLogin = 'conflict@tradicia-k.ru';
+    const localPassword = 'LocalPass123!';
+    const nowIso = new Date().toISOString();
+    await seedAuthFlowState(context, {
+        authUsers: {
+            [loginToStorageKey(conflictLogin)]: {
+                login: conflictLogin,
+                fio: 'Конфликт Пароля',
+                role: 'user',
+                passwordHash: buildPasswordHashForSmoke(conflictLogin, localPassword, 19),
+                passwordNeedsSetup: false,
+                emailVerifiedAt: nowIso,
+                emailVerificationSentAt: null,
+                failedLoginAttempts: 0,
+                isBlocked: false,
+                blockedReason: null,
+                failedLoginBackoffUntil: null,
+                blockedAt: null,
+                sessionRevokedAt: null,
+                passwordHashScheme: 'pbkdf2:v1',
+                createdAt: nowIso,
+                lastLoginAt: nowIso,
+                lastSeenAt: nowIso,
+                activeMs: 0
+            }
+        },
+        authSession: null,
+        sendDelayMs: 150,
+        authBehaviorByEmail: {
+            [conflictLogin]: {
+                expectedPassword: 'OtherFirebasePass!',
+                createErrorCode: 'auth/email-already-in-use'
+            }
+        }
+    });
+    const page = await context.newPage();
+
+    try {
+        logStep('run auth firebase conflict auto-reset flow');
+        await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('#nameModal.active');
+        await page.fill('#modalNameInput', 'Конфликт Пароля');
+        await page.fill('#modalLoginInput', conflictLogin);
+        await page.fill('#modalPasswordInput', localPassword);
+        await page.click('#modalNameSubmit');
+
+        await page.waitForFunction(() => {
+            const notification = document.querySelector('.copy-notification');
+            const error = document.getElementById('passwordError');
+            return (
+                (!!notification && /сброса пароля/i.test(String(notification.textContent || '')))
+                || (!!error && /локальный пароль обновится автоматически/i.test(String(error.textContent || '')))
+            );
+        });
+
+        const result = await page.evaluate(() => {
+            const resetEmails = Array.isArray(globalThis.__codexPasswordResetEmails)
+                ? [...globalThis.__codexPasswordResetEmails]
+                : [];
+            const error = document.getElementById('passwordError');
+            return {
+                resetEmails,
+                errorText: String(error?.textContent || '').trim(),
+                modalStillOpen: !!document.getElementById('nameModal')?.classList.contains('active')
+            };
+        });
+        expect(result.modalStillOpen, 'Firebase conflict flow must keep the auth modal open');
+        expect(result.resetEmails.includes(conflictLogin), 'Firebase conflict flow did not auto-send a password reset email');
+        expect(/локальный пароль обновится автоматически/i.test(result.errorText), 'Firebase conflict flow did not explain the automatic local password sync');
+    } catch (error) {
+        await ensureOutputDir();
+        await page.screenshot({ path: path.join(outputDir, 'smoke-auth-firebase-conflict-auto-reset-failure.png'), fullPage: true });
+        throw error;
+    } finally {
+        await context.close();
+    }
+}
+
 async function runLocalhostDevAuthFlow(browser, baseUrl) {
     const scenario = createIdleScenario();
     const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
@@ -2656,6 +2879,8 @@ async function main() {
         await runGoSilentFlow(browser, baseUrl);
         await runEmailAuthVerificationFlow(browser, baseUrl);
         await runAuthPasswordResetFlow(browser, baseUrl);
+        await runAuthFirebasePasswordRecoveryFlow(browser, baseUrl);
+        await runAuthFirebaseConflictAutoResetFlow(browser, baseUrl);
         await runLocalhostDevAuthFlow(browser, baseUrl);
         await runLocalMinimalLayoutRegressionFlow(browser, baseUrl);
         logStep('all smoke scenarios passed');

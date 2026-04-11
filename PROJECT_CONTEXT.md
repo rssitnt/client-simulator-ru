@@ -28,6 +28,9 @@
   - current passwords are not stored in plaintext anywhere in the frontend flow;
   - reset is sent through Firebase `sendPasswordResetEmail()`;
   - smoke now verifies that the reset button restores its label and does not leave the main login submit disabled.
+- If the local stored password hash is stale but Firebase already accepts the employee's new password, password login now succeeds and silently rewrites the local hash right away during that login.
+- If the local password is still correct but Firebase has an old standalone password for the same email, login now auto-sends a reset email and shows an explicit next-step message instead of leaving the employee in a dead-end error.
+- Smoke now also covers both auth repair paths: local-hash recovery through Firebase and auto-reset on Firebase password conflict.
 - Session restore no longer destroys the saved browser session immediately just because the Firebase auth session came back but the user profile read still returned empty once; that path is now treated as a soft restore miss first.
 
 ## Still watch
