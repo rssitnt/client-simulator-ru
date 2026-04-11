@@ -1597,6 +1597,21 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
             return /гидробур|case/i.test(text);
         });
 
+        await page.click('#mainDialogHistoryList .dialog-history-item-main');
+        await page.waitForFunction(() => {
+            const stage = document.getElementById('mainDialogHistoryStage');
+            const chatMessages = document.getElementById('chatMessages');
+            const renderedMessages = Array.from(document.querySelectorAll('#chatMessages .message .message-content'))
+                .map((node) => String(node.textContent || '').trim())
+                .filter(Boolean);
+            return !!chatMessages
+                && !chatMessages.hidden
+                && (!!stage && stage.hidden)
+                && renderedMessages.length >= 2
+                && renderedMessages.some((text) => /нужен гидробур/i.test(text))
+                && renderedMessages.some((text) => /подберу вариант/i.test(text));
+        });
+
         await page.hover('#mainDialogHistoryList .dialog-history-item');
         const renamePrompt = new Promise((resolve) => {
             page.once('dialog', async (dialog) => {

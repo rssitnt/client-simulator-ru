@@ -7892,15 +7892,100 @@ function isSelectedDialogCurrentLiveConversation() {
     return conversationHistory.length > 0 || isGeminiVoiceConnecting || isGeminiVoiceActive || !!geminiLiveSession;
 }
 
+function shouldRenderSelectedDialogInMainChat() {
+    if (!dialogHistorySelectedId || !dialogHistorySelectedPayload || !dialogHistorySelectedRecord) {
+        return false;
+    }
+    return !isSelectedDialogCurrentLiveConversation();
+}
+
 function syncMainDialogHistoryStage() {
     if (!mainDialogHistoryStage || !chatMessages) return;
-    const shouldShowHistoryStage = !!dialogHistorySelectedId && !isSelectedDialogCurrentLiveConversation();
+    const shouldShowHistoryStage = !!dialogHistorySelectedId
+        && !isSelectedDialogCurrentLiveConversation()
+        && !shouldRenderSelectedDialogInMainChat();
     mainDialogHistoryStage.hidden = !shouldShowHistoryStage;
     chatMessages.hidden = shouldShowHistoryStage;
     if (chatInputContainer) {
         chatInputContainer.hidden = shouldShowHistoryStage;
     }
     document.getElementById('chatPanel')?.classList.toggle('is-history-viewing', shouldShowHistoryStage);
+}
+
+function renderSelectedDialogHistoryIntoMainChat() {
+    if (!chatMessages) return false;
+    if (!shouldRenderSelectedDialogInMainChat()) return false;
+
+    const record = dialogHistorySelectedRecord;
+    const payload = dialogHistorySelectedPayload;
+    const messages = Array.isArray(payload?.messages) ? payload.messages : [];
+    const scopeLogin = normalizeLogin(dialogHistoryScopeLogin || '');
+    const isOwnedSelection = isDialogHistoryScopeOwned(scopeLogin);
+    const startDiv = document.getElementById('startConversation');
+
+    invalidateActiveChatUiRequests();
+    setVoiceModeScreenActive(false);
+    isProcessing = false;
+    removeConversationActionNotice();
+    removeReratePrompt();
+    clearConversationTerminalState();
+
+    currentDialogHistoryId = isOwnedSelection
+        ? (String(record?.id || payload?.id || '').trim() || currentDialogHistoryId)
+        : '';
+    currentDialogHistoryCreatedAt = isOwnedSelection
+        ? (String(record?.createdAt || payload?.createdAt || '').trim() || null)
+        : null;
+    currentDialogHistoryAutoTitle = isOwnedSelection
+        ? String(record?.autoTitle || '').trim() || ''
+        : '';
+    currentDialogHistoryTitle = isOwnedSelection
+        ? clampDialogHistoryTitle(
+            record?.title,
+            currentDialogHistoryAutoTitle || formatDialogHistoryFallbackTitle(currentDialogHistoryCreatedAt || new Date().toISOString())
+        )
+        : '';
+    currentDialogHistoryTitleEdited = isOwnedSelection ? !!record?.titleEdited : false;
+    currentDialogHistoryPinnedAt = isOwnedSelection
+        ? (String(record?.pinnedAt || '').trim() || null)
+        : null;
+    currentDialogHistoryClosedAt = String(payload?.closedAt || record?.closedAt || '').trim() || null;
+    currentDialogHistoryRatedAt = String(payload?.ratedAt || record?.ratedAt || payload?.rating?.createdAt || '').trim() || null;
+
+    conversationHistory = messages.map((message) => ({
+        role: message?.role === 'assistant' ? 'assistant' : 'user',
+        content: normalizeDialogHistoryText(message?.content || '')
+    })).filter((entry) => entry.content);
+    conversationHistoryText = rebuildConversationHistoryTextFromEntries(conversationHistory);
+    conversationHistoryRevision += 1;
+
+    lastRating = payload?.rating?.text ? String(payload.rating.text || '').trim() : null;
+    isDialogRated = !!lastRating;
+
+    chatMessages.innerHTML = '';
+    if (startDiv) {
+        startDiv.style.display = 'none';
+    }
+
+    conversationHistory.forEach((entry) => {
+        addMessage(entry.content, entry.role, entry.role === 'assistant');
+    });
+
+    if (lastRating) {
+        addMessage(lastRating, 'rating', true);
+    }
+
+    if (!isOwnedSelection || currentDialogHistoryClosedAt || isDialogRated) {
+        lockDialogInput();
+    } else {
+        unlockDialogInput();
+    }
+    setVoiceModeStatus('', 'idle');
+    updatePromptLock();
+    updateSendBtnState();
+    updateRateChatButtonState();
+    syncChatEmptyUiState();
+    return true;
 }
 
 function resizeMainDialogHistoryTitleInput() {
@@ -8623,6 +8708,7 @@ function renderDialogHistoryViewerInto(ui) {
 }
 
 function renderDialogHistoryViewer() {
+    renderSelectedDialogHistoryIntoMainChat();
     dialogHistoryUiSets.forEach(renderDialogHistoryViewerInto);
     syncMainDialogHistoryStage();
 }

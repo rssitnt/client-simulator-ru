@@ -68,7 +68,7 @@
   - the main shell does not auto-open the first history item on load.
   - the desktop history rail starts collapsed by default and is reopened with a dedicated toggle.
   - the old saved-dialog header block is intentionally gone now: when a saved dialog is opened, the center view should start directly with the messages instead of rendering a separate `Сохранённый диалог` / title / meta / pin-delete section above them.
-  - the main saved-dialog view must actually become visible after selecting a history item: `syncMainDialogHistoryStage()` should switch to `mainDialogHistoryStage` for any non-live selected history item, including the loading/error states; do not gate the stage visibility on `dialogHistorySelectedPayload`, or clicks will look like they did nothing.
+  - saved dialogs now render through the main `#chatMessages` message stack too, so old records and new/live chats share one visual language; do not revive the separate old saved-dialog viewer for normal opened history items.
 - A large from-scratch shell redesign was attempted on 2026-04-07 and reverted the same day because it created too many visual regressions at once; future redesigns should land in smaller passes or from a prototype branch first.
 - The current interface was then repaired in-place:
   - login is a centered modal card again;
@@ -76,7 +76,7 @@
   - a fresh session has three visible start actions (`чат / звонок / аттестация`);
   - on an empty session the bottom composer collapses to a compact voice-call button so mobile start actions stay visible;
   - the collapsed desktop history toggle is offset far enough not to overlap the clear-chat button.
-  - the large saved-dialog viewer is no longer rendered in the center workspace; saved-dialog access remains in the history rail only.
+  - the large legacy saved-dialog viewer is no longer the normal center-workspace path; saved-dialog access stays in the history rail, but opening a history item must render its messages in the same center chat layout as a fresh dialog.
   - the extra `Диалоги` eyebrow above `История` was removed from the left rail.
 - The minimal shell now runs behind `body.local-minimal-ui` on `localhost/127.0.0.1` and on the production domains `client-simulator.ru` / `www.client-simulator.ru`:
   - it preserves existing IDs/logic and smoke coverage;
