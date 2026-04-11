@@ -241,6 +241,7 @@
 - The localhost `Роль` drawer is intentionally a bit wider than before: around 10% wider than the earlier 420px/34vw baseline. Keep that wider drawer unless the user asks to tighten it again.
 - Local settings sections are flat now: section wrappers should not render as separate rounded cards. Use only faint divider lines between sections; keep the inner controls/card-like inputs intact.
 - Вход в режим аттестации теперь тихий: он должен запускаться так же, как обычный вход в чат, без отдельного toast `Режим аттестации включен`.
+- Карточка `Аттестация` на стартовом экране теперь обязана не только включать attestation-подбор промптов, но и реально заходить в основной чат через тот же `/start` flow, что и `Чат с клиентом`; состояние "включился режим, но стартовые карточки остались на месте" считается регрессией.
 - В локальном минимальном UI скролл левой истории должен жить на всей колонке `.history-panel`, а не на внутреннем списке; по виду и геометрии он должен совпадать со скроллом панели настроек, тянуться на всю высоту панели и не показывать нативные стрелки.
 - Для локальной истории это теперь зафиксировано самым поздним CSS-блоком: открытая `.history-panel` использует тот же тонкий скролл, что и settings drawer, а в `body.local-minimal-ui.history-sidebar-collapsed` скролл должен быть жёстко скрыт без видимого gutter/полосы.
 - Поиск по истории теперь должен понимать не только заголовок/превью, но и тип диалога (`чат` / `звонок`) и даты из меты; совпадения в карточках должны подсвечиваться.

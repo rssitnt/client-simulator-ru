@@ -2863,6 +2863,49 @@ async function runGoSilentFlow(browser, baseUrl) {
     }
 }
 
+async function runAttestationStartFlow(browser, baseUrl) {
+    const scenario = createEndConversationScenario();
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
+    await installCommonRoutes(context, scenario);
+    await seedLocalState(context);
+    const page = await context.newPage();
+
+    try {
+        logStep('run attestation start flow');
+        await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+        await waitForChatReady(page);
+
+        await page.click('#startAttestationBtn');
+        await page.waitForFunction(() => {
+            return Array.from(document.querySelectorAll('#chatMessages .message'))
+                .some((node) => !node.classList.contains('loading') && String(node.textContent || '').trim().length > 0);
+        });
+        await page.waitForFunction(() => {
+            const startBlock = document.getElementById('startConversation');
+            return !startBlock || startBlock.style.display === 'none';
+        });
+
+        const attestationState = await page.evaluate(() => ({
+            isAttestationMode: document.body.classList.contains('attestation-mode'),
+            exitVisible: getComputedStyle(document.getElementById('exitAttestationBtn')).display !== 'none',
+            inputDisabled: !!document.getElementById('userInput')?.disabled
+        }));
+
+        expect(attestationState.isAttestationMode, 'Attestation mode was not enabled after clicking the start card');
+        expect(attestationState.exitVisible, 'Attestation exit button must be visible after entering attestation mode');
+        expect(!attestationState.inputDisabled, 'Composer must stay enabled after entering attestation mode');
+
+        const startRequest = scenario.requests.find((item) => item.payload.requestType === 'chat_start' && item.payload.chatInput === '/start');
+        expect(!!startRequest, 'Attestation start must trigger the same /start chat flow');
+    } catch (error) {
+        await ensureOutputDir();
+        await page.screenshot({ path: path.join(outputDir, 'smoke-attestation-start-failure.png'), fullPage: true });
+        throw error;
+    } finally {
+        await context.close();
+    }
+}
+
 async function runEmailAuthVerificationFlow(browser, baseUrl) {
     const scenario = createIdleScenario();
     const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
@@ -3347,6 +3390,7 @@ async function main() {
         await runClearChatStopsVoiceFlow(browser, baseUrl);
         await runEndConversationFlow(browser, baseUrl);
         await runGoSilentFlow(browser, baseUrl);
+        await runAttestationStartFlow(browser, baseUrl);
         await runEmailAuthVerificationFlow(browser, baseUrl);
         await runAuthPasswordResetFlow(browser, baseUrl);
         await runAuthFirebasePasswordRecoveryFlow(browser, baseUrl);

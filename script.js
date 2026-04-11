@@ -13539,12 +13539,13 @@ function setAttestationMode(enabled) {
         const applied = applyAttestationPrompts();
         if (!applied) {
             isAttestationMode = false;
-            return;
+            return false;
         }
         document.body.classList.add('attestation-mode');
         if (startAttestationBtn) {
             startAttestationBtn.style.display = 'none';
         }
+        return true;
     } else {
         if (attestationPrevState) {
             promptsData.client.activeId = attestationPrevState.client;
@@ -13560,7 +13561,16 @@ function setAttestationMode(enabled) {
             startAttestationBtn.style.display = '';
         }
         showCopyNotification('Режим аттестации выключен');
+        return true;
     }
+}
+
+async function startAttestationHandler() {
+    if (!isChatReady || isProcessing) return;
+    const enabled = setAttestationMode(true);
+    if (!enabled) return;
+    activateShellPanel('chat');
+    await startConversationHandler();
 }
 
 // Chat input state
@@ -22126,10 +22136,7 @@ async function clearChat() {
     const startAttestationBtnEl = document.getElementById('startAttestationBtn');
     if (startAttestationBtnEl) {
         startAttestationBtnEl.style.display = isAttestationMode ? 'none' : '';
-        startAttestationBtnEl.addEventListener('click', () => {
-            if (!isChatReady) return;
-            setAttestationMode(true);
-        });
+        startAttestationBtnEl.addEventListener('click', startAttestationHandler);
     }
     setStartButtonsEnabled(isChatReady);
     syncChatEmptyUiState();
@@ -24208,10 +24215,7 @@ if (exitAttestationBtn) {
     });
 }
 if (startAttestationBtn) {
-    startAttestationBtn.addEventListener('click', () => {
-        if (!isChatReady) return;
-        setAttestationMode(true);
-    });
+    startAttestationBtn.addEventListener('click', startAttestationHandler);
 }
 
 bindEvent(exportChatBtn, 'click', (e) => {

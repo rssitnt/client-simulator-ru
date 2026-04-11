@@ -25,6 +25,7 @@
 - Opening a saved dialog from the history rail now reuses the same main `#chatMessages` renderer as a fresh/new chat, so old records no longer fall back to a separate legacy viewer layout.
 - For the owner, a saved dialog opened from history is now the same live workspace as a new chat: the main composer stays usable, new text messages append into the same stored `dialogId`, and starting voice from that opened dialog continues the same conversation instead of resetting into a new one. Foreign/admin-opened dialogs remain read-only.
 - There is no extra "continue this dialog" transition state anymore: after opening an owned saved dialog from history, the frontend should already treat it as the current live dialog entity. Sending the next message or starting voice must work directly on that dialog, not through a hidden one-time prep step.
+- The start-screen `Аттестация` card now has the same entry contract as the normal chat card: it must both enable attestation prompts and immediately launch the main `/start` chat flow, hiding the start cards instead of only showing the top `Выход из аттестации` control.
 - Reopened saved dialogs now also preserve their stored mode on hydration:
   - a voice dialog reopened from history keeps `currentDialogHistoryMode = voice`;
   - this prevents continued work from history from silently drifting into text-mode bookkeeping.
