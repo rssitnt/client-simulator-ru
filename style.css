@@ -13634,8 +13634,8 @@ body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .adm
 
 body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table {
     display: table;
-    width: 100%;
-    min-width: 780px;
+    width: max-content;
+    min-width: 1116px;
     table-layout: fixed;
     overflow: visible;
 }
@@ -13665,7 +13665,7 @@ body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .adm
 body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table th,
 body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table td {
     display: table-cell;
-    vertical-align: top;
+    vertical-align: middle;
 }
 
 body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table tbody td {
@@ -13691,45 +13691,45 @@ body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .adm
 
 body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table th:nth-child(1),
 body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table td:nth-child(1) {
-    width: 34%;
-    min-width: 220px;
+    width: 320px;
+    min-width: 320px;
 }
 
 body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table th:nth-child(2),
 body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table td:nth-child(2) {
-    width: 12%;
-    min-width: 104px;
+    width: 140px;
+    min-width: 140px;
 }
 
 body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table th:nth-child(3),
 body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table td:nth-child(3) {
-    width: 18%;
-    min-width: 132px;
+    width: 170px;
+    min-width: 170px;
 }
 
 body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table th:nth-child(4),
 body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table td:nth-child(4) {
-    width: 11%;
-    min-width: 88px;
+    width: 110px;
+    min-width: 110px;
 }
 
 body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table th:nth-child(5),
 body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table td:nth-child(5) {
-    width: 17%;
-    min-width: 124px;
+    width: 240px;
+    min-width: 240px;
 }
 
 body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table th:nth-child(6),
 body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table td:nth-child(6) {
-    width: 8%;
-    min-width: 88px;
+    width: 136px;
+    min-width: 136px;
 }
 
 body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-role-picker,
 body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-role-picker-trigger {
-    width: 104px;
-    min-width: 104px;
-    max-width: 104px;
+    width: 132px;
+    min-width: 132px;
+    max-width: 132px;
 }
 
 body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-role-picker-trigger {
@@ -13752,8 +13752,29 @@ body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .adm
 body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-status-main,
 body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-presence,
 body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-time {
-    font-size: 10px;
-    line-height: 1.24;
+    font-size: 11px;
+    line-height: 1.28;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table th,
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-access-source,
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-time,
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-status-main,
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-presence {
+    white-space: nowrap;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-user-login {
+    display: block;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-access-source,
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-status-main,
+body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-presence {
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 body.local-minimal-ui .admin-users-access-body[data-admin-layout="desktop"] .admin-user-action-group {
