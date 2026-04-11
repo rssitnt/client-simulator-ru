@@ -274,6 +274,10 @@
   - light-theme mobile shell теперь тоже покрыт отдельно: стартовые карточки должны оставаться одного стиля, composer input и prompt wrapper должны быть прозрачными в local light theme, а активный mobile-tab не должен падать обратно в старый accent-blue;
   - тестовые layout-hooks живут в `window.__CLIENT_SIMULATOR_TEST_HOOKS__` и предназначены только для localhost/smoke.
 - Старые глобальные light-theme правила для `mobile-tabs`, `#startBtn` и generic dropdown active-state теперь не должны влиять на `body.local-minimal-ui`; если светлая local-версия снова “синеет” или берёт старые карточки, сначала проверяй именно эту изоляцию, а не добавляй ещё один поздний override поверх.
+- Белая тема теперь опирается ещё и на самый поздний нейтральный palette-pass внизу `C:\projects\sites\client-simulator\style.css`:
+  - цель — спокойная GPT-подобная warm-neutral палитра без розово-коричневых и сине-серых конфликтов;
+  - history/chat/composer/fullscreen settings/admin должны выглядеть как одна семейство поверхностей;
+  - если белая тема снова поедет по цветам, правь именно этот финальный palette-pass, а не оживляй старые светлые override-блоки выше.
 
 ## Architecture Notes
 ### Dialog History

@@ -57,6 +57,9 @@
   - mobile cards can continue showing them inline because hover is not available there.
 - The invite row in the local admin panel intentionally has no standalone divider under it before the first admin accordion section.
 - The fullscreen light-theme settings/admin view is stabilized by the final bottom-of-file override layer in `C:\projects\sites\client-simulator\style.css`; future white-theme fixes should land there so admin accordions, invite controls, empty/error states, and the users table stay in the same warm cream palette.
+- The light theme now also has a final neutral palette pass at the bottom of `C:\projects\sites\client-simulator\style.css`:
+  - intended direction is GPT-like warm-neutral cream/stone surfaces rather than mixed legacy reds, blues, or cold whites;
+  - history, chat, composer, fullscreen settings, and admin controls should keep one shared palette ladder.
 - Smoke coverage now explicitly includes the collapsed-history no-scrollbar case and the desktop admin-users real-table layout/desktop layout-flag case, so regressions there should fail `C:\projects\sites\client-simulator\scripts\smoke-e2e.mjs`.
 - That desktop admin-users smoke now also guards the new compact behavior:
   - separate `Доступ / Активность` headers must stay hidden on desktop;
