@@ -14556,3 +14556,104 @@ body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body[data-a
 body.local-minimal-ui.light-theme #settingsModal .admin-webhook-debug-item {
     border-radius: 16px;
 }
+
+/* Final light-theme settings density pass */
+body.local-minimal-ui.light-theme #settingsModal .settings-row {
+    padding-top: 16px;
+    padding-bottom: 16px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .settings-label {
+    color: rgba(84, 69, 51, 0.62) !important;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .account-block {
+    gap: 10px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .account-topline {
+    gap: 12px;
+    align-items: center;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .account-line,
+body.local-minimal-ui.light-theme #settingsModal .role-text {
+    color: rgba(72, 60, 45, 0.78) !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .name-input,
+body.local-minimal-ui.light-theme #settingsModal .password-input,
+body.local-minimal-ui.light-theme #settingsModal .voice-picker-trigger,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-input,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-days,
+body.local-minimal-ui.light-theme #settingsModal .admin-role-picker-trigger,
+body.local-minimal-ui.light-theme #settingsModal .btn-change,
+body.local-minimal-ui.light-theme #settingsModal .btn-export,
+body.local-minimal-ui.light-theme #settingsModal .account-actions .btn-logout {
+    border-radius: 16px !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .name-input,
+body.local-minimal-ui.light-theme #settingsModal .password-input {
+    min-height: 46px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .account-actions .btn-logout,
+body.local-minimal-ui.light-theme #settingsModal .role-row .btn-change,
+body.local-minimal-ui.light-theme #settingsModal .settings-panel .btn-export {
+    min-width: 0;
+    min-height: 42px;
+    padding-inline: 18px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .role-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .role-inline {
+    gap: 10px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .export-row {
+    grid-template-columns: repeat(2, minmax(210px, max-content));
+    gap: 10px;
+    padding-top: 16px;
+    padding-bottom: 16px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .voice-row {
+    gap: 10px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .voice-config-block {
+    gap: 8px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .voice-picker-trigger {
+    min-height: 68px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .voice-picker-title {
+    color: #2d261f !important;
+    font-size: 15px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .voice-picker-subtitle {
+    color: rgba(84, 69, 51, 0.62) !important;
+    font-size: 13px;
+}
+
+@media (max-width: 840px) {
+    body.local-minimal-ui.light-theme #settingsModal .account-topline,
+    body.local-minimal-ui.light-theme #settingsModal .role-row,
+    body.local-minimal-ui.light-theme #settingsModal .export-row {
+        grid-template-columns: 1fr;
+    }
+
+    body.local-minimal-ui.light-theme #settingsModal .export-row {
+        justify-content: stretch;
+    }
+}

@@ -55,6 +55,7 @@
 - Inside that fullscreen settings surface, the admin panel content should stay on a centered working width instead of stretching edge-to-edge; `Выдача доступа`, hidden prompts, users table, and debug sections should read like one compact admin workspace, not like separate elements scattered across the whole screen.
 - The fullscreen settings sheet now also relies on a final harmonization layer for light theme: rows/blocks in settings stay flat against the sheet, while inputs/buttons/dropdowns keep one shared warm-cream surface ladder. Do not revive older mixed white/grey/light-blue settings styles from earlier rules higher in `style.css`.
 - The light-theme admin panel inside fullscreen settings now also has its own final density pass: `Выдача доступа`, accordion headers, refresh/action buttons, and the desktop users table should stay tighter and calmer than the dark theme version instead of inheriting oversized fullscreen spacing.
+- The upper settings rows in fullscreen light theme now have their own final density pass too: account, role, export, voice, and microphone blocks should stay compact and aligned to the same cream surface language instead of inheriting oversized dark-theme spacing.
 - `Пользователи и доступ` has a dedicated mobile card layout; desktop table remains unchanged.
 - Persistent dialog history is stored in RTDB:
   - index: `dialog_history_index/{loginKey}/{dialogId}`
