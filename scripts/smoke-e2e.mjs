@@ -282,6 +282,7 @@ class StubLiveSession {
     this.callbacks = callbacks;
     this.closed = false;
     this.handledFirstAudio = false;
+    this.assistantResponseWatchdogRecovered = false;
   }
 
   emit(message, delayMs = 0) {
@@ -293,6 +294,10 @@ class StubLiveSession {
 
   sendRealtimeInput(params = {}) {
     if (this.closed) return;
+    const tracker = globalThis.__codexVoiceSmoke || (globalThis.__codexVoiceSmoke = { audioStartCount: 0, activityEndCount: 0 });
+    if (params?.activityEnd) {
+      tracker.activityEndCount = Number(tracker.activityEndCount || 0) + 1;
+    }
     if (params?.audio && !this.handledFirstAudio) {
       this.handledFirstAudio = true;
       const scenario = String(globalThis.__codexGeminiVoiceScenario || 'default');
@@ -336,6 +341,25 @@ class StubLiveSession {
             waitingForInput: true
           }
         }, 280);
+        return;
+      }
+      if (scenario === 'assistant-response-watchdog-retries-boundary') {
+        this.emit({
+          serverContent: {
+            inputTranscription: {
+              text: 'Нужен гидробур на CASE CX260C, 900 лунок.',
+              finished: false
+            }
+          }
+        }, 70);
+        this.emit({
+          serverContent: {
+            inputTranscription: {
+              text: 'Нужен гидробур на CASE CX260C, 900 лунок. Что предложишь?',
+              finished: true
+            }
+          }
+        }, 140);
         return;
       }
       this.emit({
@@ -671,6 +695,39 @@ class StubLiveSession {
           waitingForInput: true
         }
       }, 420);
+    }
+    if (params?.activityEnd && !this.closed) {
+      const scenario = String(globalThis.__codexGeminiVoiceScenario || 'default');
+      if (
+        scenario === 'assistant-response-watchdog-retries-boundary' &&
+        !this.assistantResponseWatchdogRecovered &&
+        Number(tracker.activityEndCount || 0) >= 1
+      ) {
+        this.assistantResponseWatchdogRecovered = true;
+        this.emit({
+          serverContent: {
+            outputTranscription: {
+              text: 'Есть вариант под этот объём. Могу сразу пройтись по комплектации.',
+              finished: true
+            },
+            modelTurn: {
+              parts: [
+                {
+                  inlineData: {
+                    data: assistantAudioBase64,
+                    mimeType: 'audio/pcm;rate=24000'
+                  }
+                }
+              ]
+            }
+          }
+        }, 180);
+        this.emit({
+          serverContent: {
+            waitingForInput: true
+          }
+        }, 320);
+      }
     }
   }
 
@@ -1019,14 +1076,21 @@ async function seedVoiceModeRuntime(context, options = {}) {
                 super();
                 this.onaudioprocess = null;
                 this._intervalId = 0;
+                this._tickCount = 0;
             }
 
             __startProcessing() {
                 if (this._intervalId) return;
                 this._intervalId = setInterval(() => {
                     if (typeof this.onaudioprocess !== 'function') return;
+                    this._tickCount += 1;
                     const inputChannel = new Float32Array(4096);
-                    const level = 0.03;
+                    const scenario = String(globalThis.__codexGeminiVoiceScenario || 'default');
+                    const shouldSimulateSpeechBurst =
+                        scenario === 'assistant-response-watchdog-retries-boundary'
+                            ? this._tickCount <= 4
+                            : true;
+                    const level = shouldSimulateSpeechBurst ? 0.03 : 0;
                     for (let index = 0; index < inputChannel.length; index += 1) {
                         inputChannel[index] = index % 2 === 0 ? level : -level;
                     }
@@ -1169,7 +1233,7 @@ async function seedVoiceModeRuntime(context, options = {}) {
 
         globalThis.AudioContext = FakeAudioContext;
         globalThis.webkitAudioContext = FakeAudioContext;
-        globalThis.__codexVoiceSmoke = { audioStartCount: 0 };
+        globalThis.__codexVoiceSmoke = { audioStartCount: 0, activityEndCount: 0 };
         globalThis.__codexGeminiVoiceScenario = String(payload?.voiceScenario || 'default');
     }, {
         voiceScenario: String(options?.voiceScenario || 'default')
@@ -2321,6 +2385,7 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
         voiceStatus: String(document.getElementById('voiceModeStatus')?.textContent || '').trim(),
         callNoticeText: String(document.querySelector('.voice-call-note .conversation-action-note-text')?.textContent || '').trim(),
         audioStartCount: Number(globalThis.__codexVoiceSmoke?.audioStartCount || 0),
+        activityEndCount: Number(globalThis.__codexVoiceSmoke?.activityEndCount || 0),
         lastMessageClassName: String(document.querySelector('#chatMessages .message:last-child')?.className || '').trim(),
         lastMessageText: String(document.querySelector('#chatMessages .message:last-child')?.textContent || '').trim(),
         finishedNoticeCount: document.querySelectorAll('#chatMessages .voice-call-finished-note').length,
@@ -2359,12 +2424,19 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
             return sendMode === 'voice-stop' && (
                 combinedText.includes('Клиент на линии. Начинайте разговор.') ||
                 combinedText.includes('Клиент на линии. Подготавливаем микрофон…') ||
+                combinedText.includes('Клиент на линии. Можно говорить.') ||
                 combinedText.includes('Слушаю вас') ||
                 combinedText.includes('Клиент говорит…') ||
                 combinedText.includes('Клиент отвечает') ||
                 combinedText.includes('Ваша очередь говорить.')
             );
         }, null, { timeout: 12000 });
+
+        if (voiceScenario === 'assistant-response-watchdog-retries-boundary') {
+            await page.waitForFunction(() => {
+                return Number(globalThis.__codexVoiceSmoke?.activityEndCount || 0) >= 1;
+            }, null, { timeout: 9000 });
+        }
 
         await page.waitForFunction(() => {
             const userMessages = document.querySelectorAll('.message.user').length;
@@ -2464,6 +2536,15 @@ async function runGeminiVoiceModeSmokeFlow(browser, baseUrl, options = {}) {
             expect(
                 firstUserIndex !== -1 && firstAssistantIndex !== -1 && firstUserIndex < firstAssistantIndex,
                 'Idle watchdog did not finalize the manager turn before the assistant reply'
+            );
+        } else if (voiceScenario === 'assistant-response-watchdog-retries-boundary') {
+            expect(
+                dialogState.assistantMessages.some((text) => text.includes('вариант под этот объём')),
+                'Assistant response watchdog did not recover a stalled reply after the manager turn was already finalized'
+            );
+            expect(
+                dialogState.activityEndCount >= 1,
+                `Assistant response watchdog was expected to retry activityEnd, got ${dialogState.activityEndCount}`
             );
         } else {
             expect(
@@ -3153,6 +3234,10 @@ async function main() {
         });
         await runGeminiVoiceModeSmokeFlow(browser, baseUrl, {
             voiceScenario: 'idle-watchdog-finalizes-user-turn',
+            expectedAssistantNeedle: 'вариант под этот объём'
+        });
+        await runGeminiVoiceModeSmokeFlow(browser, baseUrl, {
+            voiceScenario: 'assistant-response-watchdog-retries-boundary',
             expectedAssistantNeedle: 'вариант под этот объём'
         });
         await runClearChatStopsVoiceFlow(browser, baseUrl);

@@ -13,6 +13,7 @@
 - Production hosting should remain GitHub Pages unless the user explicitly asks to switch again.
 - Voice mode is Gemini Live through the token server; first-turn handling and mic/voice settings were recently stabilized.
 - Voice mode now also has a local idle-boundary watchdog: if Gemini fails to emit an explicit end-of-manager-turn boundary (`input finished / waitingForInput`), the frontend retries `activityEnd`, finalizes the pending manager turn locally, and keeps the call in a waiting state instead of leaving the turn stuck in preview forever.
+- Voice mode now also has a second recovery step after that: if the manager turn is already finalized but the assistant still does not start replying, the frontend retries one extra `activityEnd` boundary and keeps the call in a `клиент думает` state instead of silently hanging.
 - The final voice-call summary card is now meant to live at the bottom of chat, not in the top voice status panel:
   - the top voice status panel is only for active/connecting call states;
   - after a call ends, `Звонок завершён / Разговор сохранён` should be the last dialog card appended after the messages.
@@ -32,6 +33,7 @@
 - Smoke coverage now also asserts that opening a saved dialog renders message bubbles in the main chat area and keeps `#mainDialogHistoryStage` hidden.
 - Smoke coverage now also asserts saved-dialog continuation: opening your own history item must leave the main composer enabled and persist the next outgoing message into the same saved dialog record.
 - Smoke coverage now also includes a voice idle-boundary case: the first manager turn must become a normal chat bubble even if Gemini only sent an unfinished input transcript and never sent the usual input boundary event.
+- Smoke coverage now also includes an assistant-start recovery case: if Gemini accepts the manager turn but does not begin the reply, the frontend must retry the boundary once and recover the first client response without resetting the call.
 - Smoke coverage now also includes a dedicated light-theme mobile regression pass for the local shell:
   - all three start cards must keep the same warm light-theme surface;
   - the composer input and prompt wrapper must stay transparent/flat in local light theme;
