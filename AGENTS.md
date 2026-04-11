@@ -204,6 +204,10 @@
 - Если локальный `passwordHash` устарел, но Firebase уже принимает новый пароль сотрудника, вход теперь должен пройти и сразу переписать локальный хэш во время этого же логина.
 - Если локальный пароль ещё верный, а в Firebase на этом email остался старый standalone-пароль, login-flow теперь сам отправляет reset-письмо и показывает явное объяснение дальнейших шагов вместо тупикового generic-error.
 - Smoke теперь обязан проверять оба этих auth-ремонта отдельно: `firebase password recovery` и `firebase conflict auto-reset`.
+- Auth observability is now built into the product:
+  - auth modal shows a compact live status line for `login / restore / reset`;
+  - admin settings include `Техлог входа и сброса пароля`;
+  - auth debug entries keep stage, result, and a compact browser/Firebase session snapshot so employee login failures can be diagnosed without opening devtools.
 - Переключение между админским и юзерским видом теперь происходит сразу по `Сменить`, без повторного запроса пароля; пароль нужен только один раз, чтобы получить админ-доступ.
 - In the local empty-state start cards, only the main titles remain visible; the lower subtitle lines under `Чат с клиентом / Голосовой звонок / Аттестация` were intentionally removed.
 - The local empty-state start cards are compact now: the card column is intentionally much narrower than before and the remaining titles are center-aligned. Do not stretch them back to full-width unless requested.

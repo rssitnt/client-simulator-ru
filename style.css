@@ -3564,6 +3564,26 @@ body.light-theme .ai-improve-modal textarea::-webkit-scrollbar-thumb:hover {
     margin: -6px 2px 0;
 }
 
+.auth-status-text {
+    margin: 10px 2px 0;
+    color: #9f9487;
+    font-size: 12px;
+    line-height: 1.45;
+    display: none;
+}
+
+.auth-status-text[data-state="pending"] {
+    color: #a79a8b;
+}
+
+.auth-status-text[data-state="ok"] {
+    color: #c7c0b6;
+}
+
+.auth-status-text[data-state="error"] {
+    color: #d29b9b;
+}
+
 .auth-reset-btn {
     border: none;
     background: transparent;
@@ -4369,6 +4389,10 @@ body.local-minimal-ui #nameModal .auth-mail-help {
 
 body.local-minimal-ui #nameModal .auth-reset-row {
     justify-content: flex-end;
+}
+
+body.local-minimal-ui #nameModal .auth-status-text {
+    color: var(--local-text-muted);
 }
 
 body.local-minimal-ui #nameModal .auth-reset-btn {
@@ -12130,6 +12154,10 @@ body.local-minimal-ui.light-theme #nameModal .auth-reset-btn {
 body.local-minimal-ui.light-theme #nameModal .auth-reset-btn:hover,
 body.local-minimal-ui.light-theme #nameModal .auth-reset-btn:focus-visible {
     color: var(--local-text-final);
+}
+
+body.local-minimal-ui.light-theme #nameModal .auth-status-text {
+    color: rgba(84, 68, 51, 0.76);
 }
 
 /* Final local light-theme harmonization */

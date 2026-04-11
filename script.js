@@ -157,6 +157,8 @@ const WEBHOOK_DEBUG_LOG_MAX_ENTRIES = 40;
 const DIALOG_HISTORY_PAGE_SIZE = 50;
 const HISTORY_SIDEBAR_COLLAPSED_STORAGE_KEY = 'historySidebarCollapsed:v1';
 const DIALOG_HISTORY_SAVE_DEBOUNCE_MS = 700;
+const AUTH_DEBUG_LOG_STORAGE_KEY = 'authDebugLog:v1';
+const AUTH_DEBUG_LOG_MAX_ENTRIES = 120;
 const VOICE_DEBUG_LOG_STORAGE_KEY = 'voiceDebugLog:v1';
 const VOICE_DEBUG_LOG_MAX_ENTRIES = 80;
 const ENABLE_LOCAL_WEBHOOK_DEBUG = false;
@@ -785,13 +787,84 @@ function setAuthResetPasswordState(isLoading = false, label = AUTH_RESET_PASSWOR
     }
 }
 
-async function runAuthStep(label, promiseFactory, timeoutMs = AUTH_FLOW_STEP_TIMEOUT_MS, timeoutMessage = '') {
+function setAuthStatus(message = '', state = 'idle') {
+    if (!authStatusText) return;
+    const normalized = String(message || '').trim();
+    if (!normalized) {
+        authStatusText.textContent = '';
+        authStatusText.style.display = 'none';
+        authStatusText.hidden = true;
+        delete authStatusText.dataset.state;
+        return;
+    }
+    authStatusText.textContent = normalized;
+    authStatusText.dataset.state = String(state || 'idle').trim() || 'idle';
+    authStatusText.hidden = false;
+    authStatusText.style.display = 'block';
+}
+
+function getAuthDebugErrorSummary(error, context = 'login') {
+    const readable = String(getReadableFirebaseAuthError(error, context) || '').trim();
+    if (readable) return readable;
+    return String(error?.message || '').trim() || 'Неизвестная auth-ошибка.';
+}
+
+function getAuthDebugSessionSnapshot(expectedLogin = '') {
+    const normalizedExpectedLogin = normalizeLogin(expectedLogin);
+    const browserSessionLogin = normalizeLogin(getAuthSession()?.login || '');
+    const firebaseLogin = getFirebaseAuthLogin();
+    return {
+        browserSessionLogin,
+        firebaseLogin,
+        hasFirebaseSession: !!firebaseLogin,
+        hasExpectedFirebaseSession: !!(normalizedExpectedLogin && firebaseLogin === normalizedExpectedLogin)
+    };
+}
+
+async function runAuthStep(label, promiseFactory, timeoutMs = AUTH_FLOW_STEP_TIMEOUT_MS, timeoutMessage = '', options = {}) {
     setAuthSubmitState(true, label);
-    return withPromiseTimeout(
-        Promise.resolve().then(() => promiseFactory()),
-        timeoutMs,
-        timeoutMessage || `Шаг авторизации превысил лимит ожидания (${timeoutMs / 1000}с).`
-    );
+    setAuthStatus(label, 'pending');
+    const stage = String(options?.stage || '').trim();
+    const debugContext = String(options?.debugContext || 'login').trim() || 'login';
+    const debugDetails = options?.debugDetails && typeof options.debugDetails === 'object'
+        ? options.debugDetails
+        : {};
+    if (stage) {
+        recordAuthDebugEvent(stage, {
+            status: 'pending',
+            message: label,
+            context: debugContext,
+            ...debugDetails
+        });
+    }
+    try {
+        const result = await withPromiseTimeout(
+            Promise.resolve().then(() => promiseFactory()),
+            timeoutMs,
+            timeoutMessage || `Шаг авторизации превысил лимит ожидания (${timeoutMs / 1000}с).`
+        );
+        if (stage) {
+            recordAuthDebugEvent(stage, {
+                status: 'ok',
+                message: label,
+                context: debugContext,
+                ...debugDetails
+            });
+        }
+        return result;
+    } catch (error) {
+        if (stage) {
+            recordAuthDebugEvent(stage, {
+                status: 'error',
+                context: debugContext,
+                code: String(error?.code || '').trim(),
+                message: getAuthDebugErrorSummary(error, debugContext),
+                ...debugDetails
+            });
+        }
+        setAuthStatus(getAuthDebugErrorSummary(error, debugContext), 'error');
+        throw error;
+    }
 }
 
 function createFirebaseSnapshotShim(value) {
@@ -1611,6 +1684,7 @@ const modalNameSubmit = document.getElementById('modalNameSubmit');
 const nameModalStep1 = document.getElementById('nameModalStep1');
 const modalPasswordInput = document.getElementById('modalPasswordInput');
 const authResetPasswordBtn = document.getElementById('authResetPasswordBtn');
+const authStatusText = document.getElementById('authStatusText');
 const authMailHelp = document.getElementById('authMailHelp');
 const authMailHelpImage = document.getElementById('authMailHelpImage');
 const localhostDevAuthActions = document.getElementById('localhostDevAuthActions');
@@ -1757,6 +1831,11 @@ const adminVoiceDebugMeta = document.getElementById('adminVoiceDebugMeta');
 const adminVoiceDebugList = document.getElementById('adminVoiceDebugList');
 const adminVoiceDebugCopyBtn = document.getElementById('adminVoiceDebugCopyBtn');
 const adminVoiceDebugClearBtn = document.getElementById('adminVoiceDebugClearBtn');
+const adminAuthDebugAccordion = document.getElementById('adminAuthDebugAccordion');
+const adminAuthDebugMeta = document.getElementById('adminAuthDebugMeta');
+const adminAuthDebugList = document.getElementById('adminAuthDebugList');
+const adminAuthDebugCopyBtn = document.getElementById('adminAuthDebugCopyBtn');
+const adminAuthDebugClearBtn = document.getElementById('adminAuthDebugClearBtn');
 const adminUsersAccessAccordion = document.getElementById('adminUsersAccessAccordion');
 const adminPanelAccordion = document.getElementById('adminPanelAccordion');
 const adminPanel = document.getElementById('adminPanel');
@@ -1879,6 +1958,8 @@ let localJsonStorageRemovedKeys = new Set();
 let localJsonStorageFlushTimer = null;
 let webhookDebugEntries = ENABLE_LOCAL_WEBHOOK_DEBUG ? loadWebhookDebugEntries() : [];
 let webhookDebugRenderQueued = false;
+let authDebugEntries = loadAuthDebugEntries();
+let authDebugRenderQueued = false;
 let voiceDebugEntries = loadVoiceDebugEntries();
 let voiceDebugRenderQueued = false;
 const LOCAL_PROMPTS_STORAGE_VERSION = 'v3';
@@ -4887,6 +4968,7 @@ function setAuthError(message = '') {
     }
     authErrorText.textContent = message;
     authErrorText.style.display = 'block';
+    setAuthStatus(message, 'error');
 }
 
 function syncLocalhostDevAuthActions() {
@@ -9201,29 +9283,47 @@ async function handleAuthSubmit() {
 
     setAuthError('');
     setAuthSubmitState(true, 'Проверяем данные...');
+    setAuthStatus('Проверяем данные...', 'pending');
+    recordAuthDebugEvent('submit_started', {
+        status: 'pending',
+        login,
+        context: 'login',
+        sessionMode: 'password',
+        message: 'Запущен вход по email и паролю.'
+    });
 
     try {
         const didVerifyEmailLinkNow = await runAuthStep(
             'Проверяем ссылку...',
             () => consumePendingEmailSignInLinkForLogin(login),
             AUTH_FLOW_STEP_TIMEOUT_MS,
-            'Не удалось проверить ссылку подтверждения. Попробуйте ещё раз.'
+            'Не удалось проверить ссылку подтверждения. Попробуйте ещё раз.',
+            { stage: 'email_link_check', debugContext: 'login', debugDetails: { login, sessionMode: 'password' } }
         );
         const authReady = getEmailLinkAuthReady(login);
         let existingUser = await runAuthStep(
             'Проверяем аккаунт...',
             () => getUserRecordByLogin(login),
             AUTH_FLOW_STEP_TIMEOUT_MS,
-            'Не удалось проверить аккаунт. Попробуйте ещё раз.'
+            'Не удалось проверить аккаунт. Попробуйте ещё раз.',
+            { stage: 'account_lookup', debugContext: 'login', debugDetails: { login, sessionMode: 'password' } }
         );
         const accessPolicy = await runAuthStep(
             'Проверяем доступ...',
             () => resolveAccessPolicy(login, existingUser),
             AUTH_FLOW_STEP_TIMEOUT_MS,
-            'Не удалось проверить доступ. Попробуйте ещё раз.'
+            'Не удалось проверить доступ. Попробуйте ещё раз.',
+            { stage: 'access_policy', debugContext: 'login', debugDetails: { login, sessionMode: 'password' } }
         );
         if (!accessPolicy || accessPolicy.decision !== 'allow') {
             const deniedMessage = resolveAccessPolicyDecisionMessage(accessPolicy);
+            recordAuthDebugEvent('login_blocked', {
+                status: 'error',
+                login,
+                context: 'login',
+                accessReason: String(accessPolicy?.reason || '').trim(),
+                message: deniedMessage || 'Доступ запрещён.'
+            });
             applySessionPolicy(accessPolicy || { decision: 'deny', reason: ACCESS_CONTROL_DECISION_REASON.NOT_FOUND }, {
                 userLogin: login,
                 onDeny: () => setAuthError(deniedMessage || 'Доступ запрещён.')
@@ -9309,7 +9409,8 @@ async function handleAuthSubmit() {
                         lastSeenAt: nowIso
                     }),
                     AUTH_FLOW_STEP_TIMEOUT_MS,
-                    'Не удалось сохранить попытку входа. Попробуйте ещё раз.'
+                    'Не удалось сохранить попытку входа. Попробуйте ещё раз.',
+                    { stage: 'failed_attempt_save', debugContext: 'login', debugDetails: { login, sessionMode: 'password' } }
                 );
 
                 if (shouldBlock) {
@@ -9387,7 +9488,8 @@ async function handleAuthSubmit() {
             'Открываем Firebase-сессию...',
             () => ensureFirebaseAuthPasswordSession(login, password),
             AUTH_SESSION_OPEN_TIMEOUT_MS,
-            'Не удалось открыть Firebase-сессию. Проверьте интернет и повторите вход.'
+            'Не удалось открыть Firebase-сессию. Проверьте интернет и повторите вход.',
+            { stage: 'firebase_session_open', debugContext: 'login', debugDetails: { login, sessionMode: 'password' } }
         );
 
         const requireRemoteUserSave = shouldRequireRemoteUserSaveForAuth(existingUser, targetUser, accessPolicy);
@@ -9400,7 +9502,8 @@ async function handleAuthSubmit() {
                     : { skipRemote: true, flushLocal: true }
             ),
             AUTH_FLOW_STEP_TIMEOUT_MS,
-            'Не удалось сохранить аккаунт в Firebase. Проверьте RTDB Rules и повторите вход.'
+            'Не удалось сохранить аккаунт в Firebase. Проверьте RTDB Rules и повторите вход.',
+            { stage: 'user_save', debugContext: 'login', debugDetails: { login, sessionMode: 'password' } }
         );
         if (!requireRemoteUserSave && db) {
             void saveUserRecord(targetUser).catch((error) => {
@@ -9414,7 +9517,8 @@ async function handleAuthSubmit() {
                     emailVerifiedAt: nowIso
                 }, { requireRemote: true }),
                 AUTH_FLOW_STEP_TIMEOUT_MS,
-                'Не удалось обновить приглашение. Попробуйте ещё раз.'
+                'Не удалось обновить приглашение. Попробуйте ещё раз.',
+                { stage: 'invite_update', debugContext: 'login', debugDetails: { login, sessionMode: 'password' } }
             );
         }
 
@@ -9424,7 +9528,8 @@ async function handleAuthSubmit() {
                 'Отправляем письмо...',
                 () => sendMagicLinkToEmail(login, 'verify'),
                 AUTH_MAGIC_LINK_SEND_TIMEOUT_MS,
-                'Не удалось отправить письмо подтверждения. Попробуйте ещё раз.'
+                'Не удалось отправить письмо подтверждения. Попробуйте ещё раз.',
+                { stage: 'verify_email_send', debugContext: 'verify', debugDetails: { login, sessionMode: 'password' } }
             );
             savedUser = await runAuthStep(
                 'Фиксируем письмо...',
@@ -9432,7 +9537,8 @@ async function handleAuthSubmit() {
                     emailVerificationSentAt: nowIso
                 }, { requireRemote: true }),
                 AUTH_FLOW_STEP_TIMEOUT_MS,
-                'Письмо отправлено, но не удалось сохранить статус отправки в Firebase. Проверьте RTDB Rules.'
+                'Письмо отправлено, но не удалось сохранить статус отправки в Firebase. Проверьте RTDB Rules.',
+                { stage: 'verify_email_mark', debugContext: 'verify', debugDetails: { login, sessionMode: 'password' } }
             ) || savedUser;
             setAuthError('Мы отправили ссылку подтверждения на email. Откройте письмо и повторите вход.');
             setAuthMailHelpVisible(true);
@@ -9444,7 +9550,8 @@ async function handleAuthSubmit() {
             'Подключаем промпты...',
             () => refreshProtectedFirebaseDataAfterAuth(login),
             AUTH_FLOW_STEP_TIMEOUT_MS,
-            'Firebase-сессия открыта, но не удалось заново подключить промпты. Обновите страницу и повторите вход.'
+            'Firebase-сессия открыта, но не удалось заново подключить промпты. Обновите страницу и повторите вход.',
+            { stage: 'protected_refresh', debugContext: 'login', debugDetails: { login, sessionMode: 'password' } }
         );
         setAuthSession(savedUser.login);
         applyAuthenticatedUser(savedUser);
@@ -9453,7 +9560,8 @@ async function handleAuthSubmit() {
                 'Синхронизируем доступ...',
                 () => ensureCurrentUserAccessMirror(savedUser, { requireRemote: true }),
                 AUTH_FLOW_STEP_TIMEOUT_MS,
-                'Firebase-сессия открыта, но не удалось записать access mirror. Проверьте RTDB Rules.'
+                'Firebase-сессия открыта, но не удалось записать access mirror. Проверьте RTDB Rules.',
+                { stage: 'access_mirror_sync', debugContext: 'login', debugDetails: { login, sessionMode: 'password' } }
             );
         } else {
             void ensureCurrentUserAccessMirror(savedUser).catch((error) => {
@@ -9464,18 +9572,50 @@ async function handleAuthSubmit() {
         clearEmailLinkAuthReady();
         clearEmailLinkHint();
         clearEmailLinkVerifiedHint();
+        recordAuthDebugEvent('login_complete', {
+            status: 'ok',
+            login,
+            context: 'login',
+            sessionMode: 'password',
+            accessReason: String(accessPolicy?.reason || '').trim(),
+            message: 'Вход завершён успешно.'
+        });
+        setAuthStatus('Вход выполнен. Открываю рабочее пространство…', 'ok');
         hideNameModal();
         startActiveTimeTracking();
     } catch (error) {
         console.error('Auth error:', error);
         const code = String(error?.code || '').trim();
+        recordAuthDebugEvent('login_failed', {
+            status: 'error',
+            login,
+            context: 'login',
+            sessionMode: 'password',
+            code,
+            message: getAuthDebugErrorSummary(error, 'login')
+        });
         if (code === 'auth/firebase-password-conflict' && isValidLogin(login)) {
             try {
                 await sendPasswordResetLinkToEmail(login);
+                recordAuthDebugEvent('reset_sent', {
+                    status: 'ok',
+                    login,
+                    context: 'reset-password',
+                    sessionMode: 'auto-conflict-recovery',
+                    message: 'После конфликта Firebase автоматически отправлено письмо для сброса.'
+                });
                 showCopyNotification(`На ${login} отправлено письмо для сброса пароля.`);
                 setAuthError('Для этого email в Firebase остался старый пароль. Я уже отправил письмо для сброса. Смените пароль по письму и затем войдите новым паролем — локальный пароль обновится автоматически.');
             } catch (resetError) {
                 console.error('Auto password reset after Firebase conflict failed:', resetError);
+                recordAuthDebugEvent('reset_failed', {
+                    status: 'error',
+                    login,
+                    context: 'reset-password',
+                    sessionMode: 'auto-conflict-recovery',
+                    code: String(resetError?.code || '').trim(),
+                    message: getAuthDebugErrorSummary(resetError, 'reset-password')
+                });
                 setAuthError(`${getReadableFirebaseAuthError(error, 'login')} ${getReadableFirebaseAuthError(resetError, 'reset-password')}`);
             }
         } else {
@@ -9498,16 +9638,49 @@ async function handleAuthPasswordReset() {
 
     setAuthError('');
     setAuthResetPasswordState(true, 'Отправляем...');
+    setAuthStatus('Отправляем письмо для сброса…', 'pending');
+    recordAuthDebugEvent('reset_started', {
+        status: 'pending',
+        login,
+        context: 'reset-password',
+        sessionMode: 'manual',
+        message: 'Пользователь запросил письмо для сброса пароля.'
+    });
 
     try {
         await sendPasswordResetLinkToEmail(login);
+        recordAuthDebugEvent('reset_sent', {
+            status: 'ok',
+            login,
+            context: 'reset-password',
+            sessionMode: 'manual',
+            message: 'Письмо для сброса пароля отправлено.'
+        });
+        setAuthStatus('Если аккаунт существует, письмо для сброса уже отправлено.', 'ok');
         showCopyNotification(`Если аккаунт ${login} существует, письмо для сброса уже отправлено.`);
     } catch (error) {
         const code = String(error?.code || '').trim();
         if (code === 'auth/user-not-found') {
+            recordAuthDebugEvent('reset_sent', {
+                status: 'ok',
+                login,
+                context: 'reset-password',
+                sessionMode: 'manual',
+                code,
+                message: 'Firebase скрыл наличие аккаунта. Пользователю показан generic-success ответ.'
+            });
+            setAuthStatus('Если аккаунт существует, письмо для сброса уже отправлено.', 'ok');
             showCopyNotification(`Если аккаунт ${login} существует, письмо для сброса уже отправлено.`);
         } else {
             console.error('Password reset error:', error);
+            recordAuthDebugEvent('reset_failed', {
+                status: 'error',
+                login,
+                context: 'reset-password',
+                sessionMode: 'manual',
+                code,
+                message: getAuthDebugErrorSummary(error, 'reset-password')
+            });
             setAuthError(getReadableFirebaseAuthError(error, 'reset-password'));
         }
     } finally {
@@ -9520,20 +9693,48 @@ async function restoreAuthSession() {
     const isStaleRestoreAttempt = () => restoreAttemptId !== activeAuthRestoreAttemptId;
     const session = getAuthSession();
     if (!session?.login) return false;
+    recordAuthDebugEvent('restore_started', {
+        status: 'pending',
+        login: session.login,
+        context: 'restore',
+        sessionMode: isLocalhostDevBypassSession(session) ? 'localhost-dev' : 'firebase-session',
+        message: 'Запущено восстановление сохранённой сессии.'
+    });
     if (isLocalhostDevBypassSession(session)) {
         const localUser = getLocalhostDevAuthUserByLogin(session.login) || getLocalUserRecordByLogin(session.login);
         if (!localUser) {
             clearAuthSession();
             clearAuthCacheIdentity();
+            recordAuthDebugEvent('restore_failed', {
+                status: 'error',
+                login: session.login,
+                context: 'restore',
+                sessionMode: 'localhost-dev',
+                message: 'Локальная dev-сессия сохранена, но локальный пользователь не найден.'
+            });
             return false;
         }
         if (isStaleRestoreAttempt()) return false;
         applyAuthenticatedUser(localUser);
         hideNameModal();
         startActiveTimeTracking();
+        recordAuthDebugEvent('restore_complete', {
+            status: 'ok',
+            login: session.login,
+            context: 'restore',
+            sessionMode: 'localhost-dev',
+            message: 'Локальная dev-сессия восстановлена.'
+        });
         return true;
     }
 
+    recordAuthDebugEvent('restore_wait_firebase', {
+        status: 'pending',
+        login: session.login,
+        context: 'restore',
+        sessionMode: 'firebase-session',
+        message: 'Ждём восстановления Firebase-сессии.'
+    });
     const hasMatchingFirebaseSession = await waitForFirebaseAuthSessionForLogin(
         session.login,
         AUTH_SESSION_MATCH_GRACE_TIMEOUT_MS
@@ -9542,17 +9743,45 @@ async function restoreAuthSession() {
     if (!hasMatchingFirebaseSession) {
         stopProtectedRealtimeListeners();
         pendingAuthRestoreMessage = 'Не удалось быстро подтянуть прошлую Firebase-сессию после обновления. Если доступ сам не вернётся, войдите ещё раз.';
+        recordAuthDebugEvent('restore_failed', {
+            status: 'error',
+            login: session.login,
+            context: 'restore',
+            sessionMode: 'firebase-session',
+            message: pendingAuthRestoreMessage
+        });
         return false;
     }
 
+    recordAuthDebugEvent('restore_profile_lookup', {
+        status: 'pending',
+        login: session.login,
+        context: 'restore',
+        sessionMode: 'firebase-session',
+        message: 'Firebase-сессия найдена, загружаем профиль пользователя.'
+    });
     const user = await getUserRecordByLogin(session.login);
     if (isStaleRestoreAttempt()) return false;
     if (!user) {
         pendingAuthRestoreMessage = 'Не удалось быстро подтянуть профиль пользователя после обновления. Сессия сохранена, попробуйте обновить страницу ещё раз или войти повторно только если доступ сам не вернётся.';
+        recordAuthDebugEvent('restore_failed', {
+            status: 'error',
+            login: session.login,
+            context: 'restore',
+            sessionMode: 'firebase-session',
+            message: pendingAuthRestoreMessage
+        });
         return false;
     }
     if (isSessionRevokedForSignedAt(session.signedAt, user.sessionRevokedAt)) {
         clearAuthSession();
+        recordAuthDebugEvent('restore_failed', {
+            status: 'error',
+            login: session.login,
+            context: 'restore',
+            sessionMode: 'firebase-session',
+            message: 'Сохранённая сессия отозвана.'
+        });
         return false;
     }
     const accessDecision = await resolveAccessPolicy(user.login, user);
@@ -9560,17 +9789,39 @@ async function restoreAuthSession() {
         applySessionPolicy(accessDecision, {
             userLogin: user.login
         });
+        recordAuthDebugEvent('restore_failed', {
+            status: 'error',
+            login: user.login,
+            context: 'restore',
+            sessionMode: 'firebase-session',
+            accessReason: String(accessDecision?.reason || '').trim(),
+            message: resolveAccessPolicyDecisionMessage(accessDecision) || 'Восстановленная сессия потеряла доступ.'
+        });
         return false;
     }
     if (user.passwordNeedsSetup) {
         clearAuthSession();
         clearAuthCacheIdentity();
+        recordAuthDebugEvent('restore_failed', {
+            status: 'error',
+            login: user.login,
+            context: 'restore',
+            sessionMode: 'firebase-session',
+            message: 'Сессия найдена, но пользователю ещё нужно заново задать пароль.'
+        });
         return false;
     }
     const verifiedAt = user.emailVerifiedAt || accessDecision?.invite?.emailVerifiedAt || null;
     if (!verifiedAt) {
         clearAuthSession();
         clearAuthCacheIdentity();
+        recordAuthDebugEvent('restore_failed', {
+            status: 'error',
+            login: user.login,
+            context: 'restore',
+            sessionMode: 'firebase-session',
+            message: 'Сессия найдена, но email ещё не подтверждён.'
+        });
         return false;
     }
     if (user.role !== 'admin') {
@@ -9581,6 +9832,14 @@ async function restoreAuthSession() {
     applyAuthenticatedUser(user);
     await replayActiveTimeCarryover();
     startActiveTimeTracking();
+    recordAuthDebugEvent('restore_complete', {
+        status: 'ok',
+        login: user.login,
+        context: 'restore',
+        sessionMode: 'firebase-session',
+        accessReason: String(accessDecision?.reason || '').trim(),
+        message: 'Сохранённая сессия успешно восстановлена.'
+    });
     return true;
 }
 
@@ -10645,6 +10904,193 @@ function clearWebhookDebugEntries() {
     removeSafeLocalStorageValue(WEBHOOK_DEBUG_LOG_STORAGE_KEY);
     saveWebhookDebugEntries();
     renderWebhookDebugPanel();
+}
+
+function loadAuthDebugEntries() {
+    try {
+        const rawValue = getSafeLocalStorageValue(AUTH_DEBUG_LOG_STORAGE_KEY);
+        const parsed = rawValue ? JSON.parse(rawValue) : [];
+        return Array.isArray(parsed)
+            ? parsed.filter((entry) => entry && typeof entry === 'object').slice(0, AUTH_DEBUG_LOG_MAX_ENTRIES)
+            : [];
+    } catch (error) {
+        console.warn('Failed to load auth debug log:', error);
+        return [];
+    }
+}
+
+function saveAuthDebugEntries() {
+    try {
+        setCachedLocalStorageJson(
+            AUTH_DEBUG_LOG_STORAGE_KEY,
+            Array.isArray(authDebugEntries) ? authDebugEntries.slice(0, AUTH_DEBUG_LOG_MAX_ENTRIES) : []
+        );
+    } catch (error) {
+        console.warn('Failed to save auth debug log:', error);
+    }
+}
+
+function getAuthDebugStageLabel(stage = '') {
+    switch (String(stage || '').trim()) {
+        case 'submit_started': return 'Начат вход';
+        case 'email_link_check': return 'Проверка ссылки из письма';
+        case 'account_lookup': return 'Поиск аккаунта';
+        case 'access_policy': return 'Проверка доступа';
+        case 'failed_attempt_save': return 'Фиксация неверной попытки';
+        case 'firebase_session_open': return 'Открытие Firebase-сессии';
+        case 'user_save': return 'Сохранение аккаунта';
+        case 'invite_update': return 'Обновление приглашения';
+        case 'verify_email_send': return 'Отправка письма подтверждения';
+        case 'verify_email_mark': return 'Фиксация отправки письма';
+        case 'protected_refresh': return 'Подключение защищённых данных';
+        case 'access_mirror_sync': return 'Синхронизация access mirror';
+        case 'login_blocked': return 'Вход отклонён';
+        case 'login_complete': return 'Вход завершён';
+        case 'login_failed': return 'Вход завершился ошибкой';
+        case 'reset_started': return 'Запрошен сброс пароля';
+        case 'reset_sent': return 'Письмо для сброса отправлено';
+        case 'reset_failed': return 'Сброс пароля завершился ошибкой';
+        case 'restore_started': return 'Старт восстановления сессии';
+        case 'restore_wait_firebase': return 'Ожидание Firebase-сессии';
+        case 'restore_profile_lookup': return 'Поиск профиля при восстановлении';
+        case 'restore_complete': return 'Сессия восстановлена';
+        case 'restore_failed': return 'Восстановление сессии сорвалось';
+        default: return stage || 'Auth-событие';
+    }
+}
+
+function getAuthDebugStatusLabel(status = '') {
+    switch (String(status || '').trim()) {
+        case 'ok': return 'OK';
+        case 'error': return 'Ошибка';
+        default: return 'Лог';
+    }
+}
+
+function buildAuthDebugEntry(stage = '', details = {}) {
+    const nowMs = Date.now();
+    const expectedLogin = normalizeLogin(details.expectedLogin || details.login || '');
+    const sessionSnapshot = getAuthDebugSessionSnapshot(expectedLogin);
+    return {
+        id: buildRequestId('auth_dbg'),
+        stage: String(stage || '').trim() || 'event',
+        status: String(details.status || 'info').trim() || 'info',
+        context: String(details.context || 'login').trim() || 'login',
+        startedAt: new Date(nowMs).toISOString(),
+        startedAtMs: nowMs,
+        login: expectedLogin,
+        browserSessionLogin: sessionSnapshot.browserSessionLogin,
+        firebaseLogin: sessionSnapshot.firebaseLogin,
+        hasFirebaseSession: !!sessionSnapshot.hasFirebaseSession,
+        hasExpectedFirebaseSession: !!sessionSnapshot.hasExpectedFirebaseSession,
+        code: String(details.code || '').trim(),
+        message: truncateWebhookDebugText(details.message || ''),
+        accessReason: String(details.accessReason || '').trim(),
+        sessionMode: String(details.sessionMode || '').trim()
+    };
+}
+
+function recordAuthDebugEvent(stage = '', details = {}) {
+    const entry = buildAuthDebugEntry(stage, details);
+    authDebugEntries = [entry, ...authDebugEntries].slice(0, AUTH_DEBUG_LOG_MAX_ENTRIES);
+    saveAuthDebugEntries();
+    queueAuthDebugRender();
+    return entry.id;
+}
+
+function queueAuthDebugRender() {
+    if (authDebugRenderQueued) return;
+    authDebugRenderQueued = true;
+    queueMicrotask(() => {
+        authDebugRenderQueued = false;
+        renderAuthDebugPanel();
+    });
+}
+
+function renderAuthDebugPanel() {
+    if (!adminAuthDebugList || !adminAuthDebugMeta) return;
+    const total = authDebugEntries.length;
+    const errorCount = authDebugEntries.filter((entry) => entry.status === 'error').length;
+    const loginCount = new Set(authDebugEntries.map((entry) => String(entry.login || '').trim()).filter(Boolean)).size;
+    adminAuthDebugMeta.textContent = total
+        ? `Показаны последние ${Math.min(total, AUTH_DEBUG_LOG_MAX_ENTRIES)} auth-событий. Email: ${loginCount}. Ошибок: ${errorCount}.`
+        : 'Здесь видно шаги входа, восстановления сессии и сброса пароля в этом браузере.';
+
+    if (!total) {
+        adminAuthDebugList.innerHTML = '<div class="admin-webhook-debug-empty">Техлог пока пуст</div>';
+        return;
+    }
+
+    adminAuthDebugList.innerHTML = authDebugEntries.map((entry) => {
+        const status = String(entry.status || 'info');
+        const badgeStatus = status === 'error' ? 'error' : status === 'ok' ? 'ok' : 'pending';
+        const detailFields = [
+            entry.login ? { label: 'Email', value: `<code>${escapeHtml(entry.login)}</code>` } : null,
+            entry.context ? { label: 'Контур', value: escapeHtml(entry.context) } : null,
+            entry.code ? { label: 'Код', value: `<code>${escapeHtml(entry.code)}</code>` } : null,
+            entry.accessReason ? { label: 'Доступ', value: escapeHtml(entry.accessReason) } : null,
+            entry.sessionMode ? { label: 'Режим', value: escapeHtml(entry.sessionMode) } : null,
+            entry.browserSessionLogin ? { label: 'Browser session', value: `<code>${escapeHtml(entry.browserSessionLogin)}</code>` } : null,
+            entry.firebaseLogin ? { label: 'Firebase session', value: `<code>${escapeHtml(entry.firebaseLogin)}</code>` } : null,
+            entry.message ? { label: 'Сообщение', value: escapeHtml(entry.message) } : null
+        ].filter(Boolean);
+        const startedAtText = formatWebhookDebugTime(entry.startedAt);
+        return `
+            <div class="admin-webhook-debug-item is-${badgeStatus}">
+                <div class="admin-webhook-debug-head">
+                    <div class="admin-webhook-debug-title">
+                        <span>${escapeHtml(getAuthDebugStageLabel(entry.stage))}</span>
+                        <span class="admin-webhook-debug-status is-${badgeStatus}">${escapeHtml(getAuthDebugStatusLabel(status))}</span>
+                    </div>
+                    <div class="admin-webhook-debug-time">${escapeHtml(startedAtText)}</div>
+                </div>
+                <div class="admin-webhook-debug-grid">
+                    ${detailFields.map((field) => `
+                        <div class="admin-webhook-debug-field">
+                            <div class="admin-webhook-debug-label">${escapeHtml(field.label)}</div>
+                            <div class="admin-webhook-debug-value">${field.value}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function clearAuthDebugEntries() {
+    authDebugEntries = [];
+    clearCachedLocalStorageJson(AUTH_DEBUG_LOG_STORAGE_KEY, []);
+    renderAuthDebugPanel();
+}
+
+function buildAuthDebugClipboardText() {
+    if (!authDebugEntries.length) {
+        return 'Техлог авторизации пуст.';
+    }
+    return authDebugEntries
+        .slice()
+        .reverse()
+        .map((entry) => {
+            const parts = [
+                `[${formatWebhookDebugTime(entry.startedAt)}] ${getAuthDebugStageLabel(entry.stage)}`
+            ];
+            if (entry.status === 'error') parts.push('status=error');
+            else if (entry.status === 'ok') parts.push('status=ok');
+            if (entry.login) parts.push(`login=${entry.login}`);
+            if (entry.context) parts.push(`context=${entry.context}`);
+            if (entry.code) parts.push(`code=${entry.code}`);
+            if (entry.accessReason) parts.push(`access=${entry.accessReason}`);
+            if (entry.browserSessionLogin) parts.push(`browserSession=${entry.browserSessionLogin}`);
+            if (entry.firebaseLogin) parts.push(`firebaseSession=${entry.firebaseLogin}`);
+            if (entry.message) parts.push(`message=${entry.message}`);
+            return parts.join(' | ');
+        })
+        .join('\n');
+}
+
+async function copyAuthDebugEntriesToClipboard() {
+    const text = buildAuthDebugClipboardText();
+    await navigator.clipboard.writeText(text);
 }
 
 function loadVoiceDebugEntries() {
@@ -14798,9 +15244,24 @@ async function loadPrompts() {
             console.warn('Auth session restore timed out:', error);
             shouldUseExtendedAuthRestoreRetry = true;
             pendingAuthRestoreMessage = '';
+            recordAuthDebugEvent('restore_failed', {
+                status: 'error',
+                login: getAuthSession()?.login || '',
+                context: 'restore',
+                sessionMode: 'firebase-session',
+                message: 'Первичное восстановление сессии превысило лимит ожидания.'
+            });
         } else {
             console.warn('Auth session restore failed:', error);
             pendingAuthRestoreMessage = getReadableFirebaseAuthError(error, 'login');
+            recordAuthDebugEvent('restore_failed', {
+                status: 'error',
+                login: getAuthSession()?.login || '',
+                context: 'restore',
+                sessionMode: 'firebase-session',
+                code: String(error?.code || '').trim(),
+                message: getAuthDebugErrorSummary(error, 'login')
+            });
         }
         restored = false;
     }
@@ -14823,9 +15284,24 @@ async function loadPrompts() {
                 if (isTimeout) {
                     console.warn('Late auth session restore timed out:', error);
                     pendingAuthRestoreMessage = 'Сессия после обновления восстанавливалась слишком долго. Войдите ещё раз, только если доступ сам не вернётся.';
+                    recordAuthDebugEvent('restore_failed', {
+                        status: 'error',
+                        login: lateSession.login || '',
+                        context: 'restore',
+                        sessionMode: 'firebase-session',
+                        message: pendingAuthRestoreMessage
+                    });
                 } else {
                     console.warn('Late auth session restore failed:', error);
                     pendingAuthRestoreMessage = getReadableFirebaseAuthError(error, 'login');
+                    recordAuthDebugEvent('restore_failed', {
+                        status: 'error',
+                        login: lateSession.login || '',
+                        context: 'restore',
+                        sessionMode: 'firebase-session',
+                        code: String(error?.code || '').trim(),
+                        message: getAuthDebugErrorSummary(error, 'login')
+                    });
                 }
                 restored = false;
             }
@@ -14991,6 +15467,7 @@ function showNameModal() {
     setModalPasswordAutocompleteMode('current-password');
     setPasswordVisibility(false);
     setAuthMailHelpVisible(false);
+    setAuthStatus('');
     setAuthError('');
     scheduleModalAutofillRepair();
     void syncModalPasswordAutocompleteMode();
@@ -15007,6 +15484,7 @@ function hideNameModal() {
     }
     setPasswordVisibility(false);
     setModalPasswordAutocompleteMode('current-password');
+    setAuthStatus('');
 }
 
 bindEvent(authForm, 'submit', (e) => {
@@ -19959,7 +20437,7 @@ function showSettingsModal(options = {}) {
     populateHiddenRaterPromptField();
     syncAdminUsersAccessLayoutMode();
     settingsModal.classList.add('active');
-    [adminHiddenClientPromptAccordion, adminHiddenRaterPromptAccordion, adminUsersAccessAccordion, adminVoiceDebugAccordion]
+    [adminHiddenClientPromptAccordion, adminHiddenRaterPromptAccordion, adminUsersAccessAccordion, adminVoiceDebugAccordion, adminAuthDebugAccordion]
         .forEach((accordion) => {
             accordion?.removeAttribute('open');
         });
@@ -19972,6 +20450,7 @@ function showSettingsModal(options = {}) {
         startAdminRealtimeSync();
         renderAdminUsersTable();
         renderVoiceDebugPanel();
+        renderAuthDebugPanel();
     } else if (adminPanelAccordion) {
         adminPanelAccordion.style.display = 'none';
         adminPanelAccordion.removeAttribute('open');
@@ -20577,6 +21056,21 @@ bindEvent(adminVoiceDebugCopyBtn, 'click', async () => {
 bindEvent(adminVoiceDebugClearBtn, 'click', () => {
     clearVoiceDebugEntries();
     showCopyNotification('Техлог голоса очищен');
+});
+
+bindEvent(adminAuthDebugCopyBtn, 'click', async () => {
+    try {
+        await copyAuthDebugEntriesToClipboard();
+        showCopyNotification('Техлог входа скопирован');
+    } catch (error) {
+        console.error('Failed to copy auth debug log:', error);
+        showCopyNotification('Не удалось скопировать техлог входа');
+    }
+});
+
+bindEvent(adminAuthDebugClearBtn, 'click', () => {
+    clearAuthDebugEntries();
+    showCopyNotification('Техлог входа очищен');
 });
 
 dialogHistoryUiSets.forEach((ui) => {

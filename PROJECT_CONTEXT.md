@@ -35,6 +35,10 @@
 - If the local password is still correct but Firebase has an old standalone password for the same email, login now auto-sends a reset email and shows an explicit next-step message instead of leaving the employee in a dead-end error.
 - Smoke now also covers both auth repair paths: local-hash recovery through Firebase and auto-reset on Firebase password conflict.
 - Session restore no longer destroys the saved browser session immediately just because the Firebase auth session came back but the user profile read still returned empty once; that path is now treated as a soft restore miss first.
+- Auth observability is now exposed in the UI:
+  - the login modal shows a small live status line for current auth step/result;
+  - admin settings expose `Техлог входа и сброса пароля` with recent `login / restore / reset` events;
+  - each event stores a compact browser/Firebase session snapshot so support can triage employee login issues from the app UI.
 
 ## Still watch
 - If one employee still cannot log in while others can, first check Firebase Authentication for an old standalone account or stale password on that exact email.

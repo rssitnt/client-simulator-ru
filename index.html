@@ -57,6 +57,7 @@
                 <div class="auth-reset-row">
                     <button id="authResetPasswordBtn" type="button" class="auth-reset-btn">Сбросить пароль</button>
                 </div>
+                <p id="authStatusText" class="auth-status-text" hidden></p>
                 <p id="passwordError" style="color: red; font-size: 14px; display: none; margin-top: 10px;">Ошибка авторизации</p>
 
                 <button id="modalNameSubmit" type="submit" class="btn-modal-submit">Войти</button>
@@ -430,6 +431,23 @@
                                 </div>
                             </div>
                             <div id="adminVoiceDebugList" class="admin-webhook-debug-list">
+                                <div class="admin-webhook-debug-empty">Техлог пока пуст</div>
+                            </div>
+                        </div>
+                    </details>
+                    <details id="adminAuthDebugAccordion" class="admin-hidden-prompt-section">
+                        <summary class="admin-hidden-prompt-summary">Техлог входа и сброса пароля</summary>
+                        <div class="admin-webhook-debug-body">
+                            <div class="admin-webhook-debug-toolbar">
+                                <div id="adminAuthDebugMeta" class="admin-webhook-debug-meta">
+                                    Здесь видны последние шаги авторизации в этом браузере: поиск аккаунта, проверка доступа, открытие Firebase-сессии, восстановление сессии и сброс пароля.
+                                </div>
+                                <div class="admin-webhook-debug-actions">
+                                    <button id="adminAuthDebugCopyBtn" class="btn-change" type="button">Скопировать техлог</button>
+                                    <button id="adminAuthDebugClearBtn" class="btn-change btn-danger-subtle" type="button">Очистить</button>
+                                </div>
+                            </div>
+                            <div id="adminAuthDebugList" class="admin-webhook-debug-list">
                                 <div class="admin-webhook-debug-empty">Техлог пока пуст</div>
                             </div>
                         </div>
