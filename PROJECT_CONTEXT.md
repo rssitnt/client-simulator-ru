@@ -19,6 +19,10 @@
 - The invite row in the local admin panel intentionally has no standalone divider under it before the first admin accordion section.
 - Smoke coverage now explicitly includes the collapsed-history no-scrollbar case and the desktop admin-users real-table layout/desktop layout-flag case, so regressions there should fail `C:\projects\sites\client-simulator\scripts\smoke-e2e.mjs`.
 - Smoke coverage now also asserts that opening a saved dialog renders message bubbles in the main chat area and keeps `#mainDialogHistoryStage` hidden.
+- Smoke coverage now also includes a dedicated light-theme mobile regression pass for the local shell:
+  - all three start cards must keep the same warm light-theme surface;
+  - the composer input and prompt wrapper must stay transparent/flat in local light theme;
+  - the active mobile tab must not fall back to the old accent-blue styling.
 - In the local desktop admin table, the `Статус` label and presence text are now intentionally inline in one row to keep user lines compact; avoid restoring the old stacked status layout there.
 
 ## Current auth state
@@ -39,6 +43,7 @@
   - the login modal shows a small live status line for current auth step/result;
   - admin settings expose `Техлог входа и сброса пароля` with recent `login / restore / reset` events;
   - each event stores a compact browser/Firebase session snapshot so support can triage employee login issues from the app UI.
+- Old global light-theme rules for mobile tabs, `#startBtn`, and generic dropdown active states are now isolated away from `body.local-minimal-ui`; if the warm local light shell drifts back toward old blue/grey styling, inspect that isolation first instead of piling on new overrides.
 
 ## Still watch
 - If one employee still cannot log in while others can, first check Firebase Authentication for an old standalone account or stale password on that exact email.

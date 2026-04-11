@@ -2842,6 +2842,69 @@ async function runLocalMinimalLayoutRegressionFlow(browser, baseUrl) {
     }
 }
 
+async function runLightThemeMobileRegressionFlow(browser, baseUrl) {
+    const scenario = createIdleScenario();
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    await context.addInitScript(() => {
+        window.localStorage.setItem('theme', 'light');
+    });
+    await installCommonRoutes(context, scenario);
+    await seedLocalState(context);
+    const page = await context.newPage();
+
+    try {
+        logStep('run light theme mobile regression scenario');
+        await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+        await waitForChatReady(page);
+
+        const metrics = await page.evaluate(() => {
+            const startBtn = document.getElementById('startBtn');
+            const startVoiceBtn = document.getElementById('startVoiceBtn');
+            const startAttestationBtn = document.getElementById('startAttestationBtn');
+            const input = document.getElementById('userInput');
+            const promptWrapper = document.querySelector('.prompt-wrapper');
+            const mobileTabs = document.querySelector('.mobile-tabs');
+            const activeMobileTab = document.querySelector('.mobile-tab.active');
+
+            const read = (element) => element ? getComputedStyle(element) : null;
+            const startBtnStyle = read(startBtn);
+            const startVoiceBtnStyle = read(startVoiceBtn);
+            const startAttestationBtnStyle = read(startAttestationBtn);
+            const inputStyle = read(input);
+            const promptWrapperStyle = read(promptWrapper);
+            const mobileTabsStyle = read(mobileTabs);
+            const activeMobileTabStyle = read(activeMobileTab);
+
+            return {
+                lightTheme: document.body.classList.contains('light-theme'),
+                mobileTabsDisplay: mobileTabsStyle?.display || '',
+                activeMobileTabBackground: activeMobileTabStyle?.backgroundColor || '',
+                startBtnBackground: startBtnStyle?.backgroundColor || '',
+                startVoiceBtnBackground: startVoiceBtnStyle?.backgroundColor || '',
+                startAttestationBtnBackground: startAttestationBtnStyle?.backgroundColor || '',
+                inputBackground: inputStyle?.backgroundColor || '',
+                promptWrapperBackground: promptWrapperStyle?.backgroundColor || '',
+                promptWrapperBorderTopWidth: promptWrapperStyle?.borderTopWidth || ''
+            };
+        });
+
+        expect(metrics.lightTheme, 'Light theme must be active in mobile light-theme smoke');
+        expect(metrics.mobileTabsDisplay === 'flex', `Mobile tabs must be visible on mobile width, got ${metrics.mobileTabsDisplay}`);
+        expect(metrics.startBtnBackground === metrics.startVoiceBtnBackground, `Chat and voice start cards must share the same light-theme background, got ${metrics.startBtnBackground} vs ${metrics.startVoiceBtnBackground}`);
+        expect(metrics.startBtnBackground === metrics.startAttestationBtnBackground, `Chat and attestation start cards must share the same light-theme background, got ${metrics.startBtnBackground} vs ${metrics.startAttestationBtnBackground}`);
+        expect(metrics.inputBackground === 'rgba(0, 0, 0, 0)' || metrics.inputBackground === 'transparent', `Light-theme composer input must stay transparent, got ${metrics.inputBackground}`);
+        expect(metrics.promptWrapperBackground === 'rgba(0, 0, 0, 0)' || metrics.promptWrapperBackground === 'transparent', `Prompt wrapper must stay transparent in light theme, got ${metrics.promptWrapperBackground}`);
+        expect(metrics.promptWrapperBorderTopWidth === '0px', `Prompt wrapper must not render an inner border in light theme, got ${metrics.promptWrapperBorderTopWidth}`);
+        expect(metrics.activeMobileTabBackground !== 'rgb(127, 150, 255)', `Active mobile tab must not fall back to the old accent blue, got ${metrics.activeMobileTabBackground}`);
+    } catch (error) {
+        await ensureOutputDir();
+        await page.screenshot({ path: path.join(outputDir, 'smoke-light-theme-mobile-failure.png'), fullPage: true });
+        throw error;
+    } finally {
+        await context.close();
+    }
+}
+
 async function main() {
     await ensureOutputDir();
     const { server, baseUrl } = await createStaticFileServer(projectRoot);
@@ -2898,6 +2961,7 @@ async function main() {
         await runAuthFirebaseConflictAutoResetFlow(browser, baseUrl);
         await runLocalhostDevAuthFlow(browser, baseUrl);
         await runLocalMinimalLayoutRegressionFlow(browser, baseUrl);
+        await runLightThemeMobileRegressionFlow(browser, baseUrl);
         logStep('all smoke scenarios passed');
     } finally {
         await browser.close();

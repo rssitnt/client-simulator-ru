@@ -229,7 +229,9 @@
   - свернутая `.history-panel` должна оставаться без вертикального скролла;
   - desktop-админка `Пользователи и доступ` должна оставаться настоящей таблицей (`table / table-row`) с layout-флагом `desktop`, а не срываться обратно в карточки;
   - auth reset-flow должен проходить отдельно: кнопка `Сбросить пароль` обязана возвращать исходный label и не оставлять disabled submit после отправки;
+  - light-theme mobile shell теперь тоже покрыт отдельно: стартовые карточки должны оставаться одного стиля, composer input и prompt wrapper должны быть прозрачными в local light theme, а активный mobile-tab не должен падать обратно в старый accent-blue;
   - тестовые layout-hooks живут в `window.__CLIENT_SIMULATOR_TEST_HOOKS__` и предназначены только для localhost/smoke.
+- Старые глобальные light-theme правила для `mobile-tabs`, `#startBtn` и generic dropdown active-state теперь не должны влиять на `body.local-minimal-ui`; если светлая local-версия снова “синеет” или берёт старые карточки, сначала проверяй именно эту изоляцию, а не добавляй ещё один поздний override поверх.
 
 ## Architecture Notes
 ### Dialog History

@@ -412,19 +412,19 @@ body.light-theme .message-actions .btn-icon:hover {
 }
 
 /* Мобильные табы */
-body.light-theme .mobile-tabs {
+body.light-theme:not(.local-minimal-ui) .mobile-tabs {
     background: #f5f5f5;
     border-bottom: none;
     padding: 10px 50px;
 }
 
-body.light-theme .mobile-tab {
+body.light-theme:not(.local-minimal-ui) .mobile-tab {
     background: #e0e0e0;
     color: #333; /* Был #666, стал темнее */
     border: none !important; /* Убираем обводку */
 }
 
-body.light-theme .mobile-tab.active {
+body.light-theme:not(.local-minimal-ui) .mobile-tab.active {
     background: var(--color-accent);
     color: #fff;
     border: none !important;
@@ -440,14 +440,14 @@ body.light-theme ::-webkit-scrollbar-thumb:hover {
 }
 
 /* Кнопка старта */
-body.light-theme #startBtn {
+body.light-theme:not(.local-minimal-ui) #startBtn {
     background: #f5f5f5 !important;
     color: #333 !important;
     border: none !important; /* Убрал рамку */
     box-shadow: none !important;
 }
 
-body.light-theme #startBtn:hover {
+body.light-theme:not(.local-minimal-ui) #startBtn:hover {
     background: #e0e0e0 !important;
 }
 
@@ -2249,7 +2249,7 @@ body.light-theme .dropdown-option:hover {
     color: #1a1a1a;
 }
 
-body.light-theme .dropdown-option.active {
+body.light-theme:not(.local-minimal-ui) .dropdown-option.active {
     background-color: color-mix(in srgb, var(--color-accent) 12%, #ffffff);
     color: #1a1a1a;
 }
@@ -11528,6 +11528,24 @@ body.local-minimal-ui.light-theme .toolbar-btn {
         color: var(--local-text-final);
     }
 
+    body.local-minimal-ui.light-theme .mobile-tabs {
+        background: rgba(247, 242, 234, 0.94);
+        border-bottom-color: var(--local-border-final);
+        backdrop-filter: blur(12px);
+    }
+
+    body.local-minimal-ui.light-theme .mobile-tab {
+        background: transparent;
+        border-color: var(--local-border-final);
+        color: var(--local-text-soft-final);
+    }
+
+    body.local-minimal-ui.light-theme .mobile-tab.active {
+        background: #ebe1d4;
+        border-color: #d6cab9;
+        color: var(--local-text-final);
+    }
+
     body.local-minimal-ui .panels-container {
         display: flex;
         flex-direction: column;
@@ -12254,6 +12272,16 @@ body.local-minimal-ui.light-theme .prompt-variation-chip.active {
     border-color: #d6cab9 !important;
     color: var(--local-text-final) !important;
     box-shadow: inset 0 0 0 1px rgba(139, 120, 94, 0.12);
+}
+
+body.local-minimal-ui.light-theme .personality-option.active .personality-option-check,
+body.local-minimal-ui.light-theme .dropdown-option.active {
+    color: var(--local-text-final) !important;
+}
+
+body.local-minimal-ui.light-theme .dropdown-option.active {
+    background: #ebe1d4 !important;
+    border-color: #d6cab9 !important;
 }
 
 body.local-minimal-ui.light-theme .personality-option-description,
@@ -13323,6 +13351,19 @@ body.local-minimal-ui .dialog-history-list {
 
 body.local-minimal-ui.light-theme .history-panel::-webkit-scrollbar-thumb {
     background: rgba(139, 120, 94, 0.24);
+}
+
+body.local-minimal-ui.light-theme .prompt-wrapper {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+body.local-minimal-ui.light-theme .prompt-preview,
+body.local-minimal-ui.light-theme .prompt-editor {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
 }
 
 /* Side-pass visual fixes for local minimal desktop layouts */
