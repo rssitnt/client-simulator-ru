@@ -29,8 +29,15 @@
   - foreign voice/rated dialogs must render through the same main workspace but stay locked/read-only.
 - The local admin panel now relies on an explicit final stabilization layer in `C:\projects\sites\client-simulator\style.css`: compact sizing lives there, and the users table now switches by `data-admin-layout="desktop|mobile"` instead of relying on ambiguous shared selectors.
 - The desktop admin users table now also has fixed pixel-based column widths in that final stabilization layer, so the drawer keeps a clean compact table and falls back to horizontal scroll instead of letting `Роль / Доступ / Статус` overlap each other.
+- On desktop, the admin users table is intentionally less noisy now:
+  - visible `Доступ` and `Активность` columns are hidden from the permanent table layout;
+  - those values are still preserved per row and exposed through a hover/focus bubble near the access action button;
+  - mobile cards can continue showing them inline because hover is not available there.
 - The invite row in the local admin panel intentionally has no standalone divider under it before the first admin accordion section.
 - Smoke coverage now explicitly includes the collapsed-history no-scrollbar case and the desktop admin-users real-table layout/desktop layout-flag case, so regressions there should fail `C:\projects\sites\client-simulator\scripts\smoke-e2e.mjs`.
+- That desktop admin-users smoke now also guards the new compact behavior:
+  - separate `Доступ / Активность` headers must stay hidden on desktop;
+  - when a real data row exists, its action cell must keep hover-bubble data for those two values.
 - Smoke coverage now also asserts that opening a saved dialog renders message bubbles in the main chat area and keeps `#mainDialogHistoryStage` hidden.
 - Smoke coverage now also asserts saved-dialog continuation: opening your own history item must leave the main composer enabled and persist the next outgoing message into the same saved dialog record.
 - Smoke coverage now also includes a voice idle-boundary case: the first manager turn must become a normal chat bubble even if Gemini only sent an unfinished input transcript and never sent the usual input boundary event.

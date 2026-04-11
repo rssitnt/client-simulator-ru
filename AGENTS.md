@@ -154,6 +154,10 @@
 - the local admin panel is intentionally denser now: tighter accordion headers, a more compact `Выдача доступа` row, and two-column user cards with a small access action aligned to the bottom-right; do not let it drift back into tall mobile-like cards on desktop widths;
 - the desktop admin access table now relies on a real horizontal-scroll container plus a larger minimum table width; do not squeeze it back to `width: 100%` with tiny percentage columns, or the `Статус` text and right-side access action will clip again.
 - the desktop admin access table also now uses fixed pixel-based column widths in that final stabilization layer; `Логин / Роль / Доступ / Активность / Статус / Действия` should prefer horizontal scroll over any cross-column overlap or header/text collision inside the drawer.
+- desktop `Пользователи и доступ` is intentionally quieter now:
+  - visible `Доступ` and `Активность` columns are removed from the desktop table row/header;
+  - those two values now live in a hover/focus bubble attached to the row action cell instead of taking permanent horizontal space;
+  - mobile card layout may still show those fields directly because there is no hover there.
 - the admin role picker menu now opens as a floating fixed layer and closes on scroll/resize; keep that behavior so the compact settings drawer/table wrapper cannot clip the menu vertically.
     - the access table can scroll horizontally inside the drawer instead of blowing out the layout;
     - the voice tech log uses the same local admin styling as the other sections again (`.admin-webhook-debug-body` is the real class; older `.admin-voice-debug-body` selectors were a dead typo).

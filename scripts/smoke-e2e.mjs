@@ -2056,10 +2056,13 @@ async function runAdminUsersDesktopTableLayoutFlow(browser, baseUrl) {
                 bodyCellDisplays: bodyCellElements.map((cell) => displayOf(cell)),
                 headerCellTagNames,
                 bodyCellTagNames: bodyCellElements.map((cell) => cell?.tagName?.toLowerCase() || ''),
+                hiddenHeaderDisplays: Array.from(table.querySelectorAll('thead th:nth-child(3), thead th:nth-child(4)')).map((cell) => getComputedStyle(cell).display),
                 wrapOverflowX: getComputedStyle(tableWrap).overflowX,
                 wrapDisplay: getComputedStyle(tableWrap).display,
                 wrapScrollWidth: tableWrap.scrollWidth,
-                wrapClientWidth: tableWrap.clientWidth
+                wrapClientWidth: tableWrap.clientWidth,
+                hasDataRow: !!table.querySelector('tbody tr:not(.admin-empty-row)'),
+                firstActionHoverMeta: table.querySelector('tbody tr:not(.admin-empty-row) td:nth-child(6)')?.getAttribute('data-hover-meta') || ''
             };
         });
 
@@ -2083,9 +2086,33 @@ async function runAdminUsersDesktopTableLayoutFlow(browser, baseUrl) {
             tableDisplayState.bodyCellTagNames.length > 0 && tableDisplayState.bodyCellTagNames.every((name) => name === 'td'),
             'Admin users table body must keep semantic table cells'
         );
+        expect(
+            tableDisplayState.hiddenHeaderDisplays.length === 2 && tableDisplayState.hiddenHeaderDisplays.every((value) => value === 'none'),
+            'Admin users table must hide separate access and activity columns on desktop'
+        );
         expect(tableDisplayState.wrapDisplay === 'block' || tableDisplayState.wrapDisplay === 'grid', 'Admin table wrapper must remain block-based container');
         expect(tableDisplayState.wrapOverflowX === 'auto' || tableDisplayState.wrapOverflowX === 'scroll', 'Admin users table wrapper must remain horizontally scrollable, not card-grid');
         expect(tableDisplayState.wrapScrollWidth >= tableDisplayState.wrapClientWidth, 'Admin users table wrapper width must keep expected horizontal surface');
+
+        if (tableDisplayState.hasDataRow) {
+            expect(
+                /Доступ:/i.test(tableDisplayState.firstActionHoverMeta) && /Активность:/i.test(tableDisplayState.firstActionHoverMeta),
+                'Admin users table row must keep hover bubble data for access and activity'
+            );
+            await page.hover('.admin-users-table tbody tr:not(.admin-empty-row)');
+            const hoverBubbleState = await page.evaluate(() => {
+                const actionCell = document.querySelector('.admin-users-table tbody tr:not(.admin-empty-row) td:nth-child(6)');
+                if (!actionCell) return null;
+                const pseudo = getComputedStyle(actionCell, '::after');
+                return {
+                    content: pseudo.content || '',
+                    opacity: pseudo.opacity || ''
+                };
+            });
+            expect(!!hoverBubbleState, 'Admin users hover bubble state must be readable');
+            expect(Number(hoverBubbleState.opacity || 0) > 0.5, `Admin users hover bubble must become visible on row hover, got opacity ${hoverBubbleState.opacity}`);
+            expect(/Доступ:/i.test(hoverBubbleState.content) && /Активность:/i.test(hoverBubbleState.content), 'Admin users hover bubble content must include access and activity');
+        }
 
         await closeSettings(page);
     } catch (error) {

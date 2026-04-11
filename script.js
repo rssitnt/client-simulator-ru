@@ -7134,8 +7134,10 @@ function updateAdminUsersTableRow(row, rowData) {
         roleCell.textContent = '—';
     }
 
-    sourceCell.textContent = getAccessSourceLabel(rowData.login, rowData.user, rowData.invite, rowData.accessRevocation);
-    timeCell.textContent = rowData.user ? formatActiveTime(rowData.user.activeMs) : '—';
+    const accessSourceLabel = getAccessSourceLabel(rowData.login, rowData.user, rowData.invite, rowData.accessRevocation);
+    const activeTimeLabel = rowData.user ? formatActiveTime(rowData.user.activeMs) : '—';
+    sourceCell.textContent = accessSourceLabel;
+    timeCell.textContent = activeTimeLabel;
 
     statusCell.className = `admin-access-status ${rowData.accessState.active ? 'is-active' : 'is-blocked'}`;
     statusMain.textContent = rowData.accessState.label;
@@ -7150,6 +7152,7 @@ function updateAdminUsersTableRow(row, rowData) {
 
     actionBtn.className = `btn-change ${rowData.accessState.active ? 'btn-danger-subtle' : ''}`.trim();
     actionBtn.textContent = rowData.accessState.active ? 'Закрыть' : 'Открыть';
+    actionCell.dataset.hoverMeta = `Доступ: ${accessSourceLabel || '—'}\nАктивность: ${activeTimeLabel || '—'}`;
 }
 
 function getDialogHistoryOwnerLogin(login = currentUser?.login || '') {
