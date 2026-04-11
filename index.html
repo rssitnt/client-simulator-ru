@@ -191,18 +191,22 @@
             <div class="settings-row account-row">
                 <span class="settings-label">Аккаунт:</span>
                 <div class="account-block">
-                    <div class="account-line">Логин: <span id="accountLoginValue">-</span></div>
-                    <input type="text" id="settingsNameInput" class="name-input" placeholder="ФИО" maxlength="120">
-                    <div class="account-actions">
-                        <button id="settingsLogoutBtn" type="button" class="btn-change btn-logout">Выйти из аккаунта</button>
+                    <div class="account-topline">
+                        <div class="account-line">Логин: <span id="accountLoginValue">-</span></div>
+                        <div class="account-actions">
+                            <button id="settingsLogoutBtn" type="button" class="btn-change btn-logout">Выйти из аккаунта</button>
+                        </div>
                     </div>
+                    <input type="text" id="settingsNameInput" class="name-input" placeholder="ФИО" maxlength="120">
                 </div>
             </div>
 
             <!-- Роль -->
             <div class="settings-row role-row">
-                <span class="settings-label">Роль:</span>
-                <span id="currentRoleDisplay" class="role-text"></span>
+                <div class="role-inline">
+                    <span class="settings-label">Роль:</span>
+                    <span id="currentRoleDisplay" class="role-text"></span>
+                </div>
                 <button id="changeRoleBtn" class="btn-change">Сменить</button>
             </div>
 

@@ -10649,6 +10649,13 @@ body.local-minimal-ui .account-block {
     border-radius: 0;
 }
 
+body.local-minimal-ui .account-topline {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+}
+
 body.local-minimal-ui .account-line {
     font-size: 14px;
     color: rgba(242, 238, 231, 0.64);
@@ -10688,13 +10695,20 @@ body.local-minimal-ui .btn-confirm,
 body.local-minimal-ui .admin-invite-btn,
 body.local-minimal-ui .settings-panel .btn-export {
     min-height: 40px;
-    width: 100%;
+    width: auto;
     padding: 0 14px;
     border: 1px solid var(--local-border-final);
     border-radius: 12px;
     background: rgb(36, 33, 29);
     color: var(--local-text-final);
     box-shadow: none;
+}
+
+body.local-minimal-ui .account-actions .btn-logout,
+body.local-minimal-ui .role-row .btn-change,
+body.local-minimal-ui .settings-panel .btn-export {
+    min-width: 220px;
+    justify-content: center;
 }
 
 body.local-minimal-ui .account-actions .btn-logout:hover,
@@ -10712,6 +10726,14 @@ body.local-minimal-ui .role-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
+    gap: 14px;
+}
+
+body.local-minimal-ui .role-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
 }
 
 body.local-minimal-ui .role-text {
@@ -10722,8 +10744,9 @@ body.local-minimal-ui .role-text {
 
 body.local-minimal-ui .export-row {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(220px, max-content));
     gap: 10px;
+    justify-content: start;
     margin-top: 0;
     padding: 18px 0;
     border: none;
@@ -10733,7 +10756,7 @@ body.local-minimal-ui .export-row {
 }
 
 body.local-minimal-ui .export-dropdown {
-    width: 100%;
+    width: auto;
 }
 
 body.local-minimal-ui .voice-row {
@@ -11753,8 +11776,28 @@ body.local-minimal-ui.light-theme .toolbar-btn {
         grid-template-columns: minmax(0, 1fr) auto;
     }
 
+    body.local-minimal-ui .account-topline {
+        grid-template-columns: 1fr;
+    }
+
+    body.local-minimal-ui .role-row {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+    }
+
+    body.local-minimal-ui .role-inline {
+        justify-content: flex-start;
+    }
+
     body.local-minimal-ui .export-row {
         grid-template-columns: 1fr;
+    }
+
+    body.local-minimal-ui .account-actions .btn-logout,
+    body.local-minimal-ui .role-row .btn-change,
+    body.local-minimal-ui .settings-panel .btn-export {
+        width: 100%;
+        min-width: 0;
     }
 
     body.local-minimal-ui .chat-input-container {
