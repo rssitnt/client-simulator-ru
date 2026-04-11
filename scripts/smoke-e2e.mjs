@@ -2900,6 +2900,39 @@ async function runAttestationStartFlow(browser, baseUrl) {
 
         const startRequest = scenario.requests.find((item) => item.payload.requestType === 'chat_start' && item.payload.chatInput === '/start');
         expect(!!startRequest, 'Attestation start must trigger the same /start chat flow');
+
+        await page.fill('#userInput', 'покажите конкретное решение под 900 лунок');
+        await page.click('#sendBtn');
+        await page.waitForFunction(() => {
+            return Array.from(document.querySelectorAll('#chatMessages .message'))
+                .some((node) => String(node.textContent || '').includes('Диалог завершен'));
+        });
+        await page.waitForSelector('.conversation-action-note .btn-conversation-rate');
+
+        const isInputDisabledAfterEnd = await page.locator('#userInput').isDisabled();
+        expect(isInputDisabledAfterEnd, 'Attestation chat must lock composer after terminal conversation action');
+
+        await page.click('.conversation-action-note .btn-conversation-rate');
+        await page.waitForFunction(() => {
+            const ratingText = document.querySelector('.message.rating')?.textContent || '';
+            return ratingText.includes('Smoke rating done') && ratingText.includes('Что убило диалог');
+        });
+        expect(scenario.requests.some((item) => item.payload.requestType === 'rating'), 'Attestation flow did not call the rating webhook');
+
+        let attestationRequest = null;
+        for (let attempt = 0; attempt < 40; attempt += 1) {
+            attestationRequest = scenario.requests.find((item) => {
+                return String(item.url || '').includes('/webhook/certification')
+                    && String(item.payload?.mode || '').trim() === 'attestation';
+            });
+            if (attestationRequest) break;
+            await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+
+        expect(!!attestationRequest, 'Attestation flow did not send the certification webhook payload');
+        expect(String(attestationRequest?.payload?.dialog || '').includes('покажите конкретное решение'), 'Attestation webhook did not include dialog text');
+        expect(String(attestationRequest?.payload?.rating || '').includes('Smoke rating done'), 'Attestation webhook did not include rating text');
+        expect(!!String(attestationRequest?.payload?.fileBase64 || '').trim(), 'Attestation webhook did not include generated report attachment');
     } catch (error) {
         await ensureOutputDir();
         await page.screenshot({ path: path.join(outputDir, 'smoke-attestation-start-failure.png'), fullPage: true });

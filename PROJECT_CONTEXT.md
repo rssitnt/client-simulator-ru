@@ -30,6 +30,10 @@
 - The small chat eyebrow should now reflect mode too: `Чат` in normal mode and `Аттестация` while attestation mode is active.
 - The local empty-state start cards are title-only again: the subtitle/meta lines under `Чат с клиентом / Голосовой звонок / Аттестация` are intentionally removed.
 - The start-screen `Аттестация` card must stay visible as a normal third start action even if attestation mode is already active; do not hide it just because the mode flag is on.
+- Smoke for attestation is full-flow now, not just entry:
+  - entering `Аттестация` must open the main chat, not leave the start screen visible;
+  - the scenario must survive through terminal dialog action, `Оценить`, and final certification webhook send with report attachment;
+  - if that outbound attestation send stops happening, `C:\projects\sites\client-simulator\scripts\smoke-e2e.mjs` should fail.
 - Reopened saved dialogs now also preserve their stored mode on hydration:
   - a voice dialog reopened from history keeps `currentDialogHistoryMode = voice`;
   - this prevents continued work from history from silently drifting into text-mode bookkeeping.

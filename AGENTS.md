@@ -234,6 +234,9 @@
   - auth debug entries keep stage, result, and a compact browser/Firebase session snapshot so employee login failures can be diagnosed without opening devtools.
 - Переключение между админским и юзерским видом теперь происходит сразу по `Сменить`, без повторного запроса пароля; пароль нужен только один раз, чтобы получить админ-доступ.
 - In the local empty-state start cards, only the main titles remain visible; the lower subtitle lines under `Чат с клиентом / Голосовой звонок / Аттестация` were intentionally removed.
+- Attestation regression coverage is intentionally end-to-end now:
+  - clicking the `Аттестация` start card must launch the same main chat flow as normal start;
+  - smoke must also carry that scenario through terminal dialog close, rating, and the certification webhook/report send, not just through mode entry.
 - The local empty-state start cards are compact now: the card column is intentionally much narrower than before and the remaining titles are center-aligned. Do not stretch them back to full-width unless requested.
 - For local empty-state start cards, explicitly override the base `justify-content: flex-end`; these compact cards must stay vertically centered, not bottom-biased.
 - The whole localhost empty-state start stack is centered now, not just the text inside the cards. Keep the wrapper/content centered so the column does not drift toward the left edge.
