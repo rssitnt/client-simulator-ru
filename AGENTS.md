@@ -194,6 +194,9 @@
 - Gemini Live now also has a post-finalization assistant-response watchdog:
   - if the manager turn is already finalized into chat but Gemini still does not begin the client reply, the frontend retries one extra `activityEnd` boundary on its own;
   - this recovery must be cleared immediately on the first real client text/audio so it does not duplicate healthy turns.
+- Voice call status text now uses anti-flicker smoothing for active-call conversational states:
+  - quick racey flips between `Клиент говорит…`, `Клиент на линии. Можно говорить.`, and `Ваша очередь говорить.` should be held briefly instead of repainting multiple times per second;
+  - do not apply that smoothing to real error or connection states.
 - Hard refresh auth restore is now more tolerant:
   - a 10-second restore timeout is treated as a soft timeout, not as proof of logout;
   - the saved session is no longer wiped just because Firebase restored slowly after hard refresh;

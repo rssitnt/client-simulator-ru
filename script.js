@@ -15851,6 +15851,9 @@ function hideAiImproveModal() {
 let voiceModeStatusLockUntil = 0;
 let currentVoiceModeStatusText = '';
 let currentVoiceModeStatusState = 'idle';
+let voiceModeStatusLastAppliedAt = 0;
+let voiceModeStatusPendingTimerId = 0;
+let voiceModeStatusPendingPayload = null;
 const VOICE_MODE_STATUS_COPY = Object.freeze({
     opening: 'Открываю голосовой режим…',
     auth: 'Проверяем доступ к звонку…',
@@ -15867,10 +15870,46 @@ const VOICE_MODE_STATUS_COPY = Object.freeze({
     stoppedReady: 'Звонок остановлен. Можно оценить диалог.',
     stoppedEmpty: 'Звонок остановлен. Реплики не найдены.'
 });
+const VOICE_MODE_STATUS_MIN_VISIBLE_MS = 700;
+const VOICE_MODE_STATUS_SMOOTHED_TEXTS = new Set([
+    VOICE_MODE_STATUS_COPY.callReady,
+    VOICE_MODE_STATUS_COPY.clientSpeaking,
+    VOICE_MODE_STATUS_COPY.yourTurn
+]);
 
 function getVoiceModeStatusCopy(key, fallback = '') {
     const text = VOICE_MODE_STATUS_COPY[key];
     return typeof text === 'string' && text.trim() ? text : fallback;
+}
+
+function clearVoiceModeStatusPendingUpdate() {
+    if (voiceModeStatusPendingTimerId) {
+        clearTimeout(voiceModeStatusPendingTimerId);
+        voiceModeStatusPendingTimerId = 0;
+    }
+    voiceModeStatusPendingPayload = null;
+}
+
+function isVoiceModeStatusSmoothCandidate(text = '', state = 'idle') {
+    const normalizedText = String(text || '').trim();
+    const normalizedState = String(state || '').trim();
+    if (!normalizedText) return false;
+    if (!isGeminiVoiceActive) return false;
+    if (!['waiting', 'listening', 'ready'].includes(normalizedState)) return false;
+    return VOICE_MODE_STATUS_SMOOTHED_TEXTS.has(normalizedText);
+}
+
+function applyVoiceModeStatusNow(text, state) {
+    currentVoiceModeStatusText = text;
+    currentVoiceModeStatusState = state;
+    voiceModeStatusLastAppliedAt = Date.now();
+    if (voiceModeStatus) {
+        voiceModeStatus.textContent = text;
+        voiceModeStatus.dataset.state = state;
+        voiceModeStatus.hidden = false;
+        voiceModeStatus.setAttribute('aria-hidden', 'false');
+    }
+    syncVoiceConnectStatusPanel();
 }
 
 function getVoiceConnectPanelPresentation() {
@@ -15945,8 +15984,10 @@ function setVoiceModeStatus(text, state = 'idle', options = {}) {
         isGeminiVoiceConnecting ||
         isGeminiVoiceActive;
     if (!trimmedText || !shouldShow) {
+        clearVoiceModeStatusPendingUpdate();
         currentVoiceModeStatusText = '';
         currentVoiceModeStatusState = 'idle';
+        voiceModeStatusLastAppliedAt = 0;
         if (voiceModeStatus) {
             voiceModeStatus.hidden = true;
             voiceModeStatus.setAttribute('aria-hidden', 'true');
@@ -15960,15 +16001,38 @@ function setVoiceModeStatus(text, state = 'idle', options = {}) {
     if (lockMs) {
         voiceModeStatusLockUntil = Math.max(voiceModeStatusLockUntil, Date.now() + lockMs);
     }
-    currentVoiceModeStatusText = normalizedText;
-    currentVoiceModeStatusState = state;
-    if (voiceModeStatus) {
-        voiceModeStatus.textContent = normalizedText;
-        voiceModeStatus.dataset.state = state;
-        voiceModeStatus.hidden = false;
-        voiceModeStatus.setAttribute('aria-hidden', 'false');
+    if (
+        currentVoiceModeStatusText === normalizedText &&
+        currentVoiceModeStatusState === state
+    ) {
+        clearVoiceModeStatusPendingUpdate();
+        syncVoiceConnectStatusPanel();
+        return;
     }
-    syncVoiceConnectStatusPanel();
+    const now = Date.now();
+    const currentText = String(currentVoiceModeStatusText || '').trim();
+    const currentState = String(currentVoiceModeStatusState || '').trim();
+    const shouldSmoothCurrent = isVoiceModeStatusSmoothCandidate(currentText, currentState);
+    const shouldSmoothNext = isVoiceModeStatusSmoothCandidate(normalizedText, state);
+    const withinMinWindow = (now - Number(voiceModeStatusLastAppliedAt || 0)) < VOICE_MODE_STATUS_MIN_VISIBLE_MS;
+    if (!forceShow && shouldSmoothCurrent && shouldSmoothNext && withinMinWindow) {
+        const remainingMs = Math.max(0, VOICE_MODE_STATUS_MIN_VISIBLE_MS - (now - Number(voiceModeStatusLastAppliedAt || 0)));
+        voiceModeStatusPendingPayload = { text: normalizedText, state };
+        clearVoiceModeStatusPendingUpdate();
+        voiceModeStatusPendingPayload = { text: normalizedText, state };
+        voiceModeStatusPendingTimerId = setTimeout(() => {
+            const pending = voiceModeStatusPendingPayload;
+            clearVoiceModeStatusPendingUpdate();
+            if (!pending) return;
+            if (String(currentVoiceModeStatusText || '').trim() === pending.text && String(currentVoiceModeStatusState || '').trim() === pending.state) {
+                return;
+            }
+            applyVoiceModeStatusNow(pending.text, pending.state);
+        }, remainingMs);
+        return;
+    }
+    clearVoiceModeStatusPendingUpdate();
+    applyVoiceModeStatusNow(normalizedText, state);
 }
 
 function clearVoiceModeWidgetHideTimer() {

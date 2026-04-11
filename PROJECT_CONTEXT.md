@@ -14,6 +14,7 @@
 - Voice mode is Gemini Live through the token server; first-turn handling and mic/voice settings were recently stabilized.
 - Voice mode now also has a local idle-boundary watchdog: if Gemini fails to emit an explicit end-of-manager-turn boundary (`input finished / waitingForInput`), the frontend retries `activityEnd`, finalizes the pending manager turn locally, and keeps the call in a waiting state instead of leaving the turn stuck in preview forever.
 - Voice mode now also has a second recovery step after that: if the manager turn is already finalized but the assistant still does not start replying, the frontend retries one extra `activityEnd` boundary and keeps the call in a `клиент думает` state instead of silently hanging.
+- Voice call status text is also smoothed now: fast race-condition flips between `Клиент говорит…` and `Ваша очередь говорить.` are briefly held so the top call status does not visibly blink during short boundary races.
 - The final voice-call summary card is now meant to live at the bottom of chat, not in the top voice status panel:
   - the top voice status panel is only for active/connecting call states;
   - after a call ends, `Звонок завершён / Разговор сохранён` should be the last dialog card appended after the messages.
