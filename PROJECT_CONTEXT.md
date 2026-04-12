@@ -180,6 +180,7 @@
 - Mobile role editor sticky contract:
   - only the prompt toolbar stays sticky near the top;
   - the prompt variations block is normal scrolling content and must not stay pinned.
+- The mobile prompt toolbar is now a compact 2-row grid with hidden dividers; do not revert it to a horizontal scroller.
 - The mobile top tab for `Роль` now uses the `fluent:prompt-24-regular` SVG asset and should stay icon-only like `История`, `Чат`, and `Настройки`.
 - Mobile fullscreen settings header:
   - the top close button must stay centered in its row without any residual dark circle or bleed-through from hidden shell controls below it.

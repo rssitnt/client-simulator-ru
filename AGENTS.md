@@ -404,6 +404,7 @@
 - Mobile role editor sticky contract:
   - only the prompt toolbar (`скрыть / история / форматирование`) stays sticky;
   - the prompt variations list must scroll with the rest of the content and must not stay pinned under the selector.
+- On mobile, that prompt toolbar is now intentionally a compact fixed 2-row grid directly under the top app bar; keep it denser and easier to tap rather than restoring the old long single-row scroller with dividers.
 - Mobile fullscreen settings header:
   - the close button must stay visually centered in the top sticky row;
   - no dark halo, offset circle, or underlying settings trigger should bleed through under the `X` while the sheet is open.
