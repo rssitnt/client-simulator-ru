@@ -50,10 +50,14 @@
   - light-theme admin content in that fullscreen sheet now also has a separate density layer: invite controls, accordion rows, refresh/action buttons, and the desktop users table should look tighter than before and must not inherit giant dark-theme-like gaps.
   - the upper non-admin settings rows in light theme also now have their own density layer: account, role, export, voice, and microphone controls should stay more compact than the dark-theme defaults and align to the same cream input/button rhythm.
   - the desktop admin empty/error state now has its own late override: if `Пользователи и доступ` renders only `admin-empty-row`, the table header should disappear and the error text should read like a simple inline note, but the underlying row must still remain a real `table-row` for smoke/layout checks.
-- Mobile shell is now expected to behave like an app instead of a squeezed desktop page:
-  - mobile screens use sticky app-bar headers;
-  - on that app bar, `История` and `Чат` are icon tabs, and the settings action belongs there too rather than inside panel content;
-  - the start screen keeps the three main actions near the top as compact cards;
+  - Mobile shell is now expected to behave like an app instead of a squeezed desktop page:
+    - mobile screens use sticky app-bar headers;
+    - on that app bar, `История` and `Чат` are icon tabs, and the settings action belongs there too rather than inside panel content;
+    - the start screen keeps the three main actions near the top as compact cards;
+    - inside mobile fullscreen settings, `Пользователи и доступ` should stay as compact app-like cards:
+      - `Обновить` is a small left-aligned control;
+      - each user card uses a tight two-column meta grid with login/actions spanning full width;
+      - labels remain subtle and the access button should stay compact rather than full-width.
   - the bottom tab bar is a dock-like navigation surface;
   - default browser blue tap/click glow is suppressed across interactive controls on both mobile and desktop;
   - the composer keeps a fixed visible gap above that dock and must not overlap it;

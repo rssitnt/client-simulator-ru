@@ -66,6 +66,10 @@
 - The upper settings rows in fullscreen light theme now have their own final density pass too: account, role, export, voice, and microphone blocks should stay compact and aligned to the same cream surface language instead of inheriting oversized dark-theme spacing.
 - The desktop admin empty/error state in fullscreen settings now has its own late override too: when `Пользователи и доступ` contains only `admin-empty-row`, the table should hide its header chrome and show a simple inline message instead of a broken-looking half-empty table, while still preserving `table-row` semantics for smoke/layout checks.
 - `Пользователи и доступ` has a dedicated mobile card layout; desktop table remains unchanged.
+  - on mobile inside fullscreen settings, those cards should stay compact and app-like:
+    - `Обновить` stays a small left-aligned action;
+    - each user card uses a tight two-column meta grid with `Логин` and `Действия` spanning full width;
+    - labels stay small/subtle and the access action stays compact instead of stretching to full card width.
 - Persistent dialog history is stored in RTDB:
   - index: `dialog_history_index/{loginKey}/{dialogId}`
   - payload: `dialog_history_messages/{loginKey}/{dialogId}`
