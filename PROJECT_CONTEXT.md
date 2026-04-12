@@ -155,6 +155,10 @@
   - history body is a real column layout with `history-panel-controls` ordered first and sticky at the top of the scroll area;
   - mobile settings use the same left/right safe-area inset on all content blocks and intentionally hide the sheet scrollbar;
   - mobile `Роль` uses a sticky full-width selector header and full-width content flow; do not revive the old centered dropdown card there.
+- Mobile role editor now also has a larger touch-first editing shelf:
+  - prompt variation cards are taller and full-width;
+  - the markdown toolbar buttons use a larger tap target;
+  - variations plus toolbar stay sticky near the top of the role scroll area instead of drifting away while reading the prompt body.
 - Prompt switching stability:
   - if a role has multiple prompt variations, the UI must expose them as an explicit `Варианты промпта` block instead of relying on hidden horizontal overflow;
   - on mobile that block is now a vertical full-width list under the role selector;
