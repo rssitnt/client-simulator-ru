@@ -17426,6 +17426,12 @@ body * {
         line-height: 1 !important;
     }
 
+    body.local-minimal-ui .mobile-tab-icon-prompt {
+        width: 20px !important;
+        height: 20px !important;
+        object-fit: contain !important;
+    }
+
     body.local-minimal-ui #chatPanel,
     body.local-minimal-ui #historyPanel,
     body.local-minimal-ui #instructionsPanel {

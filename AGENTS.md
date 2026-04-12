@@ -380,6 +380,7 @@
 - Если пользователь снова пожалуется на аттестацию, сначала проверь, не вернулся ли toast `Режим аттестации включен`: вход в этот режим теперь должен быть silent.
 - When updating context again, prefer replacing old bullets instead of appending another long timeline.
 - Mobile tabs (`История / Чат / Роль`) now belong to a top sticky app bar; do not move them back to a bottom dock unless explicitly requested.
+- In that mobile top app bar, `Роль` is now icon-only too and uses the `fluent:prompt-24-regular` asset from `C:\projects\sites\client-simulator\prompt-icon-fluent-24-regular.svg`; keep it visually aligned with the other icon tabs.
 - The local/mobile working chat header no longer shows the product title; only the empty first screen gets a header title and it should read `Начать чат`.
 - The inline local clear-chat header action is intentionally removed.
 - The final bottom-of-file interaction layer suppresses platform blue tap/click glow globally; future button/tab tweaks must not reintroduce system blue highlight.
