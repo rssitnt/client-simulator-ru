@@ -17258,3 +17258,380 @@ body * {
         overflow-x: hidden !important;
     }
 }
+
+/* Final mobile settings geometry lock:
+   keep the sheet edge-to-edge, but all real content on one symmetric inset grid,
+   without viewport-width drift or a visible inner scrollbar. */
+@media (max-width: 1024px) {
+    body.local-minimal-ui #settingsModal {
+        inset: 0 !important;
+        padding: 0 !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+    }
+
+    body.local-minimal-ui #settingsModal::-webkit-scrollbar,
+    body.local-minimal-ui #settingsModal .settings-panel::-webkit-scrollbar,
+    body.local-minimal-ui #settingsModal .settings-content::-webkit-scrollbar {
+        display: none !important;
+        width: 0 !important;
+        height: 0 !important;
+    }
+
+    body.local-minimal-ui #settingsModal .settings-panel {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        min-height: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border-radius: 0 !important;
+        overflow: visible !important;
+        box-sizing: border-box !important;
+    }
+
+    body.local-minimal-ui #settingsModal .theme-color-section,
+    body.local-minimal-ui #settingsModal .settings-content,
+    body.local-minimal-ui #settingsModal #adminPanel {
+        width: auto !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding-left: max(20px, env(safe-area-inset-left, 0px) + 10px) !important;
+        padding-right: max(20px, env(safe-area-inset-right, 0px) + 10px) !important;
+        box-sizing: border-box !important;
+    }
+
+    body.local-minimal-ui #settingsModal .theme-color-section {
+        padding-top: max(12px, env(safe-area-inset-top, 0px) + 8px) !important;
+    }
+
+    body.local-minimal-ui #settingsModal .settings-content {
+        padding-top: 14px !important;
+        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 30px) !important;
+    }
+
+    body.local-minimal-ui #settingsModal .settings-row,
+    body.local-minimal-ui #settingsModal .account-block,
+    body.local-minimal-ui #settingsModal .voice-config-block,
+    body.local-minimal-ui #settingsModal .admin-panel,
+    body.local-minimal-ui #settingsModal .admin-invite-form,
+    body.local-minimal-ui #settingsModal .admin-hidden-prompt-body,
+    body.local-minimal-ui #settingsModal .admin-users-access-body,
+    body.local-minimal-ui #settingsModal .admin-webhook-debug-body,
+    body.local-minimal-ui #settingsModal .account-actions,
+    body.local-minimal-ui #settingsModal .role-row,
+    body.local-minimal-ui #settingsModal .export-row,
+    body.local-minimal-ui #settingsModal .voice-row,
+    body.local-minimal-ui #settingsModal .theme-color-row {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        box-sizing: border-box !important;
+    }
+}
+
+/* Final mobile geometry lock:
+   one stable app-like shell for start/history/role/settings without legacy
+   desktop offsets, clipped edges, or floating controls inside the content. */
+@media (max-width: 1024px) {
+    body.local-minimal-ui {
+        --local-mobile-header-gap: calc(env(safe-area-inset-top, 0px) + 12px);
+        --local-mobile-shell-pad: max(16px, env(safe-area-inset-left, 0px) + 16px);
+        --local-mobile-shell-pad-right: max(16px, env(safe-area-inset-right, 0px) + 16px);
+    }
+
+    body.local-minimal-ui.settings-modal-open {
+        overflow: hidden !important;
+    }
+
+    body.local-minimal-ui .mobile-tabs {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 280 !important;
+        display: grid !important;
+        grid-template-columns: 56px 1fr 1fr 56px !important;
+        gap: 10px !important;
+        align-items: center !important;
+        padding:
+            calc(env(safe-area-inset-top, 0px) + 12px)
+            var(--local-mobile-shell-pad-right)
+            12px
+            var(--local-mobile-shell-pad) !important;
+        min-height: calc(env(safe-area-inset-top, 0px) + 76px) !important;
+        background: rgba(19, 18, 16, 0.96) !important;
+        backdrop-filter: blur(18px) !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+    }
+
+    body.local-minimal-ui.light-theme .mobile-tabs {
+        background: rgba(244, 236, 222, 0.96) !important;
+        border-bottom-color: rgba(126, 107, 83, 0.14) !important;
+    }
+
+    body.local-minimal-ui .mobile-tab {
+        min-height: 56px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        text-align: center !important;
+        padding: 0 12px !important;
+        line-height: 1 !important;
+    }
+
+    body.local-minimal-ui .mobile-tab-label,
+    body.local-minimal-ui .mobile-tab-icon {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        line-height: 1 !important;
+    }
+
+    body.local-minimal-ui #chatPanel,
+    body.local-minimal-ui #historyPanel,
+    body.local-minimal-ui #instructionsPanel {
+        padding-top: 0 !important;
+    }
+
+    body.local-minimal-ui #chatPanel .panel-header,
+    body.local-minimal-ui #historyPanel .history-panel-header {
+        display: none !important;
+    }
+
+    body.local-minimal-ui #localSettingsTopBtn {
+        display: none !important;
+    }
+
+    body.local-minimal-ui .start-conversation {
+        padding:
+            18px
+            var(--local-mobile-shell-pad-right)
+            calc(var(--local-mobile-tabbar-height) + 20px)
+            var(--local-mobile-shell-pad) !important;
+    }
+
+    body.local-minimal-ui .start-conversation-actions {
+        gap: 14px !important;
+    }
+
+    body.local-minimal-ui .btn-start,
+    body.local-minimal-ui .btn-start:focus,
+    body.local-minimal-ui .btn-start:active {
+        display: grid !important;
+        place-items: center !important;
+        min-height: 92px !important;
+        padding: 0 18px !important;
+        text-align: center !important;
+    }
+
+    body.local-minimal-ui .btn-start-label {
+        display: block !important;
+        width: 100% !important;
+        margin: 0 !important;
+        text-align: center !important;
+        line-height: 1.16 !important;
+    }
+
+    body.local-minimal-ui #historyPanel.panel.active,
+    body.local-minimal-ui #historyPanel.panel.active .history-panel-main,
+    body.local-minimal-ui #historyPanel.panel.active .history-panel-body {
+        display: flex !important;
+        flex-direction: column !important;
+        min-height: 0 !important;
+    }
+
+    body.local-minimal-ui #historyPanel.panel.active .history-panel-main {
+        overflow: hidden !important;
+    }
+
+    body.local-minimal-ui #historyPanel.panel.active .history-panel-body {
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+    }
+
+    body.local-minimal-ui #historyPanel.panel.active .history-panel-controls {
+        order: -1 !important;
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 40 !important;
+        display: grid !important;
+        gap: 12px !important;
+        margin: 0 !important;
+        padding:
+            16px
+            var(--local-mobile-shell-pad-right)
+            14px
+            var(--local-mobile-shell-pad) !important;
+        background: rgba(19, 18, 16, 0.985) !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18) !important;
+    }
+
+    body.local-minimal-ui.light-theme #historyPanel.panel.active .history-panel-controls {
+        background: rgba(244, 236, 222, 0.985) !important;
+        border-bottom-color: rgba(126, 107, 83, 0.12) !important;
+        box-shadow: 0 12px 28px rgba(133, 108, 78, 0.08) !important;
+    }
+
+    body.local-minimal-ui #historyPanel.panel.active .dialog-history-list-wrap,
+    body.local-minimal-ui #historyPanel.panel.active .dialog-history-list {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+    }
+
+    body.local-minimal-ui #historyPanel.panel.active .dialog-history-list-wrap {
+        overflow: visible !important;
+        padding:
+            8px
+            var(--local-mobile-shell-pad-right)
+            calc(var(--local-mobile-tabbar-height) + 18px)
+            var(--local-mobile-shell-pad) !important;
+    }
+
+    body.local-minimal-ui #historyPanel.panel.active .dialog-history-list {
+        padding: 0 !important;
+    }
+
+    body.local-minimal-ui #historyPanel.panel.active .history-search,
+    body.local-minimal-ui #historyPanel.panel.active .btn-new-chat {
+        width: 100% !important;
+        margin: 0 !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active {
+        display: flex !important;
+        flex-direction: column !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .prompt-panel-header {
+        display: block !important;
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 35 !important;
+        margin: 0 !important;
+        padding:
+            16px
+            var(--local-mobile-shell-pad-right)
+            10px
+            var(--local-mobile-shell-pad) !important;
+        background: rgba(19, 18, 16, 0.98) !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+
+    body.local-minimal-ui.light-theme #instructionsPanel.panel.active .prompt-panel-header {
+        background: rgba(244, 236, 222, 0.98) !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .panel-heading {
+        display: none !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .prompt-panel-topbar {
+        display: block !important;
+        width: 100% !important;
+        margin: 0 !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .personality-selector,
+    body.local-minimal-ui #instructionsPanel.panel.active .personality-selector-trigger {
+        width: 100% !important;
+        max-width: none !important;
+        min-width: 0 !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .personality-selector-trigger {
+        min-height: 60px !important;
+        justify-content: space-between !important;
+        padding-inline: 18px !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .instruction-content {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        padding:
+            12px
+            var(--local-mobile-shell-pad-right)
+            calc(var(--local-mobile-tabbar-height) + 18px)
+            var(--local-mobile-shell-pad) !important;
+    }
+
+    body.local-minimal-ui #settingsModal {
+        inset: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+    }
+
+    body.local-minimal-ui #settingsModal::-webkit-scrollbar,
+    body.local-minimal-ui #settingsModal .settings-panel::-webkit-scrollbar,
+    body.local-minimal-ui #settingsModal .settings-content::-webkit-scrollbar {
+        display: none !important;
+        width: 0 !important;
+        height: 0 !important;
+    }
+
+    body.local-minimal-ui #settingsModal .settings-panel {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        min-height: 100dvh !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border-radius: 0 !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        box-sizing: border-box !important;
+        scrollbar-width: none !important;
+    }
+
+    body.local-minimal-ui #settingsModal .theme-color-section,
+    body.local-minimal-ui #settingsModal .settings-content,
+    body.local-minimal-ui #settingsModal #adminPanel {
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding-left: var(--local-mobile-shell-pad) !important;
+        padding-right: var(--local-mobile-shell-pad-right) !important;
+        box-sizing: border-box !important;
+    }
+
+    body.local-minimal-ui #settingsModal .theme-color-section {
+        padding-top: calc(env(safe-area-inset-top, 0px) + 12px) !important;
+    }
+
+    body.local-minimal-ui #settingsModal .settings-content {
+        padding-top: 14px !important;
+        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 26px) !important;
+    }
+
+    body.local-minimal-ui #settingsModal .settings-close-row,
+    body.local-minimal-ui #settingsModal .settings-row,
+    body.local-minimal-ui #settingsModal .account-block,
+    body.local-minimal-ui #settingsModal .voice-config-block,
+    body.local-minimal-ui #settingsModal .account-actions,
+    body.local-minimal-ui #settingsModal .role-row,
+    body.local-minimal-ui #settingsModal .export-row,
+    body.local-minimal-ui #settingsModal .voice-row,
+    body.local-minimal-ui #settingsModal .theme-color-row,
+    body.local-minimal-ui #settingsModal .admin-panel,
+    body.local-minimal-ui #settingsModal .admin-invite-form,
+    body.local-minimal-ui #settingsModal .admin-hidden-prompt-body,
+    body.local-minimal-ui #settingsModal .admin-users-access-body,
+    body.local-minimal-ui #settingsModal .admin-webhook-debug-body {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        box-sizing: border-box !important;
+    }
+}

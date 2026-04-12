@@ -385,6 +385,9 @@
   - start-card labels are centered by the button itself, not only by the inner text span;
   - `Поиск по диалогам` and `Новый диалог` stay sticky at the top of the history scroller;
   - mobile fullscreen settings use only inner safe-area padding; the sheet itself should not show a visible desktop-like scrollbar or asymmetric left/right clipping.
+  - the last mobile geometry layer at the end of `C:\projects\sites\client-simulator\style.css` is the canonical override for phone-shell fixes; use it instead of reviving older conflicting mobile blocks higher in the file.
+  - on mobile, `История` must be a real column layout: sticky controls first, scrolling list second, with no duplicate inner title above the list.
+  - on mobile, `Роль` must open as one vertical app screen with a full-width selector at the top and full-width content below it; do not restore the older centered mini-card/dropdown header.
 - Prompt variation discoverability lock:
   - the role screen must show a visible `Варианты промпта` block whenever more than one variation exists;
   - on mobile, prompt variations are a full-width vertical list, not a hidden horizontal chip scroller;

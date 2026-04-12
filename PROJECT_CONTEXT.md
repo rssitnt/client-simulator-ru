@@ -150,6 +150,11 @@
   - history must scroll through its own body while keeping search/new-dialog controls sticky at the top;
   - mobile settings must be edge-to-edge only at the sheet level, with all real content aligned by symmetric inner safe-area padding;
   - mobile `Роль` is now expected to behave like a real full-width app screen: full-width selector at the top, then variations/toolbar/content in one vertical flow, without the old centered desktop mini-header or clipped side padding.
+- Final mobile geometry lock now sits at the very end of `C:\projects\sites\client-simulator\style.css` and is the canonical place for phone-shell fixes:
+  - start-action buttons use grid centering so the label sits visually in the real middle, not slightly high/off-center;
+  - history body is a real column layout with `history-panel-controls` ordered first and sticky at the top of the scroll area;
+  - mobile settings use the same left/right safe-area inset on all content blocks and intentionally hide the sheet scrollbar;
+  - mobile `Роль` uses a sticky full-width selector header and full-width content flow; do not revive the old centered dropdown card there.
 - Prompt switching stability:
   - if a role has multiple prompt variations, the UI must expose them as an explicit `Варианты промпта` block instead of relying on hidden horizontal overflow;
   - on mobile that block is now a vertical full-width list under the role selector;
