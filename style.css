@@ -17552,9 +17552,9 @@ body * {
 
     body.local-minimal-ui #instructionsPanel.panel.active .prompt-panel-header {
         display: block !important;
-        position: sticky !important;
-        top: 0 !important;
-        z-index: 35 !important;
+        position: relative !important;
+        top: auto !important;
+        z-index: 1 !important;
         margin: 0 !important;
         padding:
             16px
@@ -17622,7 +17622,7 @@ body * {
 
     body.local-minimal-ui #instructionsPanel.panel.active .markdown-toolbar {
         position: sticky !important;
-        top: calc(var(--local-mobile-appbar-height) + 6px) !important;
+        top: calc(var(--local-mobile-appbar-height) + 2px) !important;
         z-index: 26 !important;
         margin: 0 0 14px !important;
         display: grid !important;
