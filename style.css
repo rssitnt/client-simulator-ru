@@ -75,6 +75,173 @@ body.light-theme .message.user {
     color: #1a1a1a !important;
 }
 
+/* Final light-theme settings/admin consistency pass
+   Palette-only cleanup for fullscreen settings so theme switching keeps geometry intact. */
+body.local-minimal-ui.light-theme {
+    --local-settings-bg-final: #f7efe4;
+    --local-settings-surface-final: #fcf7f0;
+    --local-settings-surface-soft-final: #f3eadf;
+    --local-settings-border-final: rgba(123, 106, 84, 0.16);
+    --local-settings-border-strong-final: rgba(115, 98, 76, 0.22);
+    --local-settings-text-final: #2f2922;
+    --local-settings-muted-final: #796d61;
+}
+
+body.local-minimal-ui.light-theme #settingsModal {
+    background: rgba(121, 101, 77, 0.12) !important;
+    backdrop-filter: blur(10px);
+}
+
+body.local-minimal-ui.light-theme #settingsModal .settings-panel,
+body.local-minimal-ui.light-theme #settingsModal .theme-color-section {
+    background: var(--local-settings-bg-final) !important;
+    color: var(--local-settings-text-final) !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .theme-color-section {
+    border-bottom: 1px solid rgba(123, 106, 84, 0.12) !important;
+    box-shadow: 0 10px 28px rgba(93, 76, 55, 0.08) !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .settings-modal-close,
+body.local-minimal-ui.light-theme #settingsModal .theme-toggle .toggle-slider {
+    background: var(--local-settings-surface-final) !important;
+    border: 1px solid var(--local-settings-border-final) !important;
+    color: var(--local-settings-text-final) !important;
+    box-shadow: none !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .settings-row,
+body.local-minimal-ui.light-theme #settingsModal .account-block,
+body.local-minimal-ui.light-theme #settingsModal .voice-config-block,
+body.local-minimal-ui.light-theme #settingsModal .export-row,
+body.local-minimal-ui.light-theme #settingsModal .admin-panel,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body,
+body.local-minimal-ui.light-theme #settingsModal .admin-hidden-prompt-body,
+body.local-minimal-ui.light-theme #settingsModal .admin-webhook-debug-body,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-form {
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .settings-label,
+body.local-minimal-ui.light-theme #settingsModal .account-line,
+body.local-minimal-ui.light-theme #settingsModal .voice-picker-subtitle,
+body.local-minimal-ui.light-theme #settingsModal .admin-hidden-prompt-hint,
+body.local-minimal-ui.light-theme #settingsModal .admin-access-source,
+body.local-minimal-ui.light-theme #settingsModal .admin-time,
+body.local-minimal-ui.light-theme #settingsModal .admin-presence,
+body.local-minimal-ui.light-theme #settingsModal .admin-sort-btn,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-table tbody td,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-table tbody td::before,
+body.local-minimal-ui.light-theme #settingsModal .admin-webhook-debug-meta,
+body.local-minimal-ui.light-theme #settingsModal .admin-webhook-debug-label,
+body.local-minimal-ui.light-theme #settingsModal .admin-webhook-debug-empty {
+    color: var(--local-settings-muted-final) !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .role-text,
+body.local-minimal-ui.light-theme #settingsModal .admin-panel-title,
+body.local-minimal-ui.light-theme #settingsModal .admin-accordion-trigger,
+body.local-minimal-ui.light-theme #settingsModal .admin-hidden-prompt-summary,
+body.local-minimal-ui.light-theme #settingsModal .admin-user-login,
+body.local-minimal-ui.light-theme #settingsModal .admin-status-main,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-table th,
+body.local-minimal-ui.light-theme #settingsModal .voice-picker-title,
+body.local-minimal-ui.light-theme #settingsModal .admin-webhook-debug-title,
+body.local-minimal-ui.light-theme #settingsModal .admin-webhook-debug-value {
+    color: var(--local-settings-text-final) !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .name-input,
+body.local-minimal-ui.light-theme #settingsModal .password-input,
+body.local-minimal-ui.light-theme #settingsModal .btn-change,
+body.local-minimal-ui.light-theme #settingsModal .btn-cancel,
+body.local-minimal-ui.light-theme #settingsModal .btn-confirm,
+body.local-minimal-ui.light-theme #settingsModal .btn-export,
+body.local-minimal-ui.light-theme #settingsModal .btn-logout,
+body.local-minimal-ui.light-theme #settingsModal .voice-picker-trigger,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-input,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-days-wrap,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-btn,
+body.local-minimal-ui.light-theme #settingsModal .admin-role-picker-trigger,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-toolbar .btn-change,
+body.local-minimal-ui.light-theme #settingsModal .admin-hidden-prompt-textarea,
+body.local-minimal-ui.light-theme #settingsModal .admin-webhook-debug-item,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body[data-admin-layout=\"mobile\"] .admin-users-table tbody tr {
+    background: var(--local-settings-surface-final) !important;
+    border: 1px solid var(--local-settings-border-final) !important;
+    color: var(--local-settings-text-final) !important;
+    box-shadow: none !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-input::placeholder,
+body.local-minimal-ui.light-theme #settingsModal .admin-hidden-prompt-textarea::placeholder {
+    color: rgba(121, 109, 97, 0.76) !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-days,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-days-unit {
+    background: transparent !important;
+    color: var(--local-settings-text-final) !important;
+    border-color: transparent !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .btn-change:hover,
+body.local-minimal-ui.light-theme #settingsModal .btn-cancel:hover,
+body.local-minimal-ui.light-theme #settingsModal .btn-confirm:hover,
+body.local-minimal-ui.light-theme #settingsModal .btn-export:hover,
+body.local-minimal-ui.light-theme #settingsModal .btn-logout:hover,
+body.local-minimal-ui.light-theme #settingsModal .voice-picker-trigger:hover,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-btn:hover,
+body.local-minimal-ui.light-theme #settingsModal .admin-role-picker-trigger:hover,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-toolbar .btn-change:hover,
+body.local-minimal-ui.light-theme #settingsModal .settings-modal-close:hover {
+    background: var(--local-settings-surface-soft-final) !important;
+    border-color: var(--local-settings-border-strong-final) !important;
+    color: var(--local-settings-text-final) !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .voice-picker-menu,
+body.local-minimal-ui.light-theme #settingsModal .admin-role-picker-menu,
+body.local-minimal-ui.light-theme #settingsModal .dropdown-menu.dropdown-menu-settings {
+    background: var(--local-settings-surface-final) !important;
+    border: 1px solid var(--local-settings-border-final) !important;
+    box-shadow: 0 18px 34px rgba(93, 76, 55, 0.10) !important;
+    color: var(--local-settings-text-final) !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-role-picker-option,
+body.local-minimal-ui.light-theme #settingsModal .dropdown-item {
+    color: var(--local-settings-text-final) !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-role-picker-option:hover,
+body.local-minimal-ui.light-theme #settingsModal .admin-role-picker-option.active,
+body.local-minimal-ui.light-theme #settingsModal .dropdown-item:hover {
+    background: var(--local-settings-surface-soft-final) !important;
+    color: var(--local-settings-text-final) !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-accordion,
+body.local-minimal-ui.light-theme #settingsModal .admin-panel-header,
+body.local-minimal-ui.light-theme #settingsModal #adminPanel > .admin-invite-form,
+body.local-minimal-ui.light-theme #settingsModal #adminPanel > .admin-hidden-prompt-section,
+body.local-minimal-ui.light-theme #settingsModal #adminPanel > .admin-users-access-body,
+body.local-minimal-ui.light-theme #settingsModal #adminPanel > .admin-webhook-debug-body {
+    border-top-color: rgba(123, 106, 84, 0.12) !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-users-table th,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-table td {
+    border-bottom-color: rgba(123, 106, 84, 0.12) !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-users-table:has(.admin-empty-row) .admin-empty-row td,
+body.local-minimal-ui.light-theme #settingsModal .admin-empty-row td {
+    color: var(--local-settings-muted-final) !important;
+}
+
 body.light-theme .message.assistant {
     background: #f7f7f7 !important; /* Чуть темнее фона чата */
     border: 1px solid #f7f7f7 !important; /* Обводка цвета заливки */
@@ -15460,4 +15627,319 @@ body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body[data-a
     border-color: var(--local-border-final) !important;
     box-shadow: 0 16px 34px rgba(70, 56, 38, 0.10) !important;
     color: var(--local-text-final) !important;
+}
+
+/* Final mobile app-shell pass
+   Mobile must feel like a separate app flow, not a stacked desktop layout. */
+@media (max-width: 1024px) {
+    body.local-minimal-ui {
+        --local-mobile-tabbar-height: calc(72px + env(safe-area-inset-bottom, 0px));
+    }
+
+    body.local-minimal-ui .mobile-tabs {
+        position: fixed;
+        top: auto;
+        right: 12px;
+        bottom: 12px;
+        left: 12px;
+        z-index: 90;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+        border: 1px solid var(--local-border-final);
+        border-radius: 24px;
+        background: color-mix(in srgb, var(--local-shell-bg-final) 88%, transparent);
+        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18);
+        backdrop-filter: blur(18px);
+    }
+
+    body.local-minimal-ui .mobile-tab {
+        max-width: none;
+        min-height: 48px;
+        padding: 0 10px;
+        border: 1px solid transparent;
+        border-radius: 16px;
+        background: transparent;
+        color: var(--local-text-soft-final);
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+    }
+
+    body.local-minimal-ui .mobile-tab.active {
+        background: var(--local-surface-final);
+        border-color: var(--local-border-final);
+        color: var(--local-text-final);
+    }
+
+    body.local-minimal-ui .container,
+    body.local-minimal-ui .panels-container {
+        height: 100dvh;
+        min-height: 100dvh;
+    }
+
+    body.local-minimal-ui .panels-container {
+        display: block;
+        overflow: hidden;
+        padding-bottom: calc(var(--local-mobile-tabbar-height) + 8px);
+    }
+
+    body.local-minimal-ui .history-panel,
+    body.local-minimal-ui .chat-panel,
+    body.local-minimal-ui .prompt-panel {
+        display: none !important;
+        width: 100%;
+        min-width: 0;
+        max-width: none;
+        height: 100%;
+        min-height: 0;
+        border: none;
+        box-shadow: none;
+        background: var(--local-shell-bg-final);
+        position: relative;
+        inset: auto;
+        transform: none !important;
+        overflow: hidden;
+    }
+
+    body.local-minimal-ui .history-panel.panel.active,
+    body.local-minimal-ui .chat-panel.panel.active,
+    body.local-minimal-ui .prompt-panel.panel.active {
+        display: flex !important;
+        flex-direction: column;
+    }
+
+    body.local-minimal-ui .history-panel {
+        grid-template-columns: none;
+        min-width: 0;
+        max-width: none;
+    }
+
+    body.local-minimal-ui .history-panel-rail,
+    body.local-minimal-ui .history-sidebar-toggle,
+    body.local-minimal-ui #localHistoryToggleBtn,
+    body.local-minimal-ui #localPromptToggleBtn,
+    body.local-minimal-ui #localPromptCloseBtn {
+        display: none !important;
+    }
+
+    body.local-minimal-ui .history-panel-main {
+        display: flex;
+        flex: 1 1 auto;
+        flex-direction: column;
+        width: 100%;
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    body.local-minimal-ui .history-panel-header,
+    body.local-minimal-ui .chat-panel .panel-header,
+    body.local-minimal-ui .prompt-panel-header {
+        display: flex !important;
+        position: sticky;
+        top: 0;
+        z-index: 12;
+        min-height: auto;
+        padding: max(12px, env(safe-area-inset-top, 0px) + 8px) 16px 10px;
+        background: color-mix(in srgb, var(--local-shell-bg-final) 90%, transparent);
+        border-bottom: 1px solid color-mix(in srgb, var(--local-border-final) 75%, transparent);
+        backdrop-filter: blur(18px);
+        box-shadow: none;
+    }
+
+    body.local-minimal-ui .history-panel-header {
+        justify-content: flex-start;
+    }
+
+    body.local-minimal-ui .chat-panel .panel-header,
+    body.local-minimal-ui .prompt-panel-header {
+        justify-content: flex-end;
+    }
+
+    body.local-minimal-ui .history-panel-title {
+        font-size: 19px;
+        line-height: 1.1;
+    }
+
+    body.local-minimal-ui .history-panel-body,
+    body.local-minimal-ui .instruction-content {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+    }
+
+    body.local-minimal-ui .history-panel-body {
+        padding: 12px 16px calc(var(--local-mobile-tabbar-height) + 18px);
+    }
+
+    body.local-minimal-ui .history-panel-controls {
+        gap: 10px;
+    }
+
+    body.local-minimal-ui .history-search,
+    body.local-minimal-ui .history-panel-action {
+        min-height: 48px;
+        border-radius: 16px;
+        background: var(--local-surface-final);
+        border-color: var(--local-border-final);
+    }
+
+    body.local-minimal-ui .history-panel-action {
+        justify-content: center;
+        padding: 0 16px;
+    }
+
+    body.local-minimal-ui .history-thread-list.dialog-history-list {
+        gap: 6px;
+    }
+
+    body.local-minimal-ui .dialog-history-item {
+        border-radius: 18px;
+    }
+
+    body.local-minimal-ui .dialog-history-item-main {
+        padding: 14px 48px 14px 14px;
+    }
+
+    body.local-minimal-ui .dialog-history-item-title {
+        font-size: 15px;
+        line-height: 1.35;
+    }
+
+    body.local-minimal-ui .chat-panel .header-buttons {
+        width: 100%;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+
+    body.local-minimal-ui #localSettingsTopBtn {
+        display: inline-flex !important;
+    }
+
+    body.local-minimal-ui .chat-messages {
+        flex: 1 1 auto;
+        min-height: 0;
+        padding: 14px 0 calc(var(--local-mobile-tabbar-height) + 92px);
+        gap: 14px;
+        overflow-y: auto;
+    }
+
+    body.local-minimal-ui .chat-messages > :not(.message),
+    body.local-minimal-ui .message,
+    body.local-minimal-ui .start-conversation,
+    body.local-minimal-ui .input-wrapper,
+    body.local-minimal-ui .voice-connect-status {
+        width: calc(100% - 24px);
+    }
+
+    body.local-minimal-ui .start-conversation {
+        min-height: calc(100dvh - var(--local-mobile-tabbar-height) - 190px);
+        padding: 10px 0 18px;
+        gap: 14px;
+    }
+
+    body.local-minimal-ui .start-conversation-copy {
+        max-width: none;
+    }
+
+    body.local-minimal-ui .start-conversation-title {
+        font-size: clamp(28px, 8vw, 40px);
+        line-height: 1;
+    }
+
+    body.local-minimal-ui .start-conversation-actions {
+        width: 100%;
+        gap: 12px;
+    }
+
+    body.local-minimal-ui .btn-start {
+        min-height: 72px;
+        padding: 16px;
+        border-radius: 20px;
+    }
+
+    body.local-minimal-ui .btn-start-label {
+        font-size: 18px;
+    }
+
+    body.local-minimal-ui .message.assistant .message-content,
+    body.local-minimal-ui .message.system .message-content,
+    body.local-minimal-ui .message.loading .message-content,
+    body.local-minimal-ui .message.user .message-content {
+        max-width: 86%;
+    }
+
+    body.local-minimal-ui .message.user .message-content {
+        border-radius: 22px;
+        padding: 14px 16px;
+    }
+
+    body.local-minimal-ui .chat-input-container {
+        position: fixed;
+        right: 0;
+        bottom: calc(var(--local-mobile-tabbar-height) + 4px);
+        left: 0;
+        z-index: 70;
+        padding: 0 12px 10px;
+        justify-content: center;
+        gap: 10px;
+        background: transparent;
+    }
+
+    body.local-minimal-ui .input-wrapper {
+        min-height: 58px;
+        border-radius: 24px;
+        background: var(--local-surface-final);
+        border-color: var(--local-border-final);
+    }
+
+    body.local-minimal-ui .btn-send {
+        width: 46px;
+        height: 46px;
+    }
+
+    body.local-minimal-ui.chat-empty-state .chat-input-container {
+        display: none;
+    }
+
+    body.local-minimal-ui .prompt-panel {
+        z-index: auto;
+        width: 100%;
+        min-width: 0;
+        border-left: none;
+    }
+
+    body.local-minimal-ui .prompt-panel-topbar {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    body.local-minimal-ui .personality-selector-trigger {
+        min-height: 52px;
+        border-radius: 16px;
+        background: var(--local-surface-final);
+        border-color: var(--local-border-final);
+    }
+
+    body.local-minimal-ui .personality-selector-menu {
+        position: fixed;
+        top: max(70px, calc(env(safe-area-inset-top, 0px) + 64px));
+        right: 12px;
+        left: 12px;
+        max-height: min(56dvh, 440px);
+        border-radius: 22px;
+        background: var(--local-surface-elevated-final) !important;
+    }
+
+    body.local-minimal-ui .instruction-content {
+        padding: 14px 16px calc(var(--local-mobile-tabbar-height) + 18px);
+        gap: 12px;
+    }
+
+    body.local-minimal-ui .prompt-wrapper {
+        min-height: calc(100dvh - var(--local-mobile-tabbar-height) - 210px);
+        border-radius: 20px;
+        background: transparent;
+    }
 }

@@ -327,6 +327,7 @@
 - Settings on phones are full-screen.
 - Mobile settings have a fixed close button.
 - `Пользователи и доступ` has a mobile card layout instead of the wide desktop table.
+- The fullscreen settings sheet now has one final light-theme surface layer too: on white theme, settings/admin should keep the same geometry as dark mode and differ only by palette, using one warm cream surface system instead of mixing old dark or bluish control styles back in.
 
 ## Keep In Mind
 - If something starts failing in voice mode, check the admin tech log first before adding more heuristics.

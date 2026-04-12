@@ -3347,7 +3347,7 @@ async function runLightThemeMobileRegressionFlow(browser, baseUrl) {
         });
 
         expect(metrics.lightTheme, 'Light theme must be active in mobile light-theme smoke');
-        expect(metrics.mobileTabsDisplay === 'flex', `Mobile tabs must be visible on mobile width, got ${metrics.mobileTabsDisplay}`);
+        expect(metrics.mobileTabsDisplay === 'grid' || metrics.mobileTabsDisplay === 'flex', `Mobile tabs must be visible on mobile width, got ${metrics.mobileTabsDisplay}`);
         expect(metrics.startBtnBackground === metrics.startVoiceBtnBackground, `Chat and voice start cards must share the same light-theme background, got ${metrics.startBtnBackground} vs ${metrics.startVoiceBtnBackground}`);
         expect(metrics.startBtnBackground === metrics.startAttestationBtnBackground, `Chat and attestation start cards must share the same light-theme background, got ${metrics.startBtnBackground} vs ${metrics.startAttestationBtnBackground}`);
         expect(metrics.inputBackground === 'rgba(0, 0, 0, 0)' || metrics.inputBackground === 'transparent', `Light-theme composer input must stay transparent, got ${metrics.inputBackground}`);

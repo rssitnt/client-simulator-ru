@@ -117,6 +117,7 @@
   - admin settings expose `Техлог входа и сброса пароля` with recent `login / restore / reset` events;
   - each event stores a compact browser/Firebase session snapshot so support can triage employee login issues from the app UI.
 - Old global light-theme rules for mobile tabs, `#startBtn`, and generic dropdown active states are now isolated away from `body.local-minimal-ui`; if the warm local light shell drifts back toward old blue/grey styling, inspect that isolation first instead of piling on new overrides.
+- Fullscreen settings/admin in `body.local-minimal-ui.light-theme` now rely on one final warm-cream consistency layer at the very end of `C:\projects\sites\client-simulator\style.css`; treat that tail block as the canonical place for white-theme settings fixes so palette changes do not also mutate geometry or revive older dark/bluish controls.
 
 ## Still watch
 - If one employee still cannot log in while others can, first check Firebase Authentication for an old standalone account or stale password on that exact email.
