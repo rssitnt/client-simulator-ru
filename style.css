@@ -2983,6 +2983,10 @@ body.user-mode .prompt-preview {
 }
 
 .prompt-sync-conflict-notice {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
     margin: 10px 12px 12px;
     padding: 10px 12px;
     border: 1px solid rgba(198, 148, 43, 0.45);
@@ -2991,6 +2995,27 @@ body.user-mode .prompt-preview {
     color: #e7d2a1;
     font-size: 12px;
     line-height: 1.5;
+}
+
+.prompt-sync-conflict-copy {
+    display: block;
+}
+
+.prompt-sync-conflict-action {
+    min-height: 30px;
+    padding: 0 12px;
+    border-color: rgba(214, 174, 86, 0.38);
+    background: rgba(255, 255, 255, 0.08);
+    color: inherit;
+}
+
+.prompt-sync-conflict-action:hover {
+    border-color: rgba(227, 191, 112, 0.58);
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.prompt-sync-conflict-action[hidden] {
+    display: none !important;
 }
 
 .prompt-length-info.is-over {
@@ -3009,6 +3034,17 @@ body.light-theme .prompt-sync-conflict-notice {
     border-color: rgba(188, 138, 34, 0.38);
     background: rgba(255, 236, 194, 0.78);
     color: #6c4d00;
+}
+
+body.light-theme .prompt-sync-conflict-action {
+    border-color: rgba(188, 138, 34, 0.34);
+    background: rgba(255, 248, 232, 0.86);
+    color: #6c4d00;
+}
+
+body.light-theme .prompt-sync-conflict-action:hover {
+    border-color: rgba(188, 138, 34, 0.5);
+    background: rgba(255, 244, 218, 0.98);
 }
 
 body.light-theme .prompt-length-info.is-over {

@@ -174,6 +174,7 @@
   - only the prompt toolbar stays sticky near the top;
   - the prompt variations block is normal scrolling content and must not stay pinned.
 - The visible `Сравнить` action was intentionally removed from the prompt toolbar.
+- If a public prompt conflict saves edits into a hidden local draft, the recovery action now lives inside the conflict notice itself (`Сравнить draft`) instead of returning the old toolbar button.
 
 ## Still watch
 - If one employee still cannot log in while others can, first check Firebase Authentication for an old standalone account or stale password on that exact email.

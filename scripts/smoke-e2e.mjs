@@ -2473,8 +2473,13 @@ async function runPromptConflictRecoveryFlow(browser, baseUrl) {
         await page.waitForFunction((expectedValue) => {
             const state = window.__CLIENT_SIMULATOR_TEST_HOOKS__.getPromptUiState('client');
             const hasConflictNotice = (state.conflictMessage || '').includes('локальный скрытый draft');
+            const compareActionBtn = document.getElementById('promptSyncConflictActionBtn');
+            const compareActionVisible = !!compareActionBtn
+                && !compareActionBtn.hidden
+                && getComputedStyle(compareActionBtn).display !== 'none';
             return (state.activeContent || '').includes(expectedValue)
-                && (state.activeIsLocal || hasConflictNotice);
+                && (state.activeIsLocal || hasConflictNotice)
+                && compareActionVisible;
         }, localDraftText);
     } catch (error) {
         await ensureOutputDir();

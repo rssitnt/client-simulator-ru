@@ -400,3 +400,4 @@
   - only the prompt toolbar (`скрыть / история / форматирование`) stays sticky;
   - the prompt variations list must scroll with the rest of the content and must not stay pinned under the selector.
 - The prompt toolbar no longer has a visible `Сравнить` button.
+- If a public prompt conflict preserves edits as a hidden local draft, the recovery action must live inside the conflict notice itself (`Сравнить draft`) so admins can still inspect/publish that draft without restoring the old toolbar button.

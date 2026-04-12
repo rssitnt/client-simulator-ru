@@ -1698,6 +1698,8 @@ const authErrorText = document.getElementById('passwordError');
 const promptVariationsContainer = document.getElementById('promptVariations');
 const promptVariationsLabel = document.getElementById('promptVariationsLabel');
 const promptSyncConflictNotice = document.getElementById('promptSyncConflictNotice');
+const promptSyncConflictNoticeText = document.getElementById('promptSyncConflictNoticeText');
+const promptSyncConflictActionBtn = document.getElementById('promptSyncConflictActionBtn');
 const promptLengthInfo = document.getElementById('promptLengthInfo');
 const AUTH_SUBMIT_DEFAULT_LABEL = String(modalNameSubmit?.textContent || 'Войти').trim() || 'Войти';
 const AUTH_RESET_PASSWORD_DEFAULT_LABEL = String(authResetPasswordBtn?.textContent || 'Сбросить пароль').trim() || 'Сбросить пароль';
@@ -12584,7 +12586,24 @@ function renderPromptSyncConflictNotice(role = getActiveRole()) {
     if (!promptSyncConflictNotice) return;
     const message = PROMPT_ROLES.includes(role) ? String(promptSyncConflictMessages[role] || '').trim() : '';
     promptSyncConflictNotice.hidden = !message;
-    promptSyncConflictNotice.textContent = message;
+    if (promptSyncConflictNoticeText) {
+        promptSyncConflictNoticeText.textContent = message;
+    } else {
+        promptSyncConflictNotice.textContent = message;
+    }
+    if (promptSyncConflictActionBtn) {
+        const compareContext = message && isAdmin() ? getPromptCompareContext(role) : null;
+        const compareLabel = compareContext?.activeVariation?.isLocal
+            ? 'Сравнить draft'
+            : 'Сравнить hidden draft';
+        promptSyncConflictActionBtn.hidden = !compareContext;
+        if (compareContext) {
+            promptSyncConflictActionBtn.textContent = compareLabel;
+            setCustomTooltip(promptSyncConflictActionBtn, compareLabel);
+        } else {
+            setCustomTooltip(promptSyncConflictActionBtn, '');
+        }
+    }
 }
 
 function preservePromptConflictAsLocalDraft(role = '') {
@@ -21139,6 +21158,7 @@ function applyImprovedPrompt(targetMode = 'new') {
 bindEvent(aiImproveBtn, 'click', showAiImproveModal);
 bindEvent(promptHistoryBtn, 'click', showPromptHistoryModal);
 bindEvent(promptVisibilityBtn, 'click', toggleActivePromptVisibility);
+bindEvent(promptSyncConflictActionBtn, 'click', showPromptCompareModal);
 bindEvent(aiImproveModalClose, 'click', hideAiImproveModal);
 bindEvent(aiImproveCancel, 'click', hideAiImproveModal);
 bindEvent(aiImproveSubmit, 'click', improvePromptWithAI);
