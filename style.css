@@ -16831,3 +16831,116 @@ html *,
 body * {
     -webkit-tap-highlight-color: transparent !important;
 }
+
+/* Final mobile history/settings stabilization pass:
+   keep history controls pinned right under the top nav
+   and make the mobile settings sheet full-width, scroll-clean,
+   and padded symmetrically inside the viewport. */
+@media (max-width: 1024px) {
+    body.local-minimal-ui .btn-start {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding-inline: 20px;
+    }
+
+    body.local-minimal-ui .btn-start-label {
+        display: block;
+        width: 100%;
+        text-align: center;
+        line-height: 1.12;
+    }
+
+    body.local-minimal-ui #historyPanel .history-panel-main {
+        display: flex;
+        flex-direction: column;
+    }
+
+    body.local-minimal-ui #historyPanel .history-panel-body {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        padding: 12px 16px 20px;
+        scrollbar-width: none;
+    }
+
+    body.local-minimal-ui #historyPanel .history-panel-controls {
+        position: sticky;
+        top: 0;
+        z-index: 6;
+        padding-bottom: 10px;
+        background:
+            linear-gradient(
+                180deg,
+                color-mix(in srgb, var(--local-shell-bg-final) 96%, transparent) 0%,
+                color-mix(in srgb, var(--local-shell-bg-final) 96%, transparent) 78%,
+                rgba(0, 0, 0, 0) 100%
+            );
+        backdrop-filter: blur(16px);
+    }
+
+    body.local-minimal-ui #historyPanel .history-panel-body::-webkit-scrollbar {
+        display: none;
+    }
+
+    body.local-minimal-ui #historyPanel .dialog-history-list-wrap {
+        min-height: 0;
+        overflow: visible !important;
+        padding-top: 4px;
+    }
+
+    body.local-minimal-ui #settingsModal {
+        padding: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+        scrollbar-width: none;
+    }
+
+    body.local-minimal-ui #settingsModal::-webkit-scrollbar {
+        display: none;
+    }
+
+    body.local-minimal-ui #settingsModal .settings-panel {
+        width: 100dvw !important;
+        min-width: 0;
+        max-width: none !important;
+        min-height: 100dvh;
+        max-height: none;
+        margin: 0;
+        padding: 0;
+        border-radius: 0;
+        overflow: visible;
+        box-sizing: border-box;
+    }
+
+    body.local-minimal-ui #settingsModal .theme-color-section {
+        padding-left: max(16px, env(safe-area-inset-left, 0px));
+        padding-right: max(16px, env(safe-area-inset-right, 0px));
+    }
+
+    body.local-minimal-ui #settingsModal .theme-color-row {
+        width: 100%;
+        min-width: 0;
+        gap: 12px;
+        box-sizing: border-box;
+    }
+
+    body.local-minimal-ui #settingsModal .settings-content,
+    body.local-minimal-ui #settingsModal #adminPanel {
+        width: 100%;
+        max-width: 560px;
+        margin: 0 auto;
+        padding-left: max(16px, env(safe-area-inset-left, 0px));
+        padding-right: max(16px, env(safe-area-inset-right, 0px));
+        box-sizing: border-box;
+    }
+
+    body.local-minimal-ui #settingsModal .settings-content {
+        padding-top: 12px;
+        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 28px);
+    }
+}

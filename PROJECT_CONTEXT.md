@@ -139,6 +139,10 @@
 - Mobile tabs (`История / Чат / Роль`) now live in a top sticky app bar, not in a bottom dock.
 - The local/mobile working chat header no longer shows `client simulator`; only the empty first screen should show `Начать чат`.
 - The inline local clear-chat header action was removed intentionally.
+- Latest mobile shell stabilization:
+  - start-action labels are forced to true center alignment inside their buttons;
+  - history search plus `Новый диалог` must stay pinned directly under the top app bar instead of drifting into the feed;
+  - mobile fullscreen settings now use symmetric safe-area padding and hide the sheet scrollbar itself rather than showing a desktop-like right-edge scroller.
 - A final bottom-of-file interaction layer suppresses platform blue tap/click glow globally across desktop and mobile controls.
 
 ## Still watch

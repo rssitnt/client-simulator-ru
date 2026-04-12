@@ -157,8 +157,13 @@
 - on mobile, the empty chat start screen is intentionally top-aligned and compact now; do not restore the older stretched `start-conversation` min-height that pushed the first card down and made it look clipped.
 - the localhost light theme now has its own warm override layer for history/chat/start cards/input/role drawer/settings drawer, so it no longer falls back to old cold or dark surfaces from the legacy UI;
   - it is now the intended production shell on the main domains; future fixes should treat the old grey shell as deprecated rather than as the primary interface.
-  - the old grey production shell should not be restored on the main domain unless explicitly requested.
-  - as of 2026-04-09, the chosen production host is still GitHub Pages for corporate-network compatibility; Vercel may still exist as a side deployment, but the main domain should continue serving from GitHub Pages unless the user explicitly asks to switch again.
+- the old grey production shell should not be restored on the main domain unless explicitly requested.
+- current mobile shell contract:
+  - top nav (`история / чат / роль + настройки`) is the only mobile header;
+  - history search and `Новый диалог` must stay pinned directly under that top nav, not drift into the middle of the list while scrolling;
+  - mobile start CTA labels must stay visually centered inside their buttons;
+  - mobile fullscreen settings must use symmetric safe-area padding on both sides and should not show a visible native scrollbar on the sheet itself.
+- as of 2026-04-09, the chosen production host is still GitHub Pages for corporate-network compatibility; Vercel may still exist as a side deployment, but the main domain should continue serving from GitHub Pages unless the user explicitly asks to switch again.
   - the very last light-theme override layer in `C:\projects\sites\client-simulator\style.css` now also enforces geometry parity with dark mode for fullscreen settings/admin: switching theme there must change palette only, not grids, radii, heights, compactness, or button widths.
   - the admin panel inside settings now follows the same warm minimal shell language as the rest of the site:
     - outer admin sections are flattened into divider-based blocks instead of heavy nested rectangles;
