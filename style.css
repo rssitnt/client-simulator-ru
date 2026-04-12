@@ -11976,6 +11976,19 @@ body.local-minimal-ui.light-theme .toolbar-btn {
         width: 34px;
         min-height: 34px;
     }
+
+    body.local-minimal-ui .instruction-content {
+        padding-bottom: 20px;
+    }
+
+    body.local-minimal-ui .prompt-wrapper.instruction-editor.active {
+        flex: 0 0 auto;
+        min-height: auto;
+    }
+
+    body.local-minimal-ui .prompt-preview {
+        min-height: auto;
+    }
 }
 
 body.local-minimal-ui.light-theme .history-panel {
@@ -16542,4 +16555,93 @@ body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body[data-a
         font-size: 13px;
         line-height: 1.5;
     }
+}
+
+/* Final interaction parity pass:
+   suppress platform blue tap/click glow across desktop/mobile without changing layout */
+button,
+[role="button"],
+a,
+input,
+select,
+textarea,
+summary,
+.btn-icon,
+.btn-change,
+.btn-cancel,
+.btn-confirm,
+.btn-export,
+.btn-logout,
+.btn-start,
+.mobile-tab,
+.dialog-history-item,
+.dialog-history-item-main,
+.voice-picker-trigger,
+.admin-role-picker-trigger,
+.dropdown-item,
+.voice-picker-option,
+.admin-role-picker-option {
+    -webkit-tap-highlight-color: transparent;
+}
+
+button:focus,
+button:active,
+[role="button"]:focus,
+[role="button"]:active,
+a:focus,
+a:active,
+.btn-icon:focus,
+.btn-icon:active,
+.btn-change:focus,
+.btn-change:active,
+.btn-cancel:focus,
+.btn-cancel:active,
+.btn-confirm:focus,
+.btn-confirm:active,
+.btn-export:focus,
+.btn-export:active,
+.btn-logout:focus,
+.btn-logout:active,
+.btn-start:focus,
+.btn-start:active,
+.mobile-tab:focus,
+.mobile-tab:active,
+.dialog-history-item:focus,
+.dialog-history-item:active,
+.dialog-history-item-main:focus,
+.dialog-history-item-main:active,
+.voice-picker-trigger:focus,
+.voice-picker-trigger:active,
+.admin-role-picker-trigger:focus,
+.admin-role-picker-trigger:active,
+.dropdown-item:focus,
+.dropdown-item:active,
+.voice-picker-option:focus,
+.voice-picker-option:active,
+.admin-role-picker-option:focus,
+.admin-role-picker-option:active {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+button:focus-visible,
+[role="button"]:focus-visible,
+a:focus-visible,
+.btn-icon:focus-visible,
+.btn-change:focus-visible,
+.btn-cancel:focus-visible,
+.btn-confirm:focus-visible,
+.btn-export:focus-visible,
+.btn-logout:focus-visible,
+.btn-start:focus-visible,
+.mobile-tab:focus-visible,
+.dialog-history-item:focus-visible,
+.dialog-history-item-main:focus-visible,
+.voice-picker-trigger:focus-visible,
+.admin-role-picker-trigger:focus-visible,
+.dropdown-item:focus-visible,
+.voice-picker-option:focus-visible,
+.admin-role-picker-option:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
 }

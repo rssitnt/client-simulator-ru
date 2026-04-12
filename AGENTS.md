@@ -326,6 +326,7 @@
 ### Mobile UI
 - Settings on phones are full-screen.
 - Mobile settings have a fixed close button.
+- Platform blue tap/click glow is intentionally suppressed across desktop/mobile controls; do not reintroduce default browser halos on tap/click.
 - `Пользователи и доступ` has a mobile card layout instead of the wide desktop table.
 - The fullscreen settings sheet now has one final light-theme surface layer too: on white theme, settings/admin should keep the same geometry as dark mode and differ only by palette, using one warm cream surface system instead of mixing old dark or bluish control styles back in.
 - Mobile local shell is now intentionally app-like rather than a scaled desktop layout:
@@ -334,6 +335,7 @@
   - bottom mobile tabs use one dock-like bar with equal tab pills;
   - chat composer keeps a fixed gap above the tab bar and should never overlap it;
   - mobile role editing uses a sticky compact chip row plus a horizontal formatting tray, not the old desktop editor density.
+  - mobile role preview must use natural content height now; do not let `.prompt-wrapper/.prompt-preview` stretch to fill the remaining viewport and create an empty block above the bottom tabs.
   - mobile fullscreen settings/admin should also keep that app-sheet feel now:
     - sticky top bar inside settings;
     - tighter rows and shorter controls;
