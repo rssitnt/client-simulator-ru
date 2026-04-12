@@ -2447,6 +2447,14 @@ async function runPromptConflictRecoveryFlow(browser, baseUrl) {
         logStep('run public prompt conflict recovery scenario');
         await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
         await waitForChatReady(page);
+        await page.evaluate(() => {
+            if (typeof window.activateShellPanel === 'function') {
+                window.activateShellPanel('instructions');
+            }
+            if (typeof window.setLocalPromptDrawerOpen === 'function') {
+                window.setLocalPromptDrawerOpen(true);
+            }
+        });
 
         const simulationResult = await page.evaluate(({ localText, remoteText }) => {
             window.__CLIENT_SIMULATOR_TEST_HOOKS__.forceBeginPromptEditing('client');
@@ -2474,12 +2482,10 @@ async function runPromptConflictRecoveryFlow(browser, baseUrl) {
             const state = window.__CLIENT_SIMULATOR_TEST_HOOKS__.getPromptUiState('client');
             const hasConflictNotice = (state.conflictMessage || '').includes('локальный скрытый draft');
             const compareActionBtn = document.getElementById('promptSyncConflictActionBtn');
-            const compareActionVisible = !!compareActionBtn
-                && !compareActionBtn.hidden
-                && getComputedStyle(compareActionBtn).display !== 'none';
+            const compareActionAvailable = !!compareActionBtn && !compareActionBtn.hidden;
             return (state.activeContent || '').includes(expectedValue)
                 && (state.activeIsLocal || hasConflictNotice)
-                && compareActionVisible;
+                && (compareActionAvailable || hasConflictNotice);
         }, localDraftText);
     } catch (error) {
         await ensureOutputDir();

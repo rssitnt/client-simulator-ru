@@ -17929,6 +17929,92 @@ body * {
     }
 }
 
+/* Final mobile settings shell hard-stop:
+   fullscreen sheet stays edge-to-edge, but every visible control sits inside
+   one centered app-width column with symmetrical breathing room. */
+@media (max-width: 1024px) {
+    body.local-minimal-ui {
+        --local-mobile-settings-gutter: max(18px, env(safe-area-inset-left, 0px) + 12px);
+        --local-mobile-settings-gutter-right: max(18px, env(safe-area-inset-right, 0px) + 12px);
+    }
+
+    body.local-minimal-ui #settingsModal .settings-panel {
+        padding-inline: 0 !important;
+    }
+
+    body.local-minimal-ui #settingsModal .theme-color-section,
+    body.local-minimal-ui #settingsModal .settings-content,
+    body.local-minimal-ui #settingsModal #adminPanel {
+        width: min(100%, 520px) !important;
+        max-width: min(100%, 520px) !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+        padding-left: var(--local-mobile-settings-gutter) !important;
+        padding-right: var(--local-mobile-settings-gutter-right) !important;
+        box-sizing: border-box !important;
+    }
+
+    body.local-minimal-ui #settingsModal .theme-color-row,
+    body.local-minimal-ui #settingsModal .settings-row,
+    body.local-minimal-ui #settingsModal .password-section,
+    body.local-minimal-ui #settingsModal .admin-accordion,
+    body.local-minimal-ui #settingsModal .admin-panel,
+    body.local-minimal-ui #settingsModal .admin-invite-form,
+    body.local-minimal-ui #settingsModal .admin-hidden-prompt-body,
+    body.local-minimal-ui #settingsModal .admin-users-access-body,
+    body.local-minimal-ui #settingsModal .admin-webhook-debug-body {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        box-sizing: border-box !important;
+    }
+
+    body.local-minimal-ui #settingsModal .theme-color-row {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+
+    body.local-minimal-ui #settingsModal .settings-modal-close {
+        margin-right: 0 !important;
+    }
+
+    body.local-minimal-ui #settingsModal .account-topline,
+    body.local-minimal-ui #settingsModal .role-inline,
+    body.local-minimal-ui #settingsModal .export-row {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    body.local-minimal-ui #settingsModal .account-line,
+    body.local-minimal-ui #settingsModal .settings-label,
+    body.local-minimal-ui #settingsModal .role-text,
+    body.local-minimal-ui #settingsModal .voice-picker-current-name,
+    body.local-minimal-ui #settingsModal .voice-picker-current-description,
+    body.local-minimal-ui #settingsModal .admin-panel-title,
+    body.local-minimal-ui #settingsModal .admin-accordion-title,
+    body.local-minimal-ui #settingsModal .admin-hidden-prompt-summary {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        overflow-wrap: anywhere !important;
+        word-break: break-word !important;
+    }
+
+    body.local-minimal-ui #settingsModal .btn-change,
+    body.local-minimal-ui #settingsModal .btn-logout,
+    body.local-minimal-ui #settingsModal .btn-export,
+    body.local-minimal-ui #settingsModal .name-input,
+    body.local-minimal-ui #settingsModal .voice-picker-trigger,
+    body.local-minimal-ui #settingsModal .password-input {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        box-sizing: border-box !important;
+    }
+}
+
 /* Final compact mobile admin cards:
    denser app-like cards for "Пользователи и доступ" inside fullscreen settings. */
 @media (max-width: 1024px) {

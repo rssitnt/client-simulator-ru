@@ -185,6 +185,9 @@
 - The mobile top tab for `Роль` now uses the `fluent:prompt-24-regular` SVG asset and should stay icon-only like `История`, `Чат`, and `Настройки`.
 - Mobile fullscreen settings header:
   - the top close button must stay centered in its row without any residual dark circle or bleed-through from hidden shell controls below it.
+- The final mobile settings hard-stop now also locks the controls themselves to the inset column:
+  - direct `.settings-row`, password sections, admin accordions, and their buttons/inputs/select triggers are forced to the same centered app-width column;
+  - this is the late override that stops mobile settings content from growing back to full viewport width and clipping into the screen edges.
 - The visible `Сравнить` action was intentionally removed from the prompt toolbar.
 - If a public prompt conflict saves edits into a hidden local draft, the recovery action now lives inside the conflict notice itself (`Сравнить draft`) instead of returning the old toolbar button.
 

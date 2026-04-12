@@ -409,5 +409,8 @@
 - Mobile fullscreen settings header:
   - the close button must stay visually centered in the top sticky row;
   - no dark halo, offset circle, or underlying settings trigger should bleed through under the `X` while the sheet is open.
+- The final mobile settings shell hard-stop now clamps the visible controls themselves too:
+  - direct `.settings-row`, password sections, admin accordions/panels, and their buttons/inputs/dropdowns are width-locked to the centered app-width column;
+  - this is the last-resort layer that prevents mobile settings content from stretching back to raw viewport edges even if older mobile rules higher in `style.css` try to do so.
 - The prompt toolbar no longer has a visible `Сравнить` button.
 - If a public prompt conflict preserves edits as a hidden local draft, the recovery action must live inside the conflict notice itself (`Сравнить draft`) so admins can still inspect/publish that draft without restoring the old toolbar button.
