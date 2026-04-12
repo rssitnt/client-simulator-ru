@@ -159,6 +159,11 @@
   - prompt variation cards are taller and full-width;
   - the markdown toolbar buttons use a larger tap target;
   - variations plus toolbar stay sticky near the top of the role scroll area instead of drifting away while reading the prompt body.
+- Mobile fullscreen settings now also use a final fit-and-inset pass:
+  - the sheet itself stays fullscreen, but all real settings/admin content sits inside one narrower centered column;
+  - left/right padding is symmetric and safe-area aware;
+  - text/buttons/dropdowns must not clip into the screen edges or look glued to the right edge;
+  - the sheet scrollbar itself remains intentionally hidden on phones.
 - Prompt switching stability:
   - if a role has multiple prompt variations, the UI must expose them as an explicit `Варианты промпта` block instead of relying on hidden horizontal overflow;
   - on mobile that block is now a vertical full-width list under the role selector;

@@ -17688,3 +17688,66 @@ body * {
         box-sizing: border-box !important;
     }
 }
+
+/* Final mobile settings fit-and-inset pass:
+   the fullscreen sheet stays edge-to-edge, but all real controls live inside
+   one readable centered column with symmetric side breathing room. */
+@media (max-width: 1024px) {
+    body.local-minimal-ui #settingsModal .theme-color-section,
+    body.local-minimal-ui #settingsModal .settings-content {
+        max-width: 460px !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+        padding-left: max(18px, env(safe-area-inset-left, 0px) + 12px) !important;
+        padding-right: max(18px, env(safe-area-inset-right, 0px) + 12px) !important;
+    }
+
+    body.local-minimal-ui #settingsModal #adminPanel {
+        max-width: 460px !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+
+    body.local-minimal-ui #settingsModal .settings-close-row,
+    body.local-minimal-ui #settingsModal .settings-row,
+    body.local-minimal-ui #settingsModal .account-block,
+    body.local-minimal-ui #settingsModal .voice-config-block,
+    body.local-minimal-ui #settingsModal .account-actions,
+    body.local-minimal-ui #settingsModal .role-row,
+    body.local-minimal-ui #settingsModal .export-row,
+    body.local-minimal-ui #settingsModal .voice-row,
+    body.local-minimal-ui #settingsModal .theme-color-row,
+    body.local-minimal-ui #settingsModal .admin-panel,
+    body.local-minimal-ui #settingsModal .admin-invite-form,
+    body.local-minimal-ui #settingsModal .admin-hidden-prompt-body,
+    body.local-minimal-ui #settingsModal .admin-users-access-body,
+    body.local-minimal-ui #settingsModal .admin-webhook-debug-body {
+        overflow-x: clip !important;
+    }
+
+    body.local-minimal-ui #settingsModal .settings-label,
+    body.local-minimal-ui #settingsModal .account-line,
+    body.local-minimal-ui #settingsModal .role-text,
+    body.local-minimal-ui #settingsModal .voice-picker-current-name,
+    body.local-minimal-ui #settingsModal .voice-picker-current-description,
+    body.local-minimal-ui #settingsModal .admin-panel-title,
+    body.local-minimal-ui #settingsModal .admin-hidden-prompt-summary,
+    body.local-minimal-ui #settingsModal .admin-accordion-trigger,
+    body.local-minimal-ui #settingsModal .admin-invite-days-unit {
+        overflow-wrap: anywhere !important;
+        word-break: break-word !important;
+    }
+
+    body.local-minimal-ui #settingsModal .settings-close-row {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+
+    body.local-minimal-ui #settingsModal .account-topline,
+    body.local-minimal-ui #settingsModal .role-inline {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+}

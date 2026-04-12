@@ -389,6 +389,7 @@
   - on mobile, `История` must be a real column layout: sticky controls first, scrolling list second, with no duplicate inner title above the list.
   - on mobile, `Роль` must open as one vertical app screen with a full-width selector at the top and full-width content below it; do not restore the older centered mini-card/dropdown header.
   - the mobile role editing shelf is intentionally touch-first now: larger variation cards, larger toolbar hit areas, and sticky variations/toolbar under the selector while the prompt body scrolls.
+  - on mobile, fullscreen `Настройки` stay edge-to-edge only as a shell; the actual content must sit in a centered narrower column with symmetric left/right padding so labels, buttons, and dropdowns never touch or cross the viewport edges.
 - Prompt variation discoverability lock:
   - the role screen must show a visible `Варианты промпта` block whenever more than one variation exists;
   - on mobile, prompt variations are a full-width vertical list, not a hidden horizontal chip scroller;
