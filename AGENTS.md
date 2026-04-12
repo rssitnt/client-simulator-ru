@@ -385,3 +385,8 @@
   - start-card labels are centered by the button itself, not only by the inner text span;
   - `Поиск по диалогам` and `Новый диалог` stay sticky at the top of the history scroller;
   - mobile fullscreen settings use only inner safe-area padding; the sheet itself should not show a visible desktop-like scrollbar or asymmetric left/right clipping.
+- Prompt variation discoverability lock:
+  - the role screen must show a visible `Варианты промпта` block whenever more than one variation exists;
+  - on mobile, prompt variations are a full-width vertical list, not a hidden horizontal chip scroller;
+  - admin view must not hide a valid public variation only because a local override for it exists;
+  - smoke now covers a multi-variation client prompt case so the role screen cannot silently collapse back to one visible option.

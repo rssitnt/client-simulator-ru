@@ -1696,6 +1696,7 @@ const localhostDevAuthBtn = document.getElementById('localhostDevAuthBtn');
 const togglePasswordVisibilityBtn = document.getElementById('togglePasswordVisibility');
 const authErrorText = document.getElementById('passwordError');
 const promptVariationsContainer = document.getElementById('promptVariations');
+const promptVariationsLabel = document.getElementById('promptVariationsLabel');
 const promptSyncConflictNotice = document.getElementById('promptSyncConflictNotice');
 const promptLengthInfo = document.getElementById('promptLengthInfo');
 const AUTH_SUBMIT_DEFAULT_LABEL = String(modalNameSubmit?.textContent || 'Войти').trim() || 'Войти';
@@ -13086,20 +13087,9 @@ function getPublicActiveContent(role) {
 function getVisibleVariations(role, isAdminUser = isAdmin()) {
     const variations = promptsData[role]?.variations || [];
     const shouldHideAttestation = !isAdminUser && !isAttestationMode;
-    const hiddenBaseIds = new Set();
-    if (isAdminUser) {
-        variations.forEach((variation) => {
-            if (!variation?.isLocal) return;
-            const basePublicVariation = findBasePublicVariationForLocal(role, variation);
-            if (isBrokenEmptyLocalOverride(role, variation, basePublicVariation)) return;
-            if (basePublicVariation?.id) {
-                hiddenBaseIds.add(basePublicVariation.id);
-            }
-        });
-    }
     return variations.filter((variation) => {
+        if (variation?.isLocal && isBrokenEmptyLocalOverride(role, variation)) return false;
         if (!isAdminUser && variation?.isLocal) return false;
-        if (isAdminUser && !variation?.isLocal && hiddenBaseIds.has(variation.id)) return false;
         if (shouldHideAttestation && (variation?.name || '').trim().toLowerCase() === 'аттестация') return false;
         return true;
     });
@@ -14284,6 +14274,12 @@ function renderVariations() {
     const isAdminUser = isAdmin();
     const visibleVariations = getVisibleVariations(role, isAdminUser);
     const activeId = getActiveVariation(role)?.id || null;
+    if (promptVariationsLabel) {
+        promptVariationsLabel.hidden = visibleVariations.length <= 1;
+        promptVariationsLabel.textContent = visibleVariations.length <= 1
+            ? 'Варианты промпта'
+            : `Варианты ${getRoleLabel(role).toLowerCase()}`;
+    }
     
     const fragment = document.createDocumentFragment();
 

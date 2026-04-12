@@ -2379,6 +2379,71 @@ async function runRolePreviewVisibilityFlow(browser, baseUrl) {
     }
 }
 
+async function runPromptVariationVisibilityFlow(browser, baseUrl) {
+    const scenario = createIdleScenario();
+    const context = await browser.newContext({ viewport: { width: 430, height: 932 } });
+    await installCommonRoutes(context, scenario);
+    await seedLocalState(context);
+    const page = await context.newPage();
+    const altPromptText = `Smoke alt client ${Date.now()}`;
+
+    try {
+        logStep('run prompt variation visibility scenario');
+        await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+        await waitForChatReady(page);
+
+        await page.evaluate((altText) => {
+            const hooks = window.__CLIENT_SIMULATOR_TEST_HOOKS__;
+            const snapshot = hooks.getPublicPromptsSnapshot();
+            const currentVariations = Array.isArray(snapshot.client_variations) ? snapshot.client_variations : [];
+            const fallbackBase = {
+                id: 'client-smoke-base',
+                name: 'Основной',
+                content: snapshot.client_prompt || 'Smoke base client prompt'
+            };
+            const baseVariation = currentVariations.find((variation) => variation && !variation.isLocal) || fallbackBase;
+            snapshot.client_variations = [
+                {
+                    ...baseVariation,
+                    id: String(baseVariation.id || 'client-smoke-base'),
+                    name: String(baseVariation.name || 'Основной')
+                },
+                {
+                    ...baseVariation,
+                    id: 'client-smoke-alt',
+                    name: 'Альтернатива',
+                    content: altText
+                }
+            ];
+            snapshot.client_activeId = String(baseVariation.id || 'client-smoke-base');
+            hooks.simulateRemotePromptsSnapshot(snapshot);
+        }, altPromptText);
+
+        await page.waitForFunction(() => {
+            const hooks = window.__CLIENT_SIMULATOR_TEST_HOOKS__;
+            const state = hooks?.getPromptUiState?.('client');
+            return !!state && Array.isArray(state.visibleVariations) && state.visibleVariations.length >= 2;
+        });
+
+        await page.click('button.mobile-tab[data-panel="instructions"]');
+
+        await page.waitForFunction(() => {
+            const label = document.getElementById('promptVariationsLabel');
+            const chips = document.querySelectorAll('#promptVariations .prompt-variation-chip');
+            return !!label
+                && !label.hidden
+                && chips.length >= 2
+                && getComputedStyle(chips[0]).width === getComputedStyle(chips[1]).width;
+        });
+    } catch (error) {
+        await ensureOutputDir();
+        await page.screenshot({ path: path.join(outputDir, 'smoke-prompt-variation-visibility-failure.png'), fullPage: true });
+        throw error;
+    } finally {
+        await context.close();
+    }
+}
+
 async function runPromptConflictRecoveryFlow(browser, baseUrl) {
     const scenario = createIdleScenario();
     const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
@@ -3427,6 +3492,7 @@ async function main() {
         await runHiddenRaterPromptFlow(browser, baseUrl);
         await runBrokenLocalPromptRecoveryFlow(browser, baseUrl);
         await runRolePreviewVisibilityFlow(browser, baseUrl);
+        await runPromptVariationVisibilityFlow(browser, baseUrl);
         await runPromptConflictRecoveryFlow(browser, baseUrl);
         await runPromptWorkflowFlow(browser, baseUrl);
         await runDialogHistoryPersistenceFlow(browser, baseUrl);

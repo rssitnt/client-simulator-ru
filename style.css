@@ -2626,6 +2626,17 @@ body.light-theme .prompt-context-action {
 }
 
 /* Prompt variations */
+.prompt-variations-label {
+    display: block;
+    margin: 0;
+    padding: 0 16px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--local-text-soft-final, #9a8f81);
+}
+
 .prompt-variations-container {
     display: flex;
     flex-wrap: wrap;
@@ -17192,6 +17203,13 @@ body * {
         margin: 0 !important;
         padding: 0 !important;
         background: transparent !important;
+        display: flex !important;
+        flex-direction: column !important;
+        flex-wrap: nowrap !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+        overflow: visible !important;
+        scrollbar-width: auto !important;
     }
 
     body.local-minimal-ui #instructionsPanel.panel.active .markdown-toolbar {
@@ -17212,6 +17230,19 @@ body * {
         min-height: auto !important;
         width: 100% !important;
         padding: 8px 0 24px !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .prompt-variations-label {
+        display: block !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .prompt-variation-chip,
+    body.local-minimal-ui #instructionsPanel.panel.active .add-variation-btn {
+        width: 100% !important;
+        min-width: 100% !important;
+        justify-content: space-between !important;
     }
 
     body.local-minimal-ui #settingsModal .theme-color-section,

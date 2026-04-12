@@ -150,6 +150,11 @@
   - history must scroll through its own body while keeping search/new-dialog controls sticky at the top;
   - mobile settings must be edge-to-edge only at the sheet level, with all real content aligned by symmetric inner safe-area padding;
   - mobile `Роль` is now expected to behave like a real full-width app screen: full-width selector at the top, then variations/toolbar/content in one vertical flow, without the old centered desktop mini-header or clipped side padding.
+- Prompt switching stability:
+  - if a role has multiple prompt variations, the UI must expose them as an explicit `Варианты промпта` block instead of relying on hidden horizontal overflow;
+  - on mobile that block is now a vertical full-width list under the role selector;
+  - admin prompt view no longer hides a healthy public variation just because there is a local override linked to it;
+  - smoke now includes a dedicated multi-variation client prompt visibility scenario.
 
 ## Still watch
 - If one employee still cannot log in while others can, first check Firebase Authentication for an old standalone account or stale password on that exact email.
