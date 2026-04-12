@@ -17999,3 +17999,56 @@ body * {
         border-radius: 13px !important;
     }
 }
+
+/* Final mobile settings header lock:
+   keep the close button visually clean and centered in the sticky row,
+   and never let hidden shell controls bleed through under it. */
+@media (max-width: 1024px) {
+    body.local-minimal-ui #settingsModal.active ~ .btn-settings-floating,
+    body.local-minimal-ui #settingsModal.active ~ #localSettingsTopBtn {
+        display: none !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+    }
+
+    body.local-minimal-ui #settingsModal .theme-color-section {
+        isolation: isolate;
+    }
+
+    body.local-minimal-ui #settingsModal .theme-color-row {
+        min-height: 48px;
+        align-items: center !important;
+    }
+
+    body.local-minimal-ui #settingsModal .settings-modal-close {
+        position: relative !important;
+        top: 0 !important;
+        right: 0 !important;
+        transform: none !important;
+        justify-self: end !important;
+        align-self: center !important;
+        width: 40px !important;
+        height: 40px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border-radius: 14px !important;
+        outline: none !important;
+        box-shadow: none !important;
+        z-index: 3 !important;
+        -webkit-tap-highlight-color: transparent !important;
+    }
+
+    body.local-minimal-ui #settingsModal .settings-modal-close::before,
+    body.local-minimal-ui #settingsModal .settings-modal-close::after {
+        display: none !important;
+    }
+
+    body.local-minimal-ui #settingsModal .settings-modal-close:hover,
+    body.local-minimal-ui #settingsModal .settings-modal-close:focus,
+    body.local-minimal-ui #settingsModal .settings-modal-close:focus-visible,
+    body.local-minimal-ui #settingsModal .settings-modal-close:active {
+        outline: none !important;
+        box-shadow: none !important;
+        transform: none !important;
+    }
+}

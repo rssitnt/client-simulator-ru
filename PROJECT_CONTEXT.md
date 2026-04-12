@@ -12,6 +12,9 @@
 - Main UI target is the warm minimal shell; the old grey shell stays deprecated.
 - Production hosting should remain GitHub Pages unless the user explicitly asks to switch again.
 - Favicon now points to `C:\projects\sites\client-simulator\favicon\1.png` copied from `C:\Users\qwert\Downloads\1.png`; the project copy is now circular with transparent corners, so keep `index.html` icon links aligned to that file unless the user asks to change the source again.
+- Prompt icon asset selected on `2026-04-12`:
+  - `fluent:prompt-24-regular`
+  - saved locally as `C:\projects\sites\client-simulator\prompt-icon-fluent-24-regular.svg`
 - Voice mode is Gemini Live through the token server; first-turn handling and mic/voice settings were recently stabilized.
 - Voice mode now also has a local idle-boundary watchdog: if Gemini fails to emit an explicit end-of-manager-turn boundary (`input finished / waitingForInput`), the frontend retries `activityEnd`, finalizes the pending manager turn locally, and keeps the call in a waiting state instead of leaving the turn stuck in preview forever.
 - Voice mode now also has a second recovery step after that: if the manager turn is already finalized but the assistant still does not start replying, the frontend does not stop at one blind retry anymore:
@@ -177,6 +180,8 @@
 - Mobile role editor sticky contract:
   - only the prompt toolbar stays sticky near the top;
   - the prompt variations block is normal scrolling content and must not stay pinned.
+- Mobile fullscreen settings header:
+  - the top close button must stay centered in its row without any residual dark circle or bleed-through from hidden shell controls below it.
 - The visible `Сравнить` action was intentionally removed from the prompt toolbar.
 - If a public prompt conflict saves edits into a hidden local draft, the recovery action now lives inside the conflict notice itself (`Сравнить draft`) instead of returning the old toolbar button.
 
