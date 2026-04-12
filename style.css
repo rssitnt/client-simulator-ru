@@ -16485,4 +16485,61 @@ body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body[data-a
         min-height: 42px;
         border-radius: 16px;
     }
+
+    body.local-minimal-ui #settingsModal .voice-picker-menu,
+    body.local-minimal-ui #settingsModal .admin-role-picker-menu,
+    body.local-minimal-ui #settingsModal .dropdown-menu.dropdown-menu-settings {
+        position: fixed;
+        left: 12px;
+        right: 12px;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+        top: auto;
+        max-height: min(58dvh, 520px);
+        padding: 10px;
+        border-radius: 24px;
+        overflow: auto;
+        box-shadow: 0 22px 48px rgba(0, 0, 0, 0.28);
+        z-index: 40;
+    }
+
+    body.local-minimal-ui #settingsModal .voice-picker-scroll {
+        max-height: none;
+    }
+
+    body.local-minimal-ui #settingsModal .voice-picker-option,
+    body.local-minimal-ui #settingsModal .admin-role-picker-option,
+    body.local-minimal-ui #settingsModal .dropdown-item {
+        min-height: 50px;
+        padding: 12px 14px;
+        border-radius: 16px;
+        font-size: 15px;
+        line-height: 1.35;
+    }
+
+    body.local-minimal-ui #settingsModal .voice-picker-option + .voice-picker-option,
+    body.local-minimal-ui #settingsModal .admin-role-picker-option + .admin-role-picker-option,
+    body.local-minimal-ui #settingsModal .dropdown-item + .dropdown-item {
+        margin-top: 6px;
+    }
+
+    body.local-minimal-ui #settingsModal .dropdown-divider {
+        margin: 8px 4px;
+    }
+
+    body.local-minimal-ui #settingsModal .admin-webhook-debug-item,
+    body.local-minimal-ui #settingsModal .admin-hidden-prompt-textarea {
+        border-radius: 18px;
+    }
+
+    body.local-minimal-ui #settingsModal .admin-hidden-prompt-textarea {
+        min-height: 220px;
+        padding: 14px 16px;
+        font-size: 15px;
+        line-height: 1.6;
+    }
+
+    body.local-minimal-ui #settingsModal .admin-webhook-debug-meta {
+        font-size: 13px;
+        line-height: 1.5;
+    }
 }

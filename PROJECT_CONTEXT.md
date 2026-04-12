@@ -61,6 +61,7 @@
     - tighter section spacing;
     - shorter controls;
     - export actions aligned into two columns;
+    - settings/admin dropdowns open as bottom-sheet menus with touch-sized options;
     - mobile admin invite and user cards should read like compact app-sheet blocks rather than desktop rows transplanted onto a phone.
 - The desktop admin users table now also has fixed pixel-based column widths in that final stabilization layer, so the drawer keeps a clean compact table and falls back to horizontal scroll instead of letting `Роль / Доступ / Статус` overlap each other.
 - On desktop, the admin users table is intentionally less noisy now:

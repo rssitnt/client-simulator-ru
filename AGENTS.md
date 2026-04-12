@@ -338,6 +338,7 @@
     - sticky top bar inside settings;
     - tighter rows and shorter controls;
     - export actions in a two-column row;
+    - settings/admin dropdowns should open as bottom-sheet menus with touch-sized options, not tiny desktop popups;
     - mobile admin invite/actions/cards should read like compact sheet content, not desktop forms pasted into a phone viewport.
 
 ## Keep In Mind
