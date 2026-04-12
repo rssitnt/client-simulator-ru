@@ -481,8 +481,20 @@
     <div class="container">
         <!-- Tabs для мобильных устройств -->
         <div class="mobile-tabs">
-            <button class="mobile-tab" data-panel="history">История</button>
-            <button class="mobile-tab active" data-panel="chat">Чат</button>
+            <button class="mobile-tab mobile-tab-icon-only" data-panel="history" aria-label="История" title="История">
+                <svg class="mobile-tab-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 3v5h5"></path>
+                    <path d="M3.05 13a9 9 0 1 0 .5-4"></path>
+                    <path d="M12 7v5l3 3"></path>
+                </svg>
+                <span class="mobile-tab-label sr-only">История</span>
+            </button>
+            <button class="mobile-tab mobile-tab-icon-only active" data-panel="chat" aria-label="Чат" title="Чат">
+                <svg class="mobile-tab-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                <span class="mobile-tab-label sr-only">Чат</span>
+            </button>
             <button class="mobile-tab" data-panel="instructions">Роль</button>
         </div>
         

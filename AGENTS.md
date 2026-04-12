@@ -52,6 +52,10 @@
 - Voice debug log loading is intentionally independent from the local JSON cache bootstrap so startup diagnostics do not break on localStorage init order.
 - Settings on mobile are a full-screen sheet with a fixed close button.
 - The local/settings surface is fullscreen on desktop now too; treat settings as a full-viewport panel rather than a fixed-width right drawer.
+- On mobile, the sticky top app bar is now the canonical shell header:
+  - `История` and `Чат` are icon tabs there;
+  - the settings icon also lives there now instead of floating lower inside panel content;
+  - the old local inline settings button inside the chat header stays hidden on mobile.
 - Inside that fullscreen settings surface, the admin panel content should stay on a centered working width instead of stretching edge-to-edge; `Выдача доступа`, hidden prompts, users table, and debug sections should read like one compact admin workspace, not like separate elements scattered across the whole screen.
 - The fullscreen settings sheet now also relies on a final harmonization layer for light theme: rows/blocks in settings stay flat against the sheet, while inputs/buttons/dropdowns keep one shared warm-cream surface ladder. Do not revive older mixed white/grey/light-blue settings styles from earlier rules higher in `style.css`.
 - The final bottom-of-file light-theme palette block now also governs color parity across the local shell:
@@ -147,7 +151,10 @@
   - the local accent is neutral now too: do not reintroduce the old green accent for active dropdown rows, selected prompt variations, voice pills, or control outlines unless the user explicitly asks for green back;
   - the auth/start screen is compact now: the long welcome/explanation copy was intentionally removed, the login card uses the same local shell surface language as the rest of the site, and on normal desktop it should fit without an inner scrollbar;
   - tooltip globals were changed to non-TDZ storage because early local drawer init could throw `ReferenceError: Cannot access 'tooltipLayer' before initialization` and silently break later local UI bindings;
-  - on mobile the local prototype forces full-width panels and redirects the same empty-prompt start case into the `Роль` tab;
+- on mobile the local prototype forces full-width panels and redirects the same empty-prompt start case into the `Роль` tab;
+- on mobile, `История` and `Чат` no longer render their own duplicate inner headers under the top app bar; content should start directly below the sticky tabs.
+- on mobile, the history view must keep a real scroll container on `#historyPanel .history-panel-body`; late CSS must not push it back to `overflow: visible`, or the list becomes unscrollable.
+- on mobile, the empty chat start screen is intentionally top-aligned and compact now; do not restore the older stretched `start-conversation` min-height that pushed the first card down and made it look clipped.
 - the localhost light theme now has its own warm override layer for history/chat/start cards/input/role drawer/settings drawer, so it no longer falls back to old cold or dark surfaces from the legacy UI;
   - it is now the intended production shell on the main domains; future fixes should treat the old grey shell as deprecated rather than as the primary interface.
   - the old grey production shell should not be restored on the main domain unless explicitly requested.

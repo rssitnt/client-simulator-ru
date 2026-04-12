@@ -52,12 +52,15 @@
   - the desktop admin empty/error state now has its own late override: if `Пользователи и доступ` renders only `admin-empty-row`, the table header should disappear and the error text should read like a simple inline note, but the underlying row must still remain a real `table-row` for smoke/layout checks.
 - Mobile shell is now expected to behave like an app instead of a squeezed desktop page:
   - mobile screens use sticky app-bar headers;
+  - on that app bar, `История` and `Чат` are icon tabs, and the settings action belongs there too rather than inside panel content;
   - the start screen keeps the three main actions near the top as compact cards;
   - the bottom tab bar is a dock-like navigation surface;
   - default browser blue tap/click glow is suppressed across interactive controls on both mobile and desktop;
   - the composer keeps a fixed visible gap above that dock and must not overlap it;
   - the role editor on mobile uses sticky variation chips plus a compact horizontal formatting tray, not the old dense desktop toolbar.
   - the role preview on mobile should keep natural content height instead of stretching the prompt wrapper to the bottom and leaving a fake empty block above the tab bar.
+  - `История` and `Чат` no longer keep duplicate internal headers under that top app bar on mobile; those screens should start directly with their content.
+  - mobile history must scroll via `#historyPanel .history-panel-body`; if that element falls back to `overflow: visible`, the list effectively stops scrolling again.
   - mobile fullscreen settings/admin now have their own density pass too:
     - sticky settings top bar;
     - tighter section spacing;

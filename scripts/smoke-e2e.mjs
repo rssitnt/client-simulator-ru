@@ -3326,6 +3326,9 @@ async function runLightThemeMobileRegressionFlow(browser, baseUrl) {
             const promptWrapper = document.querySelector('.prompt-wrapper');
             const mobileTabs = document.querySelector('.mobile-tabs');
             const activeMobileTab = document.querySelector('.mobile-tab.active');
+            const settingsBtn = document.getElementById('settingsBtn');
+            const localSettingsTopBtn = document.getElementById('localSettingsTopBtn');
+            const chatPanelHeader = document.querySelector('#chatPanel .panel-header');
 
             const read = (element) => element ? getComputedStyle(element) : null;
             const startBtnStyle = read(startBtn);
@@ -3335,6 +3338,9 @@ async function runLightThemeMobileRegressionFlow(browser, baseUrl) {
             const promptWrapperStyle = read(promptWrapper);
             const mobileTabsStyle = read(mobileTabs);
             const activeMobileTabStyle = read(activeMobileTab);
+            const settingsBtnStyle = read(settingsBtn);
+            const localSettingsTopBtnStyle = read(localSettingsTopBtn);
+            const chatPanelHeaderStyle = read(chatPanelHeader);
 
             return {
                 lightTheme: document.body.classList.contains('light-theme'),
@@ -3345,7 +3351,10 @@ async function runLightThemeMobileRegressionFlow(browser, baseUrl) {
                 startAttestationBtnBackground: startAttestationBtnStyle?.backgroundColor || '',
                 inputBackground: inputStyle?.backgroundColor || '',
                 promptWrapperBackground: promptWrapperStyle?.backgroundColor || '',
-                promptWrapperBorderTopWidth: promptWrapperStyle?.borderTopWidth || ''
+                promptWrapperBorderTopWidth: promptWrapperStyle?.borderTopWidth || '',
+                settingsBtnDisplay: settingsBtnStyle?.display || '',
+                localSettingsTopDisplay: localSettingsTopBtnStyle?.display || '',
+                chatPanelHeaderDisplay: chatPanelHeaderStyle?.display || ''
             };
         });
 
@@ -3357,6 +3366,39 @@ async function runLightThemeMobileRegressionFlow(browser, baseUrl) {
         expect(metrics.promptWrapperBackground === 'rgba(0, 0, 0, 0)' || metrics.promptWrapperBackground === 'transparent', `Prompt wrapper must stay transparent in light theme, got ${metrics.promptWrapperBackground}`);
         expect(metrics.promptWrapperBorderTopWidth === '0px', `Prompt wrapper must not render an inner border in light theme, got ${metrics.promptWrapperBorderTopWidth}`);
         expect(metrics.activeMobileTabBackground !== 'rgb(127, 150, 255)', `Active mobile tab must not fall back to the old accent blue, got ${metrics.activeMobileTabBackground}`);
+        expect(metrics.settingsBtnDisplay !== 'none', `Mobile settings button must live in the top app bar, got ${metrics.settingsBtnDisplay}`);
+        expect(metrics.localSettingsTopDisplay === 'none', `Old inline mobile settings button must stay hidden, got ${metrics.localSettingsTopDisplay}`);
+        expect(metrics.chatPanelHeaderDisplay === 'none', `Chat panel header must stay hidden on mobile, got ${metrics.chatPanelHeaderDisplay}`);
+
+        await page.click('.mobile-tab[data-panel="history"]');
+        await page.waitForTimeout(150);
+        const historyMetrics = await page.evaluate(() => {
+            const list = document.getElementById('mainDialogHistoryList');
+            if (list && list.children.length < 16) {
+                list.innerHTML = '';
+                for (let index = 0; index < 20; index += 1) {
+                    const item = document.createElement('div');
+                    item.className = 'dialog-history-item';
+                    item.innerHTML = `<button class="dialog-history-item-main" type="button"><div class="dialog-history-item-title">Тестовый диалог ${index + 1}</div><div class="dialog-history-item-meta"><span class="dialog-history-item-badge">ЧАТ</span><span>${index + 1} репл.</span></div></button>`;
+                    list.appendChild(item);
+                }
+            }
+            const body = document.querySelector('#historyPanel .history-panel-body');
+            if (body) {
+                body.scrollTop = 240;
+            }
+            return {
+                overflowY: body ? getComputedStyle(body).overflowY : '',
+                scrollHeight: body?.scrollHeight || 0,
+                clientHeight: body?.clientHeight || 0,
+                scrollTop: body?.scrollTop || 0,
+                historyHeaderDisplay: getComputedStyle(document.querySelector('#historyPanel .history-panel-header')).display
+            };
+        });
+        expect(historyMetrics.historyHeaderDisplay === 'none', `History panel header must stay hidden on mobile, got ${historyMetrics.historyHeaderDisplay}`);
+        expect(historyMetrics.overflowY === 'auto', `History panel body must stay scrollable on mobile, got ${historyMetrics.overflowY}`);
+        expect(historyMetrics.scrollHeight > historyMetrics.clientHeight, `History panel body must overflow with seeded rows, got ${historyMetrics.scrollHeight} vs ${historyMetrics.clientHeight}`);
+        expect(historyMetrics.scrollTop > 0, `History panel body must actually scroll on mobile, got ${historyMetrics.scrollTop}`);
     } catch (error) {
         await ensureOutputDir();
         await page.screenshot({ path: path.join(outputDir, 'smoke-light-theme-mobile-failure.png'), fullPage: true });
