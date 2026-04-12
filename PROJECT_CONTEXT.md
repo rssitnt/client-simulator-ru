@@ -63,6 +63,13 @@
 - Fullscreen settings in light theme now also have a final settings/admin harmony pass at the bottom of `C:\projects\sites\client-simulator\style.css`:
   - panel background, invite row, accordions, dropdowns, users table, and tech logs should stay in one calm cream/stone palette;
   - future settings-only white-theme fixes should land there first.
+- Light theme now also has a final geometry-parity pass at the bottom of `C:\projects\sites\client-simulator\style.css`:
+  - palette may change, but fullscreen settings/admin geometry must stay aligned with the base local shell;
+  - widths, heights, radii, paddings, grids, and compact density for settings/admin should not diverge between dark and light themes anymore;
+  - if white-theme switching starts changing shape/layout again, repair that bottom parity block instead of reviving older light-theme layout overrides.
+- The very last light-theme block in `C:\projects\sites\client-simulator\style.css` now also enforces geometry parity with dark mode for fullscreen settings/admin:
+  - switching theme must not change grids, radii, heights, compactness, or button widths there;
+  - future white-theme work in settings/admin should change only palette unless the user explicitly asks to redesign layout/shape too.
 - The fullscreen settings header is sticky again:
   - `C:\projects\sites\client-simulator\style.css` keeps `.theme-color-section` pinned to the top of the scrolling settings panel;
   - the close button is part of that header, not a separate viewport-fixed element.

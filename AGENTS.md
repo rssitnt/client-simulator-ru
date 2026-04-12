@@ -144,10 +144,11 @@
   - the auth/start screen is compact now: the long welcome/explanation copy was intentionally removed, the login card uses the same local shell surface language as the rest of the site, and on normal desktop it should fit without an inner scrollbar;
   - tooltip globals were changed to non-TDZ storage because early local drawer init could throw `ReferenceError: Cannot access 'tooltipLayer' before initialization` and silently break later local UI bindings;
   - on mobile the local prototype forces full-width panels and redirects the same empty-prompt start case into the `Роль` tab;
-  - the localhost light theme now has its own warm override layer for history/chat/start cards/input/role drawer/settings drawer, so it no longer falls back to old cold or dark surfaces from the legacy UI;
+- the localhost light theme now has its own warm override layer for history/chat/start cards/input/role drawer/settings drawer, so it no longer falls back to old cold or dark surfaces from the legacy UI;
   - it is now the intended production shell on the main domains; future fixes should treat the old grey shell as deprecated rather than as the primary interface.
   - the old grey production shell should not be restored on the main domain unless explicitly requested.
   - as of 2026-04-09, the chosen production host is still GitHub Pages for corporate-network compatibility; Vercel may still exist as a side deployment, but the main domain should continue serving from GitHub Pages unless the user explicitly asks to switch again.
+  - the very last light-theme override layer in `C:\projects\sites\client-simulator\style.css` now also enforces geometry parity with dark mode for fullscreen settings/admin: switching theme there must change palette only, not grids, radii, heights, compactness, or button widths.
   - the admin panel inside settings now follows the same warm minimal shell language as the rest of the site:
     - outer admin sections are flattened into divider-based blocks instead of heavy nested rectangles;
     - the `Выдача доступа` days control must stay as one shell: `.admin-invite-days-wrap` is the outer surface and the inner `.admin-invite-days` input stays transparent/borderless so it does not render as a smaller field inside;
@@ -281,6 +282,10 @@
 - Для fullscreen-настроек в белой теме теперь есть ещё и самый поздний settings/admin harmony-pass:
   - он выравнивает фон панели, аккордеоны, invite-controls, dropdown-ы, таблицу пользователей и техлоги в одну warm-neutral систему;
   - если белая тема снова выглядит "грязной" именно в настройках, правь этот нижний harmony-pass, а не старые промежуточные light-theme блоки.
+- У белой темы теперь есть ещё и самый поздний `geometry parity`-слой внизу `C:\projects\sites\client-simulator\style.css`:
+  - light-theme должен менять только палитру;
+  - размеры, радиусы, высоты, сетки и плотность fullscreen-настроек/админки должны совпадать с базовой local-shell геометрией;
+  - если при переключении темы снова меняется форма интерфейса, правь именно этот parity-слой, а не старые светлые override-блоки выше.
 - Верх fullscreen-настроек снова должен быть настоящей sticky-шапкой:
   - `.theme-color-section` фиксируется у верхней кромки самой панели настроек;
   - крестик закрытия больше не живёт отдельным `position: fixed`, а остаётся частью этой шапки;

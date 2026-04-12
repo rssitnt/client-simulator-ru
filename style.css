@@ -15037,3 +15037,225 @@ body.local-minimal-ui.light-theme #settingsModal .admin-users-table:has(.admin-e
 body.local-minimal-ui.light-theme #settingsModal .admin-users-table:has(.admin-empty-row) .admin-empty-row td::before {
     display: none !important;
 }
+
+/* Final light-theme geometry parity pass
+   White theme may change palette only. Geometry/layout/radius/density
+   must stay aligned with the base local shell. */
+body.local-minimal-ui.light-theme #settingsModal .settings-panel {
+    width: 100vw;
+    max-width: 100vw;
+    min-width: 100vw;
+    min-height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    padding: 0 28px max(26px, env(safe-area-inset-bottom, 0px) + 18px);
+    border: none;
+    border-radius: 0;
+    overflow-y: auto;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .theme-color-section {
+    position: sticky;
+    top: 0;
+    z-index: 24;
+    margin: 0 -28px 18px;
+    padding: max(16px, env(safe-area-inset-top, 0px) + 16px) 28px 16px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .settings-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    margin-bottom: 0;
+    padding: 18px 0;
+    border-radius: 0 !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .account-block,
+body.local-minimal-ui.light-theme #settingsModal .voice-config-block,
+body.local-minimal-ui.light-theme #settingsModal .admin-panel,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-form,
+body.local-minimal-ui.light-theme #settingsModal .admin-hidden-prompt-body,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body,
+body.local-minimal-ui.light-theme #settingsModal .admin-webhook-debug-body {
+    border-radius: 0 !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .account-block {
+    display: grid;
+    gap: 12px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .account-topline {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .name-input,
+body.local-minimal-ui.light-theme #settingsModal .password-input {
+    min-height: 48px;
+    border-radius: 14px !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .account-actions .btn-logout,
+body.local-minimal-ui.light-theme #settingsModal .role-row .btn-change,
+body.local-minimal-ui.light-theme #settingsModal .btn-change,
+body.local-minimal-ui.light-theme #settingsModal .btn-cancel,
+body.local-minimal-ui.light-theme #settingsModal .btn-confirm,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-btn,
+body.local-minimal-ui.light-theme #settingsModal .settings-panel .btn-export {
+    min-height: 40px;
+    width: auto;
+    padding: 0 14px;
+    border-radius: 12px !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .account-actions .btn-logout,
+body.local-minimal-ui.light-theme #settingsModal .role-row .btn-change,
+body.local-minimal-ui.light-theme #settingsModal .settings-panel .btn-export {
+    min-width: 220px;
+    justify-content: center;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .role-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .role-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .export-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(220px, max-content));
+    gap: 10px;
+    justify-content: start;
+    margin-top: 0;
+    padding: 18px 0;
+    border-radius: 0 !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .voice-row {
+    gap: 12px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .voice-config-block {
+    max-width: none;
+    gap: 10px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .voice-picker-trigger {
+    min-height: 72px;
+    border-radius: 16px !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-accordion {
+    margin-top: 16px;
+    padding-top: 14px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-accordion-trigger {
+    min-height: 30px;
+    font-size: 11px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-panel-header {
+    padding: 0 0 12px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-panel-title {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+}
+
+body.local-minimal-ui.light-theme #settingsModal #adminPanel > .admin-invite-form,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-form {
+    grid-template-columns: minmax(0, 2fr) 82px 88px;
+    gap: 9px;
+    align-items: stretch;
+    padding: 0 0 16px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-hidden-prompt-summary {
+    min-height: 50px;
+    padding: 13px 2px;
+    font-size: 14px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-hidden-prompt-section[open] {
+    padding-bottom: 20px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-hidden-prompt-body,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body,
+body.local-minimal-ui.light-theme #settingsModal .admin-webhook-debug-body {
+    padding: 0 0 14px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-toolbar,
+body.local-minimal-ui.light-theme #settingsModal .admin-hidden-prompt-actions,
+body.local-minimal-ui.light-theme #settingsModal .admin-webhook-debug-toolbar {
+    margin-top: 10px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-input,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-days-wrap,
+body.local-minimal-ui.light-theme #settingsModal .admin-role-picker-trigger,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-btn,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-toolbar .btn-change {
+    min-height: 40px;
+    border-radius: 15px !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-days-wrap {
+    display: grid;
+    grid-template-columns: minmax(34px, 52px) auto;
+    align-items: center;
+    gap: 5px;
+    padding: 0 8px;
+    min-height: 38px;
+    overflow: hidden;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-days {
+    width: 38px !important;
+    min-width: 38px !important;
+    max-width: 38px !important;
+    height: 100%;
+    padding: 0;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-btn,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-toolbar .btn-change {
+    font-size: 11px;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-toolbar .btn-change {
+    min-width: 112px;
+    max-width: 144px;
+}
+
+@media (max-width: 840px) {
+    body.local-minimal-ui.light-theme #settingsModal .account-topline,
+    body.local-minimal-ui.light-theme #settingsModal .role-row,
+    body.local-minimal-ui.light-theme #settingsModal .export-row,
+    body.local-minimal-ui.light-theme #settingsModal #adminPanel > .admin-invite-form,
+    body.local-minimal-ui.light-theme #settingsModal .admin-invite-form {
+        grid-template-columns: 1fr;
+    }
+
+    body.local-minimal-ui.light-theme #settingsModal .export-row {
+        justify-content: stretch;
+    }
+}
