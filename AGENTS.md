@@ -334,6 +334,11 @@
   - bottom mobile tabs use one dock-like bar with equal tab pills;
   - chat composer keeps a fixed gap above the tab bar and should never overlap it;
   - mobile role editing uses a sticky compact chip row plus a horizontal formatting tray, not the old desktop editor density.
+  - mobile fullscreen settings/admin should also keep that app-sheet feel now:
+    - sticky top bar inside settings;
+    - tighter rows and shorter controls;
+    - export actions in a two-column row;
+    - mobile admin invite/actions/cards should read like compact sheet content, not desktop forms pasted into a phone viewport.
 
 ## Keep In Mind
 - If something starts failing in voice mode, check the admin tech log first before adding more heuristics.

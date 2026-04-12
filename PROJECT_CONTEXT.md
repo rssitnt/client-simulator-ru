@@ -56,6 +56,12 @@
   - the bottom tab bar is a dock-like navigation surface;
   - the composer keeps a fixed visible gap above that dock and must not overlap it;
   - the role editor on mobile uses sticky variation chips plus a compact horizontal formatting tray, not the old dense desktop toolbar.
+  - mobile fullscreen settings/admin now have their own density pass too:
+    - sticky settings top bar;
+    - tighter section spacing;
+    - shorter controls;
+    - export actions aligned into two columns;
+    - mobile admin invite and user cards should read like compact app-sheet blocks rather than desktop rows transplanted onto a phone.
 - The desktop admin users table now also has fixed pixel-based column widths in that final stabilization layer, so the drawer keeps a clean compact table and falls back to horizontal scroll instead of letting `Роль / Доступ / Статус` overlap each other.
 - On desktop, the admin users table is intentionally less noisy now:
   - visible `Доступ` and `Активность` columns are hidden from the permanent table layout;
