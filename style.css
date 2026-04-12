@@ -17564,25 +17564,24 @@ body * {
     }
 
     body.local-minimal-ui #instructionsPanel.panel.active .prompt-variations-container {
-        position: sticky !important;
-        top: 0 !important;
-        z-index: 26 !important;
+        position: static !important;
+        z-index: auto !important;
         display: flex !important;
         flex-direction: column !important;
         gap: 10px !important;
         margin: 0 !important;
         padding: 0 0 10px !important;
-        background: rgba(19, 18, 16, 0.98) !important;
+        background: transparent !important;
     }
 
     body.local-minimal-ui.light-theme #instructionsPanel.panel.active .prompt-variations-container {
-        background: rgba(244, 236, 222, 0.98) !important;
+        background: transparent !important;
     }
 
     body.local-minimal-ui #instructionsPanel.panel.active .markdown-toolbar {
         position: sticky !important;
-        top: 68px !important;
-        z-index: 25 !important;
+        top: 0 !important;
+        z-index: 26 !important;
         margin: 0 0 14px !important;
         padding: 14px 16px !important;
         background: rgba(25, 23, 20, 0.98) !important;

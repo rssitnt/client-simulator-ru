@@ -169,6 +169,10 @@
   - on mobile that block is now a vertical full-width list under the role selector;
   - admin prompt view no longer hides a healthy public variation just because there is a local override linked to it;
   - smoke now includes a dedicated multi-variation client prompt visibility scenario.
+- Mobile role editor sticky contract:
+  - only the prompt toolbar stays sticky near the top;
+  - the prompt variations block is normal scrolling content and must not stay pinned.
+- The visible `Сравнить` action was intentionally removed from the prompt toolbar.
 
 ## Still watch
 - If one employee still cannot log in while others can, first check Firebase Authentication for an old standalone account or stale password on that exact email.

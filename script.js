@@ -21138,7 +21138,6 @@ function applyImprovedPrompt(targetMode = 'new') {
 
 bindEvent(aiImproveBtn, 'click', showAiImproveModal);
 bindEvent(promptHistoryBtn, 'click', showPromptHistoryModal);
-bindEvent(promptCompareBtn, 'click', showPromptCompareModal);
 bindEvent(promptVisibilityBtn, 'click', toggleActivePromptVisibility);
 bindEvent(aiImproveModalClose, 'click', hideAiImproveModal);
 bindEvent(aiImproveCancel, 'click', hideAiImproveModal);

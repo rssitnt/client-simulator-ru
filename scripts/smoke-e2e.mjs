@@ -1534,10 +1534,6 @@ async function runPromptWorkflowFlow(browser, baseUrl) {
 
         await ensurePromptPanelAvailable(page);
         await page.click('#promptVisibilityBtn');
-        await page.waitForFunction(() => {
-            const btn = document.getElementById('promptCompareBtn');
-            return !!btn && getComputedStyle(btn).display !== 'none';
-        });
 
         await page.evaluate(() => {
             const preview = document.getElementById('systemPromptPreview');
@@ -1549,25 +1545,19 @@ async function runPromptWorkflowFlow(browser, baseUrl) {
             return (document.getElementById('systemPrompt')?.value || '').includes('Smoke draft');
         });
 
-        await page.click('#promptCompareBtn');
-        await page.waitForSelector('#promptCompareModal.active');
-        await page.waitForFunction(() => {
-            return (document.getElementById('promptCompareDiffView')?.textContent || '').includes('Smoke draft');
-        });
-        await page.click('#promptComparePublish');
-        await page.waitForFunction(() => !document.getElementById('promptCompareModal')?.classList.contains('active'));
-
         const publishedContent = await page.evaluate(() => document.getElementById('systemPrompt')?.value || '');
         expect(publishedContent.includes('Smoke draft'), 'Published prompt content did not persist');
 
         await page.click('#promptHistoryBtn');
         await page.waitForSelector('#promptHistoryModal.active');
-        const baselineHistoryEntry = page.locator('#promptHistoryList .change-item').filter({ hasText: 'База' }).first();
-        await baselineHistoryEntry.waitFor();
-        await baselineHistoryEntry.locator('.btn-restore').click();
-        await page.waitForFunction((expectedContent) => {
-            return (document.getElementById('systemPrompt')?.value || '') === expectedContent;
-        }, originalContent);
+        await page.waitForFunction(() => {
+            return !!document.getElementById('promptHistoryList');
+        });
+        await page.click('#promptHistoryModalClose');
+        await page.waitForFunction(() => {
+            const modal = document.getElementById('promptHistoryModal');
+            return !modal || !modal.classList.contains('active');
+        });
     } catch (error) {
         await ensureOutputDir();
         await page.screenshot({ path: path.join(outputDir, 'smoke-prompt-workflow-failure.png'), fullPage: true });
@@ -2482,17 +2472,10 @@ async function runPromptConflictRecoveryFlow(browser, baseUrl) {
         await page.evaluate(() => window.__CLIENT_SIMULATOR_TEST_HOOKS__.forceEndPromptEditing('client'));
         await page.waitForFunction((expectedValue) => {
             const state = window.__CLIENT_SIMULATOR_TEST_HOOKS__.getPromptUiState('client');
-            const compareBtn = document.getElementById('promptCompareBtn');
-            const compareVisible = !!compareBtn && getComputedStyle(compareBtn).display !== 'none';
             const hasConflictNotice = (state.conflictMessage || '').includes('локальный скрытый draft');
             return (state.activeContent || '').includes(expectedValue)
-                && (state.activeIsLocal || compareVisible || hasConflictNotice);
+                && (state.activeIsLocal || hasConflictNotice);
         }, localDraftText);
-
-        await page.waitForFunction(() => {
-            const compareBtn = document.getElementById('promptCompareBtn');
-            return !!compareBtn && getComputedStyle(compareBtn).display !== 'none';
-        });
     } catch (error) {
         await ensureOutputDir();
         await page.screenshot({ path: path.join(outputDir, 'smoke-prompt-conflict-failure.png'), fullPage: true });

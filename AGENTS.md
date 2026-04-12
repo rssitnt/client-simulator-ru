@@ -395,3 +395,7 @@
   - on mobile, prompt variations are a full-width vertical list, not a hidden horizontal chip scroller;
   - admin view must not hide a valid public variation only because a local override for it exists;
   - smoke now covers a multi-variation client prompt case so the role screen cannot silently collapse back to one visible option.
+- Mobile role editor sticky contract:
+  - only the prompt toolbar (`скрыть / история / форматирование`) stays sticky;
+  - the prompt variations list must scroll with the rest of the content and must not stay pinned under the selector.
+- The prompt toolbar no longer has a visible `Сравнить` button.
