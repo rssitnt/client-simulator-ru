@@ -17497,7 +17497,7 @@ body * {
         gap: 12px !important;
         margin: 0 !important;
         padding:
-            16px
+            4px
             var(--local-mobile-shell-pad-right)
             14px
             var(--local-mobile-shell-pad) !important;
