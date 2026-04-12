@@ -17101,3 +17101,129 @@ body * {
         padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 28px) !important;
     }
 }
+
+/* Final mobile role/history/settings polish:
+   make the role tab feel like a real app screen,
+   keep history controls pinned without overlay glitches,
+   and force symmetric mobile settings insets. */
+@media (max-width: 1024px) {
+    body.local-minimal-ui .mobile-tab {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        text-align: center !important;
+    }
+
+    body.local-minimal-ui .mobile-tab-icon-only .mobile-tab-icon {
+        margin: 0 auto;
+    }
+
+    body.local-minimal-ui #historyPanel.panel.active .history-panel-controls {
+        margin: 0 0 12px;
+        background: var(--local-shell-bg-final) !important;
+        backdrop-filter: none !important;
+    }
+
+    body.local-minimal-ui #historyPanel.panel.active .dialog-history-list,
+    body.local-minimal-ui #historyPanel.panel.active .dialog-history-list-wrap {
+        padding-top: 0 !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active {
+        display: flex !important;
+        flex-direction: column !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .prompt-panel-header {
+        display: block !important;
+        position: relative !important;
+        top: auto !important;
+        z-index: auto !important;
+        padding: 12px 16px 0 !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .panel-heading,
+    body.local-minimal-ui #instructionsPanel.panel.active .header-buttons {
+        display: none !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .prompt-panel-topbar {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        width: 100% !important;
+        gap: 12px !important;
+        margin: 0 !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .personality-selector,
+    body.local-minimal-ui #instructionsPanel.panel.active .personality-selector-trigger {
+        width: 100% !important;
+        max-width: none !important;
+        min-width: 0 !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .personality-selector-trigger {
+        justify-content: space-between !important;
+        margin: 0 !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .instruction-content {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        padding: 12px 16px calc(var(--local-mobile-tabbar-height) + 20px) !important;
+        gap: 14px !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .prompt-variations-container,
+    body.local-minimal-ui #instructionsPanel.panel.active .markdown-toolbar {
+        position: static !important;
+        top: auto !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .prompt-variations-container {
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: transparent !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .markdown-toolbar {
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 12px 14px !important;
+        row-gap: 8px !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .prompt-wrapper {
+        flex: 0 0 auto !important;
+        min-height: auto !important;
+        overflow: visible !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .prompt-preview,
+    body.local-minimal-ui #instructionsPanel.panel.active .prompt-editor {
+        min-height: auto !important;
+        width: 100% !important;
+        padding: 8px 0 24px !important;
+    }
+
+    body.local-minimal-ui #settingsModal .theme-color-section,
+    body.local-minimal-ui #settingsModal .settings-content,
+    body.local-minimal-ui #settingsModal #adminPanel {
+        padding-left: max(18px, env(safe-area-inset-left, 0px)) !important;
+        padding-right: max(18px, env(safe-area-inset-right, 0px)) !important;
+    }
+
+    body.local-minimal-ui #settingsModal .settings-panel,
+    body.local-minimal-ui #settingsModal .settings-content,
+    body.local-minimal-ui #settingsModal #adminPanel {
+        overflow-x: hidden !important;
+    }
+}

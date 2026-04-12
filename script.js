@@ -24500,15 +24500,23 @@ voiceBtn.addEventListener('click', () => {
 // Mobile tabs
 const mobileTabs = document.querySelectorAll('.mobile-tab');
 const panels = document.querySelectorAll('.panel');
+const mobileSettingsTabBtn = document.getElementById('mobileSettingsTabBtn');
 
 mobileTabs.forEach(tab => {
     tab.addEventListener('click', () => {
         const panelName = tab.dataset.panel;
+        if (!panelName) return;
         mobileTabs.forEach(t => t.classList.remove('active'));
         panels.forEach(p => p.classList.remove('active'));
         tab.classList.add('active');
         document.querySelector(`.panel[data-panel="${panelName}"]`)?.classList.add('active');
     });
+});
+
+bindEvent(mobileSettingsTabBtn, 'click', (e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    toggleSettingsModal();
 });
 
 if (window.innerWidth <= 1024) {

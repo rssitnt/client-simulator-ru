@@ -114,6 +114,12 @@
   - local shell header action buttons are now plain at rest; pill chrome should appear only on hover/active, not permanently;
   - the local shell chat header is action-only now; do not reintroduce a visible `Чат` title in that top bar unless requested;
 - the local history rail now owns its own left-edge collapse control; when collapsed it stays as a narrow ChatGPT-like rail with expand, new-chat, and search icons instead of disappearing completely;
+- the current mobile app-shell contract is:
+  - the top mobile bar is the single sticky navigation row (`история icon / чат icon / роль / настройки icon`);
+  - start cards center their labels exactly;
+  - history search + `Новый диалог` stay pinned at the top of the history scroller with an opaque background;
+  - the mobile `Роль` screen is a full-width vertical flow, not a centered desktop mini-editor: no visible panel heading/header buttons there, selector full-width at the top, then variations/toolbar/content in one scroll column;
+  - mobile fullscreen settings must keep symmetric safe-area padding and must not show desktop-like horizontal clipping or a visible sheet scrollbar.
 - when that local history rail is collapsed, it must not render any visible scrollbar at all; scroll is only for the expanded history panel.
   - the local history area no longer shows a visible `История` title above the list in the localhost prototype;
   - when the localhost history list is empty, it must stay visually empty; do not show the dashed `Пока пусто. Первый чат появится здесь.` placeholder card there anymore;

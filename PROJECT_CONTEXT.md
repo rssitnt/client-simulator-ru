@@ -148,7 +148,8 @@
   - top navigation is a fixed 4-slot mobile row (`history icon / chat icon / role / settings icon`);
   - the old inline settings trigger inside the chat/start surface is intentionally hidden on mobile;
   - history must scroll through its own body while keeping search/new-dialog controls sticky at the top;
-  - mobile settings must be edge-to-edge only at the sheet level, with all real content aligned by symmetric inner safe-area padding.
+  - mobile settings must be edge-to-edge only at the sheet level, with all real content aligned by symmetric inner safe-area padding;
+  - mobile `Роль` is now expected to behave like a real full-width app screen: full-width selector at the top, then variations/toolbar/content in one vertical flow, without the old centered desktop mini-header or clipped side padding.
 
 ## Still watch
 - If one employee still cannot log in while others can, first check Firebase Authentication for an old standalone account or stale password on that exact email.

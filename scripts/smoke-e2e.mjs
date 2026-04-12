@@ -3327,6 +3327,7 @@ async function runLightThemeMobileRegressionFlow(browser, baseUrl) {
             const mobileTabs = document.querySelector('.mobile-tabs');
             const activeMobileTab = document.querySelector('.mobile-tab.active');
             const settingsBtn = document.getElementById('settingsBtn');
+            const mobileSettingsTabBtn = document.getElementById('mobileSettingsTabBtn');
             const localSettingsTopBtn = document.getElementById('localSettingsTopBtn');
             const chatPanelHeader = document.querySelector('#chatPanel .panel-header');
 
@@ -3339,6 +3340,7 @@ async function runLightThemeMobileRegressionFlow(browser, baseUrl) {
             const mobileTabsStyle = read(mobileTabs);
             const activeMobileTabStyle = read(activeMobileTab);
             const settingsBtnStyle = read(settingsBtn);
+            const mobileSettingsTabBtnStyle = read(mobileSettingsTabBtn);
             const localSettingsTopBtnStyle = read(localSettingsTopBtn);
             const chatPanelHeaderStyle = read(chatPanelHeader);
 
@@ -3353,6 +3355,7 @@ async function runLightThemeMobileRegressionFlow(browser, baseUrl) {
                 promptWrapperBackground: promptWrapperStyle?.backgroundColor || '',
                 promptWrapperBorderTopWidth: promptWrapperStyle?.borderTopWidth || '',
                 settingsBtnDisplay: settingsBtnStyle?.display || '',
+                mobileSettingsTabDisplay: mobileSettingsTabBtnStyle?.display || '',
                 localSettingsTopDisplay: localSettingsTopBtnStyle?.display || '',
                 chatPanelHeaderDisplay: chatPanelHeaderStyle?.display || ''
             };
@@ -3366,7 +3369,10 @@ async function runLightThemeMobileRegressionFlow(browser, baseUrl) {
         expect(metrics.promptWrapperBackground === 'rgba(0, 0, 0, 0)' || metrics.promptWrapperBackground === 'transparent', `Prompt wrapper must stay transparent in light theme, got ${metrics.promptWrapperBackground}`);
         expect(metrics.promptWrapperBorderTopWidth === '0px', `Prompt wrapper must not render an inner border in light theme, got ${metrics.promptWrapperBorderTopWidth}`);
         expect(metrics.activeMobileTabBackground !== 'rgb(127, 150, 255)', `Active mobile tab must not fall back to the old accent blue, got ${metrics.activeMobileTabBackground}`);
-        expect(metrics.settingsBtnDisplay !== 'none', `Mobile settings button must live in the top app bar, got ${metrics.settingsBtnDisplay}`);
+        expect(
+            metrics.mobileSettingsTabDisplay !== 'none' || metrics.settingsBtnDisplay !== 'none',
+            `Mobile settings button must live in the top app bar, got inline=${metrics.mobileSettingsTabDisplay}, floating=${metrics.settingsBtnDisplay}`
+        );
         expect(metrics.localSettingsTopDisplay === 'none', `Old inline mobile settings button must stay hidden, got ${metrics.localSettingsTopDisplay}`);
         expect(metrics.chatPanelHeaderDisplay === 'none', `Chat panel header must stay hidden on mobile, got ${metrics.chatPanelHeaderDisplay}`);
 
