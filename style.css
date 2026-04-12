@@ -15634,6 +15634,21 @@ body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body[data-a
 @media (max-width: 1024px) {
     body.local-minimal-ui {
         --local-mobile-tabbar-height: calc(72px + env(safe-area-inset-bottom, 0px));
+        --local-mobile-composer-gap: 16px;
+    }
+
+    body.local-minimal-ui #settingsModal:not(.active) {
+        display: none !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
+
+    body.local-minimal-ui #settingsModal.active {
+        display: flex !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
     }
 
     body.local-minimal-ui .mobile-tabs {
@@ -15879,7 +15894,7 @@ body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body[data-a
     body.local-minimal-ui .chat-input-container {
         position: fixed;
         right: 0;
-        bottom: calc(var(--local-mobile-tabbar-height) + 4px);
+        bottom: calc(var(--local-mobile-tabbar-height) + var(--local-mobile-composer-gap));
         left: 0;
         z-index: 70;
         padding: 0 12px 10px;
@@ -15941,5 +15956,295 @@ body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body[data-a
         min-height: calc(100dvh - var(--local-mobile-tabbar-height) - 210px);
         border-radius: 20px;
         background: transparent;
+    }
+}
+
+/* Final mobile product pass
+   Mobile should read like a dedicated app, not a compressed desktop shell. */
+@media (max-width: 1024px) {
+    body.local-minimal-ui {
+        --local-mobile-screen-padding: 16px;
+        --local-mobile-card-radius: 22px;
+        --local-mobile-appbar-height: calc(52px + env(safe-area-inset-top, 0px));
+    }
+
+    body.local-minimal-ui .history-panel-header,
+    body.local-minimal-ui .chat-panel .panel-header,
+    body.local-minimal-ui .prompt-panel-header {
+        position: sticky;
+        top: 0;
+        z-index: 8;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: var(--local-mobile-appbar-height);
+        padding: max(8px, env(safe-area-inset-top, 0px) + 4px) var(--local-mobile-screen-padding) 8px;
+        background:
+            linear-gradient(180deg, var(--local-shell-bg-final) 0%, var(--local-shell-bg-final) 84%, rgba(0, 0, 0, 0) 100%);
+        backdrop-filter: blur(18px);
+    }
+
+    body.local-minimal-ui .chat-panel .panel-header::before {
+        content: "client simulator";
+        font-size: 18px;
+        line-height: 1.1;
+        font-weight: 650;
+        letter-spacing: -0.03em;
+        color: var(--local-text-final);
+    }
+
+    body.local-minimal-ui .chat-panel .panel-heading {
+        display: none !important;
+    }
+
+    body.local-minimal-ui .history-panel-title,
+    body.local-minimal-ui .prompt-panel-header .panel-title {
+        font-size: 18px;
+        line-height: 1.1;
+        font-weight: 650;
+        letter-spacing: -0.03em;
+        color: var(--local-text-final);
+    }
+
+    body.local-minimal-ui .prompt-panel-header .panel-eyebrow {
+        display: none;
+    }
+
+    body.local-minimal-ui .chat-panel .panel-header .header-buttons,
+    body.local-minimal-ui .prompt-panel-header .header-buttons {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-left: auto;
+    }
+
+    body.local-minimal-ui .chat-panel .panel-header .btn-icon,
+    body.local-minimal-ui .prompt-panel-header .btn-icon {
+        width: 38px;
+        height: 38px;
+        min-width: 38px;
+        border-radius: 14px;
+        background: var(--local-surface-muted-final);
+        border: 1px solid var(--local-border-final);
+    }
+
+    body.local-minimal-ui .history-panel-body {
+        padding: 4px var(--local-mobile-screen-padding) calc(var(--local-mobile-tabbar-height) + 24px);
+        gap: 12px;
+    }
+
+    body.local-minimal-ui .history-panel-controls {
+        position: sticky;
+        top: calc(var(--local-mobile-appbar-height) - 8px);
+        z-index: 2;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 10px;
+        padding-bottom: 6px;
+        background: linear-gradient(180deg, var(--local-shell-bg-final) 0%, var(--local-shell-bg-final) 80%, rgba(0, 0, 0, 0) 100%);
+    }
+
+    body.local-minimal-ui .history-search,
+    body.local-minimal-ui .history-panel-action {
+        min-height: 50px;
+        padding-inline: 16px;
+        border-radius: 18px;
+    }
+
+    body.local-minimal-ui .history-thread-list.dialog-history-list {
+        gap: 2px;
+    }
+
+    body.local-minimal-ui .dialog-history-item {
+        border-radius: 18px;
+    }
+
+    body.local-minimal-ui .dialog-history-item-main {
+        padding: 14px 44px 14px 2px;
+    }
+
+    body.local-minimal-ui .dialog-history-item-title {
+        font-size: 16px;
+        line-height: 1.32;
+    }
+
+    body.local-minimal-ui .chat-messages {
+        padding: 4px 0 calc(var(--local-mobile-tabbar-height) + 94px);
+        gap: 12px;
+    }
+
+    body.local-minimal-ui .chat-messages > :not(.message),
+    body.local-minimal-ui .message,
+    body.local-minimal-ui .input-wrapper,
+    body.local-minimal-ui .voice-connect-status {
+        width: calc(100% - (var(--local-mobile-screen-padding) * 2));
+    }
+
+    body.local-minimal-ui .start-conversation {
+        min-height: auto;
+        justify-content: flex-start;
+        padding: 18px 0 18px;
+        gap: 12px;
+    }
+
+    body.local-minimal-ui .start-conversation-actions {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 10px;
+        width: 100%;
+    }
+
+    body.local-minimal-ui .btn-start {
+        min-height: 68px;
+        padding: 14px 18px;
+        border-radius: var(--local-mobile-card-radius);
+        justify-content: flex-start;
+        text-align: left;
+    }
+
+    body.local-minimal-ui .btn-start-label {
+        font-size: 18px;
+        letter-spacing: -0.02em;
+    }
+
+    body.local-minimal-ui .message.loading {
+        align-self: center;
+        justify-content: center;
+        width: 100%;
+        margin-top: clamp(18px, 4vh, 42px);
+    }
+
+    body.local-minimal-ui .message.loading .message-content {
+        width: auto;
+        max-width: none;
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: var(--local-surface-final);
+        border: 1px solid var(--local-border-final);
+    }
+
+    body.local-minimal-ui .prompt-panel-header {
+        padding-bottom: 12px;
+    }
+
+    body.local-minimal-ui .prompt-panel-topbar {
+        gap: 10px;
+    }
+
+    body.local-minimal-ui .personality-selector-trigger {
+        min-height: 54px;
+        padding-inline: 14px;
+        border-radius: 18px;
+    }
+
+    body.local-minimal-ui .instruction-content {
+        padding: 8px var(--local-mobile-screen-padding) calc(var(--local-mobile-tabbar-height) + 24px);
+        gap: 10px;
+    }
+
+    body.local-minimal-ui .prompt-context-bar {
+        display: none;
+    }
+
+    body.local-minimal-ui .prompt-variations-container {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        gap: 8px;
+        padding: 2px 0 8px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: none;
+        background: linear-gradient(180deg, var(--local-shell-bg-final) 0%, var(--local-shell-bg-final) 82%, rgba(0, 0, 0, 0) 100%);
+    }
+
+    body.local-minimal-ui .prompt-variations-container::-webkit-scrollbar {
+        display: none;
+    }
+
+    body.local-minimal-ui .markdown-toolbar {
+        position: sticky;
+        top: calc(var(--local-mobile-appbar-height) - 14px);
+        z-index: 2;
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 4px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 6px;
+        margin-bottom: 8px;
+        border: 1px solid var(--local-border-final);
+        border-radius: 18px;
+        background: var(--local-surface-muted-final);
+        scrollbar-width: none;
+    }
+
+    body.local-minimal-ui .markdown-toolbar::-webkit-scrollbar {
+        display: none;
+    }
+
+    body.local-minimal-ui .toolbar-btn {
+        flex: 0 0 auto;
+        min-width: 34px;
+        height: 34px;
+        padding: 4px 8px;
+        border-radius: 10px;
+        font-size: 12px;
+    }
+
+    body.local-minimal-ui .prompt-variation-chip,
+    body.local-minimal-ui .add-variation-btn {
+        flex: 0 0 auto;
+        min-height: 38px;
+        padding: 0 14px;
+        border-radius: 14px;
+        background: var(--local-surface-muted-final);
+        border: 1px solid var(--local-border-final);
+    }
+
+    body.local-minimal-ui .add-variation-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 38px;
+        padding: 0 12px;
+    }
+
+    body.local-minimal-ui .prompt-wrapper {
+        min-height: calc(100dvh - var(--local-mobile-tabbar-height) - 176px);
+        border-radius: 0;
+        background: transparent;
+    }
+
+    body.local-minimal-ui .prompt-preview,
+    body.local-minimal-ui .prompt-editor {
+        padding: 4px 0 16px;
+        font-size: 16px;
+        line-height: 1.72;
+    }
+
+    body.local-minimal-ui .mobile-tabs {
+        left: 12px;
+        right: 12px;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+        padding: 8px;
+        border-radius: 22px;
+        background: color-mix(in srgb, var(--local-shell-bg-final) 90%, white 10%);
+        border: 1px solid var(--local-border-final);
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
+    }
+
+    body.local-minimal-ui .mobile-tab {
+        min-height: 42px;
+        border-radius: 16px;
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+    body.local-minimal-ui .mobile-tab.active {
+        background: var(--local-surface-final);
     }
 }

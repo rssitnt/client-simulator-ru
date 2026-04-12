@@ -50,6 +50,12 @@
   - light-theme admin content in that fullscreen sheet now also has a separate density layer: invite controls, accordion rows, refresh/action buttons, and the desktop users table should look tighter than before and must not inherit giant dark-theme-like gaps.
   - the upper non-admin settings rows in light theme also now have their own density layer: account, role, export, voice, and microphone controls should stay more compact than the dark-theme defaults and align to the same cream input/button rhythm.
   - the desktop admin empty/error state now has its own late override: if `Пользователи и доступ` renders only `admin-empty-row`, the table header should disappear and the error text should read like a simple inline note, but the underlying row must still remain a real `table-row` for smoke/layout checks.
+- Mobile shell is now expected to behave like an app instead of a squeezed desktop page:
+  - mobile screens use sticky app-bar headers;
+  - the start screen keeps the three main actions near the top as compact cards;
+  - the bottom tab bar is a dock-like navigation surface;
+  - the composer keeps a fixed visible gap above that dock and must not overlap it;
+  - the role editor on mobile uses sticky variation chips plus a compact horizontal formatting tray, not the old dense desktop toolbar.
 - The desktop admin users table now also has fixed pixel-based column widths in that final stabilization layer, so the drawer keeps a clean compact table and falls back to horizontal scroll instead of letting `Роль / Доступ / Статус` overlap each other.
 - On desktop, the admin users table is intentionally less noisy now:
   - visible `Доступ` and `Активность` columns are hidden from the permanent table layout;
