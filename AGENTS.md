@@ -373,3 +373,9 @@
 - The local/mobile working chat header no longer shows the product title; only the empty first screen gets a header title and it should read `Начать чат`.
 - The inline local clear-chat header action is intentionally removed.
 - The final bottom-of-file interaction layer suppresses platform blue tap/click glow globally; future button/tab tweaks must not reintroduce system blue highlight.
+- Mobile app-shell lock:
+  - the top bar is now a strict 4-slot row: `история icon / чат icon / роль / настройки icon`;
+  - the legacy inline settings button inside the chat/start area stays hidden on phones;
+  - start-card labels are centered by the button itself, not only by the inner text span;
+  - `Поиск по диалогам` and `Новый диалог` stay sticky at the top of the history scroller;
+  - mobile fullscreen settings use only inner safe-area padding; the sheet itself should not show a visible desktop-like scrollbar or asymmetric left/right clipping.

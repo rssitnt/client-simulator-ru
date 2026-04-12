@@ -144,6 +144,11 @@
   - history search plus `Новый диалог` must stay pinned directly under the top app bar instead of drifting into the feed;
   - mobile fullscreen settings now use symmetric safe-area padding and hide the sheet scrollbar itself rather than showing a desktop-like right-edge scroller.
 - A final bottom-of-file interaction layer suppresses platform blue tap/click glow globally across desktop and mobile controls.
+- Latest mobile app-shell lock:
+  - top navigation is a fixed 4-slot mobile row (`history icon / chat icon / role / settings icon`);
+  - the old inline settings trigger inside the chat/start surface is intentionally hidden on mobile;
+  - history must scroll through its own body while keeping search/new-dialog controls sticky at the top;
+  - mobile settings must be edge-to-edge only at the sheet level, with all real content aligned by symmetric inner safe-area padding.
 
 ## Still watch
 - If one employee still cannot log in while others can, first check Firebase Authentication for an old standalone account or stale password on that exact email.
