@@ -17750,3 +17750,51 @@ body * {
         padding-right: 0 !important;
     }
 }
+
+/* Final hard lock for mobile settings content width:
+   inner rows must size to the centered content column, never to the raw viewport. */
+@media (max-width: 1024px) {
+    body.local-minimal-ui #settingsModal .settings-panel > .settings-row,
+    body.local-minimal-ui #settingsModal .settings-panel > .password-section,
+    body.local-minimal-ui #settingsModal .settings-panel > .admin-accordion {
+        padding-left: max(18px, env(safe-area-inset-left, 0px) + 12px) !important;
+        padding-right: max(18px, env(safe-area-inset-right, 0px) + 12px) !important;
+        box-sizing: border-box !important;
+    }
+
+    body.local-minimal-ui #settingsModal .settings-panel > .settings-row .settings-label,
+    body.local-minimal-ui #settingsModal .settings-panel > .settings-row .account-block,
+    body.local-minimal-ui #settingsModal .settings-panel > .settings-row .account-topline,
+    body.local-minimal-ui #settingsModal .settings-panel > .settings-row .account-actions,
+    body.local-minimal-ui #settingsModal .settings-panel > .settings-row .role-inline,
+    body.local-minimal-ui #settingsModal .settings-panel > .settings-row .export-row,
+    body.local-minimal-ui #settingsModal .settings-panel > .settings-row .voice-config-block,
+    body.local-minimal-ui #settingsModal .settings-panel > .settings-row .voice-picker,
+    body.local-minimal-ui #settingsModal .settings-panel > .settings-row .voice-picker-trigger,
+    body.local-minimal-ui #settingsModal .settings-panel > .settings-row .name-input,
+    body.local-minimal-ui #settingsModal .settings-panel > .settings-row .btn-change,
+    body.local-minimal-ui #settingsModal .settings-panel > .settings-row .btn-logout,
+    body.local-minimal-ui #settingsModal .settings-panel > .settings-row .btn-export,
+    body.local-minimal-ui #settingsModal .settings-panel > .password-section .password-input,
+    body.local-minimal-ui #settingsModal .settings-panel > .password-section .password-buttons {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        box-sizing: border-box !important;
+    }
+
+    body.local-minimal-ui #settingsModal .settings-panel > .settings-row .btn-change,
+    body.local-minimal-ui #settingsModal .settings-panel > .settings-row .btn-logout,
+    body.local-minimal-ui #settingsModal .settings-panel > .settings-row .btn-export,
+    body.local-minimal-ui #settingsModal .settings-panel > .settings-row .name-input,
+    body.local-minimal-ui #settingsModal .settings-panel > .settings-row .voice-picker-trigger,
+    body.local-minimal-ui #settingsModal .settings-panel > .password-section .password-input {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+
+    body.local-minimal-ui #settingsModal .settings-panel > .settings-row .role-inline,
+    body.local-minimal-ui #settingsModal .settings-panel > .settings-row .account-topline {
+        gap: 12px !important;
+    }
+}

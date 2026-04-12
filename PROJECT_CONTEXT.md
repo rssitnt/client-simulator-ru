@@ -164,6 +164,7 @@
   - left/right padding is symmetric and safe-area aware;
   - text/buttons/dropdowns must not clip into the screen edges or look glued to the right edge;
   - the sheet scrollbar itself remains intentionally hidden on phones.
+  - direct mobile `.settings-row` blocks are now width-locked to that same inner column too; labels, buttons, and inputs must not expand back to full viewport width.
 - Prompt switching stability:
   - if a role has multiple prompt variations, the UI must expose them as an explicit `Варианты промпта` block instead of relying on hidden horizontal overflow;
   - on mobile that block is now a vertical full-width list under the role selector;
