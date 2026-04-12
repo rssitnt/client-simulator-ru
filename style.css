@@ -16645,3 +16645,92 @@ a:focus-visible,
     outline: none !important;
     box-shadow: none !important;
 }
+
+/* Final shell/mobile parity pass:
+   mobile tabs belong at the top, the working chat keeps no product title,
+   and platform tap highlight stays fully disabled. */
+@media (max-width: 1024px) {
+    body.local-minimal-ui {
+        --local-mobile-tabbar-height: 0px;
+        --local-mobile-top-tabs-height: calc(62px + env(safe-area-inset-top, 0px));
+        --local-mobile-composer-gap: 12px;
+    }
+
+    body.local-minimal-ui .mobile-tabs {
+        position: sticky;
+        top: 0;
+        right: 0;
+        bottom: auto;
+        left: 0;
+        z-index: 95;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        padding: max(10px, env(safe-area-inset-top, 0px) + 6px) 16px 10px;
+        border: none;
+        border-bottom: 1px solid var(--local-border-final);
+        border-radius: 0;
+        background: color-mix(in srgb, var(--local-shell-bg-final) 94%, transparent);
+        box-shadow: none;
+        backdrop-filter: blur(18px);
+    }
+
+    body.local-minimal-ui .history-panel-header,
+    body.local-minimal-ui .chat-panel .panel-header,
+    body.local-minimal-ui .prompt-panel-header {
+        top: var(--local-mobile-top-tabs-height);
+    }
+
+    body.local-minimal-ui .panels-container {
+        padding-bottom: 0;
+    }
+
+    body.local-minimal-ui .history-panel-body {
+        padding-bottom: 20px;
+    }
+
+    body.local-minimal-ui .chat-messages {
+        padding-top: 12px;
+        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 104px);
+    }
+
+    body.local-minimal-ui .chat-input-container {
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+    }
+
+    body.local-minimal-ui .prompt-panel {
+        padding-bottom: 12px;
+    }
+
+    body.local-minimal-ui .chat-panel .panel-header::before {
+        content: none;
+    }
+
+    body.local-minimal-ui.chat-empty-state .chat-panel .panel-header::before {
+        content: "Начать чат";
+        display: block;
+        font-size: 18px;
+        line-height: 1.1;
+        font-weight: 650;
+        letter-spacing: -0.03em;
+        color: var(--local-text-final);
+    }
+
+    body.local-minimal-ui #localHistoryToggleBtn,
+    body.local-minimal-ui #localPromptToggleBtn,
+    body.local-minimal-ui #localClearChatInlineBtn {
+        display: none !important;
+    }
+
+    body.local-minimal-ui .chat-panel .header-buttons {
+        width: auto;
+        margin-left: auto;
+    }
+}
+
+html,
+body,
+html *,
+body * {
+    -webkit-tap-highlight-color: transparent !important;
+}

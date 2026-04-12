@@ -133,6 +133,10 @@
   - each event stores a compact browser/Firebase session snapshot so support can triage employee login issues from the app UI.
 - Old global light-theme rules for mobile tabs, `#startBtn`, and generic dropdown active states are now isolated away from `body.local-minimal-ui`; if the warm local light shell drifts back toward old blue/grey styling, inspect that isolation first instead of piling on new overrides.
 - Fullscreen settings/admin in `body.local-minimal-ui.light-theme` now rely on one final warm-cream consistency layer at the very end of `C:\projects\sites\client-simulator\style.css`; treat that tail block as the canonical place for white-theme settings fixes so palette changes do not also mutate geometry or revive older dark/bluish controls.
+- Mobile tabs (`История / Чат / Роль`) now live in a top sticky app bar, not in a bottom dock.
+- The local/mobile working chat header no longer shows `client simulator`; only the empty first screen should show `Начать чат`.
+- The inline local clear-chat header action was removed intentionally.
+- A final bottom-of-file interaction layer suppresses platform blue tap/click glow globally across desktop and mobile controls.
 
 ## Still watch
 - If one employee still cannot log in while others can, first check Firebase Authentication for an old standalone account or stale password on that exact email.

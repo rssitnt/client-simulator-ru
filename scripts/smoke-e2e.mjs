@@ -2744,11 +2744,14 @@ async function runClearChatStopsVoiceFlow(browser, baseUrl) {
             return sendMode === 'voice-stop';
         }, null, { timeout: 12000 });
 
-        const inlineClearVisible = await page.locator('#localClearChatInlineBtn').isVisible().catch(() => false);
-        if (inlineClearVisible) {
-            await page.click('#localClearChatInlineBtn');
+        const desktopNewDialogVisible = await page.locator('#mainDialogHistoryNewBtn').isVisible().catch(() => false);
+        const railNewDialogVisible = await page.locator('#historyRailNewBtn').isVisible().catch(() => false);
+        if (desktopNewDialogVisible) {
+            await page.click('#mainDialogHistoryNewBtn');
+        } else if (railNewDialogVisible) {
+            await page.click('#historyRailNewBtn');
         } else {
-            await page.click('#clearChat');
+            throw new Error('Fresh dialog action is not visible during voice reset smoke');
         }
         await page.waitForFunction(() => {
             const sendMode = String(document.getElementById('sendBtn')?.dataset?.mode || '').trim();
@@ -2756,11 +2759,11 @@ async function runClearChatStopsVoiceFlow(browser, baseUrl) {
         }, null, { timeout: 8000 });
 
         const state = await readVoiceSmokeState();
-        expect(capturedVoiceRequests.length > 0, 'Voice token endpoint was not called before clear chat');
+        expect(capturedVoiceRequests.length > 0, 'Voice token endpoint was not called before starting a fresh dialog');
         expect(!state.bodyVoiceCallActive, 'Voice active body state must clear after chat reset');
-        expect(state.sendMode !== 'voice-stop', 'Clear chat must leave the primary action out of stop mode');
-        expect(state.startConversationVisible, 'Start conversation block must return after clear chat');
-        expect(state.chatMessagesCount === 0, 'Clear chat must remove buffered voice bubbles from the current view');
+        expect(state.sendMode !== 'voice-stop', 'Fresh dialog action must leave the primary action out of stop mode');
+        expect(state.startConversationVisible, 'Start conversation block must return after fresh dialog reset');
+        expect(state.chatMessagesCount === 0, 'Fresh dialog reset must remove buffered voice bubbles from the current view');
         expect(
             !state.rateVisible || !state.voiceModeActionsVisible,
             'Rate button must not stay visible to the user after full chat reset'

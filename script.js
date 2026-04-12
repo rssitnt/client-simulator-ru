@@ -2469,10 +2469,6 @@ function revealLocalMinimalPromptSetup(role = 'client', message = 'Сначал�
 
 function syncLocalShellUtilityButtons() {
     const isLocalUi = isLocalMinimalUiEnabled();
-    const isEmptyState = document.body?.classList.contains('chat-empty-state');
-    if (localClearChatInlineBtn) {
-        localClearChatInlineBtn.hidden = !isLocalUi || !!isEmptyState;
-    }
     if (localSettingsTopBtn) {
         localSettingsTopBtn.hidden = !isLocalUi;
     }
@@ -8088,7 +8084,7 @@ function renderSelectedDialogHistoryIntoMainChat() {
         showGeminiVoiceFinishedNotice({
             eyebrow: 'Звонок завершён',
             title: 'Разговор сохранён',
-            subtext: 'Можно оценить диалог или очистить чат для нового звонка.'
+        subtext: 'Можно оценить диалог или начать новый звонок.'
         });
     }
 
@@ -19004,7 +19000,7 @@ function buildGeminiVoiceFinishedNoticePayload() {
         eyebrow: 'Звонок завершён',
         title: 'Разговор сохранён',
         subtext: String(currentVoiceModeStatusText || '').trim()
-            || 'Можно оценить диалог или очистить чат для нового звонка.'
+            || 'Можно оценить диалог или начать новый звонок.'
     };
 }
 
@@ -24163,7 +24159,6 @@ bindEvent(userInput, 'input', () => {
     updateSendBtnState();
     });
 bindEvent(clearChatBtn, 'click', () => { if (confirm('Очистить чат?')) clearChat(); });
-bindEvent(localClearChatInlineBtn, 'click', () => { if (confirm('Очистить чат?')) clearChat(); });
 bindEvent(historySidebarToggleBtn, 'click', () => {
     applyHistorySidebarCollapsed(!historySidebarCollapsed);
 });
