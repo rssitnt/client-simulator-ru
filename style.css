@@ -15259,3 +15259,205 @@ body.local-minimal-ui.light-theme #settingsModal .admin-users-access-toolbar .bt
         justify-content: stretch;
     }
 }
+
+/* Final light-theme palette parity pass
+   Only color/surface cleanup. Geometry is intentionally handled above. */
+body.local-minimal-ui.light-theme {
+    --local-shell-bg-final: #f6efe5;
+    --local-surface-final: #f1e8dc;
+    --local-surface-muted-final: #f6eee3;
+    --local-surface-elevated-final: #fbf7f0;
+    --local-surface-soft-final: #f4ebe0;
+    --local-border-final: #d8cdbd;
+    --local-border-strong-final: #c9baa6;
+    --local-text-final: #2f2922;
+    --local-text-muted-final: #76695c;
+    --local-text-soft-final: #948678;
+}
+
+body.local-minimal-ui.light-theme .history-panel,
+body.local-minimal-ui.light-theme .chat-panel,
+body.local-minimal-ui.light-theme .chat-messages,
+body.local-minimal-ui.light-theme .prompt-panel,
+body.local-minimal-ui.light-theme #settingsModal .settings-panel {
+    background: var(--local-shell-bg-final) !important;
+    color: var(--local-text-final) !important;
+}
+
+body.local-minimal-ui.light-theme .history-search,
+body.local-minimal-ui.light-theme .history-panel-action,
+body.local-minimal-ui.light-theme .dialog-history-empty,
+body.local-minimal-ui.light-theme .input-wrapper,
+body.local-minimal-ui.light-theme .personality-selector-trigger,
+body.local-minimal-ui.light-theme .personality-selector-menu,
+body.local-minimal-ui.light-theme .personality-option,
+body.local-minimal-ui.light-theme .prompt-context-action,
+body.local-minimal-ui.light-theme .prompt-variation-chip,
+body.local-minimal-ui.light-theme .add-variation-btn,
+body.local-minimal-ui.light-theme .voice-picker-trigger,
+body.local-minimal-ui.light-theme .voice-picker-menu,
+body.local-minimal-ui.light-theme .dropdown-menu.dropdown-menu-settings,
+body.local-minimal-ui.light-theme #settingsModal .name-input,
+body.local-minimal-ui.light-theme #settingsModal .password-input,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-input,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-days-wrap,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-btn,
+body.local-minimal-ui.light-theme #settingsModal .admin-role-picker-trigger,
+body.local-minimal-ui.light-theme #settingsModal .btn-change,
+body.local-minimal-ui.light-theme #settingsModal .btn-cancel,
+body.local-minimal-ui.light-theme #settingsModal .btn-confirm,
+body.local-minimal-ui.light-theme #settingsModal .btn-export,
+body.local-minimal-ui.light-theme #settingsModal .account-actions .btn-logout,
+body.local-minimal-ui.light-theme #settingsModal .admin-webhook-debug-item,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body[data-admin-layout="mobile"] .admin-users-table tbody tr {
+    background: var(--local-surface-elevated-final) !important;
+    border-color: var(--local-border-final) !important;
+    color: var(--local-text-final) !important;
+}
+
+body.local-minimal-ui.light-theme .chat-panel .panel-header,
+body.local-minimal-ui.light-theme .prompt-panel-header,
+body.local-minimal-ui.light-theme #settingsModal .theme-color-section {
+    background: rgba(246, 239, 229, 0.92) !important;
+    border-bottom-color: rgba(129, 112, 88, 0.12) !important;
+    box-shadow: none !important;
+}
+
+body.local-minimal-ui.light-theme .dialog-history-item:hover,
+body.local-minimal-ui.light-theme .history-panel-action:hover,
+body.local-minimal-ui.light-theme .personality-selector-trigger:hover,
+body.local-minimal-ui.light-theme .personality-option:hover,
+body.local-minimal-ui.light-theme .prompt-context-action:hover,
+body.local-minimal-ui.light-theme .prompt-variation-chip:hover,
+body.local-minimal-ui.light-theme .add-variation-btn:hover,
+body.local-minimal-ui.light-theme .toolbar-btn:hover,
+body.local-minimal-ui.light-theme #settingsModal .btn-change:hover,
+body.local-minimal-ui.light-theme #settingsModal .btn-cancel:hover,
+body.local-minimal-ui.light-theme #settingsModal .btn-confirm:hover,
+body.local-minimal-ui.light-theme #settingsModal .btn-export:hover,
+body.local-minimal-ui.light-theme #settingsModal .account-actions .btn-logout:hover,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-btn:hover,
+body.local-minimal-ui.light-theme #settingsModal .voice-picker-trigger:hover,
+body.local-minimal-ui.light-theme #settingsModal .admin-role-picker-trigger:hover,
+body.local-minimal-ui.light-theme .dialog-history-item-menu-action:hover,
+body.local-minimal-ui.light-theme .dialog-history-item-menu-action:focus-visible,
+body.local-minimal-ui.light-theme .dialog-history-item-menu-toggle:hover,
+body.local-minimal-ui.light-theme .dialog-history-item-menu-toggle:focus-visible,
+body.local-minimal-ui.light-theme .dialog-history-item.is-menu-open .dialog-history-item-menu-toggle {
+    background: #f0e7da !important;
+    border-color: var(--local-border-strong-final) !important;
+    color: var(--local-text-final) !important;
+}
+
+body.local-minimal-ui.light-theme .personality-option.active,
+body.local-minimal-ui.light-theme .prompt-variation-chip.active,
+body.local-minimal-ui.light-theme .mobile-tab.active {
+    background: #ece2d5 !important;
+    border-color: var(--local-border-strong-final) !important;
+    color: var(--local-text-final) !important;
+}
+
+body.local-minimal-ui.light-theme .personality-option.active .personality-option-title,
+body.local-minimal-ui.light-theme .personality-option.active .personality-option-description,
+body.local-minimal-ui.light-theme .voice-picker-title,
+body.local-minimal-ui.light-theme .admin-role-picker-option,
+body.local-minimal-ui.light-theme #settingsModal .admin-hidden-prompt-summary,
+body.local-minimal-ui.light-theme #settingsModal .admin-accordion-trigger,
+body.local-minimal-ui.light-theme #settingsModal .admin-user-login,
+body.local-minimal-ui.light-theme #settingsModal .admin-status-main,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-table th,
+body.local-minimal-ui.light-theme #settingsModal .admin-accordion-trigger .chevron,
+body.local-minimal-ui.light-theme #settingsModal .admin-panel-title,
+body.local-minimal-ui.light-theme .dialog-history-item-title,
+body.local-minimal-ui.light-theme .voice-call-finished-note .conversation-action-note-text {
+    color: var(--local-text-final) !important;
+}
+
+body.local-minimal-ui.light-theme .dialog-history-item-meta,
+body.local-minimal-ui.light-theme .history-search-input,
+body.local-minimal-ui.light-theme .history-search-input::placeholder,
+body.local-minimal-ui.light-theme .history-search-icon,
+body.local-minimal-ui.light-theme .dialog-history-pill,
+body.local-minimal-ui.light-theme .btn-start-meta,
+body.local-minimal-ui.light-theme .personality-selector-caption,
+body.local-minimal-ui.light-theme .personality-option-description,
+body.local-minimal-ui.light-theme .prompt-context-role-description,
+body.local-minimal-ui.light-theme .prompt-context-variation-badge,
+body.local-minimal-ui.light-theme .prompt-length-info,
+body.local-minimal-ui.light-theme #settingsModal .settings-label,
+body.local-minimal-ui.light-theme #settingsModal .account-line,
+body.local-minimal-ui.light-theme #settingsModal .role-text,
+body.local-minimal-ui.light-theme #settingsModal .voice-picker-subtitle,
+body.local-minimal-ui.light-theme #settingsModal .admin-hidden-prompt-hint,
+body.local-minimal-ui.light-theme #settingsModal .admin-access-source,
+body.local-minimal-ui.light-theme #settingsModal .admin-time,
+body.local-minimal-ui.light-theme #settingsModal .admin-presence,
+body.local-minimal-ui.light-theme #settingsModal .admin-sort-btn,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-table tbody td,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-table tbody td::before,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-table:has(.admin-empty-row) .admin-empty-row td,
+body.local-minimal-ui.light-theme .voice-call-finished-note .conversation-action-note-meta {
+    color: var(--local-text-muted-final) !important;
+}
+
+body.local-minimal-ui.light-theme .message.user .message-content {
+    background: #e9dfd1 !important;
+    color: var(--local-text-final) !important;
+}
+
+body.local-minimal-ui.light-theme .btn-send {
+    background: #40362b !important;
+    border-color: #40362b !important;
+    color: #fffaf3 !important;
+}
+
+body.local-minimal-ui.light-theme .btn-send:hover:not(:disabled) {
+    background: #4a3f33 !important;
+    border-color: #4a3f33 !important;
+}
+
+body.local-minimal-ui.light-theme .btn-send:disabled {
+    background: #cabfb0 !important;
+    border-color: #cabfb0 !important;
+    color: #fbf6ef !important;
+}
+
+body.local-minimal-ui.light-theme .voice-call-finished-note .conversation-action-note-box {
+    background: #fbf7f0 !important;
+    border-color: var(--local-border-final) !important;
+    box-shadow: 0 18px 36px rgba(70, 56, 38, 0.10) !important;
+}
+
+body.local-minimal-ui.light-theme .voice-call-finished-note .conversation-action-note-badge {
+    background: #f1e7da !important;
+    border-color: rgba(132, 113, 89, 0.12) !important;
+    color: var(--local-text-muted-final) !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal {
+    background: rgba(95, 78, 58, 0.12) !important;
+    backdrop-filter: blur(8px);
+}
+
+body.local-minimal-ui.light-theme #settingsModal .settings-row,
+body.local-minimal-ui.light-theme #settingsModal .export-row,
+body.local-minimal-ui.light-theme #settingsModal .account-block,
+body.local-minimal-ui.light-theme #settingsModal .voice-config-block,
+body.local-minimal-ui.light-theme #settingsModal .admin-panel,
+body.local-minimal-ui.light-theme #settingsModal .admin-invite-form,
+body.local-minimal-ui.light-theme #settingsModal .admin-hidden-prompt-body,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body,
+body.local-minimal-ui.light-theme #settingsModal .admin-webhook-debug-body {
+    background: transparent !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .admin-role-picker-menu,
+body.local-minimal-ui.light-theme #settingsModal .voice-picker-menu,
+body.local-minimal-ui.light-theme #settingsModal .dropdown-menu.dropdown-menu-settings,
+body.local-minimal-ui.light-theme .dialog-history-item-menu,
+body.local-minimal-ui.light-theme #settingsModal .admin-users-access-body[data-admin-layout="desktop"] .admin-users-table tbody td:nth-child(6)::after {
+    background: #fbf7f0 !important;
+    border-color: var(--local-border-final) !important;
+    box-shadow: 0 16px 34px rgba(70, 56, 38, 0.10) !important;
+    color: var(--local-text-final) !important;
+}
