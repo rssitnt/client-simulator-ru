@@ -151,6 +151,14 @@ function sendJson(res, statusCode, payload, requestOrigin = '') {
     res.end(JSON.stringify(payload));
 }
 
+function sendApiError(res, statusCode, message, code, requestOrigin = '', meta = {}) {
+    sendJson(res, statusCode, {
+        error: message,
+        code,
+        ...meta
+    }, requestOrigin);
+}
+
 function sendText(res, statusCode, text, requestOrigin = '') {
     applyCors(res, requestOrigin);
     res.statusCode = statusCode;
@@ -190,6 +198,24 @@ function createHttpError(statusCode, message, cause = null) {
         error.cause = cause;
     }
     return error;
+}
+
+function validateTokenRequest(body) {
+    if (body?.voice && typeof body.voice !== 'string') {
+        throw createHttpError(400, 'Voice must be a string.', { code: 'invalid_voice' });
+    }
+}
+
+function validateTranscribeRequest(body) {
+    if (!body.audio || typeof body.audio !== 'string') {
+        throw createHttpError(400, 'Audio payload is required.', { code: 'missing_audio' });
+    }
+}
+
+function validateOpenAiTokenRequest(body) {
+    if (body?.voice && typeof body.voice !== 'string') {
+        throw createHttpError(400, 'Voice must be a string.', { code: 'invalid_voice' });
+    }
 }
 
 function hasServiceAccountConfig() {
@@ -577,8 +603,15 @@ function isRateLimited(key) {
     const bucket = rateLimitBuckets.get(key);
     if (!bucket || now - bucket.windowStart > RATE_LIMIT_WINDOW_MS) {
         rateLimitBuckets.set(key, { windowStart: now, count: 1 });
-        return false;
-    }
+    return false;
+}
+
+function getRetryAfterMs(key) {
+    const bucket = rateLimitBuckets.get(key);
+    if (!bucket) return RATE_LIMIT_WINDOW_MS;
+    const remaining = bucket.resetAt - Date.now();
+    return remaining > 0 ? remaining : RATE_LIMIT_WINDOW_MS;
+}
     bucket.count += 1;
     rateLimitBuckets.set(key, bucket);
     return bucket.count > RATE_LIMIT_MAX_REQUESTS;
@@ -834,7 +867,7 @@ export async function handleTokenServerRequest(req, res) {
     }
 
     if (req.method !== 'POST') {
-        sendJson(res, 405, { error: 'Method not allowed' }, requestOrigin);
+        sendApiError(res, 405, 'Method not allowed', 'method_not_allowed', requestOrigin);
         logRequestEvent('warn', buildRequestLogContext(req, requestId, {
             status: 405,
             reason: 'method-not-allowed'
@@ -844,7 +877,7 @@ export async function handleTokenServerRequest(req, res) {
 
     const missingConfigMessage = getMissingServerConfigMessage();
     if (missingConfigMessage) {
-        sendJson(res, 500, { error: missingConfigMessage }, requestOrigin);
+        sendApiError(res, 500, missingConfigMessage, 'missing_config', requestOrigin);
         logRequestEvent('error', buildRequestLogContext(req, requestId, {
             status: 500,
             reason: 'missing-config',
@@ -865,6 +898,13 @@ export async function handleTokenServerRequest(req, res) {
             req,
             isGeminiTranscribeRequest ? MAX_TRANSCRIBE_JSON_BODY_BYTES : MAX_JSON_BODY_BYTES
         );
+        if (isGeminiTranscribeRequest) {
+            validateTranscribeRequest(requestBody);
+        } else if (isOpenAiTokenRequest) {
+            validateOpenAiTokenRequest(requestBody);
+        } else {
+            validateTokenRequest(requestBody);
+        }
         let authIdentity = null;
 
         if (idToken) {
@@ -903,7 +943,16 @@ export async function handleTokenServerRequest(req, res) {
         const rateKey = `${authIdentity.uid || authIdentity.login || 'unknown'}:${clientIp}`;
 
         if (isRateLimited(rateKey)) {
-            sendJson(res, 429, { error: 'Too many token requests. Try again in a minute.' }, requestOrigin);
+            const retryAfterMs = getRetryAfterMs(rateKey);
+            res.setHeader('Retry-After', Math.ceil(retryAfterMs / 1000));
+            sendApiError(
+                res,
+                429,
+                'Too many token requests. Try again in a minute.',
+                'rate_limited',
+                requestOrigin,
+                { retryAfterMs }
+            );
             return;
         }
 
@@ -987,7 +1036,8 @@ export async function handleTokenServerRequest(req, res) {
             : /MISSING|INVALID|EXPIRED|TOKEN/i.test(message)
                 ? 401
                 : 500;
-        sendJson(res, status, { error: message }, requestOrigin);
+        const errorCode = error?.cause?.code || error?.code || (status === 401 ? 'unauthorized' : 'server_error');
+        sendApiError(res, status, message, errorCode, requestOrigin);
         logRequestEvent('error', buildRequestLogContext(req, requestId, {
             status,
             durationMs: Date.now() - startedAt,
