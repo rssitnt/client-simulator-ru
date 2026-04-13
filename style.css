@@ -18402,6 +18402,18 @@ body.local-minimal-ui * {
     -webkit-tap-highlight-color: transparent !important;
 }
 
+/* Mobile: hide all visible scrollbars (keep scrolling enabled). */
+@media (max-width: 1024px) {
+    body.local-minimal-ui * {
+        scrollbar-width: none !important;
+    }
+
+    body.local-minimal-ui *::-webkit-scrollbar {
+        width: 0 !important;
+        height: 0 !important;
+    }
+}
+
 /* Final mobile tab label alignment:
    ensure tab text/icons are vertically centered. */
 @media (max-width: 1024px) {

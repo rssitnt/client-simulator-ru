@@ -167,6 +167,7 @@
   - the mobile settings header row now uses safe-area-based min-height/padding so the close button stays fully inside the top bar.
   - the mobile `Роль` tab icon now inherits the same white/cream tone as other tabs in dark mode; light theme keeps it neutral.
 - A final bottom-of-file interaction layer suppresses platform blue tap/click glow globally across desktop and mobile controls.
+- On mobile, all visible scrollbars are now hidden globally; scrolling remains enabled but no scroll rail should be visible.
 - Latest mobile app-shell lock:
   - top navigation is a fixed 4-slot mobile row (`history icon / chat icon / role / settings icon`);
   - the old inline settings trigger inside the chat/start surface is intentionally hidden on mobile;
