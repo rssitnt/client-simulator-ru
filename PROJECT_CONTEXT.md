@@ -160,6 +160,7 @@
   - mobile fullscreen settings now use symmetric safe-area padding and hide the sheet scrollbar itself rather than showing a desktop-like right-edge scroller.
   - the mobile settings close button is fully contained inside the top header row; it must not overlap the row’s lower edge.
   - the mobile settings header row stays as a single flex bar so the close button aligns with the theme toggle.
+  - the mobile settings header row now has extra height/bottom padding so the close button never dips across the divider line.
 - A final bottom-of-file interaction layer suppresses platform blue tap/click glow globally across desktop and mobile controls.
 - Latest mobile app-shell lock:
   - top navigation is a fixed 4-slot mobile row (`history icon / chat icon / role / settings icon`);
