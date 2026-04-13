@@ -147,11 +147,13 @@
 - The local/mobile working chat header no longer shows `client simulator`; only the empty first screen should show `Начать чат`.
 - The inline local clear-chat header action was removed intentionally.
 - Latest mobile shell stabilization:
+  - horizontal swipe navigation now switches panels in order `history → chat → instructions` and back.
   - start-action labels are forced to true center alignment inside their buttons;
   - mobile start CTA buttons keep fixed height and remove vertical padding so labels stay optically centered;
   - the mobile start screen keeps a small top offset so the first CTA does not clip under the app bar.
   - history search plus `Новый диалог` must stay pinned directly under the top app bar instead of drifting into the feed;
     - the history search block must render first in the list, flush under the top nav with no dialog cards above it.
+    - the mobile history panel removes extra top padding so controls sit directly under the tabs.
   - mobile fullscreen settings now use symmetric safe-area padding and hide the sheet scrollbar itself rather than showing a desktop-like right-edge scroller.
   - the mobile settings close button is fully contained inside the top header row; it must not overlap the row’s lower edge.
   - the mobile settings header row stays as a single flex bar so the close button aligns with the theme toggle.

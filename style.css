@@ -12108,12 +12108,14 @@ body.local-minimal-ui.light-theme .admin-panel-title {
 }
 
 body.local-minimal-ui.light-theme .dialog-history-item {
-    background: transparent;
-    border-color: transparent;
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
 }
 
 body.local-minimal-ui.light-theme .dialog-history-item.is-active {
-    background: transparent;
+    background: transparent !important;
+    box-shadow: none !important;
 }
 
 body.local-minimal-ui.light-theme .history-rail-btn,
@@ -18252,8 +18254,12 @@ body * {
    keep search + new dialog flush under the top app bar (no gap). */
 @media (max-width: 1024px) {
     body.local-minimal-ui #historyPanel.panel.active .history-panel-controls {
-        top: var(--local-mobile-appbar-height) !important;
+        top: var(--local-mobile-top-tabs-height, var(--local-mobile-appbar-height)) !important;
         margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+
+    body.local-minimal-ui #historyPanel.panel.active {
         padding-top: 0 !important;
     }
 }

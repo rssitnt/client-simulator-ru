@@ -120,6 +120,7 @@
 - the local history rail now owns its own left-edge collapse control; when collapsed it stays as a narrow ChatGPT-like rail with expand, new-chat, and search icons instead of disappearing completely;
 - the current mobile app-shell contract is:
   - the top mobile bar is the single sticky navigation row (`история icon / чат icon / роль / настройки icon`);
+    - horizontal swipes switch between `История ↔ Чат ↔ Роль` in that order.
   - start cards center their labels exactly;
     - mobile start CTA buttons are fixed-height with vertical centering; no extra top/bottom padding that shifts labels.
     - the mobile start screen keeps a small top offset so the first CTA does not clip under the app bar.

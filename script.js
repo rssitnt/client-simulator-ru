@@ -24524,17 +24524,78 @@ voiceBtn.addEventListener('click', () => {
 const mobileTabs = document.querySelectorAll('.mobile-tab');
 const panels = document.querySelectorAll('.panel');
 const mobileSettingsTabBtn = document.getElementById('mobileSettingsTabBtn');
+const mobilePanelOrder = ['history', 'chat', 'instructions'];
+
+function setMobilePanel(panelName) {
+    if (!panelName) return;
+    mobileTabs.forEach(t => t.classList.remove('active'));
+    panels.forEach(p => p.classList.remove('active'));
+    document.querySelector(`.mobile-tab[data-panel="${panelName}"]`)?.classList.add('active');
+    document.querySelector(`.panel[data-panel="${panelName}"]`)?.classList.add('active');
+}
 
 mobileTabs.forEach(tab => {
     tab.addEventListener('click', () => {
         const panelName = tab.dataset.panel;
         if (!panelName) return;
-        mobileTabs.forEach(t => t.classList.remove('active'));
-        panels.forEach(p => p.classList.remove('active'));
-        tab.classList.add('active');
-        document.querySelector(`.panel[data-panel="${panelName}"]`)?.classList.add('active');
+        setMobilePanel(panelName);
     });
 });
+
+function getActiveMobilePanelName() {
+    const activePanel = document.querySelector('.panel.active[data-panel]');
+    return activePanel?.dataset?.panel || 'chat';
+}
+
+function isSwipeAllowedTarget(target) {
+    if (!(target instanceof Element)) return true;
+    if (target.closest('input, textarea, select, [contenteditable="true"]')) return false;
+    if (target.closest('.dialog-history-item-menu, .voice-picker-menu, .admin-role-picker-menu, .dropdown-menu')) return false;
+    if (target.closest('#settingsModal')) return false;
+    return true;
+}
+
+let mobileSwipeStartX = 0;
+let mobileSwipeStartY = 0;
+let mobileSwipeStartTime = 0;
+let mobileSwipeTracking = false;
+
+if (panelsContainer) {
+    panelsContainer.addEventListener('touchstart', (event) => {
+        if (window.innerWidth > 1024) return;
+        if (!isLocalMinimalUiEnabled()) return;
+        if (settingsModal?.classList.contains('active')) return;
+        const touch = event.touches?.[0];
+        if (!touch) return;
+        if (!isSwipeAllowedTarget(event.target)) return;
+        mobileSwipeTracking = true;
+        mobileSwipeStartX = touch.clientX;
+        mobileSwipeStartY = touch.clientY;
+        mobileSwipeStartTime = Date.now();
+    }, { passive: true });
+
+    panelsContainer.addEventListener('touchend', (event) => {
+        if (!mobileSwipeTracking) return;
+        mobileSwipeTracking = false;
+        if (window.innerWidth > 1024) return;
+        if (!isLocalMinimalUiEnabled()) return;
+        if (settingsModal?.classList.contains('active')) return;
+        const touch = event.changedTouches?.[0];
+        if (!touch) return;
+        const deltaX = touch.clientX - mobileSwipeStartX;
+        const deltaY = touch.clientY - mobileSwipeStartY;
+        const elapsed = Date.now() - mobileSwipeStartTime;
+        if (elapsed > 800) return;
+        if (Math.abs(deltaX) < 60) return;
+        if (Math.abs(deltaX) < Math.abs(deltaY) * 1.2) return;
+        const currentPanel = getActiveMobilePanelName();
+        const currentIndex = mobilePanelOrder.indexOf(currentPanel);
+        if (currentIndex === -1) return;
+        const nextIndex = deltaX < 0 ? currentIndex + 1 : currentIndex - 1;
+        if (nextIndex < 0 || nextIndex >= mobilePanelOrder.length) return;
+        setMobilePanel(mobilePanelOrder[nextIndex]);
+    }, { passive: true });
+}
 
 bindEvent(mobileSettingsTabBtn, 'click', (e) => {
     e?.preventDefault?.();
