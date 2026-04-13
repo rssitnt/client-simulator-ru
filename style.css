@@ -5678,6 +5678,20 @@ body.local-minimal-ui .btn-settings-floating {
     transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
+.dialog-history-title-input-inline {
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    min-width: 0;
+}
+
+.dialog-history-title-input-inline:focus-visible {
+    outline: none;
+    box-shadow: none;
+}
+
 .dialog-history-title-input:focus-visible {
     border-color: color-mix(in srgb, var(--color-accent) 55%, transparent);
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 45%, transparent);

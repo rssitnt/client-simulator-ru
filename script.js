@@ -2014,6 +2014,8 @@ let dialogHistorySelectedPayload = null;
 let dialogHistoryViewerLoading = false;
 let dialogHistoryRevealTimer = 0;
 let dialogHistoryMenuOpenId = '';
+let dialogHistoryInlineRenameId = '';
+let dialogHistoryInlineRenameValue = '';
 let historySidebarCollapsed = true;
 let isProcessing = false;
 let lastRating = null;
@@ -7829,6 +7831,29 @@ function canDeleteSelectedDialogHistory() {
     return canDeleteDialogHistoryRecord(dialogHistorySelectedRecord);
 }
 
+function beginDialogHistoryInlineRename(record = null) {
+    if (!record || !canRenameDialogHistoryRecord(record)) return false;
+    dialogHistoryInlineRenameId = String(record.id || '').trim();
+    dialogHistoryInlineRenameValue = getDialogHistoryRecordEffectiveTitle(record);
+    renderDialogHistoryList();
+    return true;
+}
+
+function cancelDialogHistoryInlineRename() {
+    dialogHistoryInlineRenameId = '';
+    dialogHistoryInlineRenameValue = '';
+    renderDialogHistoryList();
+}
+
+async function commitDialogHistoryInlineRename(record = null, nextTitle = '') {
+    if (!record || !canRenameDialogHistoryRecord(record)) return false;
+    const result = await saveDialogHistoryRecordTitle(record, nextTitle);
+    dialogHistoryInlineRenameId = '';
+    dialogHistoryInlineRenameValue = '';
+    renderDialogHistoryList();
+    return result;
+}
+
 function resetCurrentDialogHistoryState() {
     if (dialogHistorySaveTimerId) {
         clearTimeout(dialogHistorySaveTimerId);
@@ -8778,10 +8803,7 @@ async function saveDialogHistoryRecordTitle(record = null, nextTitleRaw = '') {
 
 async function renameDialogHistoryRecord(record = null) {
     if (!record || !canRenameDialogHistoryRecord(record)) return false;
-    const currentTitle = getDialogHistoryRecordEffectiveTitle(record);
-    const nextTitle = window.prompt('Новое название диалога', currentTitle);
-    if (nextTitle === null) return false;
-    return saveDialogHistoryRecordTitle(record, nextTitle);
+    return beginDialogHistoryInlineRename(record);
 }
 
 async function deleteDialogHistoryRecord(record = null) {
@@ -8875,6 +8897,10 @@ function renderDialogHistoryListInto(ui) {
             ${isCompactRail ? '' : `<div class="dialog-history-item-preview">${renderDialogHistoryHighlightedText(record.preview || 'Без текста', dialogHistorySearchQuery)}</div>`}
         `;
         mainButton.addEventListener('click', () => {
+            if (mainButton.dataset.suppressClick === '1') {
+                delete mainButton.dataset.suppressClick;
+                return;
+            }
             loadDialogHistorySelection(record.id).catch((error) => {
                 console.error('Failed to load dialog history selection:', error);
                 showCopyNotification(error?.message || 'Не удалось открыть диалог');
@@ -8883,6 +8909,49 @@ function renderDialogHistoryListInto(ui) {
                 activateShellPanel('chat');
             }
         });
+        mainButton.addEventListener('dblclick', (event) => {
+            if (!canRenameDialogHistoryRecord(record)) return;
+            event.preventDefault();
+            event.stopPropagation();
+            mainButton.dataset.suppressClick = '1';
+            beginDialogHistoryInlineRename(record);
+        });
+
+        const titleNode = mainButton.querySelector('.dialog-history-item-title');
+        if (dialogHistoryInlineRenameId === record.id && titleNode && canRenameDialogHistoryRecord(record)) {
+            const inlineInput = document.createElement('input');
+            inlineInput.type = 'text';
+            inlineInput.className = 'dialog-history-title-input dialog-history-title-input-inline';
+            inlineInput.value = dialogHistoryInlineRenameValue || titleNode.textContent || '';
+            inlineInput.addEventListener('click', (event) => event.stopPropagation());
+            inlineInput.addEventListener('input', () => {
+                dialogHistoryInlineRenameValue = inlineInput.value;
+            });
+            inlineInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    cancelDialogHistoryInlineRename();
+                    return;
+                }
+                if (event.key !== 'Enter') return;
+                event.preventDefault();
+                commitDialogHistoryInlineRename(record, inlineInput.value).catch((error) => {
+                    console.error('Failed to rename dialog history record:', error);
+                    showCopyNotification(error?.message || 'Не удалось переименовать диалог');
+                });
+            });
+            inlineInput.addEventListener('blur', () => {
+                commitDialogHistoryInlineRename(record, inlineInput.value).catch((error) => {
+                    console.error('Failed to rename dialog history record:', error);
+                    showCopyNotification(error?.message || 'Не удалось переименовать диалог');
+                });
+            });
+            titleNode.replaceWith(inlineInput);
+            requestAnimationFrame(() => {
+                inlineInput.focus();
+                inlineInput.select();
+            });
+        }
 
         const actions = document.createElement('div');
         actions.className = 'dialog-history-item-actions';

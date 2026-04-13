@@ -236,6 +236,9 @@
 - Public share links now use `shared_dialogs` in RTDB:
   - sharing creates a permanent `?share=` link;
   - opening that link after login clones the dialog into a new live conversation so it can be continued.
+- Dialog history rename is now inline in the list:
+  - double-click on a dialog title starts inline editing;
+  - the `Переименовать` menu action edits the title in place instead of a prompt dialog.
 - Mobile settings panel now hides its own scrollbar on phones; the sheet stays clean without a visible scroll rail.
 - Mobile role screen now scrolls the selector away; only the prompt toolbar stays sticky under the app bar.
 - Mobile top tab icons now inherit tab color so the role icon matches the other white/active states.
