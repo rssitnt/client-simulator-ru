@@ -18366,3 +18366,22 @@ body.local-minimal-ui.light-theme .dialog-history-item-main {
         background: var(--local-shell-bg-final) !important;
     }
 }
+
+/* Mobile start CTA centering:
+   keep labels visually centered inside the three start buttons. */
+@media (max-width: 1024px) {
+    body.local-minimal-ui .start-conversation-actions .btn-start,
+    body.local-minimal-ui #startBtn,
+    body.local-minimal-ui #startVoiceBtn,
+    body.local-minimal-ui #startAttestationBtn {
+        align-items: center !important;
+        justify-content: center !important;
+        text-align: center !important;
+    }
+
+    body.local-minimal-ui .btn-start-label {
+        width: 100% !important;
+        text-align: center !important;
+        justify-content: center !important;
+    }
+}
