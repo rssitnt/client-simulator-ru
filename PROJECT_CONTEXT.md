@@ -191,6 +191,7 @@
 - Mobile history is now locked to a single scroll container: the history panel is 100dvh and `.history-panel-body` is the only scrolling element so sticky controls always stay at the top.
 - Mobile panels now add a top overlap guard so active panel content stays below the app bar height (safe-area is already part of that height).
 - Mobile history scroll now explicitly enables `-webkit-overflow-scrolling: touch` to keep list scrolling reliable on mobile webviews.
+- Mobile fullscreen settings now clamp horizontal overflow at the sheet/content level so controls cannot bleed past the inset column.
 - The visible `Сравнить` action was intentionally removed from the prompt toolbar.
 - If a public prompt conflict saves edits into a hidden local draft, the recovery action now lives inside the conflict notice itself (`Сравнить draft`) instead of returning the old toolbar button.
 - When a prompt conflict notice is set for an admin, the role/prompt panel should auto-open so the recovery notice and compare action are visible immediately.

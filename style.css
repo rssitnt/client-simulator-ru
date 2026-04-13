@@ -17954,6 +17954,11 @@ body * {
         box-sizing: border-box !important;
     }
 
+    body.local-minimal-ui #settingsModal .settings-panel,
+    body.local-minimal-ui #settingsModal .settings-content {
+        overflow-x: hidden !important;
+    }
+
     body.local-minimal-ui #settingsModal .theme-color-row,
     body.local-minimal-ui #settingsModal .settings-row,
     body.local-minimal-ui #settingsModal .password-section,
