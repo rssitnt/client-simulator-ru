@@ -18013,6 +18013,26 @@ body * {
         min-width: 0 !important;
         box-sizing: border-box !important;
     }
+
+    /* Mobile history hard-lock: make the list always scrollable */
+    body.local-minimal-ui #historyPanel.panel.active {
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+        overflow: hidden !important;
+    }
+
+    body.local-minimal-ui #historyPanel.panel.active .history-panel-main {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+    }
+
+    body.local-minimal-ui #historyPanel.panel.active .history-panel-body {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain !important;
+    }
 }
 
 /* Final compact mobile admin cards:

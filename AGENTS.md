@@ -412,6 +412,7 @@
 - The final mobile settings shell hard-stop now clamps the visible controls themselves too:
   - direct `.settings-row`, password sections, admin accordions/panels, and their buttons/inputs/dropdowns are width-locked to the centered app-width column;
   - this is the last-resort layer that prevents mobile settings content from stretching back to raw viewport edges even if older mobile rules higher in `style.css` try to do so.
+- Mobile history scrolling now has a hard lock: the history panel is 100dvh and the body itself is the only scroll container, so search/new-dialog stay sticky while the list always scrolls.
 - The prompt toolbar no longer has a visible `Сравнить` button.
 - If a public prompt conflict preserves edits as a hidden local draft, the recovery action must live inside the conflict notice itself (`Сравнить draft`) so admins can still inspect/publish that draft without restoring the old toolbar button.
 - When a prompt conflict notice is raised for admins, the role/prompt panel should auto-open so the recovery notice and compare action are visible immediately.
