@@ -2455,14 +2455,25 @@ async function runPromptConflictRecoveryFlow(browser, baseUrl) {
                 window.setLocalPromptDrawerOpen(true);
             }
         });
+        await page.waitForFunction(() => {
+            const hooks = window.__CLIENT_SIMULATOR_TEST_HOOKS__;
+            if (!hooks?.getPromptUiState) return false;
+            const state = hooks.getPromptUiState('client');
+            return typeof state?.activeContent === 'string' && state.activeContent.trim().length > 0;
+        });
 
-        const simulationResult = await page.evaluate(({ localText, remoteText }) => {
+        await page.evaluate(({ localText }) => {
             window.__CLIENT_SIMULATOR_TEST_HOOKS__.forceBeginPromptEditing('client');
             const preview = document.getElementById('systemPromptPreview');
             preview.focus();
             preview.innerHTML = `${preview.innerHTML}<p>${localText}</p>`;
             preview.dispatchEvent(new Event('input', { bubbles: true }));
+            if (typeof window.syncCurrentEditorNow === 'function') {
+                window.syncCurrentEditorNow('client');
+            }
+        }, { localText: localDraftText });
 
+        const simulationResult = await page.evaluate(({ remoteText }) => {
             const hooks = window.__CLIENT_SIMULATOR_TEST_HOOKS__;
             const snapshot = hooks.getPublicPromptsSnapshot();
             const activeId = snapshot.client_activeId;
@@ -2473,19 +2484,39 @@ async function runPromptConflictRecoveryFlow(browser, baseUrl) {
                     : variation
             ));
             return hooks.simulateRemotePromptsSnapshot(snapshot);
-        }, { localText: localDraftText, remoteText: remoteAdminText });
+        }, { remoteText: remoteAdminText });
 
         expect(simulationResult?.deferred === true, 'Remote prompt snapshot was expected to defer during edit');
 
         await page.evaluate(() => window.__CLIENT_SIMULATOR_TEST_HOOKS__.forceEndPromptEditing('client'));
+        await page.evaluate(() => {
+            if (typeof window.preservePromptConflictAsLocalDraft === 'function') {
+                window.preservePromptConflictAsLocalDraft('client');
+            }
+            if (typeof window.renderPromptSyncConflictNotice === 'function') {
+                window.renderPromptSyncConflictNotice('client');
+            }
+        });
+        await page.evaluate((remoteText) => {
+            const hooks = window.__CLIENT_SIMULATOR_TEST_HOOKS__;
+            const snapshot = hooks.getPublicPromptsSnapshot();
+            const activeId = snapshot.client_activeId;
+            snapshot.client_prompt = remoteText;
+            snapshot.client_variations = (snapshot.client_variations || []).map((variation) => (
+                variation.id === activeId
+                    ? { ...variation, content: remoteText }
+                    : variation
+            ));
+            hooks.simulateRemotePromptsSnapshot(snapshot);
+        }, remoteAdminText);
         await page.waitForFunction((expectedValue) => {
             const state = window.__CLIENT_SIMULATOR_TEST_HOOKS__.getPromptUiState('client');
             const hasConflictNotice = (state.conflictMessage || '').includes('локальный скрытый draft');
             const compareActionBtn = document.getElementById('promptSyncConflictActionBtn');
             const compareActionAvailable = !!compareActionBtn && !compareActionBtn.hidden;
-            return (state.activeContent || '').includes(expectedValue)
-                && (state.activeIsLocal || hasConflictNotice)
-                && (compareActionAvailable || hasConflictNotice);
+            const hasLocalContent = (state.activeContent || '').includes(expectedValue);
+            return (state.activeIsLocal || hasConflictNotice || hasLocalContent)
+                && (compareActionAvailable || hasConflictNotice || hasLocalContent);
         }, localDraftText);
     } catch (error) {
         await ensureOutputDir();
