@@ -127,6 +127,7 @@
     - the history search block must be the first element in the list (no dialog cards above it) and sit flush under the top bar.
   - light theme history rows stay flat (no permanent white cards); highlight appears only on hover/active.
   - mobile settings close button must sit fully inside the top settings row, not overlap the lower edge.
+    - the mobile settings header row is a single flex bar that keeps the close button aligned with the toggle.
   - the mobile `Роль` screen is a full-width vertical flow, not a centered desktop mini-editor: no visible panel heading/header buttons there, selector full-width at the top, then variations/toolbar/content in one scroll column;
   - mobile fullscreen settings must keep symmetric safe-area padding and must not show desktop-like horizontal clipping or a visible sheet scrollbar.
 - when that local history rail is collapsed, it must not render any visible scrollbar at all; scroll is only for the expanded history panel.

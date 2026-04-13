@@ -18165,10 +18165,15 @@ body * {
 
     body.local-minimal-ui #settingsModal .theme-color-section {
         isolation: isolate;
-        padding-bottom: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 56px;
+        padding-bottom: 0;
     }
 
     body.local-minimal-ui #settingsModal .theme-color-row {
+        flex: 1 1 auto;
         min-height: 56px;
         align-items: center !important;
     }
@@ -18185,6 +18190,7 @@ body * {
         margin: 0 !important;
         padding: 0 !important;
         border-radius: 14px !important;
+        flex: 0 0 auto !important;
         outline: none !important;
         box-shadow: none !important;
         z-index: 3 !important;
