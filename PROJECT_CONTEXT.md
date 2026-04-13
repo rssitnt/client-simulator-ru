@@ -201,8 +201,8 @@
 - In the mobile role screen, the role selector/header is no longer sticky; only the toolbar stays pinned under the app bar while the selector scrolls away.
 - The mobile top tab for `Роль` now uses the `fluent:prompt-24-regular` SVG asset and should stay icon-only like `История`, `Чат`, and `Настройки`.
 - Mobile `Роль` icon now inherits the same tab color as the other icons (uses `currentColor` for both fill and stroke).
-- Mobile tab icons now also force a dark-theme invert filter for any inline image/svg inside the icon slot so the role icon matches the other white icons.
-- The mobile `Роль` tab no longer uses a filled inline SVG; it now renders through the standalone `prompt-icon-fluent-24-regular.svg` asset so it matches the weight and color behavior of the other header icons.
+- The earlier global mobile SVG color override was too broad and could distort other header icons; mobile tab icons should rely on their own native `stroke="currentColor"` / `fill="currentColor"` behavior instead of one catch-all `fill/stroke` rule.
+- The mobile `Роль` tab is inline SVG again, but now only inherits the tab color directly; do not color-force every mobile SVG in the header just to fix that one icon.
 - Mobile fullscreen settings header:
   - the top close button must stay centered in its row without any residual dark circle or bleed-through from hidden shell controls below it.
 - The final mobile settings hard-stop now also locks the controls themselves to the inset column:

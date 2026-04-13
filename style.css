@@ -17514,35 +17514,10 @@ body * {
         width: 20px !important;
         height: 20px !important;
         object-fit: contain !important;
-        filter: brightness(0) invert(1);
-    }
-
-    body.local-minimal-ui.light-theme .mobile-tab-icon-prompt {
-        filter: none;
     }
 
     body.local-minimal-ui .mobile-tab-icon {
         color: inherit !important;
-    }
-
-    body.local-minimal-ui .mobile-tab-icon svg,
-    body.local-minimal-ui .mobile-tab-icon path,
-    body.local-minimal-ui .mobile-tab-icon circle,
-    body.local-minimal-ui .mobile-tab-icon rect,
-    body.local-minimal-ui .mobile-tab-icon line,
-    body.local-minimal-ui .mobile-tab-icon polyline {
-        stroke: currentColor !important;
-        fill: currentColor !important;
-    }
-
-    body.local-minimal-ui .mobile-tab-icon img,
-    body.local-minimal-ui .mobile-tab-icon svg {
-        filter: brightness(0) invert(1);
-    }
-
-    body.local-minimal-ui.light-theme .mobile-tab-icon img,
-    body.local-minimal-ui.light-theme .mobile-tab-icon svg {
-        filter: none;
     }
 
     body.local-minimal-ui #chatPanel,
