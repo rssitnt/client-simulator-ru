@@ -18195,4 +18195,10 @@ body * {
     body.local-minimal-ui .panel.active {
         padding-top: var(--local-mobile-appbar-height) !important;
     }
+
+    html,
+    body.local-minimal-ui {
+        overflow-x: hidden !important;
+        overscroll-behavior-x: none !important;
+    }
 }
