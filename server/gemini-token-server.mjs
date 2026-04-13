@@ -30,6 +30,7 @@ const GEMINI_LIVE_MODEL = String(process.env.GEMINI_LIVE_MODEL || 'gemini-3.1-fl
 const GEMINI_LIVE_VOICE = String(process.env.GEMINI_LIVE_VOICE || 'Enceladus').trim();
 const GEMINI_LIVE_MEDIA_RESOLUTION = 'MEDIA_RESOLUTION_LOW';
 const GEMINI_LIVE_THINKING_BUDGET = 0;
+const HEALTH_PATH = '/health';
 const TOKEN_PATH = '/api/gemini-live-token';
 const TRANSCRIBE_PATH = '/api/gemini-live-transcribe';
 const OPENAI_TOKEN_PATH = '/api/openai-realtime-session';
@@ -148,6 +149,38 @@ function sendJson(res, statusCode, payload, requestOrigin = '') {
     res.statusCode = statusCode;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.end(JSON.stringify(payload));
+}
+
+function sendText(res, statusCode, text, requestOrigin = '') {
+    applyCors(res, requestOrigin);
+    res.statusCode = statusCode;
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.end(text);
+}
+
+function buildRequestLogContext(req, requestId, extra = {}) {
+    return {
+        requestId,
+        method: req?.method || '',
+        path: req?.url || '',
+        origin: String(req?.headers?.origin || ''),
+        ip: getClientIp(req),
+        ...extra
+    };
+}
+
+function logRequestEvent(level, payload) {
+    const entry = {
+        ts: new Date().toISOString(),
+        level,
+        ...payload
+    };
+    const text = JSON.stringify(entry);
+    if (level === 'error') {
+        console.error(text);
+    } else {
+        console.log(text);
+    }
 }
 
 function createHttpError(statusCode, message, cause = null) {
@@ -753,18 +786,23 @@ async function createOpenAiRealtimeSession(requestBody = {}) {
 export async function handleTokenServerRequest(req, res) {
     const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
     const requestOrigin = String(req.headers.origin || '');
+    const requestId = `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
     const isGeminiTokenRequest = url.pathname === TOKEN_PATH;
     const isGeminiTranscribeRequest = url.pathname === TRANSCRIBE_PATH;
     const isOpenAiTokenRequest = url.pathname === OPENAI_TOKEN_PATH;
+    const isHealthCheck = url.pathname === HEALTH_PATH;
 
-    if (!isGeminiTokenRequest && !isGeminiTranscribeRequest && !isOpenAiTokenRequest) {
-        res.statusCode = 404;
-        res.end('Not found');
+    if (!isGeminiTokenRequest && !isGeminiTranscribeRequest && !isOpenAiTokenRequest && !isHealthCheck) {
+        sendText(res, 404, 'Not found', requestOrigin);
         return;
     }
 
     const corsOrigin = applyCors(res, requestOrigin);
     if (requestOrigin && !corsOrigin) {
+        logRequestEvent('warn', buildRequestLogContext(req, requestId, {
+            status: 403,
+            reason: 'origin-not-allowed'
+        }));
         sendJson(res, 403, { error: 'Origin is not allowed' }, requestOrigin);
         return;
     }
@@ -772,23 +810,53 @@ export async function handleTokenServerRequest(req, res) {
     if (req.method === 'OPTIONS') {
         res.statusCode = 204;
         res.end();
+        logRequestEvent('info', buildRequestLogContext(req, requestId, { status: 204, reason: 'cors-preflight' }));
+        return;
+    }
+
+    if (isHealthCheck && req.method === 'GET') {
+        const missingConfigMessage = getMissingServerConfigMessage();
+        const ok = !missingConfigMessage;
+        const payload = {
+            ok,
+            service: 'gemini-token-server',
+            geminiConfigured: !!GEMINI_API_KEY,
+            openaiConfigured: !!OPENAI_API_KEY,
+            firebaseConfigured: !!FIREBASE_WEB_API_KEY,
+            appCheckEnforced: FIREBASE_APP_CHECK_ENFORCE
+        };
+        sendJson(res, ok ? 200 : 503, payload, requestOrigin);
+        logRequestEvent(ok ? 'info' : 'warn', buildRequestLogContext(req, requestId, {
+            status: ok ? 200 : 503,
+            reason: ok ? 'health-ok' : 'health-missing-config'
+        }));
         return;
     }
 
     if (req.method !== 'POST') {
         sendJson(res, 405, { error: 'Method not allowed' }, requestOrigin);
+        logRequestEvent('warn', buildRequestLogContext(req, requestId, {
+            status: 405,
+            reason: 'method-not-allowed'
+        }));
         return;
     }
 
     const missingConfigMessage = getMissingServerConfigMessage();
     if (missingConfigMessage) {
         sendJson(res, 500, { error: missingConfigMessage }, requestOrigin);
+        logRequestEvent('error', buildRequestLogContext(req, requestId, {
+            status: 500,
+            reason: 'missing-config',
+            message: missingConfigMessage
+        }));
         return;
     }
 
     const idToken = extractBearerToken(req);
     const appCheckToken = extractAppCheckToken(req);
 
+    const startedAt = Date.now();
     try {
         if (FIREBASE_APP_CHECK_ENFORCE) {
             await verifyAppCheckToken(appCheckToken);
@@ -821,6 +889,13 @@ export async function handleTokenServerRequest(req, res) {
             };
         } else {
             sendJson(res, 401, { error: 'Firebase ID token is required' }, requestOrigin);
+            logRequestEvent('info', buildRequestLogContext(req, requestId, {
+                status: 200,
+                durationMs: Date.now() - startedAt,
+                mode: 'openai',
+                authSource: authIdentity.source,
+                accessSource: authIdentity.accessSource || null
+            }));
             return;
         }
 
@@ -848,6 +923,13 @@ export async function handleTokenServerRequest(req, res) {
                     accessSource: authIdentity.accessSource || null
                 }
             }, requestOrigin);
+            logRequestEvent('info', buildRequestLogContext(req, requestId, {
+                status: 200,
+                durationMs: Date.now() - startedAt,
+                mode: 'gemini-transcribe',
+                authSource: authIdentity.source,
+                accessSource: authIdentity.accessSource || null
+            }));
             return;
         }
 
@@ -891,6 +973,13 @@ export async function handleTokenServerRequest(req, res) {
                     accessSource: authIdentity.accessSource || null
                 }
             }, requestOrigin);
+        logRequestEvent('info', buildRequestLogContext(req, requestId, {
+            status: 200,
+            durationMs: Date.now() - startedAt,
+            mode: 'gemini-token',
+            authSource: authIdentity.source,
+            accessSource: authIdentity.accessSource || null
+        }));
     } catch (error) {
         const message = String(error?.message || 'Failed to create voice session token');
         const status = Number.isInteger(error?.statusCode)
@@ -899,6 +988,11 @@ export async function handleTokenServerRequest(req, res) {
                 ? 401
                 : 500;
         sendJson(res, status, { error: message }, requestOrigin);
+        logRequestEvent('error', buildRequestLogContext(req, requestId, {
+            status,
+            durationMs: Date.now() - startedAt,
+            error: message
+        }));
     }
 }
 
@@ -911,6 +1005,6 @@ if (isDirectRun) {
 
     const server = createServer(handleTokenServerRequest);
     server.listen(PORT, () => {
-        console.log(`[gemini-token-server] listening on http://localhost:${PORT} (paths: ${TOKEN_PATH}, ${TRANSCRIBE_PATH}, ${OPENAI_TOKEN_PATH})`);
+        console.log(`[gemini-token-server] listening on http://localhost:${PORT} (paths: ${TOKEN_PATH}, ${TRANSCRIBE_PATH}, ${OPENAI_TOKEN_PATH}, ${HEALTH_PATH})`);
     });
 }
