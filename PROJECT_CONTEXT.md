@@ -199,6 +199,7 @@
 - The mobile shell now disables horizontal scrolling at the root (overflow-x hidden) to prevent sideways drift on phones.
 - Mobile top tabs now lock to the app-bar height with tighter vertical padding for a more app-like header.
 - Mobile fullscreen settings now enforce symmetric side padding on the settings panel + theme row so controls never touch or clip into the screen edges.
+- Mobile history controls now sit flush under the top app bar with no extra gap between the app bar and the search/new-dialog row.
 - The visible `Сравнить` action was intentionally removed from the prompt toolbar.
 - If a public prompt conflict saves edits into a hidden local draft, the recovery action now lives inside the conflict notice itself (`Сравнить draft`) instead of returning the old toolbar button.
 - When a prompt conflict notice is set for an admin, the role/prompt panel should auto-open so the recovery notice and compare action are visible immediately.

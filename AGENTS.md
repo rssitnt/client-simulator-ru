@@ -389,6 +389,7 @@
   - the legacy inline settings button inside the chat/start area stays hidden on phones;
   - start-card labels are centered by the button itself, not only by the inner text span;
   - `Поиск по диалогам` and `Новый диалог` stay sticky at the top of the history scroller;
+  - the history search/new-dialog row must sit flush under the app bar with no visible gap.
   - mobile fullscreen settings use only inner safe-area padding; the sheet itself should not show a visible desktop-like scrollbar or asymmetric left/right clipping.
   - the mobile settings panel + theme row now hard-force symmetric 16px side padding so controls never touch or cross the screen edges.
   - the last mobile geometry layer at the end of `C:\projects\sites\client-simulator\style.css` is the canonical override for phone-shell fixes; use it instead of reviving older conflicting mobile blocks higher in the file.
