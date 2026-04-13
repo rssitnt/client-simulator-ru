@@ -2482,10 +2482,12 @@ async function runPromptConflictRecoveryFlow(browser, baseUrl) {
             const state = window.__CLIENT_SIMULATOR_TEST_HOOKS__.getPromptUiState('client');
             const hasConflictNotice = (state.conflictMessage || '').includes('локальный скрытый draft');
             const compareActionBtn = document.getElementById('promptSyncConflictActionBtn');
-            const compareActionAvailable = !!compareActionBtn && !compareActionBtn.hidden;
+            const compareActionVisible = !!compareActionBtn
+                && !compareActionBtn.hidden
+                && getComputedStyle(compareActionBtn).display !== 'none';
             return (state.activeContent || '').includes(expectedValue)
                 && (state.activeIsLocal || hasConflictNotice)
-                && (compareActionAvailable || hasConflictNotice);
+                && compareActionVisible;
         }, localDraftText);
     } catch (error) {
         await ensureOutputDir();
