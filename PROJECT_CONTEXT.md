@@ -148,6 +148,7 @@
 - The inline local clear-chat header action was removed intentionally.
 - Latest mobile shell stabilization:
   - start-action labels are forced to true center alignment inside their buttons;
+  - mobile start CTA buttons keep fixed height and remove vertical padding so labels stay optically centered;
   - history search plus `Новый диалог` must stay pinned directly under the top app bar instead of drifting into the feed;
   - mobile fullscreen settings now use symmetric safe-area padding and hide the sheet scrollbar itself rather than showing a desktop-like right-edge scroller.
 - A final bottom-of-file interaction layer suppresses platform blue tap/click glow globally across desktop and mobile controls.
