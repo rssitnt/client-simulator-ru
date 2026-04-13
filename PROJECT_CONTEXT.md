@@ -158,6 +158,7 @@
     - the history search block must render first in the list, flush under the top nav with no dialog cards above it.
     - the mobile history panel removes extra top padding so controls sit directly under the tabs.
     - mobile history rows are transparent at rest (no light-theme white cards); only hover/active gives a subtle fill.
+    - the clickable history row surface (`.dialog-history-item-main`) is also forced transparent on mobile to avoid inner white blocks.
     - on mobile, the history controls are forced to order first with a solid background so they never drift below dialog items.
   - mobile fullscreen settings now use symmetric safe-area padding and hide the sheet scrollbar itself rather than showing a desktop-like right-edge scroller.
   - the mobile settings close button is fully contained inside the top header row; it must not overlap the row’s lower edge.

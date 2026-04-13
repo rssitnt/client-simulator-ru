@@ -18275,6 +18275,12 @@ body * {
           box-shadow: none;
       }
 
+      body.local-minimal-ui #historyPanel .dialog-history-item-main {
+          background: transparent;
+          border-color: transparent;
+          box-shadow: none;
+      }
+
       body.local-minimal-ui #historyPanel.panel.active .history-panel-body {
           display: flex !important;
           flex-direction: column !important;
