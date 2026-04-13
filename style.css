@@ -18272,49 +18272,40 @@ body * {
 /* Final mobile history header lock:
    keep search + new dialog flush under the top app bar (no gap). */
 @media (max-width: 1024px) {
-    body.local-minimal-ui #historyPanel.panel.active .history-panel-controls {
-        top: 0 !important;
-        margin-top: 0 !important;
+    body.local-minimal-ui #historyPanel.panel.active {
         padding-top: 0 !important;
     }
-  
-      body.local-minimal-ui #historyPanel.panel.active {
-          padding-top: 0 !important;
-      }
 
-      body.local-minimal-ui #historyPanel .dialog-history-item,
-      body.local-minimal-ui #historyPanel .history-thread-list .dialog-history-item {
-          background: transparent;
-          border-color: transparent;
-          box-shadow: none;
-      }
+    body.local-minimal-ui #historyPanel .dialog-history-item,
+    body.local-minimal-ui #historyPanel .history-thread-list .dialog-history-item {
+        background: transparent;
+        border-color: transparent;
+        box-shadow: none;
+    }
 
-      body.local-minimal-ui #historyPanel .dialog-history-item-main {
-          background: transparent;
-          border-color: transparent;
-          box-shadow: none;
-      }
+    body.local-minimal-ui #historyPanel .dialog-history-item-main {
+        background: transparent;
+        border-color: transparent;
+        box-shadow: none;
+    }
 
-      body.local-minimal-ui #historyPanel.panel.active .history-panel-body {
-          display: flex !important;
-          flex-direction: column !important;
-          padding-top: 0 !important;
-      }
+    body.local-minimal-ui #historyPanel.panel.active .history-panel-body {
+        display: flex !important;
+        flex-direction: column !important;
+    }
 
-      body.local-minimal-ui #historyPanel.panel.active .history-panel-controls {
-          order: 0 !important;
-          position: sticky !important;
-          top: 0 !important;
-          margin: 0 !important;
-          padding: 0 0 8px !important;
-          background: var(--local-shell-bg-final) !important;
-          backdrop-filter: blur(14px);
-      }
+    body.local-minimal-ui #historyPanel.panel.active .history-panel-controls {
+        order: 0 !important;
+        position: sticky !important;
+        margin: 0 !important;
+        background: var(--local-shell-bg-final) !important;
+        backdrop-filter: blur(14px);
+    }
 
-      body.local-minimal-ui #historyPanel.panel.active .history-thread-layout {
-          order: 1 !important;
-      }
-  }
+    body.local-minimal-ui #historyPanel.panel.active .history-thread-layout {
+        order: 1 !important;
+    }
+}
 
 /* Light theme history rows: flat by default, highlight only on hover/active. */
 body.local-minimal-ui.light-theme .dialog-history-item,
@@ -18353,11 +18344,11 @@ body.local-minimal-ui.light-theme .dialog-history-item-main {
     body.local-minimal-ui #historyPanel.panel.active .history-panel-controls {
         top: var(--local-mobile-appbar-height) !important;
         margin-top: 0 !important;
-        padding-top: 8px !important;
+        padding-top: 0 !important;
     }
 
     body.local-minimal-ui #historyPanel.panel.active .history-panel-body {
-        padding-top: calc(var(--local-mobile-appbar-height) + 8px) !important;
+        padding-top: var(--local-mobile-appbar-height) !important;
     }
 }
 

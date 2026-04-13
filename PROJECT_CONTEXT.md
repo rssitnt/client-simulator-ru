@@ -216,7 +216,7 @@
 - Mobile fullscreen settings now enforce symmetric side padding on the settings panel + theme row so controls never touch or clip into the screen edges.
 - Mobile fullscreen settings now re-clamps the sheet/content/admin panel to safe-area gutters to prevent any left/right bleed on narrow devices.
 - Mobile history panel now hard-locks the scroll container to `.history-panel-body` with full-height panel + flex layout so the list always scrolls and never sticks.
-- Mobile history controls are now hard-aligned directly under the app bar with a fixed top offset and matching body padding to remove the extra gap.
+- Mobile history controls are now hard-aligned directly under the app bar with no extra inner top padding; the list starts exactly after the app bar height.
 - Light theme history rows now stay flat by default (no permanent card background); highlight appears only on hover/active.
 - Mobile start CTA buttons now force centered labels so the three start actions don't look vertically/left-skewed.
 - Mobile history controls now sit flush under the top app bar with no extra gap between the app bar and the search/new-dialog row.
