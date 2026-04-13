@@ -18213,11 +18213,17 @@ body * {
         padding-right: 16px !important;
         overflow-x: hidden !important;
         box-sizing: border-box !important;
+        scrollbar-width: none !important;
     }
 
     body.local-minimal-ui #settingsModal .theme-color-section {
         padding-left: 16px !important;
         padding-right: 16px !important;
+    }
+
+    body.local-minimal-ui #settingsModal .settings-panel::-webkit-scrollbar {
+        width: 0 !important;
+        height: 0 !important;
     }
 }
 
