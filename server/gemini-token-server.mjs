@@ -608,19 +608,28 @@ function isRateLimited(key) {
     cleanupRateLimitBuckets(now);
     const bucket = rateLimitBuckets.get(key);
     if (!bucket || now - bucket.windowStart > RATE_LIMIT_WINDOW_MS) {
-        rateLimitBuckets.set(key, { windowStart: now, count: 1 });
-    return false;
+        rateLimitBuckets.set(key, {
+            windowStart: now,
+            resetAt: now + RATE_LIMIT_WINDOW_MS,
+            count: 1
+        });
+        return false;
+    }
+
+    bucket.resetAt = Number.isFinite(bucket.resetAt) ? bucket.resetAt : bucket.windowStart + RATE_LIMIT_WINDOW_MS;
+    bucket.count += 1;
+    rateLimitBuckets.set(key, bucket);
+    return bucket.count > RATE_LIMIT_MAX_REQUESTS;
 }
 
 function getRetryAfterMs(key) {
     const bucket = rateLimitBuckets.get(key);
     if (!bucket) return RATE_LIMIT_WINDOW_MS;
+    if (!Number.isFinite(bucket.resetAt)) {
+        return RATE_LIMIT_WINDOW_MS;
+    }
     const remaining = bucket.resetAt - Date.now();
     return remaining > 0 ? remaining : RATE_LIMIT_WINDOW_MS;
-}
-    bucket.count += 1;
-    rateLimitBuckets.set(key, bucket);
-    return bucket.count > RATE_LIMIT_MAX_REQUESTS;
 }
 
 async function verifyFirebaseIdToken(idToken) {
