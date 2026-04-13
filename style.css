@@ -17521,6 +17521,20 @@ body * {
         filter: none;
     }
 
+    body.local-minimal-ui .mobile-tab-icon {
+        color: inherit !important;
+    }
+
+    body.local-minimal-ui .mobile-tab-icon svg,
+    body.local-minimal-ui .mobile-tab-icon path,
+    body.local-minimal-ui .mobile-tab-icon circle,
+    body.local-minimal-ui .mobile-tab-icon rect,
+    body.local-minimal-ui .mobile-tab-icon line,
+    body.local-minimal-ui .mobile-tab-icon polyline {
+        stroke: currentColor !important;
+        fill: currentColor !important;
+    }
+
     body.local-minimal-ui #chatPanel,
     body.local-minimal-ui #historyPanel,
     body.local-minimal-ui #instructionsPanel {
