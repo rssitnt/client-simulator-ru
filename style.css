@@ -15579,7 +15579,7 @@ body.local-minimal-ui.light-theme .dialog-history-item.is-menu-open .dialog-hist
 body.local-minimal-ui.light-theme .personality-option.active,
 body.local-minimal-ui.light-theme .prompt-variation-chip.active,
 body.local-minimal-ui.light-theme .mobile-tab.active {
-    background: #ece2d5 !important;
+    background: #f5ece0 !important;
     border-color: var(--local-border-strong-final) !important;
     color: var(--local-text-final) !important;
 }
