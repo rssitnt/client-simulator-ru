@@ -138,8 +138,9 @@ const PARTNER_INVITES_DB_PATH = 'partner_invites';
 const APP_CONFIG_DB_PATH = 'app_config';
 const ACCESS_REVOKE_DB_PATH = 'access_revocations';
 const USER_PRESENCE_DB_PATH = 'user_presence';
-const DIALOG_HISTORY_INDEX_DB_PATH = 'dialog_history_index';
-const DIALOG_HISTORY_MESSAGES_DB_PATH = 'dialog_history_messages';
+  const DIALOG_HISTORY_INDEX_DB_PATH = 'dialog_history_index';
+  const DIALOG_HISTORY_MESSAGES_DB_PATH = 'dialog_history_messages';
+  const SHARED_DIALOGS_DB_PATH = 'shared_dialogs';
 const PROMPT_OVERRIDES_DB_PATH = 'prompt_overrides';
 const AUTH_LOCAL_STORAGE_KEY = 'authUsers:v1';
 const PARTNER_INVITES_STORAGE_KEY = 'partnerInvites:v1';
@@ -159,7 +160,8 @@ const WEBHOOK_DEBUG_CONFIG_STORAGE_KEY = 'webhookDebugConfig:v1';
 const WEBHOOK_DEBUG_LOG_STORAGE_KEY = 'webhookDebugLog:v1';
 const WEBHOOK_DEBUG_LOG_MAX_ENTRIES = 40;
 const DIALOG_HISTORY_PAGE_SIZE = 50;
-const HISTORY_SIDEBAR_COLLAPSED_STORAGE_KEY = 'historySidebarCollapsed:v1';
+  const HISTORY_SIDEBAR_COLLAPSED_STORAGE_KEY = 'historySidebarCollapsed:v1';
+  const SHARED_DIALOG_PENDING_STORAGE_KEY = 'sharedDialogPending:v1';
 const DIALOG_HISTORY_SAVE_DEBOUNCE_MS = 700;
 const AUTH_DEBUG_LOG_STORAGE_KEY = 'authDebugLog:v1';
 const AUTH_DEBUG_LOG_MAX_ENTRIES = 120;
@@ -4920,6 +4922,7 @@ function applyAuthenticatedUser(user) {
     applyRoleRestrictions();
     scheduleVoiceAuthWarmup('apply_authenticated_user');
     scheduleGeminiVoiceStartupWarmup('apply_authenticated_user');
+    void resumeSharedDialogFromPending();
 }
 
 function resetCurrentSessionToAuth(message = '') {
@@ -7179,13 +7182,244 @@ function getDialogHistoryIndexPath(login = currentUser?.login || '', dialogId = 
         : `${DIALOG_HISTORY_INDEX_DB_PATH}/${ownerKey}`;
 }
 
-function getDialogHistoryMessagesPath(login = currentUser?.login || '', dialogId = '') {
-    const ownerKey = getDialogHistoryOwnerKey(login);
-    if (!ownerKey) return '';
-    return dialogId
-        ? `${DIALOG_HISTORY_MESSAGES_DB_PATH}/${ownerKey}/${dialogId}`
-        : `${DIALOG_HISTORY_MESSAGES_DB_PATH}/${ownerKey}`;
-}
+  function getDialogHistoryMessagesPath(login = currentUser?.login || '', dialogId = '') {
+      const ownerKey = getDialogHistoryOwnerKey(login);
+      if (!ownerKey) return '';
+      return dialogId
+          ? `${DIALOG_HISTORY_MESSAGES_DB_PATH}/${ownerKey}/${dialogId}`
+          : `${DIALOG_HISTORY_MESSAGES_DB_PATH}/${ownerKey}`;
+  }
+
+  function getSharedDialogPath(shareId = '') {
+      const normalized = normalizeSharedDialogId(shareId);
+      if (!normalized) return '';
+      return `${SHARED_DIALOGS_DB_PATH}/${normalized}`;
+  }
+
+  function normalizeSharedDialogId(value = '') {
+      const normalized = String(value || '').trim();
+      if (!normalized) return '';
+      return normalized.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80);
+  }
+
+  function buildSharedDialogUrl(shareId = '') {
+      const normalized = normalizeSharedDialogId(shareId);
+      if (!normalized) return '';
+      const url = new URL(window.location.href);
+      url.searchParams.set('share', normalized);
+      url.hash = '';
+      return url.toString();
+  }
+
+  function getPendingSharedDialogId() {
+      return normalizeSharedDialogId(getCachedStorageValue(SHARED_DIALOG_PENDING_STORAGE_KEY, '') || '');
+  }
+
+  function clearPendingSharedDialogId() {
+      setCachedStorageValue(SHARED_DIALOG_PENDING_STORAGE_KEY, '');
+  }
+
+  function storePendingSharedDialogIdFromUrl() {
+      let shareId = '';
+      try {
+          const url = new URL(window.location.href);
+          shareId = normalizeSharedDialogId(url.searchParams.get('share') || '');
+          if (!shareId && url.hash && url.hash.startsWith('#share=')) {
+              shareId = normalizeSharedDialogId(url.hash.slice(7));
+          }
+          if (!shareId) return '';
+          url.searchParams.delete('share');
+          url.hash = '';
+          window.history.replaceState({}, '', url.toString());
+      } catch (error) {
+          shareId = normalizeSharedDialogId('');
+      }
+      if (!shareId) return '';
+      setCachedStorageValue(SHARED_DIALOG_PENDING_STORAGE_KEY, shareId);
+      return shareId;
+  }
+
+  function buildSharedDialogPayload(record = null, payload = null, shareId = '') {
+      const normalizedShareId = normalizeSharedDialogId(shareId);
+      if (!record || !payload || !normalizedShareId) return null;
+      const messages = Array.isArray(payload.messages) ? payload.messages : [];
+      const normalizedMessages = messages.map((message, index) => {
+          const content = normalizeDialogHistoryText(message?.content || '');
+          if (!content) return null;
+          return {
+              id: String(message?.id || `m_${String(index + 1).padStart(4, '0')}`).trim(),
+              seq: Math.max(0, Number(message?.seq) || index + 1),
+              role: message?.role === 'assistant' ? 'assistant' : 'user',
+              content
+          };
+      }).filter(Boolean);
+      if (!normalizedMessages.length) return null;
+      const ratingText = normalizeDialogHistoryText(payload?.rating?.text || '');
+      return {
+          id: normalizedShareId,
+          title: clampDialogHistoryTitle(getDialogHistoryRecordEffectiveTitle(record)),
+          mode: payload?.mode === 'voice' ? 'voice' : 'text',
+          createdAt: new Date().toISOString(),
+          source: {
+              login: normalizeLogin(record.login || ''),
+              dialogId: String(record.id || '').trim()
+          },
+          messages: normalizedMessages,
+          rating: ratingText
+              ? { text: ratingText }
+              : null
+      };
+  }
+
+  function normalizeSharedDialogPayload(raw, shareId = '') {
+      if (!raw || typeof raw !== 'object') return null;
+      const normalizedShareId = normalizeSharedDialogId(raw.id || shareId);
+      if (!normalizedShareId) return null;
+      const messages = Array.isArray(raw.messages) ? raw.messages : [];
+      const normalizedMessages = messages.map((message, index) => {
+          const content = normalizeDialogHistoryText(message?.content || '');
+          if (!content) return null;
+          return {
+              id: String(message?.id || `m_${String(index + 1).padStart(4, '0')}`).trim(),
+              seq: Math.max(0, Number(message?.seq) || index + 1),
+              role: message?.role === 'assistant' ? 'assistant' : 'user',
+              content
+          };
+      }).filter(Boolean);
+      if (!normalizedMessages.length) return null;
+      const ratingText = normalizeDialogHistoryText(raw?.rating?.text || raw?.ratingText || '');
+      return {
+          id: normalizedShareId,
+          title: clampDialogHistoryTitle(raw.title || ''),
+          mode: raw.mode === 'voice' ? 'voice' : 'text',
+          createdAt: String(raw.createdAt || '').trim() || new Date().toISOString(),
+          messages: normalizedMessages,
+          rating: ratingText ? { text: ratingText } : null
+      };
+  }
+
+  async function saveSharedDialogPayload(shareId = '', payload = null) {
+      const dbPath = getSharedDialogPath(shareId);
+      if (!dbPath || !payload) return false;
+      await firebaseWritePathWithFallback(
+          dbPath,
+          () => set(ref(db, dbPath), payload),
+          payload,
+          'PUT',
+          FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
+          `Firebase write for ${dbPath}`
+      );
+      return true;
+  }
+
+  async function fetchSharedDialogPayload(shareId = '') {
+      const dbPath = getSharedDialogPath(shareId);
+      if (!dbPath) return null;
+      const snapshot = await firebaseGetWithTimeout(dbPath);
+      if (!snapshot?.exists()) return null;
+      return normalizeSharedDialogPayload(snapshot.val(), shareId);
+  }
+
+  function applySharedDialogContinuation(payload) {
+      if (!payload || !Array.isArray(payload.messages) || !payload.messages.length) {
+          throw new Error('Диалог пустой');
+      }
+      invalidateActiveChatUiRequests();
+      setVoiceModeScreenActive(false);
+      isProcessing = false;
+      removeConversationActionNotice();
+      removeReratePrompt();
+      clearConversationTerminalState();
+      lastRating = null;
+      isDialogRated = false;
+      prepareCurrentDialogHistorySession(payload.mode === 'voice' ? 'voice' : 'text');
+      resetConversationHistory();
+      conversationHistory = payload.messages.map((message) => ({
+          role: message?.role === 'assistant' ? 'assistant' : 'user',
+          content: normalizeDialogHistoryText(message?.content || '')
+      })).filter((entry) => entry.content);
+      conversationHistoryText = rebuildConversationHistoryTextFromEntries(conversationHistory);
+      conversationHistoryRevision += 1;
+      const nowIso = new Date().toISOString();
+      currentDialogHistoryId = `dlg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      currentDialogHistoryCreatedAt = nowIso;
+      currentDialogHistoryClosedAt = null;
+      currentDialogHistoryRatedAt = null;
+      currentDialogHistoryPinnedAt = null;
+      currentDialogHistoryAutoTitle = deriveDialogHistoryAutoTitle(conversationHistory, nowIso);
+      currentDialogHistoryTitle = currentDialogHistoryAutoTitle;
+      currentDialogHistoryTitleEdited = false;
+      const scopeLogin = normalizeLogin(currentUser?.login || '');
+      dialogHistoryScopeLogin = scopeLogin || dialogHistoryScopeLogin;
+      dialogHistorySelectedId = currentDialogHistoryId;
+      dialogHistorySelectedPayload = null;
+      dialogHistorySelectedRecord = normalizeDialogHistoryIndexRecord({
+          id: currentDialogHistoryId,
+          login: scopeLogin,
+          uid: currentUser?.uid || null,
+          mode: currentDialogHistoryMode,
+          title: currentDialogHistoryTitle,
+          autoTitle: currentDialogHistoryAutoTitle,
+          titleEdited: false,
+          preview: conversationHistoryText.split('\n')[0] || '',
+          messageCount: conversationHistory.length,
+          hasRating: false,
+          pinnedAt: null,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+          lastMessageAt: nowIso,
+          closedAt: null,
+          ratedAt: null
+      }, currentDialogHistoryId, scopeLogin);
+      if (dialogHistorySelectedRecord) {
+          upsertDialogHistoryScopeRecord(dialogHistorySelectedRecord);
+      }
+      if (chatMessages) {
+          chatMessages.innerHTML = '';
+      }
+      clearGeminiVoiceFinishedNotice();
+      const startDiv = document.getElementById('startConversation');
+      if (startDiv) {
+          startDiv.style.display = 'none';
+      }
+      conversationHistory.forEach((entry) => {
+          addMessage(entry.content, entry.role, entry.role === 'assistant');
+      });
+      if (payload?.rating?.text) {
+          addMessage(payload.rating.text, 'rating', true);
+      }
+      unlockDialogInput();
+      setVoiceModeStatus('', 'idle');
+      updatePromptLock();
+      updateSendBtnState();
+      updateRateChatButtonState();
+      syncChatEmptyUiState();
+      scheduleCurrentDialogHistorySave({ immediate: true });
+      if (window.innerWidth <= 1024) {
+          activateShellPanel('chat');
+      }
+  }
+
+  async function resumeSharedDialogFromPending() {
+      const pendingShareId = getPendingSharedDialogId();
+      if (!pendingShareId) return false;
+      if (!currentUser) return false;
+      try {
+          const payload = await fetchSharedDialogPayload(pendingShareId);
+          if (!payload) {
+              clearPendingSharedDialogId();
+              showCopyNotification('Ссылка недействительна или диалог удалён.');
+              return false;
+          }
+          applySharedDialogContinuation(payload);
+          clearPendingSharedDialogId();
+          showCopyNotification('Диалог открыт по ссылке. Можно продолжать.');
+          return true;
+      } catch (error) {
+          console.error('Failed to open shared dialog:', error);
+          return false;
+      }
+  }
 
 function normalizeDialogHistoryText(value = '') {
     return String(value || '')
@@ -8441,16 +8675,22 @@ function buildDialogHistoryShareText(record = null, payload = null) {
 async function shareDialogHistoryRecord(record = null) {
     if (!record) return false;
     const payload = await getDialogHistoryPayloadForRecord(record);
-    const shareText = buildDialogHistoryShareText(record, payload);
-    if (!shareText) {
+    const shareId = normalizeSharedDialogId(`sh_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`);
+    const sharedPayload = buildSharedDialogPayload(record, payload, shareId);
+    if (!sharedPayload) {
         throw new Error('В диалоге пока нет текста для отправки');
+    }
+    await saveSharedDialogPayload(shareId, sharedPayload);
+    const shareUrl = buildSharedDialogUrl(shareId);
+    if (!shareUrl) {
+        throw new Error('Не удалось подготовить ссылку для отправки');
     }
 
     if (navigator.share) {
         try {
             await navigator.share({
                 title: getDialogHistoryRecordEffectiveTitle(record),
-                text: shareText
+                url: shareUrl
             });
             return true;
         } catch (error) {
@@ -8460,8 +8700,8 @@ async function shareDialogHistoryRecord(record = null) {
         }
     }
 
-    await navigator.clipboard.writeText(shareText);
-    showCopyNotification('Диалог скопирован для отправки');
+    await navigator.clipboard.writeText(shareUrl);
+    showCopyNotification('Ссылка на диалог скопирована');
     return true;
 }
 
@@ -24877,6 +25117,7 @@ function installLocalhostTestHooks() {
 
 // ============ INITIALIZATION ============
 
+storePendingSharedDialogIdFromUrl();
 setChatLoadingState(true);
 installLocalhostTestHooks();
 loadAttestationQueue();

@@ -92,6 +92,10 @@
         }
       }
     },
+    "shared_dialogs": {
+      ".read": true,
+      ".write": "auth != null"
+    },
     "app_config": {
       ".read": "auth != null",
       ".write": "auth != null && (auth.token.admin === true || auth.token.role === 'admin')"
