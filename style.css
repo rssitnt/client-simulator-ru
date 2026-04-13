@@ -18176,3 +18176,11 @@ body * {
         transform: none !important;
     }
 }
+
+/* Mobile header overlap guard:
+   keep panel content below the top app bar + safe area. */
+@media (max-width: 1024px) {
+    body.local-minimal-ui .panel.active {
+        padding-top: calc(var(--local-mobile-appbar-height) + env(safe-area-inset-top, 0px)) !important;
+    }
+}
