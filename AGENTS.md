@@ -124,6 +124,8 @@
     - mobile start CTA buttons are fixed-height with vertical centering; no extra top/bottom padding that shifts labels.
     - the mobile start screen keeps a small top offset so the first CTA does not clip under the app bar.
   - history search + `Новый диалог` stay pinned at the top of the history scroller with an opaque background;
+    - the history search block must be the first element in the list (no dialog cards above it) and sit flush under the top bar.
+  - light theme history rows stay flat (no permanent white cards); highlight appears only on hover/active.
   - mobile settings close button must sit fully inside the top settings row, not overlap the lower edge.
   - the mobile `Роль` screen is a full-width vertical flow, not a centered desktop mini-editor: no visible panel heading/header buttons there, selector full-width at the top, then variations/toolbar/content in one scroll column;
   - mobile fullscreen settings must keep symmetric safe-area padding and must not show desktop-like horizontal clipping or a visible sheet scrollbar.

@@ -12107,6 +12107,15 @@ body.local-minimal-ui.light-theme .admin-panel-title {
     color: var(--local-text-muted-final);
 }
 
+body.local-minimal-ui.light-theme .dialog-history-item {
+    background: transparent;
+    border-color: transparent;
+}
+
+body.local-minimal-ui.light-theme .dialog-history-item.is-active {
+    background: transparent;
+}
+
 body.local-minimal-ui.light-theme .history-rail-btn,
 body.local-minimal-ui.light-theme .history-sidebar-toggle,
 body.local-minimal-ui.light-theme .local-shell-icon-btn,
@@ -17079,7 +17088,7 @@ body * {
         overflow-y: auto !important;
         overscroll-behavior: contain;
         -webkit-overflow-scrolling: touch;
-        padding: 10px 16px 18px !important;
+        padding: 0 16px 18px !important;
         scrollbar-width: none;
     }
 
@@ -17092,7 +17101,9 @@ body * {
         top: 0;
         z-index: 8;
         flex: 0 0 auto;
-        padding-top: 2px;
+        order: -1;
+        margin-top: 0;
+        padding-top: 0;
         padding-bottom: 10px;
         background:
             linear-gradient(
