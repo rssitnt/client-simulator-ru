@@ -15573,6 +15573,7 @@ body.local-minimal-ui.light-theme {
 }
 
 body.local-minimal-ui.light-theme .history-panel,
+body.local-minimal-ui.light-theme .history-panel-header,
 body.local-minimal-ui.light-theme .chat-panel,
 body.local-minimal-ui.light-theme .chat-messages,
 body.local-minimal-ui.light-theme .prompt-panel,
