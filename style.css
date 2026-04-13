@@ -18531,3 +18531,42 @@ body.local-minimal-ui .dialog-history-pill.is-text {
     box-shadow: none !important;
     font-weight: 600;
 }
+
+/* Final light-theme parity for fullscreen settings:
+   keep palette consistent with the dark-theme geometry (no gradients or layout shifts). */
+body.local-minimal-ui.light-theme #settingsModal .settings-panel {
+    background: var(--local-shell-bg-final) !important;
+    color: var(--local-text-final) !important;
+    box-shadow: none !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .settings-panel .settings-row,
+body.local-minimal-ui.light-theme #settingsModal .settings-panel .password-section,
+body.local-minimal-ui.light-theme #settingsModal .settings-panel .admin-accordion {
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .settings-panel .btn-change,
+body.local-minimal-ui.light-theme #settingsModal .settings-panel .btn-logout,
+body.local-minimal-ui.light-theme #settingsModal .settings-panel .btn-export,
+body.local-minimal-ui.light-theme #settingsModal .settings-panel .name-input,
+body.local-minimal-ui.light-theme #settingsModal .settings-panel .voice-picker-trigger,
+body.local-minimal-ui.light-theme #settingsModal .settings-panel .settings-modal-close,
+body.local-minimal-ui.light-theme #settingsModal .settings-panel .admin-invite-input,
+body.local-minimal-ui.light-theme #settingsModal .settings-panel .admin-invite-days-wrap {
+    background: var(--local-surface-muted-final) !important;
+    border-color: var(--local-border-final) !important;
+    color: var(--local-text-final) !important;
+    box-shadow: none !important;
+}
+
+body.local-minimal-ui.light-theme #settingsModal .settings-panel .btn-change:hover,
+body.local-minimal-ui.light-theme #settingsModal .settings-panel .btn-logout:hover,
+body.local-minimal-ui.light-theme #settingsModal .settings-panel .btn-export:hover,
+body.local-minimal-ui.light-theme #settingsModal .settings-panel .settings-modal-close:hover,
+body.local-minimal-ui.light-theme #settingsModal .settings-panel .admin-invite-input:hover,
+body.local-minimal-ui.light-theme #settingsModal .settings-panel .admin-invite-days-wrap:hover {
+    background: var(--local-surface-elevated-final) !important;
+    border-color: var(--local-border-strong-final) !important;
+}
