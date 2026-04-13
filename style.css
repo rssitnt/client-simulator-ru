@@ -17497,7 +17497,7 @@ body * {
     body.local-minimal-ui #historyPanel.panel.active .history-panel-controls {
         order: -1 !important;
         position: sticky !important;
-        top: 0 !important;
+        top: calc(var(--local-mobile-appbar-height) + 2px) !important;
         z-index: 40 !important;
         display: grid !important;
         gap: 12px !important;

@@ -192,6 +192,7 @@
 - Mobile panels now add a top overlap guard so active panel content stays below the app bar height (safe-area is already part of that height).
 - Mobile history scroll now explicitly enables `-webkit-overflow-scrolling: touch` to keep list scrolling reliable on mobile webviews.
 - Mobile fullscreen settings now clamp horizontal overflow at the sheet/content level so controls cannot bleed past the inset column.
+- Mobile history controls now stick below the app bar height so the search/new-dialog header never slides under it.
 - Light theme active tabs/chips now use a softer fill (`#f5ece0`) to keep the selected state subtle.
 - The visible `Сравнить` action was intentionally removed from the prompt toolbar.
 - If a public prompt conflict saves edits into a hidden local draft, the recovery action now lives inside the conflict notice itself (`Сравнить draft`) instead of returning the old toolbar button.
