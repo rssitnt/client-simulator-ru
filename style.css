@@ -5689,7 +5689,9 @@ body.local-minimal-ui .btn-settings-floating {
 
 .dialog-history-title-input-inline:focus-visible {
     outline: none;
-    box-shadow: none;
+    border-radius: 8px;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.28);
+    padding: 2px 4px;
 }
 
 .dialog-history-title-input:focus-visible {
