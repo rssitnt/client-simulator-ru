@@ -202,6 +202,7 @@
 - The mobile top tab for `Роль` now uses the `fluent:prompt-24-regular` SVG asset and should stay icon-only like `История`, `Чат`, and `Настройки`.
 - Mobile `Роль` icon now inherits the same tab color as the other icons (uses `currentColor` for both fill and stroke).
 - Mobile tab icons now also force a dark-theme invert filter for any inline image/svg inside the icon slot so the role icon matches the other white icons.
+- The mobile `Роль` tab no longer uses a filled inline SVG; it now renders through the standalone `prompt-icon-fluent-24-regular.svg` asset so it matches the weight and color behavior of the other header icons.
 - Mobile fullscreen settings header:
   - the top close button must stay centered in its row without any residual dark circle or bleed-through from hidden shell controls below it.
 - The final mobile settings hard-stop now also locks the controls themselves to the inset column:
