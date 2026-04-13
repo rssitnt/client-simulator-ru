@@ -29,6 +29,7 @@
 - Voice mode runs on Gemini Live (`gemini-3.1-flash-live-preview`) through the token server.
 - Token server now exposes a `/health` endpoint (GET) with basic config status and logs structured request events for debugging.
 - Client-side token fetch now respects `rate_limited` responses by waiting for `retryAfterMs` before retrying.
+- Token server JSON/body validation now returns structured error codes (e.g., `invalid_body`, `payload_too_large`) and includes limit metadata.
 - Stable voice behavior is manager-first. The frontend no longer relies on a synthetic first text turn from the client.
 - Voice startup is now split into two phases:
   - before session key arrives, UI shows that the voice server is connecting and does not imitate an active call yet;

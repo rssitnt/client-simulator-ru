@@ -297,7 +297,10 @@ async function readJsonBody(req, maxBytes = MAX_JSON_BODY_BYTES) {
     const safeMaxBytes = Number.isFinite(maxBytes) && maxBytes > 0 ? maxBytes : MAX_JSON_BODY_BYTES;
     const declaredLength = Number.parseInt(String(req.headers['content-length'] || ''), 10);
     if (Number.isFinite(declaredLength) && declaredLength > safeMaxBytes) {
-        throw createHttpError(413, `Request body too large. Limit is ${safeMaxBytes} bytes.`);
+        throw createHttpError(413, `Request body too large. Limit is ${safeMaxBytes} bytes.`, {
+            code: 'payload_too_large',
+            limitBytes: safeMaxBytes
+        });
     }
 
     const chunks = [];
@@ -305,7 +308,10 @@ async function readJsonBody(req, maxBytes = MAX_JSON_BODY_BYTES) {
     for await (const chunk of req) {
         totalBytes += chunk.length;
         if (totalBytes > safeMaxBytes) {
-            throw createHttpError(413, `Request body too large. Limit is ${safeMaxBytes} bytes.`);
+            throw createHttpError(413, `Request body too large. Limit is ${safeMaxBytes} bytes.`, {
+                code: 'payload_too_large',
+                limitBytes: safeMaxBytes
+            });
         }
         chunks.push(chunk);
     }
@@ -315,14 +321,14 @@ async function readJsonBody(req, maxBytes = MAX_JSON_BODY_BYTES) {
     try {
         const parsed = JSON.parse(rawBody);
         if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-            throw createHttpError(400, 'JSON body must be an object.');
+            throw createHttpError(400, 'JSON body must be an object.', { code: 'invalid_body' });
         }
         return parsed;
     } catch (error) {
         if (error?.statusCode) {
             throw error;
         }
-        throw createHttpError(400, 'Invalid JSON body.');
+        throw createHttpError(400, 'Invalid JSON body.', { code: 'invalid_body' });
     }
 }
 
@@ -1037,7 +1043,11 @@ export async function handleTokenServerRequest(req, res) {
                 ? 401
                 : 500;
         const errorCode = error?.cause?.code || error?.code || (status === 401 ? 'unauthorized' : 'server_error');
-        sendApiError(res, status, message, errorCode, requestOrigin);
+        const meta = {};
+        if (error?.cause?.limitBytes) {
+            meta.limitBytes = error.cause.limitBytes;
+        }
+        sendApiError(res, status, message, errorCode, requestOrigin, meta);
         logRequestEvent('error', buildRequestLogContext(req, requestId, {
             status,
             durationMs: Date.now() - startedAt,
