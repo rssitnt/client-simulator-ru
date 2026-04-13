@@ -239,6 +239,7 @@
 - Public share links now use `shared_dialogs` in RTDB:
   - sharing creates a permanent `?share=` link;
   - opening that link after login clones the dialog into a new live conversation so it can be continued.
+  - shared link records are create-once now; authenticated users must not be able to overwrite an existing public dialog payload.
 - Dialog history rename is now inline in the list:
   - double-click on a dialog title starts inline editing;
   - the `Переименовать` menu action edits the title in place instead of a prompt dialog.
