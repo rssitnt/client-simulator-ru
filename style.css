@@ -18448,3 +18448,14 @@ body.local-minimal-ui .mobile-tab-icon {
         --local-mobile-tabbar-height: 0px !important;
     }
 }
+
+/* History meta: "ЧАТ" pill should look like plain text (no outline). */
+body.local-minimal-ui .dialog-history-pill.is-text {
+    background: transparent !important;
+    border: 0 !important;
+    padding: 0 !important;
+    min-height: auto !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    font-weight: 600;
+}
