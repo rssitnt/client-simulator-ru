@@ -8633,12 +8633,6 @@ function renderDialogHistoryListInto(ui) {
                 ${record.pinnedAt ? '<span class="dialog-history-item-pin" aria-hidden="true">★</span>' : ''}
             </div>
             ${isCompactRail ? '' : `<div class="dialog-history-item-preview">${renderDialogHistoryHighlightedText(record.preview || 'Без текста', dialogHistorySearchQuery)}</div>`}
-            <div class="dialog-history-item-meta">
-                <span class="dialog-history-pill ${record.mode === 'voice' ? 'is-voice' : 'is-text'}">${renderDialogHistoryHighlightedText(modeLabel, dialogHistorySearchQuery)}</span>
-                <span>${renderDialogHistoryHighlightedText(metaDate, dialogHistorySearchQuery)}</span>
-                <span>${record.messageCount} репл.</span>
-                ${record.hasRating ? '<span>Есть оценка</span>' : ''}
-            </div>
         `;
         mainButton.addEventListener('click', () => {
             loadDialogHistorySelection(record.id).catch((error) => {
@@ -8667,6 +8661,11 @@ function renderDialogHistoryListInto(ui) {
         const menu = document.createElement('div');
         menu.className = 'dialog-history-item-menu';
         menu.hidden = dialogHistoryMenuOpenId !== record.id;
+
+        const menuMeta = document.createElement('div');
+        menuMeta.className = 'dialog-history-item-menu-meta';
+        menuMeta.textContent = `${modeLabel} ${metaDate} ${record.messageCount} репл.${record.hasRating ? ' · Есть оценка' : ''}`;
+        menu.appendChild(menuMeta);
 
         const renameBtn = document.createElement('button');
         renameBtn.type = 'button';

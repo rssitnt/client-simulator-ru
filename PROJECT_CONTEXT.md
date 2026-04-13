@@ -230,6 +230,7 @@
 - Mobile history controls now sit flush under the top app bar with no extra gap between the app bar and the search/new-dialog row.
 - Mobile history body no longer adds extra top padding; the list starts immediately under the sticky controls.
 - History "ЧАТ" label is now plain text (no pill/outline); only the voice badge keeps the pill styling.
+- History item meta (тип/дата/реплики/оценка) moved into the `…` menu instead of the list row.
 - Mobile settings panel now hides its own scrollbar on phones; the sheet stays clean without a visible scroll rail.
 - Mobile role screen now scrolls the selector away; only the prompt toolbar stays sticky under the app bar.
 - Mobile top tab icons now inherit tab color so the role icon matches the other white/active states.
