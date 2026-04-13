@@ -18392,3 +18392,10 @@ body.local-minimal-ui.light-theme .dialog-history-item-main {
         text-align: center !important;
     }
 }
+
+/* Global tap highlight kill (mobile + desktop):
+   prevent blue flash on interactive elements. */
+body.local-minimal-ui,
+body.local-minimal-ui * {
+    -webkit-tap-highlight-color: transparent !important;
+}

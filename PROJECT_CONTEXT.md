@@ -220,6 +220,7 @@
 - Light theme history rows now stay flat by default (no permanent card background); highlight appears only on hover/active.
 - Mobile start CTA buttons now force centered labels so the three start actions don't look vertically/left-skewed.
 - Mobile start CTA label wrapper is now a flex box so vertical centering stays exact in all three buttons.
+- Tap highlight is now globally disabled in the local shell to prevent blue flash on mobile/desktop.
 - Mobile history controls now sit flush under the top app bar with no extra gap between the app bar and the search/new-dialog row.
 - Mobile settings panel now hides its own scrollbar on phones; the sheet stays clean without a visible scroll rail.
 - Mobile role screen now scrolls the selector away; only the prompt toolbar stays sticky under the app bar.
