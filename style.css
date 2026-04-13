@@ -18030,10 +18030,11 @@ body * {
         box-sizing: border-box !important;
     }
 
-    /* Mobile history hard-lock: make the list always scrollable */
+    /* Mobile history hard-lock: keep the list scrollable without making the
+       panel taller than its already constrained mobile shell column. */
     body.local-minimal-ui #historyPanel.panel.active {
-        height: 100dvh !important;
-        max-height: 100dvh !important;
+        height: 100% !important;
+        max-height: 100% !important;
         overflow: hidden !important;
     }
 

@@ -3479,22 +3479,27 @@ async function runLightThemeMobileRegressionFlow(browser, baseUrl) {
                     list.appendChild(item);
                 }
             }
+            const panel = document.getElementById('historyPanel');
             const body = document.querySelector('#historyPanel .history-panel-body');
             if (body) {
                 body.scrollTop = 240;
             }
+            const panelRect = panel?.getBoundingClientRect();
             return {
                 overflowY: body ? getComputedStyle(body).overflowY : '',
                 scrollHeight: body?.scrollHeight || 0,
                 clientHeight: body?.clientHeight || 0,
                 scrollTop: body?.scrollTop || 0,
-                historyHeaderDisplay: getComputedStyle(document.querySelector('#historyPanel .history-panel-header')).display
+                historyHeaderDisplay: getComputedStyle(document.querySelector('#historyPanel .history-panel-header')).display,
+                panelBottom: panelRect?.bottom || 0,
+                viewportHeight: window.innerHeight
             };
         });
         expect(historyMetrics.historyHeaderDisplay === 'none', `History panel header must stay hidden on mobile, got ${historyMetrics.historyHeaderDisplay}`);
         expect(historyMetrics.overflowY === 'auto', `History panel body must stay scrollable on mobile, got ${historyMetrics.overflowY}`);
         expect(historyMetrics.scrollHeight > historyMetrics.clientHeight, `History panel body must overflow with seeded rows, got ${historyMetrics.scrollHeight} vs ${historyMetrics.clientHeight}`);
         expect(historyMetrics.scrollTop > 0, `History panel body must actually scroll on mobile, got ${historyMetrics.scrollTop}`);
+        expect(historyMetrics.panelBottom <= historyMetrics.viewportHeight + 1, `History panel must fit inside the mobile viewport, got bottom=${historyMetrics.panelBottom} viewport=${historyMetrics.viewportHeight}`);
     } catch (error) {
         await ensureOutputDir();
         await page.screenshot({ path: path.join(outputDir, 'smoke-light-theme-mobile-failure.png'), fullPage: true });

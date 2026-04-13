@@ -198,6 +198,7 @@
 - Light theme active tabs/chips now use a softer fill (`#f5ece0`) to keep the selected state subtle.
 - Mobile top tabs now also show an active pill in dark mode so the current tab is visible.
 - Mobile top tabs now force strong text/icon color for the active state so the current tab reads clearly.
+- Mobile history panel height must follow the remaining mobile shell column height, not raw `100dvh`; otherwise the panel extends below the viewport under the top app bar.
 - The mobile shell now disables horizontal scrolling at the root (overflow-x hidden) to prevent sideways drift on phones.
 - Mobile top tabs now lock to the app-bar height with tighter vertical padding for a more app-like header.
 - Mobile fullscreen settings now enforce symmetric side padding on the settings panel + theme row so controls never touch or clip into the screen edges.
