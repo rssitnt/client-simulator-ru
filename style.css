@@ -18479,6 +18479,17 @@ body.local-minimal-ui .mobile-tab-icon {
     }
 }
 
+/* History titles: force single-line truncation with ellipsis. */
+body.local-minimal-ui .dialog-history-item-title,
+body.local-minimal-ui .history-thread-list .dialog-history-item-title {
+    display: block !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    -webkit-line-clamp: unset !important;
+    -webkit-box-orient: unset !important;
+}
+
 /* History meta: "ЧАТ" pill should look like plain text (no outline). */
 body.local-minimal-ui .dialog-history-pill.is-text {
     background: transparent !important;

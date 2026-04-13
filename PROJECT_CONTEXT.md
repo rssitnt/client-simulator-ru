@@ -232,6 +232,7 @@
 - History "ЧАТ" label is now plain text (no pill/outline); only the voice badge keeps the pill styling.
 - History item meta (тип/дата/реплики/оценка) moved into the `…` menu instead of the list row.
 - Dialog history titles are now forced to a single line with ellipsis when they overflow.
+- History title truncation is enforced for the local shell list to prevent multi-line wrap.
 - Mobile settings panel now hides its own scrollbar on phones; the sheet stays clean without a visible scroll rail.
 - Mobile role screen now scrolls the selector away; only the prompt toolbar stays sticky under the app bar.
 - Mobile top tab icons now inherit tab color so the role icon matches the other white/active states.
