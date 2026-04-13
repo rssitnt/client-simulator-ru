@@ -12591,6 +12591,14 @@ function renderPromptSyncConflictNotice(role = getActiveRole()) {
     } else {
         promptSyncConflictNotice.textContent = message;
     }
+    if (message && isAdmin()) {
+        const shouldOpenDrawer = shouldUseLocalPromptDrawer();
+        if (shouldOpenDrawer) {
+            setLocalPromptDrawerOpen(true);
+        } else {
+            activateShellPanel('instructions');
+        }
+    }
     if (promptSyncConflictActionBtn) {
         const compareContext = message && isAdmin() ? getPromptCompareContext(role) : null;
         const compareLabel = compareContext?.activeVariation?.isLocal
