@@ -16837,7 +16837,7 @@ a:focus-visible,
     body.local-minimal-ui .start-conversation {
         min-height: auto !important;
         justify-content: flex-start;
-        padding-top: 0 !important;
+        padding-top: 8px !important;
         gap: 14px;
     }
 

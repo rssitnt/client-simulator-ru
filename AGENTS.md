@@ -122,6 +122,7 @@
   - the top mobile bar is the single sticky navigation row (`история icon / чат icon / роль / настройки icon`);
   - start cards center their labels exactly;
     - mobile start CTA buttons are fixed-height with vertical centering; no extra top/bottom padding that shifts labels.
+    - the mobile start screen keeps a small top offset so the first CTA does not clip under the app bar.
   - history search + `Новый диалог` stay pinned at the top of the history scroller with an opaque background;
   - the mobile `Роль` screen is a full-width vertical flow, not a centered desktop mini-editor: no visible panel heading/header buttons there, selector full-width at the top, then variations/toolbar/content in one scroll column;
   - mobile fullscreen settings must keep symmetric safe-area padding and must not show desktop-like horizontal clipping or a visible sheet scrollbar.
