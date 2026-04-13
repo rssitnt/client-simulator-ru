@@ -226,7 +226,7 @@
 - Tap highlight is now globally disabled in the local shell to prevent blue flash on mobile/desktop.
 - Mobile top tabs now force a consistent line-height so labels/icons stay vertically centered.
 - Mobile top tabs are now hard-locked to the top app bar (no bottom dock position on small screens).
-- Mobile tabbar height is now forced to `0` in the top-bar layout so no bottom padding/space remains.
+- Mobile top-bar layout no longer keeps the old dock height, but it must still preserve `env(safe-area-inset-bottom)` through `--local-mobile-tabbar-height`; do not zero that variable out or bottom content/composer padding will slip into the home-indicator area on iPhone.
 - Mobile history controls now sit flush under the top app bar with no extra gap between the app bar and the search/new-dialog row.
 - Mobile history body no longer adds extra top padding; the list starts immediately under the sticky controls.
 - History "ЧАТ" label is now plain text (no pill/outline); only the voice badge keeps the pill styling.

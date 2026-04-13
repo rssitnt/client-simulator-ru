@@ -18475,7 +18475,8 @@ body.local-minimal-ui .mobile-tab-icon {
     }
 
     body.local-minimal-ui {
-        --local-mobile-tabbar-height: 0px !important;
+        /* Remove the old dock height, but keep iPhone home-indicator safe area. */
+        --local-mobile-tabbar-height: env(safe-area-inset-bottom, 0px) !important;
     }
 }
 
