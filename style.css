@@ -18413,3 +18413,17 @@ body.local-minimal-ui * {
         line-height: 1 !important;
     }
 }
+
+/* Final mobile top bar lock:
+   ensure tabs live only in the top app bar, never as a bottom dock. */
+@media (max-width: 1024px) {
+    body.local-minimal-ui .mobile-tabs {
+        position: sticky !important;
+        top: 0 !important;
+        bottom: auto !important;
+        left: 0 !important;
+        right: 0 !important;
+        margin: 0 !important;
+        padding-top: env(safe-area-inset-top, 0px) !important;
+    }
+}
