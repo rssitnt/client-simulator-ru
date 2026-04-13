@@ -414,6 +414,7 @@
   - this is the last-resort layer that prevents mobile settings content from stretching back to raw viewport edges even if older mobile rules higher in `style.css` try to do so.
 - Mobile history scrolling now has a hard lock: the history panel is 100dvh and the body itself is the only scroll container, so search/new-dialog stay sticky while the list always scrolls.
 - Mobile panels now include a top overlap guard: every active panel is padded below the app bar and safe-area inset so content never hides under the header.
+- Mobile history scroll now forces `-webkit-overflow-scrolling: touch` for consistent momentum scrolling on iOS/Android WebView.
 - The prompt toolbar no longer has a visible `Сравнить` button.
 - If a public prompt conflict preserves edits as a hidden local draft, the recovery action must live inside the conflict notice itself (`Сравнить draft`) so admins can still inspect/publish that draft without restoring the old toolbar button.
 - When a prompt conflict notice is raised for admins, the role/prompt panel should auto-open so the recovery notice and compare action are visible immediately.

@@ -18032,6 +18032,7 @@ body * {
         min-height: 0 !important;
         overflow-y: auto !important;
         overscroll-behavior: contain !important;
+        -webkit-overflow-scrolling: touch !important;
     }
 }
 
