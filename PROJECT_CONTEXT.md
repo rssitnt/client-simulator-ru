@@ -201,6 +201,7 @@
 - In the mobile role screen, the role selector/header is no longer sticky; only the toolbar stays pinned under the app bar while the selector scrolls away.
 - The mobile top tab for `Роль` now uses the `fluent:prompt-24-regular` SVG asset and should stay icon-only like `История`, `Чат`, and `Настройки`.
 - Mobile `Роль` icon now inherits the same tab color as the other icons (uses `currentColor` for both fill and stroke).
+- Mobile tab icons now also force a dark-theme invert filter for any inline image/svg inside the icon slot so the role icon matches the other white icons.
 - Mobile fullscreen settings header:
   - the top close button must stay centered in its row without any residual dark circle or bleed-through from hidden shell controls below it.
 - The final mobile settings hard-stop now also locks the controls themselves to the inset column:

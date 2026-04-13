@@ -17535,6 +17535,16 @@ body * {
         fill: currentColor !important;
     }
 
+    body.local-minimal-ui .mobile-tab-icon img,
+    body.local-minimal-ui .mobile-tab-icon svg {
+        filter: brightness(0) invert(1);
+    }
+
+    body.local-minimal-ui.light-theme .mobile-tab-icon img,
+    body.local-minimal-ui.light-theme .mobile-tab-icon svg {
+        filter: none;
+    }
+
     body.local-minimal-ui #chatPanel,
     body.local-minimal-ui #historyPanel,
     body.local-minimal-ui #instructionsPanel {
