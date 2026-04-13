@@ -18271,12 +18271,12 @@ body * {
 
 /* Final mobile history header lock:
    keep search + new dialog flush under the top app bar (no gap). */
-  @media (max-width: 1024px) {
-      body.local-minimal-ui #historyPanel.panel.active .history-panel-controls {
-          top: 0 !important;
-          margin-top: 0 !important;
-          padding-top: 0 !important;
-      }
+@media (max-width: 1024px) {
+    body.local-minimal-ui #historyPanel.panel.active .history-panel-controls {
+        top: 0 !important;
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
   
       body.local-minimal-ui #historyPanel.panel.active {
           padding-top: 0 !important;
@@ -18315,6 +18315,29 @@ body * {
           order: 1 !important;
       }
   }
+
+/* Mobile history scroll hard-lock:
+   keep the list as the only scrolling region so it never gets stuck. */
+@media (max-width: 1024px) {
+    body.local-minimal-ui #historyPanel.panel.active {
+        display: flex !important;
+        flex-direction: column !important;
+        height: 100dvh !important;
+        overflow: hidden !important;
+    }
+
+    body.local-minimal-ui #historyPanel.panel.active .history-panel-body {
+        flex: 1 1 auto !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    body.local-minimal-ui #historyPanel.panel.active .history-thread-layout {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+    }
+}
 
 /* Final mobile role scroll contract:
    let the role selector scroll away; keep only the toolbar sticky. */
