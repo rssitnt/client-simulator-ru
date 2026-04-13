@@ -1845,7 +1845,24 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
             }
             return String(activeTextNode?.textContent || '').trim();
         });
-        await page.locator('#mainDialogHistoryList .dialog-history-item').nth(1).locator('.dialog-history-item-main').dblclick();
+        const secondHistoryItem = page.locator('#mainDialogHistoryList .dialog-history-item').nth(1);
+        await secondHistoryItem.locator('.dialog-history-item-main').click();
+        await secondHistoryItem.locator('.dialog-history-item-menu-toggle').click();
+        await page.waitForTimeout(350);
+        const activeTitleAfterMenuOpen = await page.evaluate(() => {
+            const activeItem = document.querySelector('#mainDialogHistoryList .dialog-history-item.is-active');
+            const activeTextNode = activeItem?.querySelector('.dialog-history-item-title, .dialog-history-title-input-inline');
+            if (activeTextNode instanceof HTMLInputElement) {
+                return String(activeTextNode.value || '').trim();
+            }
+            return String(activeTextNode?.textContent || '').trim();
+        });
+        expect(
+            activeTitleAfterMenuOpen === activeTitleBeforeDblclick,
+            `History menu tap must not open the dialog after the rename delay, got "${activeTitleBeforeDblclick}" -> "${activeTitleAfterMenuOpen}"`
+        );
+        await page.keyboard.press('Escape');
+        await secondHistoryItem.locator('.dialog-history-item-main').dblclick();
         await page.waitForFunction(() => {
             const items = document.querySelectorAll('#mainDialogHistoryList .dialog-history-item');
             const secondItem = items[1];
