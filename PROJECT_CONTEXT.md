@@ -195,6 +195,7 @@
 - Mobile history controls now stick below the app bar height so the search/new-dialog header never slides under it.
 - Light theme active tabs/chips now use a softer fill (`#f5ece0`) to keep the selected state subtle.
 - Mobile top tabs now also show an active pill in dark mode so the current tab is visible.
+- Mobile top tabs now force strong text/icon color for the active state so the current tab reads clearly.
 - The visible `Сравнить` action was intentionally removed from the prompt toolbar.
 - If a public prompt conflict saves edits into a hidden local draft, the recovery action now lives inside the conflict notice itself (`Сравнить draft`) instead of returning the old toolbar button.
 - When a prompt conflict notice is set for an admin, the role/prompt panel should auto-open so the recovery notice and compare action are visible immediately.

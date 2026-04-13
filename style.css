@@ -16736,6 +16736,7 @@ a:focus-visible,
     body.local-minimal-ui .mobile-tab.active {
         background: color-mix(in srgb, var(--local-shell-bg-final) 82%, #ffffff 18%);
         border-color: transparent;
+        color: var(--local-text-strong-final);
     }
 
     body.local-minimal-ui .mobile-tab-icon-only {
