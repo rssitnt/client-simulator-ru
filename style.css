@@ -16713,7 +16713,9 @@ a:focus-visible,
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 8px;
-        padding: max(10px, env(safe-area-inset-top, 0px) + 6px) 16px 10px;
+        min-height: var(--local-mobile-appbar-height);
+        align-items: center;
+        padding: max(6px, env(safe-area-inset-top, 0px) + 6px) 16px 6px;
         border: none;
         border-bottom: 1px solid var(--local-border-final);
         border-radius: 0;
@@ -18200,5 +18202,21 @@ body * {
     body.local-minimal-ui {
         overflow-x: hidden !important;
         overscroll-behavior-x: none !important;
+    }
+}
+
+/* Final mobile settings padding parity:
+   keep the fullscreen settings surface symmetric with safe side gutters. */
+@media (max-width: 1024px) {
+    body.local-minimal-ui #settingsModal .settings-panel {
+        padding-left: 16px !important;
+        padding-right: 16px !important;
+        overflow-x: hidden !important;
+        box-sizing: border-box !important;
+    }
+
+    body.local-minimal-ui #settingsModal .theme-color-section {
+        padding-left: 16px !important;
+        padding-right: 16px !important;
     }
 }

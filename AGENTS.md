@@ -390,6 +390,7 @@
   - start-card labels are centered by the button itself, not only by the inner text span;
   - `Поиск по диалогам` and `Новый диалог` stay sticky at the top of the history scroller;
   - mobile fullscreen settings use only inner safe-area padding; the sheet itself should not show a visible desktop-like scrollbar or asymmetric left/right clipping.
+  - the mobile settings panel + theme row now hard-force symmetric 16px side padding so controls never touch or cross the screen edges.
   - the last mobile geometry layer at the end of `C:\projects\sites\client-simulator\style.css` is the canonical override for phone-shell fixes; use it instead of reviving older conflicting mobile blocks higher in the file.
   - on mobile, `История` must be a real column layout: sticky controls first, scrolling list second, with no duplicate inner title above the list.
   - on mobile, `Роль` must open as one vertical app screen with a full-width selector at the top and full-width content below it; do not restore the older centered mini-card/dropdown header.
@@ -421,6 +422,7 @@
 - Mobile top tabs now get a visible active pill in dark mode too, so the current tab is obvious.
 - Mobile top tab active state now also forces the icon/text color to the strong text color, so the active tab reads clearly.
 - Mobile shell now hard-disables horizontal scrolling (overflow-x hidden on html/body) to prevent sideways drift on phones.
+- Mobile top tabs now use a fixed app-bar height with tighter vertical padding so the header feels like a real app bar instead of a tall banner.
 - The prompt toolbar no longer has a visible `Сравнить` button.
 - If a public prompt conflict preserves edits as a hidden local draft, the recovery action must live inside the conflict notice itself (`Сравнить draft`) so admins can still inspect/publish that draft without restoring the old toolbar button.
 - When a prompt conflict notice is raised for admins, the role/prompt panel should auto-open so the recovery notice and compare action are visible immediately.
