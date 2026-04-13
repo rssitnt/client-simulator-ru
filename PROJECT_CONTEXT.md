@@ -194,6 +194,9 @@
 - The visible `Сравнить` action was intentionally removed from the prompt toolbar.
 - If a public prompt conflict saves edits into a hidden local draft, the recovery action now lives inside the conflict notice itself (`Сравнить draft`) instead of returning the old toolbar button.
 - When a prompt conflict notice is set for an admin, the role/prompt panel should auto-open so the recovery notice and compare action are visible immediately.
+- Prompt-conflict smoke must verify the real recovery surface, not just retained local text:
+  - `C:\projects\sites\client-simulator\scripts\smoke-e2e.mjs` should require the conflict notice path plus a visible `promptSyncConflictActionBtn`;
+  - do not weaken that scenario by calling recovery helpers directly and then accepting local-content-only success.
 
 ## Still watch
 - If one employee still cannot log in while others can, first check Firebase Authentication for an old standalone account or stale password on that exact email.
