@@ -2869,7 +2869,7 @@ body.user-mode .prompt-preview {
     display: none;
 }
 
-@media (max-width: 1024px) {
+  @media (max-width: 1024px) {
     .toolbar-btn {
         min-width: 40px;
         height: 40px;
@@ -18315,6 +18315,14 @@ body * {
           order: 1 !important;
       }
   }
+
+/* Light theme history rows: flat by default, highlight only on hover/active. */
+body.local-minimal-ui.light-theme .dialog-history-item,
+body.local-minimal-ui.light-theme .dialog-history-item-main {
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+}
 
 /* Mobile history scroll hard-lock:
    keep the list as the only scrolling region so it never gets stuck. */
