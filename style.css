@@ -18236,3 +18236,23 @@ body * {
         padding-top: 0 !important;
     }
 }
+
+/* Final mobile role scroll contract:
+   let the role selector scroll away; keep only the toolbar sticky. */
+@media (max-width: 1024px) {
+    body.local-minimal-ui #instructionsPanel.panel.active {
+        overflow-y: auto !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .instruction-content {
+        overflow: visible !important;
+        padding-bottom: calc(var(--local-mobile-tabbar-height) + 22px) !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .markdown-toolbar {
+        position: sticky !important;
+        top: var(--local-mobile-appbar-height) !important;
+        z-index: 3 !important;
+        background: var(--local-shell-bg-final) !important;
+    }
+}

@@ -407,6 +407,7 @@
 - Mobile role editor sticky contract:
   - only the prompt toolbar (`скрыть / история / форматирование`) stays sticky;
   - the prompt variations list must scroll with the rest of the content and must not stay pinned under the selector.
+  - the role selector itself must scroll away with the content; it should not remain visible after scrolling.
 - On mobile, that prompt toolbar is now intentionally a compact fixed 2-row grid directly under the top app bar; keep it denser and easier to tap rather than restoring the old long single-row scroller with dividers.
 - On mobile role editing, the selector/header block must scroll away with content; only the toolbar itself stays sticky under the top app bar.
 - Mobile fullscreen settings header:
