@@ -18345,6 +18345,7 @@ body.local-minimal-ui.light-theme .dialog-history-item-main {
         top: var(--local-mobile-appbar-height) !important;
         margin-top: 0 !important;
         padding-top: 0 !important;
+        overflow: visible !important;
     }
 
     body.local-minimal-ui #historyPanel.panel.active .history-panel-body {
