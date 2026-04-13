@@ -214,6 +214,7 @@
 - The mobile shell now disables horizontal scrolling at the root (overflow-x hidden) to prevent sideways drift on phones.
 - Mobile top tabs now lock to the app-bar height with tighter vertical padding for a more app-like header.
 - Mobile fullscreen settings now enforce symmetric side padding on the settings panel + theme row so controls never touch or clip into the screen edges.
+- Mobile fullscreen settings now re-clamps the sheet/content/admin panel to safe-area gutters to prevent any left/right bleed on narrow devices.
 - Mobile history controls now sit flush under the top app bar with no extra gap between the app bar and the search/new-dialog row.
 - Mobile settings panel now hides its own scrollbar on phones; the sheet stays clean without a visible scroll rail.
 - Mobile role screen now scrolls the selector away; only the prompt toolbar stays sticky under the app bar.

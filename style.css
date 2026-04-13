@@ -18233,20 +18233,34 @@ body * {
     }
 }
 
-/* Final mobile settings padding parity:
+/* Final mobile settings edge clamp:
    keep the fullscreen settings surface symmetric with safe side gutters. */
 @media (max-width: 1024px) {
-    body.local-minimal-ui #settingsModal .settings-panel {
-        padding-left: 16px !important;
-        padding-right: 16px !important;
+    body.local-minimal-ui #settingsModal {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
         overflow-x: hidden !important;
+    }
+
+    body.local-minimal-ui #settingsModal .settings-panel,
+    body.local-minimal-ui #settingsModal .settings-content,
+    body.local-minimal-ui #settingsModal #adminPanel,
+    body.local-minimal-ui #settingsModal .theme-color-section {
+        padding-left: max(18px, env(safe-area-inset-left, 0px) + 12px) !important;
+        padding-right: max(18px, env(safe-area-inset-right, 0px) + 12px) !important;
         box-sizing: border-box !important;
+        max-width: 100% !important;
+    }
+
+    body.local-minimal-ui #settingsModal .settings-panel {
+        width: 100% !important;
+        overflow-x: hidden !important;
         scrollbar-width: none !important;
     }
 
-    body.local-minimal-ui #settingsModal .theme-color-section {
-        padding-left: 16px !important;
-        padding-right: 16px !important;
+    body.local-minimal-ui #settingsModal .settings-panel > * {
+        max-width: 100% !important;
+        box-sizing: border-box !important;
     }
 
     body.local-minimal-ui #settingsModal .settings-panel::-webkit-scrollbar {
