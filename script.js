@@ -17640,6 +17640,7 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
                 {}
             );
             const tokenErrorText = String(tokenErrorPayload?.error || '').trim();
+            const retryAfterMs = Number.parseInt(String(tokenErrorPayload?.retryAfterMs || ''), 10);
             recordVoiceDebugEvent('token_request_failed', {
                 status: 'error',
                 httpStatus: tokenResponse.status,
@@ -17647,6 +17648,21 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
                 attempt: attemptNumber,
                 totalAttempts: endpointCandidates.length
             });
+            if (tokenResponse.status === 429) {
+                const remainingBudgetMs = Math.max(0, totalDeadlineAt - Date.now());
+                const delayMs = Number.isFinite(retryAfterMs) && retryAfterMs > 0
+                    ? Math.min(retryAfterMs, remainingBudgetMs)
+                    : Math.min(1200, remainingBudgetMs);
+                if (delayMs > 0) {
+                    await waitForDelay(delayMs);
+                }
+                sawTimeoutLikeFailure = true;
+                lastError = new Error(tokenErrorText || 'Слишком много запросов к token endpoint.');
+                if (attemptIndex < endpointCandidates.length - 1) {
+                    continue;
+                }
+                throw lastError;
+            }
             if (tokenResponse.status === 401 || tokenResponse.status === 403) {
                 throw new Error(tokenErrorText || 'Нет доступа к голосовому режиму');
             }
