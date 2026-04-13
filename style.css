@@ -18175,8 +18175,9 @@ body * {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        min-height: 64px;
-        padding-bottom: 6px;
+        min-height: calc(env(safe-area-inset-top, 0px) + 56px);
+        padding-top: env(safe-area-inset-top, 0px);
+        padding-bottom: 8px;
     }
 
     body.local-minimal-ui #settingsModal .theme-color-row {
@@ -18404,14 +18405,14 @@ body.local-minimal-ui * {
 /* Final mobile tab label alignment:
    ensure tab text/icons are vertically centered. */
 @media (max-width: 1024px) {
-    body.local-minimal-ui .mobile-tab {
-        line-height: 1 !important;
-    }
+body.local-minimal-ui .mobile-tab {
+    line-height: 1 !important;
+}
 
-    body.local-minimal-ui .mobile-tab-label,
-    body.local-minimal-ui .mobile-tab-icon {
-        line-height: 1 !important;
-    }
+body.local-minimal-ui .mobile-tab-label,
+body.local-minimal-ui .mobile-tab-icon {
+    line-height: 1 !important;
+}
 }
 
 /* Final mobile top bar lock:
@@ -18425,5 +18426,9 @@ body.local-minimal-ui * {
         right: 0 !important;
         margin: 0 !important;
         padding-top: env(safe-area-inset-top, 0px) !important;
+    }
+
+    body.local-minimal-ui {
+        --local-mobile-tabbar-height: 0px !important;
     }
 }

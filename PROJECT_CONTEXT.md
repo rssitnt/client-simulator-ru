@@ -164,6 +164,7 @@
   - the mobile settings close button is fully contained inside the top header row; it must not overlap the row’s lower edge.
   - the mobile settings header row stays as a single flex bar so the close button aligns with the theme toggle.
   - the mobile settings header row now has extra height/bottom padding so the close button never dips across the divider line.
+  - the mobile settings header row now uses safe-area-based min-height/padding so the close button stays fully inside the top bar.
   - the mobile `Роль` tab icon now inherits the same white/cream tone as other tabs in dark mode; light theme keeps it neutral.
 - A final bottom-of-file interaction layer suppresses platform blue tap/click glow globally across desktop and mobile controls.
 - Latest mobile app-shell lock:
@@ -224,6 +225,7 @@
 - Tap highlight is now globally disabled in the local shell to prevent blue flash on mobile/desktop.
 - Mobile top tabs now force a consistent line-height so labels/icons stay vertically centered.
 - Mobile top tabs are now hard-locked to the top app bar (no bottom dock position on small screens).
+- Mobile tabbar height is now forced to `0` in the top-bar layout so no bottom padding/space remains.
 - Mobile history controls now sit flush under the top app bar with no extra gap between the app bar and the search/new-dialog row.
 - Mobile settings panel now hides its own scrollbar on phones; the sheet stays clean without a visible scroll rail.
 - Mobile role screen now scrolls the selector away; only the prompt toolbar stays sticky under the app bar.
