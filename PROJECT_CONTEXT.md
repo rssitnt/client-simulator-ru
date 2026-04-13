@@ -163,6 +163,7 @@
   - the mobile settings close button is fully contained inside the top header row; it must not overlap the row’s lower edge.
   - the mobile settings header row stays as a single flex bar so the close button aligns with the theme toggle.
   - the mobile settings header row now has extra height/bottom padding so the close button never dips across the divider line.
+  - the mobile `Роль` tab icon now inherits the same white/cream tone as other tabs in dark mode; light theme keeps it neutral.
 - A final bottom-of-file interaction layer suppresses platform blue tap/click glow globally across desktop and mobile controls.
 - Latest mobile app-shell lock:
   - top navigation is a fixed 4-slot mobile row (`history icon / chat icon / role / settings icon`);

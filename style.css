@@ -17454,6 +17454,11 @@ body * {
         width: 20px !important;
         height: 20px !important;
         object-fit: contain !important;
+        filter: brightness(0) invert(1);
+    }
+
+    body.local-minimal-ui.light-theme .mobile-tab-icon-prompt {
+        filter: none;
     }
 
     body.local-minimal-ui #chatPanel,
