@@ -16733,6 +16733,7 @@ a:focus-visible,
         justify-content: center;
         gap: 8px;
         font-size: 15px;
+        color: var(--local-text-soft-final);
     }
 
     body.local-minimal-ui .mobile-tab.active {
@@ -16749,6 +16750,7 @@ a:focus-visible,
         display: block;
         width: 18px;
         height: 18px;
+        color: currentColor;
     }
 
     body.local-minimal-ui .sr-only {

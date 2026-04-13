@@ -392,6 +392,7 @@
   - the history search/new-dialog row must sit flush under the app bar with no visible gap.
   - mobile fullscreen settings use only inner safe-area padding; the sheet itself should not show a visible desktop-like scrollbar or asymmetric left/right clipping.
   - the mobile settings panel must not show a visible scrollbar; keep it hidden.
+  - mobile tab icons inherit the tab text color; the role icon must not render black against dark mode.
   - the mobile settings panel + theme row now hard-force symmetric 16px side padding so controls never touch or cross the screen edges.
   - the last mobile geometry layer at the end of `C:\projects\sites\client-simulator\style.css` is the canonical override for phone-shell fixes; use it instead of reviving older conflicting mobile blocks higher in the file.
   - on mobile, `История` must be a real column layout: sticky controls first, scrolling list second, with no duplicate inner title above the list.
