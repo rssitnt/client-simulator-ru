@@ -18252,17 +18252,24 @@ body * {
 
 /* Final mobile history header lock:
    keep search + new dialog flush under the top app bar (no gap). */
-@media (max-width: 1024px) {
-    body.local-minimal-ui #historyPanel.panel.active .history-panel-controls {
-        top: var(--local-mobile-top-tabs-height, var(--local-mobile-appbar-height)) !important;
-        margin-top: 0 !important;
-        padding-top: 0 !important;
-    }
+  @media (max-width: 1024px) {
+      body.local-minimal-ui #historyPanel.panel.active .history-panel-controls {
+          top: 0 !important;
+          margin-top: 0 !important;
+          padding-top: 0 !important;
+      }
+  
+      body.local-minimal-ui #historyPanel.panel.active {
+          padding-top: 0 !important;
+      }
 
-    body.local-minimal-ui #historyPanel.panel.active {
-        padding-top: 0 !important;
-    }
-}
+      body.local-minimal-ui #historyPanel .dialog-history-item,
+      body.local-minimal-ui #historyPanel .history-thread-list .dialog-history-item {
+          background: transparent;
+          border-color: transparent;
+          box-shadow: none;
+      }
+  }
 
 /* Final mobile role scroll contract:
    let the role selector scroll away; keep only the toolbar sticky. */

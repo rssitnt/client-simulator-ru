@@ -157,6 +157,7 @@
   - history search plus `Новый диалог` must stay pinned directly under the top app bar instead of drifting into the feed;
     - the history search block must render first in the list, flush under the top nav with no dialog cards above it.
     - the mobile history panel removes extra top padding so controls sit directly under the tabs.
+    - mobile history rows are transparent at rest (no light-theme white cards); only hover/active gives a subtle fill.
   - mobile fullscreen settings now use symmetric safe-area padding and hide the sheet scrollbar itself rather than showing a desktop-like right-edge scroller.
   - the mobile settings close button is fully contained inside the top header row; it must not overlap the row’s lower edge.
   - the mobile settings header row stays as a single flex bar so the close button aligns with the theme toggle.
