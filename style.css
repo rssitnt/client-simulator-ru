@@ -18399,3 +18399,16 @@ body.local-minimal-ui,
 body.local-minimal-ui * {
     -webkit-tap-highlight-color: transparent !important;
 }
+
+/* Final mobile tab label alignment:
+   ensure tab text/icons are vertically centered. */
+@media (max-width: 1024px) {
+    body.local-minimal-ui .mobile-tab {
+        line-height: 1 !important;
+    }
+
+    body.local-minimal-ui .mobile-tab-label,
+    body.local-minimal-ui .mobile-tab-icon {
+        line-height: 1 !important;
+    }
+}
