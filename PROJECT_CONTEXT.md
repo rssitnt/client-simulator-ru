@@ -239,8 +239,10 @@
 - Dialog history rename is now inline in the list:
   - double-click on a dialog title starts inline editing;
   - the `Переименовать` menu action edits the title in place instead of a prompt dialog.
+- History sidebar surface now uses a theme-agnostic color mix between shell and surface so light/dark stay in sync.
   - inline rename now has a click-vs-dblclick guard: a double-click no longer opens the dialog first and then starts rename;
   - renaming the current live dialog now survives an overlapping autosave too: if a stale save is already in flight, the next metadata snapshot is queued for an immediate follow-up save instead of losing the new title.
+- History sidebar surface now uses a theme-agnostic color mix between shell and surface so light/dark stay in sync.
 - Mobile settings panel now hides its own scrollbar on phones; the sheet stays clean without a visible scroll rail.
 - Mobile role screen now scrolls the selector away; only the prompt toolbar stays sticky under the app bar.
 - Mobile top tab icons now inherit tab color so the role icon matches the other white/active states.

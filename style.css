@@ -440,7 +440,11 @@ body.local-minimal-ui.light-theme {
 
 body.local-minimal-ui .history-panel,
 body.local-minimal-ui .history-panel-header {
-    background: var(--local-surface-muted-final) !important;
+    background: color-mix(
+        in srgb,
+        var(--local-shell-bg-final) 30%,
+        var(--local-surface-final) 70%
+    ) !important;
 }
 
 body .panel,
