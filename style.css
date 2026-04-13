@@ -18347,6 +18347,20 @@ body.local-minimal-ui.light-theme .dialog-history-item-main {
     }
 }
 
+/* Final mobile history header alignment:
+   keep controls flush under the app bar with no extra gap. */
+@media (max-width: 1024px) {
+    body.local-minimal-ui #historyPanel.panel.active .history-panel-controls {
+        top: var(--local-mobile-appbar-height) !important;
+        margin-top: 0 !important;
+        padding-top: 8px !important;
+    }
+
+    body.local-minimal-ui #historyPanel.panel.active .history-panel-body {
+        padding-top: calc(var(--local-mobile-appbar-height) + 8px) !important;
+    }
+}
+
 /* Final mobile role scroll contract:
    let the role selector scroll away; keep only the toolbar sticky. */
 @media (max-width: 1024px) {
