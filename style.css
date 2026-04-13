@@ -18350,7 +18350,11 @@ body.local-minimal-ui.light-theme .dialog-history-item-main {
     }
 
     body.local-minimal-ui #historyPanel.panel.active .history-panel-body {
-        padding-top: var(--local-mobile-appbar-height) !important;
+        padding-top: 0 !important;
+    }
+
+    body.local-minimal-ui #historyPanel.panel.active .history-thread-layout {
+        margin-top: 0 !important;
     }
 }
 
