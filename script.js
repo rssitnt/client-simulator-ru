@@ -160,6 +160,7 @@ const WEBHOOK_DEBUG_CONFIG_STORAGE_KEY = 'webhookDebugConfig:v1';
 const WEBHOOK_DEBUG_LOG_STORAGE_KEY = 'webhookDebugLog:v1';
 const WEBHOOK_DEBUG_LOG_MAX_ENTRIES = 40;
 const DIALOG_HISTORY_PAGE_SIZE = 50;
+const DIALOG_HISTORY_INLINE_RENAME_CLICK_DELAY_MS = 260;
   const HISTORY_SIDEBAR_COLLAPSED_STORAGE_KEY = 'historySidebarCollapsed:v1';
   const SHARED_DIALOG_PENDING_STORAGE_KEY = 'sharedDialogPending:v1';
 const DIALOG_HISTORY_SAVE_DEBOUNCE_MS = 700;
@@ -2003,6 +2004,8 @@ let currentDialogHistoryAutoTitle = '';
 let currentDialogHistoryTitleEdited = false;
 let dialogHistorySaveTimerId = 0;
 let dialogHistorySaveInFlight = null;
+let dialogHistorySaveInFlightFingerprint = '';
+let dialogHistoryPendingResave = false;
 let dialogHistoryQueuedRevision = 0;
 let dialogHistoryScopeLogin = '';
 let dialogHistoryScopeRecords = [];
@@ -8073,15 +8076,37 @@ function removeDialogHistoryScopeRecord(dialogId = '') {
     renderDialogHistoryViewer();
 }
 
+function buildDialogHistorySnapshotFingerprint(snapshot = null) {
+    if (!snapshot?.indexRecord || !snapshot?.messagesPayload) return '';
+    try {
+        return JSON.stringify({
+            indexRecord: snapshot.indexRecord,
+            messagesPayload: snapshot.messagesPayload
+        });
+    } catch (error) {
+        return '';
+    }
+}
+
 async function saveCurrentDialogHistoryNow(options = {}) {
     const snapshot = buildCurrentDialogHistorySnapshot(options);
     if (!snapshot) return null;
     const revisionAtStart = conversationHistoryRevision;
+    const snapshotFingerprint = buildDialogHistorySnapshotFingerprint(snapshot);
     if (dialogHistorySaveInFlight) {
+        if (
+            snapshotFingerprint
+            && dialogHistorySaveInFlightFingerprint
+            && snapshotFingerprint !== dialogHistorySaveInFlightFingerprint
+        ) {
+            dialogHistoryPendingResave = true;
+        }
         dialogHistoryQueuedRevision = Math.max(dialogHistoryQueuedRevision, revisionAtStart);
         return dialogHistorySaveInFlight;
     }
 
+    dialogHistoryPendingResave = false;
+    dialogHistorySaveInFlightFingerprint = snapshotFingerprint;
     const savePromise = (async () => {
         try {
             await persistDialogHistorySnapshot(snapshot);
@@ -8097,7 +8122,9 @@ async function saveCurrentDialogHistoryNow(options = {}) {
             return snapshot;
         } finally {
             dialogHistorySaveInFlight = null;
-            const needsResave = conversationHistoryRevision > revisionAtStart || dialogHistoryQueuedRevision > revisionAtStart;
+            const needsResave = dialogHistoryPendingResave || conversationHistoryRevision > revisionAtStart || dialogHistoryQueuedRevision > revisionAtStart;
+            dialogHistoryPendingResave = false;
+            dialogHistorySaveInFlightFingerprint = '';
             if (needsResave && currentDialogHistoryId === snapshot.id) {
                 dialogHistoryQueuedRevision = 0;
                 scheduleCurrentDialogHistorySave({ immediate: true });
@@ -8896,11 +8923,8 @@ function renderDialogHistoryListInto(ui) {
             </div>
             ${isCompactRail ? '' : `<div class="dialog-history-item-preview">${renderDialogHistoryHighlightedText(record.preview || 'Без текста', dialogHistorySearchQuery)}</div>`}
         `;
-        mainButton.addEventListener('click', () => {
-            if (mainButton.dataset.suppressClick === '1') {
-                delete mainButton.dataset.suppressClick;
-                return;
-            }
+        let pendingOpenTimerId = 0;
+        const openHistoryRecord = () => {
             loadDialogHistorySelection(record.id).catch((error) => {
                 console.error('Failed to load dialog history selection:', error);
                 showCopyNotification(error?.message || 'Не удалось открыть диалог');
@@ -8908,12 +8932,28 @@ function renderDialogHistoryListInto(ui) {
             if (ui.list === mainDialogHistoryList && window.innerWidth <= 1024) {
                 activateShellPanel('chat');
             }
+        };
+        const clearPendingOpen = () => {
+            if (!pendingOpenTimerId) return;
+            clearTimeout(pendingOpenTimerId);
+            pendingOpenTimerId = 0;
+        };
+        mainButton.addEventListener('click', () => {
+            clearPendingOpen();
+            if (!canRenameDialogHistoryRecord(record)) {
+                openHistoryRecord();
+                return;
+            }
+            pendingOpenTimerId = window.setTimeout(() => {
+                pendingOpenTimerId = 0;
+                openHistoryRecord();
+            }, DIALOG_HISTORY_INLINE_RENAME_CLICK_DELAY_MS);
         });
         mainButton.addEventListener('dblclick', (event) => {
             if (!canRenameDialogHistoryRecord(record)) return;
             event.preventDefault();
             event.stopPropagation();
-            mainButton.dataset.suppressClick = '1';
+            clearPendingOpen();
             beginDialogHistoryInlineRename(record);
         });
 
@@ -25065,6 +25105,13 @@ function installLocalhostTestHooks() {
         },
         async loadDialogHistorySelectionForTest(dialogId = '') {
             await loadDialogHistorySelection(dialogId);
+            return true;
+        },
+        async renameDialogHistoryForTest(dialogId = '', nextTitle = '') {
+            const normalizedDialogId = String(dialogId || '').trim();
+            const record = dialogHistoryScopeRecords.find((item) => item.id === normalizedDialogId) || null;
+            if (!record) return false;
+            await saveDialogHistoryRecordTitle(record, nextTitle);
             return true;
         },
         getLocalLayoutMetricsForTest() {

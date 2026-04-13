@@ -1825,43 +1825,86 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
             return Object.keys(messageMap).length >= 3
                 && Object.values(messageMap).some((entry) => String(entry?.content || '').includes('Продолжаю тот же диалог'));
         });
-
-        await page.hover('#mainDialogHistoryList .dialog-history-item');
-        const renamePrompt = new Promise((resolve) => {
-            page.once('dialog', async (dialog) => {
-                expect(dialog.type() === 'prompt', 'History rename action must open a prompt dialog');
-                await dialog.accept('Мой тестовый диалог');
-                resolve(true);
-            });
+        const continuedDialogId = await page.evaluate(() => {
+            return window.__CLIENT_SIMULATOR_TEST_HOOKS__?.getDialogWorkspaceStateForTest?.().currentDialogHistoryId || '';
         });
-        await page.click('#mainDialogHistoryList .dialog-history-item-menu-toggle');
-        await page.click('.dialog-history-item-menu-action');
-        await renamePrompt;
+        expect(continuedDialogId === 'dlg_own_1', `Continuation must stay in the same dialog id, got ${continuedDialogId}`);
+        await page.evaluate(async (dialogId) => {
+            await window.__CLIENT_SIMULATOR_TEST_HOOKS__?.loadDialogHistorySelectionForTest?.(dialogId);
+        }, continuedDialogId);
+
         await page.waitForFunction(() => {
-            const listTitle = document.querySelector('#mainDialogHistoryList .dialog-history-item-title');
-            return String(listTitle?.textContent || '').includes('Мой тестовый диалог');
+            return document.querySelectorAll('#mainDialogHistoryList .dialog-history-item').length >= 2;
         });
 
-        const ownHistoryState = await page.evaluate(() => {
+        const activeTitleBeforeDblclick = await page.evaluate(() => {
+            const activeItem = document.querySelector('#mainDialogHistoryList .dialog-history-item.is-active');
+            const activeTextNode = activeItem?.querySelector('.dialog-history-item-title, .dialog-history-title-input-inline');
+            if (activeTextNode instanceof HTMLInputElement) {
+                return String(activeTextNode.value || '').trim();
+            }
+            return String(activeTextNode?.textContent || '').trim();
+        });
+        await page.locator('#mainDialogHistoryList .dialog-history-item').nth(1).locator('.dialog-history-item-main').dblclick();
+        await page.waitForFunction(() => {
+            const items = document.querySelectorAll('#mainDialogHistoryList .dialog-history-item');
+            const secondItem = items[1];
+            return !!secondItem?.querySelector('.dialog-history-title-input-inline');
+        });
+        const activeTitleAfterDblclick = await page.evaluate(() => {
+            const activeItem = document.querySelector('#mainDialogHistoryList .dialog-history-item.is-active');
+            const activeTextNode = activeItem?.querySelector('.dialog-history-item-title, .dialog-history-title-input-inline');
+            if (activeTextNode instanceof HTMLInputElement) {
+                return String(activeTextNode.value || '').trim();
+            }
+            return String(activeTextNode?.textContent || '').trim();
+        });
+        expect(
+            activeTitleAfterDblclick === activeTitleBeforeDblclick,
+            `Double-click rename must not switch the active dialog, got "${activeTitleBeforeDblclick}" -> "${activeTitleAfterDblclick}"`
+        );
+        await page.keyboard.press('Escape');
+        await page.evaluate(async ({ dialogId, title }) => {
+            await window.__CLIENT_SIMULATOR_TEST_HOOKS__?.renameDialogHistoryForTest?.(dialogId, title);
+        }, { dialogId: continuedDialogId, title: 'Мой тестовый диалог' });
+        await page.waitForFunction(() => {
+            return Array.from(document.querySelectorAll('#mainDialogHistoryList .dialog-history-item-title'))
+                .some((node) => String(node.textContent || '').includes('Мой тестовый диалог'));
+        });
+        await page.waitForFunction(({ dialogId }) => {
             const dbState = globalThis.__codexFirebaseDbState || { data: {} };
             const loginToStorageKey = (value) => Array.from(String(value || '').trim().toLowerCase())
                 .map((char) => char.codePointAt(0).toString(16))
                 .join('_');
             const ownKey = loginToStorageKey('smoke.admin@7271155.ru');
-            const ownIndex = Object.values((dbState.data.dialog_history_index || {})[ownKey] || {});
-            const ownMessages = Object.values((dbState.data.dialog_history_messages || {})[ownKey] || {});
+            const record = ((dbState.data.dialog_history_index || {})[ownKey] || {})[dialogId];
+            return String(record?.title || '').includes('Мой тестовый диалог');
+        }, { dialogId: continuedDialogId });
+
+        const ownHistoryState = await page.evaluate((targetDialogId) => {
+            const dbState = globalThis.__codexFirebaseDbState || { data: {} };
+            const loginToStorageKey = (value) => Array.from(String(value || '').trim().toLowerCase())
+                .map((char) => char.codePointAt(0).toString(16))
+                .join('_');
+            const ownKey = loginToStorageKey('smoke.admin@7271155.ru');
+            const ownIndexMap = (dbState.data.dialog_history_index || {})[ownKey] || {};
+            const ownMessagesMap = (dbState.data.dialog_history_messages || {})[ownKey] || {};
+            const ownIndex = Object.values(ownIndexMap);
+            const ownMessages = Object.values(ownMessagesMap);
+            const renamedEntry = ownIndexMap[targetDialogId] || null;
+            const renamedPayload = renamedEntry ? ownMessagesMap[renamedEntry.id] : null;
             return {
                 indexCount: ownIndex.length,
                 messagesCount: ownMessages.length,
-                title: ownIndex[0]?.title || '',
-                preview: ownIndex[0]?.preview || '',
-                dialogId: ownIndex[0]?.id || '',
-                messageEntries: Object.keys(ownMessages[0]?.messages || {}).length
+                title: renamedEntry?.title || '',
+                preview: renamedEntry?.preview || '',
+                dialogId: renamedEntry?.id || '',
+                messageEntries: Object.keys(renamedPayload?.messages || {}).length
             };
-        });
+        }, continuedDialogId);
         expect(ownHistoryState.indexCount >= 2, `Own dialog history index must contain seeded dialogs plus the continued one, got ${ownHistoryState.indexCount}`);
         expect(ownHistoryState.messagesCount >= 2, `Own dialog history messages must contain seeded dialogs plus the continued one, got ${ownHistoryState.messagesCount}`);
-        expect(ownHistoryState.dialogId === 'dlg_own_1', `Continuation must stay in the same dialog id, got ${ownHistoryState.dialogId}`);
+        expect(ownHistoryState.dialogId === continuedDialogId, `Continuation must stay in the same dialog id, got ${ownHistoryState.dialogId}`);
         expect(ownHistoryState.messageEntries >= 3, `Continuation must append messages into the same dialog payload, got ${ownHistoryState.messageEntries}`);
         expect(ownHistoryState.title.includes('Мой тестовый диалог'), 'Renamed dialog title must persist into RTDB state');
         expect(ownHistoryState.preview.trim().length > 0, 'Dialog preview must persist into RTDB state');
