@@ -2518,6 +2518,31 @@ async function runPromptConflictRecoveryFlow(browser, baseUrl) {
             return (state.activeIsLocal || hasConflictNotice || hasLocalContent)
                 && (compareActionAvailable || hasConflictNotice || hasLocalContent);
         }, localDraftText);
+
+        await page.click('#localPromptCloseBtn');
+        await page.waitForFunction(() => !document.body.classList.contains('local-prompt-open'));
+        const variationSwitchTriggered = await page.evaluate(() => {
+            const chips = Array.from(document.querySelectorAll('#promptVariations .prompt-variation-chip'));
+            if (chips.length < 2) return false;
+            const activeIndex = chips.findIndex((chip) => chip.classList.contains('active'));
+            const nextIndex = activeIndex === 0 ? 1 : 0;
+            chips[nextIndex]?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+            const refreshedChips = Array.from(document.querySelectorAll('#promptVariations .prompt-variation-chip'));
+            const restoreIndex = activeIndex >= 0 ? activeIndex : 0;
+            refreshedChips[restoreIndex]?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            return true;
+        });
+        expect(variationSwitchTriggered, 'Prompt conflict recovery must expose at least two variation chips for rerender coverage');
+        await page.waitForTimeout(150);
+        const persistedConflictState = await page.evaluate(() => {
+            const state = window.__CLIENT_SIMULATOR_TEST_HOOKS__?.getPromptUiState?.('client');
+            return {
+                drawerOpen: document.body.classList.contains('local-prompt-open'),
+                conflictMessage: String(state?.conflictMessage || '')
+            };
+        });
+        expect(!persistedConflictState.drawerOpen, 'Prompt drawer must stay closed after a rerender with the same conflict message');
     } catch (error) {
         await ensureOutputDir();
         await page.screenshot({ path: path.join(outputDir, 'smoke-prompt-conflict-failure.png'), fullPage: true });

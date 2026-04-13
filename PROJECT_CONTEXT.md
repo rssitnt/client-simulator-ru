@@ -208,6 +208,9 @@
 - The visible `Сравнить` action was intentionally removed from the prompt toolbar.
 - If a public prompt conflict saves edits into a hidden local draft, the recovery action now lives inside the conflict notice itself (`Сравнить draft`) instead of returning the old toolbar button.
 - When a prompt conflict notice is set for an admin, the role/prompt panel should auto-open so the recovery notice and compare action are visible immediately.
+- That prompt-conflict auto-open is now one-shot per conflict message:
+  - after the admin closes the role drawer manually, ordinary rerenders (for example variation switches) must not reopen it again unless a new conflict message appears.
+  - smoke now verifies both a visible `promptSyncConflictActionBtn` and that the drawer stays closed after a same-message rerender.
 
 ## Still watch
 - If one employee still cannot log in while others can, first check Firebase Authentication for an old standalone account or stale password on that exact email.

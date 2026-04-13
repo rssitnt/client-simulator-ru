@@ -2258,6 +2258,7 @@ let promptsData = {
 };
 const promptEditRemoteBaselineHashes = {};
 const promptSyncConflictMessages = {};
+const promptSyncConflictAutoOpenedMessages = {};
 
 function normalizeFio(value) {
     return String(value || '').trim().replace(/\s+/g, ' ');
@@ -12591,7 +12592,11 @@ function renderPromptSyncConflictNotice(role = getActiveRole()) {
     } else {
         promptSyncConflictNotice.textContent = message;
     }
-    if (message && isAdmin()) {
+    if (!message) {
+        delete promptSyncConflictAutoOpenedMessages[role];
+    }
+    if (message && isAdmin() && promptSyncConflictAutoOpenedMessages[role] !== message) {
+        promptSyncConflictAutoOpenedMessages[role] = message;
         const shouldOpenDrawer = shouldUseLocalPromptDrawer();
         if (shouldOpenDrawer) {
             setLocalPromptDrawerOpen(true);
