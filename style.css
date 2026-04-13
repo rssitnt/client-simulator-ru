@@ -11576,7 +11576,11 @@ body.local-minimal-ui.light-theme .local-shell-icon-btn:hover {
 }
 
 body.local-minimal-ui.light-theme .history-panel {
-    background: #ece5db;
+    background: color-mix(
+        in srgb,
+        var(--local-shell-bg-final) 30%,
+        var(--local-surface-final) 70%
+    ) !important;
     border-right-color: var(--local-border-final);
 }
 
