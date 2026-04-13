@@ -890,11 +890,9 @@ export async function handleTokenServerRequest(req, res) {
         } else {
             sendJson(res, 401, { error: 'Firebase ID token is required' }, requestOrigin);
             logRequestEvent('info', buildRequestLogContext(req, requestId, {
-                status: 200,
+                status: 401,
                 durationMs: Date.now() - startedAt,
-                mode: 'openai',
-                authSource: authIdentity.source,
-                accessSource: authIdentity.accessSource || null
+                reason: 'missing-id-token'
             }));
             return;
         }
@@ -926,7 +924,7 @@ export async function handleTokenServerRequest(req, res) {
             logRequestEvent('info', buildRequestLogContext(req, requestId, {
                 status: 200,
                 durationMs: Date.now() - startedAt,
-                mode: 'gemini-transcribe',
+                mode: 'openai',
                 authSource: authIdentity.source,
                 accessSource: authIdentity.accessSource || null
             }));
@@ -948,6 +946,13 @@ export async function handleTokenServerRequest(req, res) {
                     accessSource: authIdentity.accessSource || null
                 }
             }, requestOrigin);
+            logRequestEvent('info', buildRequestLogContext(req, requestId, {
+                status: 200,
+                durationMs: Date.now() - startedAt,
+                mode: 'gemini-transcribe',
+                authSource: authIdentity.source,
+                accessSource: authIdentity.accessSource || null
+            }));
             return;
         }
 

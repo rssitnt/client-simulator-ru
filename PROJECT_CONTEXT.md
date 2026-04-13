@@ -142,6 +142,9 @@
   - admin settings expose `Техлог входа и сброса пароля` with recent `login / restore / reset` events;
   - each event stores a compact browser/Firebase session snapshot so support can triage employee login issues from the app UI.
 - The Gemini token server now exposes `/health` (GET) for readiness checks and logs structured per-request events with status/duration.
+- Token server request-log guardrail:
+  - unauthenticated `POST` requests must return a clean `401` log entry without touching `authIdentity.*` before auth exists;
+  - the OpenAI realtime route must log as `mode: openai`, and Gemini transcription must keep its own `mode: gemini-transcribe`.
 - Old global light-theme rules for mobile tabs, `#startBtn`, and generic dropdown active states are now isolated away from `body.local-minimal-ui`; if the warm local light shell drifts back toward old blue/grey styling, inspect that isolation first instead of piling on new overrides.
 - Fullscreen settings/admin in `body.local-minimal-ui.light-theme` now rely on one final warm-cream consistency layer at the very end of `C:\projects\sites\client-simulator\style.css`; treat that tail block as the canonical place for white-theme settings fixes so palette changes do not also mutate geometry or revive older dark/bluish controls.
 - Mobile tabs (`История / Чат / Роль`) now live in a top sticky app bar, not in a bottom dock.
@@ -216,5 +219,7 @@
 - When a prompt conflict notice is set for an admin, the role/prompt panel should auto-open so the recovery notice and compare action are visible immediately.
 
 ## Still watch
+- `npm run test:smoke` on `2026-04-13` currently reaches the attestation flow and then fails on `Attestation flow did not send the certification webhook payload`.
+  - This was observed after the token-server logging fix, but the last 24h commit window is mobile-shell/token-server focused and does not provide strong evidence that today's scanned commits caused the attestation webhook regression.
 - If one employee still cannot log in while others can, first check Firebase Authentication for an old standalone account or stale password on that exact email.
 - Keep auth fixes narrow and safe; do not reopen the earlier broad auth rewrite unless a reproducible blocker appears.
