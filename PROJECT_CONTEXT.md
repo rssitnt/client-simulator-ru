@@ -152,6 +152,7 @@
   - the mobile start screen keeps a small top offset so the first CTA does not clip under the app bar.
   - history search plus `Новый диалог` must stay pinned directly under the top app bar instead of drifting into the feed;
   - mobile fullscreen settings now use symmetric safe-area padding and hide the sheet scrollbar itself rather than showing a desktop-like right-edge scroller.
+  - the mobile settings close button is fully contained inside the top header row; it must not overlap the row’s lower edge.
 - A final bottom-of-file interaction layer suppresses platform blue tap/click glow globally across desktop and mobile controls.
 - Latest mobile app-shell lock:
   - top navigation is a fixed 4-slot mobile row (`history icon / chat icon / role / settings icon`);

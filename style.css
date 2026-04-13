@@ -18154,10 +18154,11 @@ body * {
 
     body.local-minimal-ui #settingsModal .theme-color-section {
         isolation: isolate;
+        padding-bottom: 8px;
     }
 
     body.local-minimal-ui #settingsModal .theme-color-row {
-        min-height: 48px;
+        min-height: 56px;
         align-items: center !important;
     }
 
