@@ -10397,6 +10397,17 @@ body.local-minimal-ui .dialog-history-item-title {
     font-weight: 500;
     line-height: 1.35;
     color: var(--local-text-final);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+body.local-minimal-ui .dialog-history-item-title-row {
+    align-items: center;
+}
+
+body.local-minimal-ui .dialog-history-item-title-row .dialog-history-item-title {
+    min-width: 0;
 }
 
 body.local-minimal-ui .dialog-history-item-preview {
