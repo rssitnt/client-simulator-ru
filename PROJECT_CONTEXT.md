@@ -154,9 +154,13 @@
   - missing Firebase ID token now returns structured `401 { code: "missing_id_token" }` instead of a bare JSON error;
   - success logs now use the correct request mode for OpenAI vs Gemini endpoints, and Gemini transcribe success is logged too;
   - OpenAI realtime-session input now rejects non-string `model` / `instructions` payloads before they reach the upstream API.
+- As of `2026-04-14`, the integration smoke harness is aligned with the current frontend bootstrap again:
+  - `C:\projects\sites\client-simulator\scripts\integration-smoke.mjs` now stubs both `sendPasswordResetEmail` and Firebase App Check, so the app no longer dies during module import on missing exports/internal Firebase symbols;
+  - settings opening in that integration flow now waits for the currently visible trigger (`#localSettingsTopBtn`, mobile settings tab, or legacy `#settingsBtn`) and closes through the real modal close button instead of assuming one old floating button is always visible.
 - Verification on `2026-04-14`:
   - `node --check server/gemini-token-server.mjs` passed;
   - `npm run test:smoke` passed end-to-end after the token-server fix.
+  - `npm run test:smoke:integration` passed again after the integration-smoke stub/selector repair.
 - Old global light-theme rules for mobile tabs, `#startBtn`, and generic dropdown active states are now isolated away from `body.local-minimal-ui`; if the warm local light shell drifts back toward old blue/grey styling, inspect that isolation first instead of piling on new overrides.
 - Fullscreen settings/admin in `body.local-minimal-ui.light-theme` now rely on one final warm-cream consistency layer at the very end of `C:\projects\sites\client-simulator\style.css`; treat that tail block as the canonical place for white-theme settings fixes so palette changes do not also mutate geometry or revive older dark/bluish controls.
 - Mobile tabs (`История / Чат / Роль`) now live in a top sticky app bar, not in a bottom dock.

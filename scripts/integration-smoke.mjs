@@ -174,6 +174,7 @@ export function getAuth() {
   return authInstance;
 }
 export async function sendSignInLinkToEmail() { return null; }
+export async function sendPasswordResetEmail() { return null; }
 export function isSignInWithEmailLink() { return false; }
 export async function signInWithEmailLink() {
   return { user: null };
@@ -189,6 +190,22 @@ export async function createUserWithEmailAndPassword(_auth, email) {
 export async function signOut() {
   authInstance.currentUser = null;
   return null;
+}
+`.trim();
+
+const firebaseAppCheckStub = `
+export function initializeAppCheck() {
+  return { __codexStubAppCheck: true };
+}
+export class ReCaptchaV3Provider {
+  constructor(siteKey = '') {
+    this.siteKey = siteKey;
+  }
+}
+export async function getToken() {
+  return {
+    token: 'codex-app-check-stub-token'
+  };
 }
 `.trim();
 
@@ -340,18 +357,56 @@ async function installIntegrationRoutes(context) {
     await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js', async (route) => {
         await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAuthStub });
     });
+    await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js', async (route) => {
+        await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAppCheckStub });
+    });
     await context.route('http://127.0.0.1:7243/**', async (route) => {
         await route.fulfill({ status: 204, body: '' });
     });
 }
 
+async function waitForVisibleSelector(page, selectors = [], timeoutMs = 30000) {
+    await page.waitForFunction((selectorList) => {
+        return selectorList.some((selector) => {
+            const element = document.querySelector(selector);
+            if (!element || element.hidden) {
+                return false;
+            }
+            const style = window.getComputedStyle(element);
+            if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') {
+                return false;
+            }
+            return element.getClientRects().length > 0;
+        });
+    }, selectors, { timeout: timeoutMs });
+
+    for (const selector of selectors) {
+        const locator = page.locator(selector).first();
+        if (await locator.count() && await locator.isVisible()) {
+            return locator;
+        }
+    }
+
+    throw new Error(`Visible selector not found after wait: ${selectors.join(', ')}`);
+}
+
+async function clickVisibleSelector(page, selectors = [], timeoutMs = 30000) {
+    const locator = await waitForVisibleSelector(page, selectors, timeoutMs);
+    await locator.click();
+    return locator;
+}
+
 async function openSettings(page) {
-    await page.click('#settingsBtn');
+    await clickVisibleSelector(page, [
+        '#localSettingsTopBtn',
+        '#mobileSettingsTabBtn',
+        '#settingsBtn'
+    ]);
     await page.waitForSelector('#settingsModal.active');
 }
 
 async function closeSettings(page) {
-    await page.click('#settingsBtn');
+    await clickVisibleSelector(page, ['#settingsModalCloseBtn']);
     await page.waitForFunction(() => !document.getElementById('settingsModal')?.classList.contains('active'));
 }
 
