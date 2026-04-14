@@ -2022,6 +2022,7 @@ let dialogHistoryInlineRenameValue = '';
 let historySidebarCollapsed = true;
 let isProcessing = false;
 let lastRating = null;
+let persistedDialogHistoryRatingText = null;
 let isDialogRated = false;
 let conversationTerminalAction = null;
 let conversationRecoverableAction = null;
@@ -7872,6 +7873,7 @@ function resetCurrentDialogHistoryState() {
     currentDialogHistoryTitle = '';
     currentDialogHistoryAutoTitle = '';
     currentDialogHistoryTitleEdited = false;
+    persistedDialogHistoryRatingText = null;
 }
 
 function prepareCurrentDialogHistorySession(mode = 'text') {
@@ -7884,6 +7886,14 @@ function resolveDialogHistoryModeForCurrentState() {
     if (isGeminiVoiceConnecting || isGeminiVoiceActive || geminiVoiceConversationFinished) return 'voice';
     if (Array.isArray(geminiVoiceDialogLines) && geminiVoiceDialogLines.length > 0) return 'voice';
     return 'text';
+}
+
+function getPersistedDialogRatingText() {
+    return normalizeDialogHistoryText(lastRating || persistedDialogHistoryRatingText || '');
+}
+
+function hasPersistedDialogRating() {
+    return !!getPersistedDialogRatingText();
 }
 
 function buildConversationEntriesForHistoryPersistence() {
@@ -7952,7 +7962,7 @@ function buildCurrentDialogHistorySnapshot(options = {}) {
     const ownerLogin = getDialogHistoryOwnerLogin();
     if (!ownerLogin) return null;
     const messages = buildConversationEntriesForHistoryPersistence();
-    const ratingText = normalizeDialogHistoryText(lastRating || '');
+    const ratingText = getPersistedDialogRatingText();
     if (!messages.length && !ratingText) return null;
 
     const nowIso = String(options.nowIso || '').trim() || new Date().toISOString();
@@ -8343,7 +8353,8 @@ function renderSelectedDialogHistoryIntoMainChat() {
     const shouldShowVoiceFinishedSummary = selectedDialogMode === 'voice' && !!persistedClosedAt && messages.length > 0;
     currentDialogHistoryMode = selectedDialogMode === 'voice' ? 'voice' : 'text';
     currentDialogHistoryClosedAt = isOwnedSelection ? null : persistedClosedAt;
-    currentDialogHistoryRatedAt = isOwnedSelection ? null : persistedRatedAt;
+    currentDialogHistoryRatedAt = isOwnedSelection ? persistedRatedAt : null;
+    persistedDialogHistoryRatingText = isOwnedSelection ? persistedRatingText : null;
 
     conversationHistory = messages.map((message) => ({
         role: message?.role === 'assistant' ? 'assistant' : 'user',
@@ -23062,6 +23073,8 @@ function showReratePrompt() {
 function resetRatingUiForRerun() {
     chatMessages.querySelectorAll('.message.rating, .message.improve-message, .message.rerate-confirm').forEach(el => el.remove());
     lastRating = null;
+    persistedDialogHistoryRatingText = null;
+    currentDialogHistoryRatedAt = null;
     isDialogRated = false;
     rateChatBtn.classList.remove('rated');
     if (isConversationClosed()) {
@@ -23417,7 +23430,7 @@ async function rateChat(options = {}) {
     if (isProcessing) return;
     
     // If already rated, cancel the rating
-    if (isDialogRated && !force) {
+    if ((isDialogRated || hasPersistedDialogRating()) && !force) {
         showReratePrompt();
         return;
     }
@@ -23451,6 +23464,7 @@ async function rateChat(options = {}) {
         
         loadingMsg.remove();
         lastRating = ratingResult.exportText;
+        persistedDialogHistoryRatingText = null;
         currentDialogHistoryRatedAt = new Date().toISOString();
         currentDialogHistoryClosedAt = currentDialogHistoryClosedAt || currentDialogHistoryRatedAt;
         addRatingMessage(ratingResult);
@@ -23822,9 +23836,10 @@ function exportChat(format = 'txt') {
         role: msg.role === 'user' ? 'Менеджер' : 'Клиент',
         content: msg.content
     }));
-    
-    if (lastRating) {
-        messages.push({ role: 'ОЦЕНКА ДИАЛОГА', content: lastRating });
+
+    const ratingText = getPersistedDialogRatingText();
+    if (ratingText) {
+        messages.push({ role: 'ОЦЕНКА ДИАЛОГА', content: ratingText });
     }
 
     const filename = `диалог ${new Date().toLocaleString().replace(/[:.]/g, '-')}`;
@@ -25157,6 +25172,8 @@ function installLocalhostTestHooks() {
                 scopeLogin: String(dialogHistoryScopeLogin || '').trim(),
                 currentDialogHistoryId: String(currentDialogHistoryId || '').trim(),
                 currentDialogHistoryMode: String(currentDialogHistoryMode || '').trim(),
+                isDialogRated,
+                hasPersistedDialogRating: hasPersistedDialogRating(),
                 inputDisabled: !!userInput?.disabled,
                 inputLocked: userInput?.classList?.contains('locked-dialog') === true,
                 sendDisabled: !!sendBtn?.disabled,

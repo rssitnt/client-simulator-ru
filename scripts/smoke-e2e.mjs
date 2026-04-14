@@ -1933,6 +1933,8 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
                 && state.selectedId === 'dlg_own_voice_1'
                 && state.currentDialogHistoryId === 'dlg_own_voice_1'
                 && state.currentDialogHistoryMode === 'voice'
+                && state.isDialogRated === false
+                && state.hasPersistedDialogRating === true
                 && state.inputDisabled === false
                 && state.inputLocked === false
                 && state.stageHidden === true
@@ -1946,6 +1948,18 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
         await page.waitForFunction(() => {
             return Array.from(document.querySelectorAll('#chatMessages .message .message-content'))
                 .some((node) => String(node.textContent || '').includes('Продолжаю сохранённый звонок'));
+        });
+        await page.waitForFunction(() => {
+            const dbState = globalThis.__codexFirebaseDbState || { data: {} };
+            const loginToStorageKey = (value) => Array.from(String(value || '').trim().toLowerCase())
+                .map((char) => char.codePointAt(0).toString(16))
+                .join('_');
+            const ownKey = loginToStorageKey('smoke.admin@7271155.ru');
+            const payload = ((dbState.data.dialog_history_messages || {})[ownKey] || {}).dlg_own_voice_1;
+            const ratingText = String(payload?.rating?.text || '').trim();
+            const messageMap = payload?.messages || {};
+            return ratingText.includes('Диалог уже оценён')
+                && Object.values(messageMap).some((entry) => String(entry?.content || '').includes('Продолжаю сохранённый звонок'));
         });
 
         await page.evaluate(async () => {

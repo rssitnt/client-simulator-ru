@@ -44,6 +44,11 @@
 - Smoke now also covers dialog-history parity explicitly:
   - owned saved voice/rated dialogs must reopen in the same writable main workspace with the finished-call footer preserved;
   - foreign voice/rated dialogs must render through the same main workspace but stay locked/read-only.
+- Continuing an owned already-rated dialog from history now keeps the archived rating in sync with future autosaves:
+  - the dialog stays writable;
+  - the old rating is preserved in RTDB/history until the user explicitly rerates;
+  - pressing `Оценить` on that reopened dialog now goes through rerate flow instead of stacking a second rating blindly;
+  - smoke now checks that `dlg_own_voice_1` keeps its stored rating after continuation.
 - The local admin panel now relies on an explicit final stabilization layer in `C:\projects\sites\client-simulator\style.css`: compact sizing lives there, and the users table now switches by `data-admin-layout="desktop|mobile"` instead of relying on ambiguous shared selectors.
 - The local settings surface is fullscreen now, not a narrow right drawer:
   - `#settingsModal .settings-panel` should occupy the full viewport width and height;
