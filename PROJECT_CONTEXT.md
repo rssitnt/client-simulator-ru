@@ -232,6 +232,7 @@
 - Mobile top-bar layout no longer keeps the old dock height, but it must still preserve `env(safe-area-inset-bottom)` through `--local-mobile-tabbar-height`; do not zero that variable out or bottom content/composer padding will slip into the home-indicator area on iPhone.
 - Mobile history controls now sit flush under the top app bar with no extra gap between the app bar and the search/new-dialog row.
 - Mobile history body no longer adds extra top padding; the list starts immediately under the sticky controls.
+- The final mobile history sticky block now also uses `top: 0` inside the panel scroll container; do not restore `top: var(--local-mobile-appbar-height)` there or the search/new-dialog strip will fall away from the top bar again.
 - History "ЧАТ" label is now plain text (no pill/outline); only the voice badge keeps the pill styling.
 - History item meta (тип/дата/реплики/оценка) moved into the `…` menu instead of the list row.
 - Dialog history titles are now forced to a single line with ellipsis when they overflow.

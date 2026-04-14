@@ -18402,9 +18402,10 @@ body.local-minimal-ui.light-theme .dialog-history-item-main {
    keep controls flush under the app bar with no extra gap. */
 @media (max-width: 1024px) {
     body.local-minimal-ui #historyPanel.panel.active .history-panel-controls {
-        top: var(--local-mobile-appbar-height) !important;
+        top: 0 !important;
         margin-top: 0 !important;
         padding-top: 0 !important;
+        padding-bottom: 12px !important;
         overflow: visible !important;
     }
 
@@ -18413,6 +18414,11 @@ body.local-minimal-ui.light-theme .dialog-history-item-main {
     }
 
     body.local-minimal-ui #historyPanel.panel.active .history-thread-layout {
+        margin-top: 0 !important;
+    }
+
+    body.local-minimal-ui #historyPanel.panel.active .dialog-history-list-wrap {
+        padding-top: 0 !important;
         margin-top: 0 !important;
     }
 }
