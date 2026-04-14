@@ -20467,8 +20467,7 @@ async function stopGeminiVoiceMode(options = {}) {
 
     resetGeminiVoiceDialogBuffer();
     geminiVoiceConversationFinished = false;
-    const hasRenderedVoiceMessages = appendedVoiceDialogCount > 0
-        || !!chatMessages?.querySelector('.message.user, .message.assistant');
+    const hasRenderedVoiceMessages = hasDialogToPersist || appendedVoiceDialogCount > 0;
     if (finishedDialogNoticePayload && hasRenderedVoiceMessages) {
         showGeminiVoiceFinishedNotice(finishedDialogNoticePayload);
     }

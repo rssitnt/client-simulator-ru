@@ -21,10 +21,12 @@
   - the assistant-response watchdog can retry the manager `activityEnd` boundary more than once;
   - if the gap still persists, a later hard stall-recovery retry fires, keeps the call in a waiting state, and logs `assistant_response_stall_recovery` into the local voice tech log.
 - Voice call status text is also smoothed now: fast race-condition flips between `Клиент говорит…` and `Ваша очередь говорить.` are briefly held so the top call status does not visibly blink during short boundary races.
+- The Gemini fallback-transcription endpoint now accepts the same audio payload keys the frontend actually sends (`audioBase64`, plus legacy `data` / `audio`) instead of rejecting valid fallback requests at validation time.
 - The final voice-call summary card is now meant to live at the bottom of chat, not in the top voice status panel:
   - the top voice status panel is only for active/connecting call states;
   - after a call ends, `Звонок завершён / Разговор сохранён` should be the last dialog card appended after the messages.
   - in the local minimal shell, that footer card is also intentionally centered now and uses the same warm neutral surface ladder as the rest of the product instead of an older colder/system-note look.
+  - if the current voice session had no buffered voice turns, that footer card should not be appended just because the chat already contains older text/history messages.
 - The local left history rail now uses the settings-style thin scrollbar on the whole `.history-panel`, and in collapsed state that scrollbar is forced fully hidden.
 - Opening a saved dialog from the history rail now reuses the same main `#chatMessages` renderer as a fresh/new chat, so old records no longer fall back to a separate legacy viewer layout.
 - For the owner, a saved dialog opened from history is now the same live workspace as a new chat: the main composer stays usable, new text messages append into the same stored `dialogId`, and starting voice from that opened dialog continues the same conversation instead of resetting into a new one. Foreign/admin-opened dialogs remain read-only.
