@@ -216,6 +216,12 @@ function validateOpenAiTokenRequest(body) {
     if (body?.voice && typeof body.voice !== 'string') {
         throw createHttpError(400, 'Voice must be a string.', { code: 'invalid_voice' });
     }
+    if (body?.model && typeof body.model !== 'string') {
+        throw createHttpError(400, 'Model must be a string.', { code: 'invalid_model' });
+    }
+    if (body?.instructions && typeof body.instructions !== 'string') {
+        throw createHttpError(400, 'Instructions must be a string.', { code: 'invalid_instructions' });
+    }
 }
 
 function hasServiceAccountConfig() {
@@ -608,19 +614,32 @@ function isRateLimited(key) {
     cleanupRateLimitBuckets(now);
     const bucket = rateLimitBuckets.get(key);
     if (!bucket || now - bucket.windowStart > RATE_LIMIT_WINDOW_MS) {
-        rateLimitBuckets.set(key, { windowStart: now, count: 1 });
-    return false;
+        rateLimitBuckets.set(key, {
+            windowStart: now,
+            resetAt: now + RATE_LIMIT_WINDOW_MS,
+            count: 1
+        });
+        return false;
+    }
+    bucket.count += 1;
+    rateLimitBuckets.set(key, bucket);
+    return bucket.count > RATE_LIMIT_MAX_REQUESTS;
 }
 
 function getRetryAfterMs(key) {
     const bucket = rateLimitBuckets.get(key);
     if (!bucket) return RATE_LIMIT_WINDOW_MS;
-    const remaining = bucket.resetAt - Date.now();
+    const resetAt = Number.isFinite(bucket.resetAt)
+        ? bucket.resetAt
+        : bucket.windowStart + RATE_LIMIT_WINDOW_MS;
+    const remaining = resetAt - Date.now();
     return remaining > 0 ? remaining : RATE_LIMIT_WINDOW_MS;
 }
-    bucket.count += 1;
-    rateLimitBuckets.set(key, bucket);
-    return bucket.count > RATE_LIMIT_MAX_REQUESTS;
+
+function getRequestModeLabel({ isGeminiTranscribeRequest = false, isOpenAiTokenRequest = false } = {}) {
+    if (isOpenAiTokenRequest) return 'openai-realtime-session';
+    if (isGeminiTranscribeRequest) return 'gemini-transcribe';
+    return 'gemini-token';
 }
 
 async function verifyFirebaseIdToken(idToken) {
@@ -830,6 +849,10 @@ export async function handleTokenServerRequest(req, res) {
     const isGeminiTranscribeRequest = url.pathname === TRANSCRIBE_PATH;
     const isOpenAiTokenRequest = url.pathname === OPENAI_TOKEN_PATH;
     const isHealthCheck = url.pathname === HEALTH_PATH;
+    const requestMode = getRequestModeLabel({
+        isGeminiTranscribeRequest,
+        isOpenAiTokenRequest
+    });
 
     if (!isGeminiTokenRequest && !isGeminiTranscribeRequest && !isOpenAiTokenRequest && !isHealthCheck) {
         sendText(res, 404, 'Not found', requestOrigin);
@@ -934,13 +957,14 @@ export async function handleTokenServerRequest(req, res) {
                 accessSource: fallbackAuth.accessSource || null
             };
         } else {
-            sendJson(res, 401, { error: 'Firebase ID token is required' }, requestOrigin);
-            logRequestEvent('info', buildRequestLogContext(req, requestId, {
-                status: 200,
+            sendApiError(res, 401, 'Firebase ID token is required', 'missing_id_token', requestOrigin);
+            logRequestEvent('warn', buildRequestLogContext(req, requestId, {
+                status: 401,
                 durationMs: Date.now() - startedAt,
-                mode: 'openai',
-                authSource: authIdentity.source,
-                accessSource: authIdentity.accessSource || null
+                mode: requestMode,
+                authSource: null,
+                accessSource: null,
+                error: 'Firebase ID token is required'
             }));
             return;
         }
@@ -959,6 +983,14 @@ export async function handleTokenServerRequest(req, res) {
                 requestOrigin,
                 { retryAfterMs }
             );
+            logRequestEvent('warn', buildRequestLogContext(req, requestId, {
+                status: 429,
+                durationMs: Date.now() - startedAt,
+                mode: requestMode,
+                authSource: authIdentity.source,
+                accessSource: authIdentity.accessSource || null,
+                retryAfterMs
+            }));
             return;
         }
 
@@ -981,7 +1013,7 @@ export async function handleTokenServerRequest(req, res) {
             logRequestEvent('info', buildRequestLogContext(req, requestId, {
                 status: 200,
                 durationMs: Date.now() - startedAt,
-                mode: 'gemini-transcribe',
+                mode: requestMode,
                 authSource: authIdentity.source,
                 accessSource: authIdentity.accessSource || null
             }));
@@ -1003,6 +1035,13 @@ export async function handleTokenServerRequest(req, res) {
                     accessSource: authIdentity.accessSource || null
                 }
             }, requestOrigin);
+            logRequestEvent('info', buildRequestLogContext(req, requestId, {
+                status: 200,
+                durationMs: Date.now() - startedAt,
+                mode: requestMode,
+                authSource: authIdentity.source,
+                accessSource: authIdentity.accessSource || null
+            }));
             return;
         }
 

@@ -144,6 +144,14 @@
 - The Gemini token server now exposes `/health` (GET) for readiness checks and logs structured per-request events with status/duration.
 - The Gemini token client now honors `rate_limited` responses by delaying for `retryAfterMs` before retrying candidates.
 - Token server validation now emits structured error codes (`invalid_body`, `payload_too_large`) with size metadata.
+- As of `2026-04-14`, token-server runtime safety was tightened again:
+  - rate limiting now keeps a real reset timestamp and returns a valid `retryAfterMs` instead of falling into a broken helper scope;
+  - missing Firebase ID token now returns structured `401 { code: "missing_id_token" }` instead of a bare JSON error;
+  - success logs now use the correct request mode for OpenAI vs Gemini endpoints, and Gemini transcribe success is logged too;
+  - OpenAI realtime-session input now rejects non-string `model` / `instructions` payloads before they reach the upstream API.
+- Verification on `2026-04-14`:
+  - `node --check server/gemini-token-server.mjs` passed;
+  - `npm run test:smoke` passed end-to-end after the token-server fix.
 - Old global light-theme rules for mobile tabs, `#startBtn`, and generic dropdown active states are now isolated away from `body.local-minimal-ui`; if the warm local light shell drifts back toward old blue/grey styling, inspect that isolation first instead of piling on new overrides.
 - Fullscreen settings/admin in `body.local-minimal-ui.light-theme` now rely on one final warm-cream consistency layer at the very end of `C:\projects\sites\client-simulator\style.css`; treat that tail block as the canonical place for white-theme settings fixes so palette changes do not also mutate geometry or revive older dark/bluish controls.
 - Mobile tabs (`История / Чат / Роль`) now live in a top sticky app bar, not in a bottom dock.
