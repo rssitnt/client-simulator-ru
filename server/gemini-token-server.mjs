@@ -166,6 +166,12 @@ function sendText(res, statusCode, text, requestOrigin = '') {
     res.end(text);
 }
 
+function getRequestMode({ isOpenAiTokenRequest = false, isGeminiTranscribeRequest = false } = {}) {
+    if (isOpenAiTokenRequest) return 'openai-token';
+    if (isGeminiTranscribeRequest) return 'gemini-transcribe';
+    return 'gemini-token';
+}
+
 function buildRequestLogContext(req, requestId, extra = {}) {
     return {
         requestId,
@@ -830,6 +836,7 @@ export async function handleTokenServerRequest(req, res) {
     const isGeminiTranscribeRequest = url.pathname === TRANSCRIBE_PATH;
     const isOpenAiTokenRequest = url.pathname === OPENAI_TOKEN_PATH;
     const isHealthCheck = url.pathname === HEALTH_PATH;
+    const requestMode = getRequestMode({ isOpenAiTokenRequest, isGeminiTranscribeRequest });
 
     if (!isGeminiTokenRequest && !isGeminiTranscribeRequest && !isOpenAiTokenRequest && !isHealthCheck) {
         sendText(res, 404, 'Not found', requestOrigin);
@@ -934,13 +941,12 @@ export async function handleTokenServerRequest(req, res) {
                 accessSource: fallbackAuth.accessSource || null
             };
         } else {
-            sendJson(res, 401, { error: 'Firebase ID token is required' }, requestOrigin);
-            logRequestEvent('info', buildRequestLogContext(req, requestId, {
-                status: 200,
+            sendApiError(res, 401, 'Firebase ID token is required', 'missing_id_token', requestOrigin);
+            logRequestEvent('warn', buildRequestLogContext(req, requestId, {
+                status: 401,
                 durationMs: Date.now() - startedAt,
-                mode: 'openai',
-                authSource: authIdentity.source,
-                accessSource: authIdentity.accessSource || null
+                mode: requestMode,
+                reason: 'missing-id-token'
             }));
             return;
         }
@@ -981,7 +987,7 @@ export async function handleTokenServerRequest(req, res) {
             logRequestEvent('info', buildRequestLogContext(req, requestId, {
                 status: 200,
                 durationMs: Date.now() - startedAt,
-                mode: 'gemini-transcribe',
+                mode: requestMode,
                 authSource: authIdentity.source,
                 accessSource: authIdentity.accessSource || null
             }));
@@ -1003,6 +1009,13 @@ export async function handleTokenServerRequest(req, res) {
                     accessSource: authIdentity.accessSource || null
                 }
             }, requestOrigin);
+            logRequestEvent('info', buildRequestLogContext(req, requestId, {
+                status: 200,
+                durationMs: Date.now() - startedAt,
+                mode: requestMode,
+                authSource: authIdentity.source,
+                accessSource: authIdentity.accessSource || null
+            }));
             return;
         }
 
@@ -1031,7 +1044,7 @@ export async function handleTokenServerRequest(req, res) {
         logRequestEvent('info', buildRequestLogContext(req, requestId, {
             status: 200,
             durationMs: Date.now() - startedAt,
-            mode: 'gemini-token',
+            mode: requestMode,
             authSource: authIdentity.source,
             accessSource: authIdentity.accessSource || null
         }));
