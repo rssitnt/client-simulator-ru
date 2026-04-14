@@ -346,12 +346,14 @@ const ELEVENLABS_WIDGET_SOURCES = [
 ];
 const EXTERNAL_SCRIPT_LOAD_TIMEOUT_MS = 8000;
 const DOCX_LIBRARY_SRC = 'https://unpkg.com/docx@7.1.0/build/index.js';
+const DOCX_LIBRARY_FALLBACK_SRC = 'https://cdn.jsdelivr.net/npm/docx@7.1.0/build/index.js';
 const MAMMOTH_LIBRARY_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
 const FILESAVER_LIBRARY_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js';
 const TRUSTED_EXTERNAL_SCRIPT_METADATA = new Map([
     [ELEVENLABS_WIDGET_PRIMARY_SRC, { integrity: 'sha384-5tWP0n8XpR8xOqp5MbYmYLibF6/Ou7UFDhWn2ESUAz+qz6OlS9o8Fy1d+lMTQRuD' }],
     [ELEVENLABS_WIDGET_FALLBACK_SRC, { integrity: 'sha384-5tWP0n8XpR8xOqp5MbYmYLibF6/Ou7UFDhWn2ESUAz+qz6OlS9o8Fy1d+lMTQRuD' }],
     [DOCX_LIBRARY_SRC, { integrity: 'sha384-lGLqE+x3VglMuTcmrdpm32ZSDEh1a93PZ+jHuVZ8jG4DayHt4qNBJtmwL76C855e' }],
+    [DOCX_LIBRARY_FALLBACK_SRC, { integrity: 'sha384-lGLqE+x3VglMuTcmrdpm32ZSDEh1a93PZ+jHuVZ8jG4DayHt4qNBJtmwL76C855e' }],
     [MAMMOTH_LIBRARY_SRC, { integrity: 'sha384-nFoSjZIoH3CCp8W639jJyQkuPHinJ2NHe7on1xvlUA7SuGfJAfvMldrsoAVm6ECz' }],
     [FILESAVER_LIBRARY_SRC, { integrity: 'sha384-PlRSzpewlarQuj5alIadXwjNUX+2eNMKwr0f07ShWYLy8B6TjEbm7ZlcN/ScSbwy' }]
 ]);
@@ -11845,16 +11847,22 @@ function ensureGlobalScriptReady({
 }
 
 function ensureDocxLibrary() {
-    return ensureGlobalScriptReady({
-        key: 'docx',
-        src: DOCX_LIBRARY_SRC,
-        isReady: () => typeof window.docx !== 'undefined'
-    }).then((ready) => {
-        if (!ready) {
+    const docxSources = [DOCX_LIBRARY_SRC, DOCX_LIBRARY_FALLBACK_SRC];
+    const ensureFromSource = async (src, index) => {
+        const ready = await ensureGlobalScriptReady({
+            key: `docx:${index}`,
+            src,
+            isReady: () => typeof window.docx !== 'undefined'
+        });
+        if (ready) {
+            return true;
+        }
+        if (index >= docxSources.length - 1) {
             throw new Error('Не удалось загрузить библиотеку docx');
         }
-        return true;
-    });
+        return ensureFromSource(docxSources[index + 1], index + 1);
+    };
+    return ensureFromSource(docxSources[0], 0);
 }
 
 function ensureMammothLibrary() {

@@ -38,6 +38,9 @@
   - entering `Аттестация` must open the main chat, not leave the start screen visible;
   - the scenario must survive through terminal dialog action, `Оценить`, and final certification webhook send with report attachment;
   - if that outbound attestation send stops happening, `C:\projects\sites\client-simulator\scripts\smoke-e2e.mjs` should fail.
+- As of `2026-04-14` daily bug scan:
+  - `C:\projects\sites\client-simulator\scripts\integration-smoke.mjs` now stubs `firebase-app-check.js` and `sendPasswordResetEmail()`, waits for localhost test hooks before treating the shell as ready, and opens settings through the admin test hook with a visible-button fallback; this prevents false green states where static markup exists but `script.js` failed to boot.
+  - attestation DOCX generation no longer depends on `unpkg` alone: `C:\projects\sites\client-simulator\script.js` now retries the `docx` library through `cdn.jsdelivr.net` if the primary CDN is unavailable.
 - Reopened saved dialogs now also preserve their stored mode on hydration:
   - a voice dialog reopened from history keeps `currentDialogHistoryMode = voice`;
   - this prevents continued work from history from silently drifting into text-mode bookkeeping.

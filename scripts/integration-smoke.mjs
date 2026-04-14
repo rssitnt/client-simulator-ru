@@ -166,6 +166,22 @@ export function onDisconnect() {
 export function serverTimestamp() { return Date.now(); }
 `.trim();
 
+const firebaseAppCheckStub = `
+export class ReCaptchaV3Provider {
+  constructor(siteKey = '') {
+    this.siteKey = siteKey;
+  }
+}
+
+export function initializeAppCheck(app = null, options = {}) {
+  return { app, options };
+}
+
+export async function getToken() {
+  return { token: 'integration-app-check-token' };
+}
+`.trim();
+
 const firebaseAuthStub = `
 const authInstance = {
   currentUser: null
@@ -174,6 +190,7 @@ export function getAuth() {
   return authInstance;
 }
 export async function sendSignInLinkToEmail() { return null; }
+export async function sendPasswordResetEmail() { return null; }
 export function isSignInWithEmailLink() { return false; }
 export async function signInWithEmailLink() {
   return { user: null };
@@ -340,18 +357,48 @@ async function installIntegrationRoutes(context) {
     await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js', async (route) => {
         await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAuthStub });
     });
+    await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js', async (route) => {
+        await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAppCheckStub });
+    });
     await context.route('http://127.0.0.1:7243/**', async (route) => {
         await route.fulfill({ status: 204, body: '' });
     });
 }
 
+async function clickFirstVisible(page, selectors) {
+    for (const selector of selectors) {
+        const locator = page.locator(selector).first();
+        if (!await locator.count()) {
+            continue;
+        }
+        if (!await locator.isVisible()) {
+            continue;
+        }
+        await locator.click();
+        return selector;
+    }
+    throw new Error(`No visible control found for selectors: ${selectors.join(', ')}`);
+}
+
 async function openSettings(page) {
-    await page.click('#settingsBtn');
+    const openedThroughHook = await page.evaluate(async () => {
+        const hooks = window.__CLIENT_SIMULATOR_TEST_HOOKS__;
+        if (!hooks?.openSettingsAdminForTest) {
+            return false;
+        }
+        await hooks.openSettingsAdminForTest();
+        return true;
+    });
+    if (openedThroughHook) {
+        await page.waitForSelector('#settingsModal.active');
+        return;
+    }
+    await clickFirstVisible(page, ['#localSettingsTopBtn', '#settingsBtn']);
     await page.waitForSelector('#settingsModal.active');
 }
 
 async function closeSettings(page) {
-    await page.click('#settingsBtn');
+    await clickFirstVisible(page, ['#settingsModalCloseBtn', '#localSettingsTopBtn', '#settingsBtn']);
     await page.waitForFunction(() => !document.getElementById('settingsModal')?.classList.contains('active'));
 }
 
@@ -397,6 +444,11 @@ async function waitForChatReady(page) {
     await page.waitForFunction(() => {
         const startBtn = document.getElementById('startBtn');
         return !!startBtn && !startBtn.disabled;
+    });
+    await page.waitForFunction(() => {
+        const hostname = String(window?.location?.hostname || '').trim().toLowerCase();
+        const isLocalPreview = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
+        return !isLocalPreview || !!window.__CLIENT_SIMULATOR_TEST_HOOKS__;
     });
 }
 
