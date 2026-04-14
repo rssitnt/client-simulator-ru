@@ -170,25 +170,50 @@ const firebaseAuthStub = `
 const authInstance = {
   currentUser: null
 };
+
+function createAuthUser(email = '') {
+  return {
+    email,
+    async getIdToken() {
+      return 'integration-firebase-token';
+    }
+  };
+}
+
 export function getAuth() {
   return authInstance;
 }
 export async function sendSignInLinkToEmail() { return null; }
+export async function sendPasswordResetEmail() { return null; }
 export function isSignInWithEmailLink() { return false; }
 export async function signInWithEmailLink() {
   return { user: null };
 }
 export async function signInWithEmailAndPassword(_auth, email) {
-  authInstance.currentUser = { email };
+  authInstance.currentUser = createAuthUser(email);
   return { user: authInstance.currentUser };
 }
 export async function createUserWithEmailAndPassword(_auth, email) {
-  authInstance.currentUser = { email };
+  authInstance.currentUser = createAuthUser(email);
   return { user: authInstance.currentUser };
 }
 export async function signOut() {
   authInstance.currentUser = null;
   return null;
+}
+`.trim();
+
+const firebaseAppCheckStub = `
+export function initializeAppCheck() {
+  return { appCheck: true };
+}
+export class ReCaptchaV3Provider {
+  constructor(siteKey = '') {
+    this.siteKey = siteKey;
+  }
+}
+export async function getToken() {
+  return { token: 'integration-app-check-token' };
 }
 `.trim();
 
@@ -340,18 +365,54 @@ async function installIntegrationRoutes(context) {
     await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js', async (route) => {
         await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAuthStub });
     });
+    await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js', async (route) => {
+        await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAppCheckStub });
+    });
     await context.route('http://127.0.0.1:7243/**', async (route) => {
         await route.fulfill({ status: 204, body: '' });
     });
 }
 
 async function openSettings(page) {
-    await page.click('#settingsBtn');
-    await page.waitForSelector('#settingsModal.active');
+    const settingsEntryHandle = await page.waitForFunction(() => {
+        if (globalThis.__CLIENT_SIMULATOR_TEST_HOOKS__?.openSettingsAdminForTest) {
+            return '__hook__';
+        }
+        const selectors = ['#localSettingsTopBtn', '#settingsBtn', '#mobileSettingsTabBtn'];
+        for (const selector of selectors) {
+            const element = document.querySelector(selector);
+            if (!element) continue;
+            const style = globalThis.getComputedStyle?.(element);
+            if (!style) continue;
+            const visible = !element.hidden &&
+                style.display !== 'none' &&
+                style.visibility !== 'hidden' &&
+                style.opacity !== '0' &&
+                element.getClientRects().length > 0;
+            if (visible) {
+                return selector;
+            }
+        }
+        return '';
+    });
+    const settingsEntry = await settingsEntryHandle.jsonValue();
+    if (settingsEntry === '__hook__') {
+        await page.evaluate(async () => {
+            await globalThis.__CLIENT_SIMULATOR_TEST_HOOKS__.openSettingsAdminForTest();
+        });
+    } else if (typeof settingsEntry === 'string' && settingsEntry) {
+        await page.click(settingsEntry);
+    }
+    await page.waitForFunction(() => document.getElementById('settingsModal')?.classList.contains('active'));
 }
 
 async function closeSettings(page) {
-    await page.click('#settingsBtn');
+    const closeBtn = page.locator('#settingsModalCloseBtn');
+    if (await closeBtn.count() && await closeBtn.first().isVisible()) {
+        await closeBtn.first().click();
+    } else {
+        await page.keyboard.press('Escape');
+    }
     await page.waitForFunction(() => !document.getElementById('settingsModal')?.classList.contains('active'));
 }
 
@@ -398,6 +459,48 @@ async function waitForChatReady(page) {
         const startBtn = document.getElementById('startBtn');
         return !!startBtn && !startBtn.disabled;
     });
+    try {
+        await page.waitForFunction(() => {
+            const textarea = document.getElementById('systemPrompt');
+            const preview = document.getElementById('systemPromptPreview');
+            const textareaValue = String(textarea?.value || '');
+            const previewText = String(preview?.innerText || '').trim();
+            return textareaValue.trim().length > 0 || previewText.length > 0;
+        });
+        await page.waitForFunction(() => {
+            if (globalThis.__CLIENT_SIMULATOR_TEST_HOOKS__?.openSettingsAdminForTest) {
+                return true;
+            }
+            const selectors = ['#localSettingsTopBtn', '#settingsBtn', '#mobileSettingsTabBtn'];
+            return selectors.some((selector) => {
+                const element = document.querySelector(selector);
+                if (!element) return false;
+                const style = globalThis.getComputedStyle?.(element);
+                return !!style
+                    && !element.hidden
+                    && style.display !== 'none'
+                    && style.visibility !== 'hidden'
+                    && style.opacity !== '0'
+                    && element.getClientRects().length > 0;
+            });
+        });
+    } catch (error) {
+        const debugState = await page.evaluate(() => {
+            const textarea = document.getElementById('systemPrompt');
+            const preview = document.getElementById('systemPromptPreview');
+            return {
+                bodyClass: document.body.className,
+                textareaValueLength: String(textarea?.value || '').trim().length,
+                previewTextLength: String(preview?.innerText || '').trim().length,
+                authSession: localStorage.getItem('authSession:v1'),
+                localhostDevAuthUser: localStorage.getItem('localhostDevAuthUser:v1'),
+                promptPublicSnapshot: localStorage.getItem('promptPublicSnapshot:v1'),
+                hasTestHooks: !!globalThis.__CLIENT_SIMULATOR_TEST_HOOKS__,
+                hasOpenSettingsHook: !!globalThis.__CLIENT_SIMULATOR_TEST_HOOKS__?.openSettingsAdminForTest
+            };
+        });
+        throw new Error(`waitForChatReady debug: ${JSON.stringify(debugState)}`, { cause: error });
+    }
 }
 
 async function waitForNewConversationEvent(page, previousAssistantCount, previousNoticeCount) {

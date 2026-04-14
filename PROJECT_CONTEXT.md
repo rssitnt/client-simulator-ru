@@ -157,6 +157,11 @@
 - Verification on `2026-04-14`:
   - `node --check server/gemini-token-server.mjs` passed;
   - `npm run test:smoke` passed end-to-end after the token-server fix.
+- Integration smoke was repaired on `2026-04-14` too:
+  - `C:\projects\sites\client-simulator\scripts\integration-smoke.mjs` now stubs `firebase-app-check.js` and the current auth exports expected by `script.js`;
+  - its page-ready gate now waits for prompt/test-hook readiness before opening settings, so it no longer fails on a half-initialized localhost shell.
+- Verification on `2026-04-14` also includes:
+  - `npm run test:smoke:integration` passed after the integration-smoke repair.
 - Old global light-theme rules for mobile tabs, `#startBtn`, and generic dropdown active states are now isolated away from `body.local-minimal-ui`; if the warm local light shell drifts back toward old blue/grey styling, inspect that isolation first instead of piling on new overrides.
 - Fullscreen settings/admin in `body.local-minimal-ui.light-theme` now rely on one final warm-cream consistency layer at the very end of `C:\projects\sites\client-simulator\style.css`; treat that tail block as the canonical place for white-theme settings fixes so palette changes do not also mutate geometry or revive older dark/bluish controls.
 - Mobile tabs (`История / Чат / Роль`) now live in a top sticky app bar, not in a bottom dock.
