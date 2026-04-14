@@ -9004,6 +9004,7 @@ function renderDialogHistoryListInto(ui) {
         menuToggle.innerHTML = '<span aria-hidden="true">⋯</span>';
         menuToggle.addEventListener('click', (event) => {
             event.stopPropagation();
+            clearPendingOpen();
             toggleDialogHistoryItemMenu(record.id);
         });
 

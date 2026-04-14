@@ -94,7 +94,7 @@
     },
     "shared_dialogs": {
       ".read": true,
-      ".write": "auth != null"
+      ".write": "auth != null && !data.exists()"
     },
     "app_config": {
       ".read": "auth != null",
