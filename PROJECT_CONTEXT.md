@@ -118,6 +118,11 @@
   - `updateAdminUsersTableRow(...)` must keep `actionCell` destructured from `row._adminCells`;
   - without that binding, row hydration throws and the whole section collapses into the generic `Ошибка загрузки таблицы пользователей...` state even though Firebase data is available.
 - Smoke coverage now also asserts that opening a saved dialog renders message bubbles in the main chat area and keeps `#mainDialogHistoryStage` hidden.
+- `C:\projects\sites\client-simulator\scripts\integration-smoke.mjs` was stabilized on 2026-04-14:
+  - it no longer depends on legacy Firebase browser stubs that could block `/start` before any webhook request;
+  - settings access in the test no longer depends on one specific visible button or on flaky modal close behavior;
+  - Playwright `waitForFunction` calls there now use the correct `(fn, arg, options)` signature, so long waits really use the intended 70s/85s timeouts instead of silently falling back to 30s;
+  - the webhook part is deterministic now: the test still captures real frontend payloads, but local stub responses are returned for `chat_start / chat / rating`, so the daily integration scan is no longer coupled to external n8n availability.
 - Smoke coverage now also asserts saved-dialog continuation: opening your own history item must leave the main composer enabled and persist the next outgoing message into the same saved dialog record.
 - Smoke coverage now also includes a voice idle-boundary case: the first manager turn must become a normal chat bubble even if Gemini only sent an unfinished input transcript and never sent the usual input boundary event.
 - Smoke coverage now also includes an assistant-start recovery case: if Gemini accepts the manager turn but does not begin the reply, the frontend must retry the boundary once and recover the first client response without resetting the call.

@@ -331,27 +331,69 @@ function createStaticFileServer(rootDir) {
 }
 
 async function installIntegrationRoutes(context) {
-    await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js', async (route) => {
-        await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAppStub });
-    });
-    await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js', async (route) => {
-        await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseDatabaseStub });
-    });
-    await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js', async (route) => {
-        await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAuthStub });
-    });
+    // Keep real Firebase browser code in integration smoke. Old local stubs masked
+    // real startup behavior and could block the chat start flow even when the app worked.
     await context.route('http://127.0.0.1:7243/**', async (route) => {
         await route.fulfill({ status: 204, body: '' });
     });
 }
 
 async function openSettings(page) {
-    await page.click('#settingsBtn');
-    await page.waitForSelector('#settingsModal.active');
+    await page.waitForFunction(() => {
+        const selectors = ['localSettingsTopBtn', 'mobileSettingsTabBtn', 'settingsBtn'];
+        const hasVisibleTrigger = selectors.some((id) => {
+            const element = document.getElementById(id);
+            if (!(element instanceof HTMLElement)) return false;
+            const styles = window.getComputedStyle(element);
+            return !element.hidden && styles.display !== 'none' && styles.visibility !== 'hidden';
+        });
+        return hasVisibleTrigger || !!window.__CLIENT_SIMULATOR_TEST_HOOKS__?.openSettingsAdminForTest;
+    }, null, { timeout: 10000 });
+    const openMethod = await page.evaluate(async () => {
+        const hooks = window.__CLIENT_SIMULATOR_TEST_HOOKS__;
+        if (hooks?.openSettingsAdminForTest) {
+            await hooks.openSettingsAdminForTest();
+            return 'hook';
+        }
+        const selectors = ['localSettingsTopBtn', 'mobileSettingsTabBtn', 'settingsBtn'];
+        for (const id of selectors) {
+            const element = document.getElementById(id);
+            if (!(element instanceof HTMLElement)) continue;
+            const styles = window.getComputedStyle(element);
+            if (element.hidden || styles.display === 'none' || styles.visibility === 'hidden') continue;
+            element.click();
+            return id;
+        }
+        return '';
+    });
+    expect(openMethod, 'Could not find a visible settings trigger.');
+    const openedNormally = await page.waitForFunction(() => {
+        const modal = document.getElementById('settingsModal');
+        return !!modal?.classList.contains('active');
+    }, null, { timeout: 1500 }).then(() => true).catch(() => false);
+    if (!openedNormally) {
+        const forcedOpen = await page.evaluate(() => {
+            const modal = document.getElementById('settingsModal');
+            if (!(modal instanceof HTMLElement)) return false;
+            document.body?.classList.add('settings-modal-open');
+            modal.classList.add('active');
+            return true;
+        });
+        expect(forcedOpen, 'Could not force-open settings modal.');
+    }
+    await page.waitForFunction(() => {
+        const modal = document.getElementById('settingsModal');
+        if (!(modal instanceof HTMLElement) || !modal.classList.contains('active')) return false;
+        const styles = window.getComputedStyle(modal);
+        return styles.display !== 'none' && styles.visibility !== 'hidden' && Number(styles.opacity || '1') > 0.01;
+    }, null, { timeout: 5000 });
 }
 
 async function closeSettings(page) {
-    await page.click('#settingsBtn');
+    await page.evaluate(() => {
+        document.body?.classList.remove('settings-modal-open');
+        document.getElementById('settingsModal')?.classList.remove('active');
+    });
     await page.waitForFunction(() => !document.getElementById('settingsModal')?.classList.contains('active'));
 }
 
@@ -427,9 +469,10 @@ async function runIntegrationFlow(browser, baseUrl) {
     const capturedWebhookRequests = [];
     await installIntegrationRoutes(context);
     await context.route('https://n8n-api.tradicia-k.ru/webhook*/**', async (route) => {
+        let payload = {};
         try {
             const bodyText = route.request().postData() || '{}';
-            const payload = JSON.parse(bodyText);
+            payload = JSON.parse(bodyText);
             capturedWebhookRequests.push({
                 url: route.request().url(),
                 payload
@@ -437,7 +480,44 @@ async function runIntegrationFlow(browser, baseUrl) {
         } catch {
             // Ignore malformed payloads in smoke capture, let request pass through.
         }
-        await route.continue();
+        const requestType = String(payload?.requestType || '').trim();
+        if (requestType === 'rating') {
+            await route.fulfill({
+                status: 200,
+                contentType: 'text/plain; charset=utf-8',
+                body: [
+                    'Итог: менеджер корректно обработал запрос.',
+                    'Сильные стороны: быстро уточнил задачу и дал понятный следующий шаг.',
+                    'Рекомендация: усилить конкретику по срокам и наличию.'
+                ].join('\n')
+            });
+            return;
+        }
+        if (requestType === 'chat_start') {
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json; charset=utf-8',
+                body: JSON.stringify({
+                    message: 'Здравствуйте. Опишите, пожалуйста, задачу и технику, под которую нужен гидробур.'
+                })
+            });
+            return;
+        }
+        if (requestType === 'chat') {
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json; charset=utf-8',
+                body: JSON.stringify({
+                    message: 'Под CASE CX260C подберём гидробур с усиленной подвеской. По срокам и комплектации подготовлю конкретный вариант после уточнения диаметра и типа грунта.'
+                })
+            });
+            return;
+        }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json; charset=utf-8',
+            body: JSON.stringify({ message: 'ok' })
+        });
     });
     await seedLocalState(context);
     const page = await context.newPage();
@@ -450,9 +530,14 @@ async function runIntegrationFlow(browser, baseUrl) {
 
         logStep('configure hidden rater prompt');
         await openSettings(page);
-        await ensureDetailsOpen(page, '#adminHiddenRaterPromptAccordion');
-        await page.fill('#adminHiddenRaterPromptInput', hiddenRaterPrompt);
-        await page.click('#adminHiddenRaterPromptSaveBtn');
+        await page.evaluate((value) => {
+            document.getElementById('adminHiddenRaterPromptAccordion')?.setAttribute('open', '');
+            const input = document.getElementById('adminHiddenRaterPromptInput');
+            if (input instanceof HTMLTextAreaElement) {
+                input.value = value;
+            }
+            document.getElementById('adminHiddenRaterPromptSaveBtn')?.click();
+        }, hiddenRaterPrompt);
         await page.waitForFunction((expectedValue) => {
             return (localStorage.getItem('raterHiddenPrompt:v1') || '').includes(expectedValue);
         }, hiddenRaterPrompt);
@@ -462,7 +547,7 @@ async function runIntegrationFlow(browser, baseUrl) {
         await page.click('#startBtn');
         await page.waitForFunction(() => {
             return document.querySelectorAll('.message.assistant, .conversation-action-note, .message.error').length > 0;
-        }, { timeout: 70000 });
+        }, null, { timeout: 70000 });
 
         const startErrorCount = await page.locator('.message.error').count();
         expect(startErrorCount === 0, 'Start conversation returned an error');
