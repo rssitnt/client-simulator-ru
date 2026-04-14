@@ -157,6 +157,10 @@
 - Verification on `2026-04-14`:
   - `node --check server/gemini-token-server.mjs` passed;
   - `npm run test:smoke` passed end-to-end after the token-server fix.
+- Daily bug scan on `2026-04-15`:
+  - token-server transcribe validation now accepts the same audio payload keys as the frontend fallback path (`audioBase64`, `data`, legacy `audio`) instead of rejecting valid fallback transcription requests before Gemini is called;
+  - `scripts/integration-smoke.mjs` no longer depends on the old visible settings button and no longer loses its intended 70s wait to a misplaced Playwright timeout argument;
+  - integration smoke is still red in the current environment after those harness fixes: the live `/start` step now waits the full 70s and still receives no first assistant/error event, so the next investigation should inspect the real webhook/network path rather than the settings helper.
 - Old global light-theme rules for mobile tabs, `#startBtn`, and generic dropdown active states are now isolated away from `body.local-minimal-ui`; if the warm local light shell drifts back toward old blue/grey styling, inspect that isolation first instead of piling on new overrides.
 - Fullscreen settings/admin in `body.local-minimal-ui.light-theme` now rely on one final warm-cream consistency layer at the very end of `C:\projects\sites\client-simulator\style.css`; treat that tail block as the canonical place for white-theme settings fixes so palette changes do not also mutate geometry or revive older dark/bluish controls.
 - Mobile tabs (`История / Чат / Роль`) now live in a top sticky app bar, not in a bottom dock.

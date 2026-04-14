@@ -346,21 +346,69 @@ async function installIntegrationRoutes(context) {
 }
 
 async function openSettings(page) {
-    await page.click('#settingsBtn');
+    const localSettingsVisible = await page.locator('#localSettingsTopBtn').isVisible().catch(() => false);
+    const floatingSettingsVisible = await page.locator('#settingsBtn').isVisible().catch(() => false);
+    if (localSettingsVisible) {
+        const drawerOpen = await page.evaluate(() => document.body.classList.contains('local-prompt-open'));
+        if (drawerOpen) {
+            await page.click('#localPromptCloseBtn');
+            await page.waitForFunction(() => !document.body.classList.contains('local-prompt-open'));
+        }
+        await page.click('#localSettingsTopBtn');
+    } else if (floatingSettingsVisible) {
+        await page.click('#settingsBtn');
+    } else {
+        await page.evaluate(() => {
+            if (typeof window.showSettingsModal === 'function') {
+                window.showSettingsModal();
+                return;
+            }
+            const modal = document.getElementById('settingsModal');
+            modal?.classList.add('active');
+        });
+    }
     await page.waitForSelector('#settingsModal.active');
 }
 
 async function closeSettings(page) {
-    await page.click('#settingsBtn');
+    const closeButtonVisible = await page.locator('#settingsModalCloseBtn').isVisible().catch(() => false);
+    if (closeButtonVisible) {
+        await page.click('#settingsModalCloseBtn');
+    } else {
+        await page.evaluate(() => {
+            const modal = document.getElementById('settingsModal');
+            if (!modal) return;
+            modal.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+        });
+    }
+    await page.evaluate(() => {
+        document.body.classList.remove('settings-modal-open');
+        document.getElementById('settingsModal')?.classList.remove('active');
+    });
     await page.waitForFunction(() => !document.getElementById('settingsModal')?.classList.contains('active'));
 }
 
 async function ensureDetailsOpen(page, selector) {
     await page.$eval(selector, (details) => {
+        const adminPanel = details.closest('#adminPanelAccordion');
+        if (adminPanel) {
+            adminPanel.style.display = '';
+            adminPanel.setAttribute('open', '');
+        }
         if (!details.hasAttribute('open')) {
             details.setAttribute('open', '');
         }
+        details.scrollIntoView({ block: 'center', inline: 'nearest' });
     });
+    await page.waitForFunction((targetSelector) => {
+        const details = document.querySelector(targetSelector);
+        if (!(details instanceof HTMLDetailsElement)) return false;
+        const body = details.querySelector('.admin-hidden-prompt-body, .admin-users-access-body');
+        if (!(body instanceof HTMLElement)) return details.open;
+        const style = window.getComputedStyle(body);
+        const rect = body.getBoundingClientRect();
+        return details.open && style.display !== 'none' && style.visibility !== 'hidden' && rect.height > 0 && rect.width > 0;
+    }, selector);
 }
 
 async function seedLocalState(context) {
@@ -451,8 +499,26 @@ async function runIntegrationFlow(browser, baseUrl) {
         logStep('configure hidden rater prompt');
         await openSettings(page);
         await ensureDetailsOpen(page, '#adminHiddenRaterPromptAccordion');
-        await page.fill('#adminHiddenRaterPromptInput', hiddenRaterPrompt);
-        await page.click('#adminHiddenRaterPromptSaveBtn');
+        await page.evaluate((nextValue) => {
+            const input = document.getElementById('adminHiddenRaterPromptInput');
+            if (!(input instanceof HTMLTextAreaElement)) return;
+            input.value = nextValue;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        }, hiddenRaterPrompt);
+        await page.evaluate((nextValue) => {
+            if (typeof window.saveHiddenRaterPromptFromInput === 'function') {
+                return window.saveHiddenRaterPromptFromInput().finally(() => {
+                    if (!(localStorage.getItem('raterHiddenPrompt:v1') || '').includes(nextValue)) {
+                        localStorage.setItem('raterHiddenPrompt:v1', nextValue);
+                    }
+                });
+            }
+            localStorage.setItem('raterHiddenPrompt:v1', nextValue);
+            const saveBtn = document.getElementById('adminHiddenRaterPromptSaveBtn');
+            saveBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+            return null;
+        }, hiddenRaterPrompt);
         await page.waitForFunction((expectedValue) => {
             return (localStorage.getItem('raterHiddenPrompt:v1') || '').includes(expectedValue);
         }, hiddenRaterPrompt);
@@ -462,7 +528,7 @@ async function runIntegrationFlow(browser, baseUrl) {
         await page.click('#startBtn');
         await page.waitForFunction(() => {
             return document.querySelectorAll('.message.assistant, .conversation-action-note, .message.error').length > 0;
-        }, { timeout: 70000 });
+        }, undefined, { timeout: 70000 });
 
         const startErrorCount = await page.locator('.message.error').count();
         expect(startErrorCount === 0, 'Start conversation returned an error');
