@@ -97,6 +97,9 @@
 - Fullscreen settings in light theme now also have a final settings/admin harmony pass at the bottom of `C:\projects\sites\client-simulator\style.css`:
   - panel background, invite row, accordions, dropdowns, users table, and tech logs should stay in one calm cream/stone palette;
   - future settings-only white-theme fixes should land there first.
+- `C:\projects\sites\client-simulator\scripts\integration-smoke.mjs` was partially realigned to the current shell on `2026-04-14`:
+  - settings opening/closing now follows the local minimal UI path instead of the removed floating `#settingsBtn` desktop control;
+  - the integration harness now also stubs Firebase App Check and exports `sendPasswordResetEmail` from its Firebase Auth stub so page boot does not depend on incomplete module mocks.
 - Light theme now also has a final geometry-parity pass at the bottom of `C:\projects\sites\client-simulator\style.css`:
   - palette may change, but fullscreen settings/admin geometry must stay aligned with the base local shell;
   - widths, heights, radii, paddings, grids, and compact density for settings/admin should not diverge between dark and light themes anymore;
@@ -276,3 +279,7 @@
 ## Still watch
 - If one employee still cannot log in while others can, first check Firebase Authentication for an old standalone account or stale password on that exact email.
 - Keep auth fixes narrow and safe; do not reopen the earlier broad auth rewrite unless a reproducible blocker appears.
+- Attestation delivery is still externally fragile:
+  - `sendAttestationResult(...)` builds the DOCX attachment through `https://unpkg.com/docx@7.1.0/build/index.js`;
+  - if that CDN is slow or blocked, rating may render but the certification webhook can lag or not be sent at all.
+- `C:\projects\sites\client-simulator\scripts\integration-smoke.mjs` still depends on the live `n8n` webhook and currently fails with a plain `Failed to fetch` when that endpoint is unreachable; it needs either a preflight/skip contract or a dedicated mocked mode for local/CI runs.
