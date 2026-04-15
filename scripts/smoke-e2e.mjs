@@ -1920,7 +1920,7 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
 
         await page.evaluate(async () => {
             const hooks = window.__CLIENT_SIMULATOR_TEST_HOOKS__;
-            if (!hooks?.loadDialogHistorySelectionForTest || !hooks?.openDialogHistoryScopeForTest || !hooks?.getDialogWorkspaceStateForTest) {
+            if (!hooks?.loadDialogHistorySelectionForTest || !hooks?.openDialogHistoryScopeForTest || !hooks?.getDialogWorkspaceStateForTest || !hooks?.applySharedDialogContinuationForTest) {
                 throw new Error('Dialog history parity test hooks are missing');
             }
             await hooks.loadDialogHistorySelectionForTest('dlg_own_voice_1');
@@ -1961,6 +1961,57 @@ async function runDialogHistoryPersistenceFlow(browser, baseUrl) {
             return ratingText.includes('Диалог уже оценён')
                 && Object.values(messageMap).some((entry) => String(entry?.content || '').includes('Продолжаю сохранённый звонок'));
         });
+
+        await page.evaluate(async () => {
+            const hooks = window.__CLIENT_SIMULATOR_TEST_HOOKS__;
+            await hooks.applySharedDialogContinuationForTest({
+                id: 'sh_smoke_rated_voice',
+                title: 'Поделённый звонок',
+                mode: 'voice',
+                createdAt: '2026-04-15T08:00:00.000Z',
+                messages: [
+                    { id: 'm_0001', seq: 1, role: 'user', content: 'Здравствуйте, нужен CASE 580.' },
+                    { id: 'm_0002', seq: 2, role: 'assistant', content: 'Подскажу по CASE 580.' }
+                ],
+                rating: {
+                    text: 'В диалоге уже есть оценка. Продолжение не должно её терять.'
+                }
+            });
+        });
+
+        await page.waitForFunction(() => {
+            const hooks = window.__CLIENT_SIMULATOR_TEST_HOOKS__;
+            const state = hooks?.getDialogWorkspaceStateForTest?.();
+            return !!state
+                && state.currentDialogHistoryMode === 'voice'
+                && state.currentDialogHistoryId.startsWith('dlg_')
+                && state.hasPersistedDialogRating === true
+                && state.isDialogRated === false
+                && state.inputDisabled === false
+                && state.inputLocked === false
+                && state.ratingMessageCount >= 1;
+        });
+        const sharedContinuedDialogId = await page.evaluate(() => {
+            return window.__CLIENT_SIMULATOR_TEST_HOOKS__?.getDialogWorkspaceStateForTest?.().currentDialogHistoryId || '';
+        });
+        expect(
+            sharedContinuedDialogId.startsWith('dlg_') && sharedContinuedDialogId !== 'dlg_own_voice_1',
+            `Shared continuation must create a new owned dialog id, got ${sharedContinuedDialogId}`
+        );
+        await page.waitForFunction(({ dialogId }) => {
+            const dbState = globalThis.__codexFirebaseDbState || { data: {} };
+            const loginToStorageKey = (value) => Array.from(String(value || '').trim().toLowerCase())
+                .map((char) => char.codePointAt(0).toString(16))
+                .join('_');
+            const ownKey = loginToStorageKey('smoke.admin@7271155.ru');
+            const record = ((dbState.data.dialog_history_index || {})[ownKey] || {})[dialogId];
+            const payload = ((dbState.data.dialog_history_messages || {})[ownKey] || {})[dialogId];
+            const ratingText = String(payload?.rating?.text || '').trim();
+            return record?.hasRating === true
+                && String(record?.ratedAt || '').trim().length > 0
+                && String(payload?.ratedAt || '').trim().length > 0
+                && ratingText.includes('Продолжение не должно её терять');
+        }, { dialogId: sharedContinuedDialogId });
 
         await page.evaluate(async () => {
             const hooks = window.__CLIENT_SIMULATOR_TEST_HOOKS__;
@@ -2123,7 +2174,7 @@ async function runAdminUsersDesktopTableLayoutFlow(browser, baseUrl) {
             return !!details && details.open === true;
         });
 
-        const refreshBtn = page.locator('#refreshAdminUsersBtn');
+        const refreshBtn = page.locator('#adminRefreshBtn');
         if (await refreshBtn.count().catch(() => 0)) {
             await refreshBtn.first().click().catch(() => {});
         }

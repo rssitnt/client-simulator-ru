@@ -111,6 +111,9 @@
   - active/search rows should not keep a permanent filled rectangle;
   - the visible card-like highlight is meant to appear only on hover/focus interaction.
 - Smoke coverage now explicitly includes the collapsed-history no-scrollbar case and the desktop admin-users real-table layout/desktop layout-flag case, so regressions there should fail `C:\projects\sites\client-simulator\scripts\smoke-e2e.mjs`.
+- That desktop admin-users smoke now also clicks the real refresh control `#adminRefreshBtn`; do not let it drift back to the removed `#refreshAdminUsersBtn` id or the refresh path will stop being validated.
+- `C:\projects\sites\client-simulator\scripts\integration-smoke.mjs` now seeds the hidden rater prompt directly through local storage instead of depending on the current settings-shell layout.
+  - it is still partly external by design: start/follow-up there rely on the live webhook returning in time, so a failure in that script is not automatically a frontend regression.
 - That desktop admin-users smoke now also guards the new compact behavior:
   - separate `Доступ / Активность` headers must stay hidden on desktop;
   - when a real data row exists, its action cell must keep hover-bubble data for those two values.
@@ -253,6 +256,7 @@
 - Public share links now use `shared_dialogs` in RTDB:
   - sharing creates a permanent `?share=` link;
   - opening that link after login clones the dialog into a new live conversation so it can be continued.
+  - if the shared source dialog already had a rating, the cloned live copy must keep that imported rating in history/autosave until the user explicitly rerates; the shared continuation path no longer drops the old rating on first save.
 - Dialog history rename is now inline in the list:
   - double-click on a dialog title starts inline editing;
   - the `Переименовать` menu action edits the title in place instead of a prompt dialog.

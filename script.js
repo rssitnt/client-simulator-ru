@@ -7326,57 +7326,59 @@ function getDialogHistoryIndexPath(login = currentUser?.login || '', dialogId = 
       return normalizeSharedDialogPayload(snapshot.val(), shareId);
   }
 
-  function applySharedDialogContinuation(payload) {
-      if (!payload || !Array.isArray(payload.messages) || !payload.messages.length) {
-          throw new Error('Диалог пустой');
-      }
-      invalidateActiveChatUiRequests();
+function applySharedDialogContinuation(payload) {
+    if (!payload || !Array.isArray(payload.messages) || !payload.messages.length) {
+        throw new Error('Диалог пустой');
+    }
+    invalidateActiveChatUiRequests();
       setVoiceModeScreenActive(false);
       isProcessing = false;
       removeConversationActionNotice();
       removeReratePrompt();
-      clearConversationTerminalState();
-      lastRating = null;
-      isDialogRated = false;
-      prepareCurrentDialogHistorySession(payload.mode === 'voice' ? 'voice' : 'text');
-      resetConversationHistory();
-      conversationHistory = payload.messages.map((message) => ({
-          role: message?.role === 'assistant' ? 'assistant' : 'user',
-          content: normalizeDialogHistoryText(message?.content || '')
-      })).filter((entry) => entry.content);
-      conversationHistoryText = rebuildConversationHistoryTextFromEntries(conversationHistory);
-      conversationHistoryRevision += 1;
-      const nowIso = new Date().toISOString();
-      currentDialogHistoryId = `dlg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-      currentDialogHistoryCreatedAt = nowIso;
-      currentDialogHistoryClosedAt = null;
-      currentDialogHistoryRatedAt = null;
-      currentDialogHistoryPinnedAt = null;
-      currentDialogHistoryAutoTitle = deriveDialogHistoryAutoTitle(conversationHistory, nowIso);
-      currentDialogHistoryTitle = currentDialogHistoryAutoTitle;
-      currentDialogHistoryTitleEdited = false;
-      const scopeLogin = normalizeLogin(currentUser?.login || '');
-      dialogHistoryScopeLogin = scopeLogin || dialogHistoryScopeLogin;
-      dialogHistorySelectedId = currentDialogHistoryId;
-      dialogHistorySelectedPayload = null;
-      dialogHistorySelectedRecord = normalizeDialogHistoryIndexRecord({
+    clearConversationTerminalState();
+    lastRating = null;
+    isDialogRated = false;
+    prepareCurrentDialogHistorySession(payload.mode === 'voice' ? 'voice' : 'text');
+    resetConversationHistory();
+    conversationHistory = payload.messages.map((message) => ({
+        role: message?.role === 'assistant' ? 'assistant' : 'user',
+        content: normalizeDialogHistoryText(message?.content || '')
+    })).filter((entry) => entry.content);
+    conversationHistoryText = rebuildConversationHistoryTextFromEntries(conversationHistory);
+    conversationHistoryRevision += 1;
+    const nowIso = new Date().toISOString();
+    const persistedRatingText = normalizeDialogHistoryText(payload?.rating?.text || '');
+    currentDialogHistoryId = `dlg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    currentDialogHistoryCreatedAt = nowIso;
+    currentDialogHistoryClosedAt = null;
+    currentDialogHistoryRatedAt = persistedRatingText ? nowIso : null;
+    currentDialogHistoryPinnedAt = null;
+    currentDialogHistoryAutoTitle = deriveDialogHistoryAutoTitle(conversationHistory, nowIso);
+    currentDialogHistoryTitle = currentDialogHistoryAutoTitle;
+    currentDialogHistoryTitleEdited = false;
+    persistedDialogHistoryRatingText = persistedRatingText || null;
+    const scopeLogin = normalizeLogin(currentUser?.login || '');
+    dialogHistoryScopeLogin = scopeLogin || dialogHistoryScopeLogin;
+    dialogHistorySelectedId = currentDialogHistoryId;
+    dialogHistorySelectedPayload = null;
+    dialogHistorySelectedRecord = normalizeDialogHistoryIndexRecord({
           id: currentDialogHistoryId,
           login: scopeLogin,
           uid: currentUser?.uid || null,
           mode: currentDialogHistoryMode,
-          title: currentDialogHistoryTitle,
-          autoTitle: currentDialogHistoryAutoTitle,
-          titleEdited: false,
-          preview: conversationHistoryText.split('\n')[0] || '',
-          messageCount: conversationHistory.length,
-          hasRating: false,
-          pinnedAt: null,
-          createdAt: nowIso,
-          updatedAt: nowIso,
-          lastMessageAt: nowIso,
-          closedAt: null,
-          ratedAt: null
-      }, currentDialogHistoryId, scopeLogin);
+        title: currentDialogHistoryTitle,
+        autoTitle: currentDialogHistoryAutoTitle,
+        titleEdited: false,
+        preview: conversationHistoryText.split('\n')[0] || '',
+        messageCount: conversationHistory.length,
+        hasRating: !!persistedRatingText,
+        pinnedAt: null,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        lastMessageAt: nowIso,
+        closedAt: null,
+        ratedAt: currentDialogHistoryRatedAt
+    }, currentDialogHistoryId, scopeLogin);
       if (dialogHistorySelectedRecord) {
           upsertDialogHistoryScopeRecord(dialogHistorySelectedRecord);
       }
@@ -7388,12 +7390,12 @@ function getDialogHistoryIndexPath(login = currentUser?.login || '', dialogId = 
       if (startDiv) {
           startDiv.style.display = 'none';
       }
-      conversationHistory.forEach((entry) => {
-          addMessage(entry.content, entry.role, entry.role === 'assistant');
-      });
-      if (payload?.rating?.text) {
-          addMessage(payload.rating.text, 'rating', true);
-      }
+    conversationHistory.forEach((entry) => {
+        addMessage(entry.content, entry.role, entry.role === 'assistant');
+    });
+    if (persistedRatingText) {
+        addMessage(persistedRatingText, 'rating', true);
+    }
       unlockDialogInput();
       setVoiceModeStatus('', 'idle');
       updatePromptLock();
@@ -7940,7 +7942,7 @@ function ensureCurrentDialogHistoryIdentity(modeOverride = '') {
         return currentDialogHistoryId;
     }
     const messages = buildConversationEntriesForHistoryPersistence();
-    if (!messages.length && !normalizeDialogHistoryText(lastRating || '')) {
+    if (!messages.length && !getPersistedDialogRatingText()) {
         return '';
     }
     const nowIso = new Date().toISOString();
@@ -14461,6 +14463,7 @@ function updateSendBtnState() {
 
 function updateRateChatButtonState() {
     if (!rateChatBtn) return;
+    rateChatBtn.classList.toggle('rated', isDialogRated || hasPersistedDialogRating());
     if (rateChatBtn.classList.contains('loading')) {
         rateChatBtn.disabled = true;
         return;
@@ -25120,6 +25123,10 @@ function installLocalhostTestHooks() {
         },
         async loadDialogHistorySelectionForTest(dialogId = '') {
             await loadDialogHistorySelection(dialogId);
+            return true;
+        },
+        async applySharedDialogContinuationForTest(payload = null) {
+            applySharedDialogContinuation(normalizeSharedDialogPayload(payload, payload?.id || '') || payload);
             return true;
         },
         async renameDialogHistoryForTest(dialogId = '', nextTitle = '') {

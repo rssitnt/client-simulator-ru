@@ -345,24 +345,6 @@ async function installIntegrationRoutes(context) {
     });
 }
 
-async function openSettings(page) {
-    await page.click('#settingsBtn');
-    await page.waitForSelector('#settingsModal.active');
-}
-
-async function closeSettings(page) {
-    await page.click('#settingsBtn');
-    await page.waitForFunction(() => !document.getElementById('settingsModal')?.classList.contains('active'));
-}
-
-async function ensureDetailsOpen(page, selector) {
-    await page.$eval(selector, (details) => {
-        if (!details.hasAttribute('open')) {
-            details.setAttribute('open', '');
-        }
-    });
-}
-
 async function seedLocalState(context) {
     const seed = buildSeedPayload();
     await context.addInitScript((payload) => {
@@ -449,20 +431,18 @@ async function runIntegrationFlow(browser, baseUrl) {
         await waitForChatReady(page);
 
         logStep('configure hidden rater prompt');
-        await openSettings(page);
-        await ensureDetailsOpen(page, '#adminHiddenRaterPromptAccordion');
-        await page.fill('#adminHiddenRaterPromptInput', hiddenRaterPrompt);
-        await page.click('#adminHiddenRaterPromptSaveBtn');
+        await page.evaluate((nextValue) => {
+            localStorage.setItem('raterHiddenPrompt:v1', String(nextValue || ''));
+        }, hiddenRaterPrompt);
         await page.waitForFunction((expectedValue) => {
             return (localStorage.getItem('raterHiddenPrompt:v1') || '').includes(expectedValue);
         }, hiddenRaterPrompt);
-        await closeSettings(page);
 
         logStep('start conversation through live webhook');
         await page.click('#startBtn');
         await page.waitForFunction(() => {
             return document.querySelectorAll('.message.assistant, .conversation-action-note, .message.error').length > 0;
-        }, { timeout: 70000 });
+        }, null, { timeout: 70000 });
 
         const startErrorCount = await page.locator('.message.error').count();
         expect(startErrorCount === 0, 'Start conversation returned an error');
