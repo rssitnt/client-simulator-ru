@@ -276,6 +276,12 @@
 - The visible `Сравнить` action was intentionally removed from the prompt toolbar.
 - If a public prompt conflict saves edits into a hidden local draft, the recovery action now lives inside the conflict notice itself (`Сравнить draft`) instead of returning the old toolbar button.
 - When a prompt conflict notice is set for an admin, the role/prompt panel should auto-open so the recovery notice and compare action are visible immediately.
+- Integration smoke is hardened for the current localhost shell again:
+  - it no longer depends on clicking the hidden legacy `#settingsBtn` just to set the hidden rater prompt;
+  - the hidden rater prompt is seeded directly through local storage before boot.
+- Integration smoke now uses deterministic webhook replies by default, so daily automation does not depend on live `n8n` availability for the base pass.
+  - live webhook mode is still available through `INTEGRATION_SMOKE_USE_LIVE_WEBHOOK=true`.
+- Firebase browser-module stubs in integration smoke are opt-in only now via `INTEGRATION_SMOKE_USE_FIREBASE_STUBS=true`.
 
 ## Still watch
 - If one employee still cannot log in while others can, first check Firebase Authentication for an old standalone account or stale password on that exact email.

@@ -9,6 +9,8 @@ const projectRoot = path.resolve(__dirname, '..');
 const outputDir = path.join(projectRoot, 'output', 'playwright');
 const login = 'smoke.admin@7271155.ru';
 const fio = 'Integration Smoke';
+const useLiveWebhook = /^true$/i.test(String(process.env.INTEGRATION_SMOKE_USE_LIVE_WEBHOOK || '').trim());
+const useFirebaseStubs = /^true$/i.test(String(process.env.INTEGRATION_SMOKE_USE_FIREBASE_STUBS || '').trim());
 const mimeTypes = new Map([
     ['.html', 'text/html; charset=utf-8'],
     ['.js', 'application/javascript; charset=utf-8'],
@@ -278,6 +280,41 @@ function buildSeedPayload() {
     };
 }
 
+function buildDeterministicWebhookReply(payload = {}) {
+    const requestType = String(payload?.requestType || '').trim().toLowerCase();
+    if (requestType === 'chat_start') {
+        return {
+            response: 'Здравствуйте. Что у вас за задача?'
+        };
+    }
+    if (requestType === 'chat') {
+        return {
+            response: 'Понял. Для CASE CX260C подберу гидробур после уточнения бюджета, региона и желаемого срока поставки.'
+        };
+    }
+    if (requestType === 'rating') {
+        return {
+            summary: 'Менеджер зафиксировал запрос и вывел разговор в рабочее продолжение.',
+            outcome: 'continue_dialog',
+            outcomeReason: 'needs_follow_up',
+            managerWins: [
+                'Зафиксировал модель CASE CX260C.',
+                'Сформулировал следующий рабочий шаг.'
+            ],
+            managerMistakes: [
+                'Не уточнил бюджет и регион в одном сообщении.'
+            ],
+            nextBestStep: 'Уточнить регион, бюджет и желаемый срок, затем дать комплектацию и срок поставки.',
+            crmActions: [
+                'Создать follow-up по подбору гидробура для CASE CX260C.'
+            ]
+        };
+    }
+    return {
+        response: 'Интеграционный smoke получил неожиданный requestType.'
+    };
+}
+
 async function ensureOutputDir() {
     await mkdir(outputDir, { recursive: true });
 }
@@ -331,40 +368,27 @@ function createStaticFileServer(rootDir) {
 }
 
 async function installIntegrationRoutes(context) {
-    await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js', async (route) => {
-        await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAppStub });
-    });
-    await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js', async (route) => {
-        await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseDatabaseStub });
-    });
-    await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js', async (route) => {
-        await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAuthStub });
-    });
+    if (useFirebaseStubs) {
+        await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js', async (route) => {
+            await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAppStub });
+        });
+        await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js', async (route) => {
+            await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseDatabaseStub });
+        });
+        await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js', async (route) => {
+            await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAuthStub });
+        });
+    }
     await context.route('http://127.0.0.1:7243/**', async (route) => {
         await route.fulfill({ status: 204, body: '' });
     });
 }
 
-async function openSettings(page) {
-    await page.click('#settingsBtn');
-    await page.waitForSelector('#settingsModal.active');
-}
-
-async function closeSettings(page) {
-    await page.click('#settingsBtn');
-    await page.waitForFunction(() => !document.getElementById('settingsModal')?.classList.contains('active'));
-}
-
-async function ensureDetailsOpen(page, selector) {
-    await page.$eval(selector, (details) => {
-        if (!details.hasAttribute('open')) {
-            details.setAttribute('open', '');
-        }
-    });
-}
-
-async function seedLocalState(context) {
-    const seed = buildSeedPayload();
+async function seedLocalState(context, options = {}) {
+    const seed = {
+        ...buildSeedPayload(),
+        hiddenRaterPrompt: String(options.hiddenRaterPrompt || '')
+    };
     await context.addInitScript((payload) => {
         localStorage.setItem('authSession:v1', payload.authSession);
         localStorage.setItem('authUsers:v1', payload.authUsers);
@@ -378,6 +402,9 @@ async function seedLocalState(context) {
         localStorage.setItem('raterPrompt', payload.prompts.raterPrompt);
         localStorage.setItem('promptPublicSnapshot:v1', payload.publicPromptSnapshot);
         localStorage.setItem('webhookDebugConfig:v1', payload.webhookDebugConfig);
+        if (payload.hiddenRaterPrompt) {
+            localStorage.setItem('raterHiddenPrompt:v1', payload.hiddenRaterPrompt);
+        }
     }, seed);
 }
 
@@ -426,39 +453,43 @@ async function runIntegrationFlow(browser, baseUrl) {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
     const capturedWebhookRequests = [];
     await installIntegrationRoutes(context);
+    const hiddenRaterPrompt = `Integration hidden rater suffix ${Date.now()}`;
     await context.route('https://n8n-api.tradicia-k.ru/webhook*/**', async (route) => {
+        let payload = null;
         try {
             const bodyText = route.request().postData() || '{}';
-            const payload = JSON.parse(bodyText);
+            payload = JSON.parse(bodyText);
             capturedWebhookRequests.push({
                 url: route.request().url(),
                 payload
             });
         } catch {
-            // Ignore malformed payloads in smoke capture, let request pass through.
+            payload = null;
         }
-        await route.continue();
+        if (useLiveWebhook) {
+            await route.continue();
+            return;
+        }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json; charset=utf-8',
+            body: JSON.stringify(buildDeterministicWebhookReply(payload || {}))
+        });
     });
-    await seedLocalState(context);
+    await seedLocalState(context, { hiddenRaterPrompt });
     const page = await context.newPage();
-    const hiddenRaterPrompt = `Integration hidden rater suffix ${Date.now()}`;
 
     try {
         logStep('open page');
         await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
         await waitForChatReady(page);
 
-        logStep('configure hidden rater prompt');
-        await openSettings(page);
-        await ensureDetailsOpen(page, '#adminHiddenRaterPromptAccordion');
-        await page.fill('#adminHiddenRaterPromptInput', hiddenRaterPrompt);
-        await page.click('#adminHiddenRaterPromptSaveBtn');
+        logStep('verify hidden rater prompt seed');
         await page.waitForFunction((expectedValue) => {
             return (localStorage.getItem('raterHiddenPrompt:v1') || '').includes(expectedValue);
         }, hiddenRaterPrompt);
-        await closeSettings(page);
 
-        logStep('start conversation through live webhook');
+        logStep(`start conversation through ${useLiveWebhook ? 'live' : 'stubbed'} webhook`);
         await page.click('#startBtn');
         await page.waitForFunction(() => {
             return document.querySelectorAll('.message.assistant, .conversation-action-note, .message.error').length > 0;
@@ -470,7 +501,7 @@ async function runIntegrationFlow(browser, baseUrl) {
         const assistantCountBefore = await page.locator('.message.assistant').count();
         const noticeCountBefore = await page.locator('.conversation-action-note').count();
 
-        logStep('send live follow-up');
+        logStep(`send ${useLiveWebhook ? 'live' : 'stubbed'} follow-up`);
         await page.fill('#userInput', 'Нужен гидробур на CASE CX260C, дайте решение по комплектации и срокам.');
         await page.click('#sendBtn');
         await waitForNewConversationEvent(page, assistantCountBefore, noticeCountBefore);
@@ -478,7 +509,7 @@ async function runIntegrationFlow(browser, baseUrl) {
         const sendErrorCount = await page.locator('.message.error').count();
         expect(sendErrorCount === 0, 'Chat webhook returned an error after follow-up');
 
-        logStep('request rating through live webhook');
+        logStep(`request rating through ${useLiveWebhook ? 'live' : 'stubbed'} webhook`);
         let previousRatingCount = await page.locator('.message.rating').count();
         let previousErrorCount = await page.locator('.message.error').count();
         let ratingSucceeded = false;
