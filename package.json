@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start:token-server": "node server/gemini-token-server.mjs",
-    "test:smoke": "node scripts/smoke-e2e.mjs",
+    "test:smoke": "node scripts/server-contract-check.mjs && node scripts/smoke-e2e.mjs",
+    "test:server-contract": "node scripts/server-contract-check.mjs",
     "test:smoke:integration": "node scripts/integration-smoke.mjs"
   },
   "devDependencies": {

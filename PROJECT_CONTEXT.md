@@ -9,6 +9,10 @@
 - Token server: `C:\projects\sites\client-simulator\server\gemini-token-server.mjs`
 
 ## Current product state
+- Daily bug scan on 2026-04-15 found and fixed a real server/frontend contract bug in Gemini fallback transcription:
+  - the frontend sends `audioBase64` to `/api/gemini-live-transcribe`;
+  - the token server had been validating only `audio`;
+  - the server now accepts `audioBase64 | data | audio`, and smoke starts with an extra server-contract check so this mismatch is caught before UI smoke runs.
 - Main UI target is the warm minimal shell; the old grey shell stays deprecated.
 - Production hosting should remain GitHub Pages unless the user explicitly asks to switch again.
 - Favicon now points to `C:\projects\sites\client-simulator\favicon\1.png` copied from `C:\Users\qwert\Downloads\1.png`; the project copy is now circular with transparent corners, so keep `index.html` icon links aligned to that file unless the user asks to change the source again.
