@@ -1880,6 +1880,13 @@ const dialogHistoryTitleInputs = dialogHistoryUiSets.map((item) => item.titleInp
 const partnerInviteEmailInput = document.getElementById('partnerInviteEmailInput');
 const partnerInviteDaysInput = document.getElementById('partnerInviteDaysInput');
 const partnerInviteAddBtn = document.getElementById('partnerInviteAddBtn');
+const adminLatestInvitePanel = document.getElementById('adminLatestInvitePanel');
+const adminLatestInviteStatus = document.getElementById('adminLatestInviteStatus');
+const adminLatestInviteSummary = document.getElementById('adminLatestInviteSummary');
+const adminLatestInviteMeta = document.getElementById('adminLatestInviteMeta');
+const adminLatestInviteCopyBtn = document.getElementById('adminLatestInviteCopyBtn');
+const adminLatestInviteResendBtn = document.getElementById('adminLatestInviteResendBtn');
+const adminLatestInviteReissueBtn = document.getElementById('adminLatestInviteReissueBtn');
 const instructionSelectEl = document.getElementById('instructionSelect');
 const panelsContainer = document.querySelector('.panels-container');
 const instructionsPanelElement = document.getElementById('instructionsPanel');
@@ -2243,6 +2250,8 @@ let didInteractWithAuthModalSinceOpen = false;
 let fioSaveTimeout = null;
 let didClearLegacyLocalPromptsStorageKeys = false;
 let partnerInviteCreateInFlight = false;
+let adminLatestInviteState = null;
+let adminLatestInviteActionInFlight = false;
 let sharedAppConfig = {
     geminiTokenEndpoint: '',
     clientConversationActionPrompt: '',
@@ -3940,6 +3949,10 @@ function normalizePartnerInvite(raw, loginFallback = '', loginKey = '') {
     const inviteTokenHash = String(raw.inviteTokenHash || '').trim();
     const inviteTokenCreatedAt = raw.inviteTokenCreatedAt || null;
     const inviteTokenConsumedAt = raw.inviteTokenConsumedAt || null;
+    const magicLinkSentAt = raw.magicLinkSentAt || null;
+    const magicLinkLastError = String(raw.magicLinkLastError || '').trim();
+    const inviteVerifiedVia = String(raw.inviteVerifiedVia || '').trim();
+    const inviteAcceptedAt = raw.inviteAcceptedAt || null;
     return {
         login,
         role,
@@ -3951,7 +3964,11 @@ function normalizePartnerInvite(raw, loginFallback = '', loginKey = '') {
         note: String(raw.note || ''),
         inviteTokenHash,
         inviteTokenCreatedAt,
-        inviteTokenConsumedAt
+        inviteTokenConsumedAt,
+        magicLinkSentAt,
+        magicLinkLastError,
+        inviteVerifiedVia,
+        inviteAcceptedAt
     };
 }
 
@@ -4009,7 +4026,9 @@ async function resolveDirectInviteTokenVerification(login, invite = null, rawUrl
         consumePatch: {
             emailVerifiedAt: new Date().toISOString(),
             inviteTokenHash: null,
-            inviteTokenConsumedAt: new Date().toISOString()
+            inviteTokenConsumedAt: new Date().toISOString(),
+            inviteVerifiedVia: 'direct_link',
+            inviteAcceptedAt: new Date().toISOString()
         }
     };
 }
@@ -4024,7 +4043,9 @@ function buildPublicPartnerInvitePayload(invite) {
         emailVerifiedAt: normalized.emailVerifiedAt,
         inviteTokenHash: normalized.inviteTokenHash,
         inviteTokenCreatedAt: normalized.inviteTokenCreatedAt,
-        inviteTokenConsumedAt: normalized.inviteTokenConsumedAt
+        inviteTokenConsumedAt: normalized.inviteTokenConsumedAt,
+        inviteVerifiedVia: normalized.inviteVerifiedVia,
+        inviteAcceptedAt: normalized.inviteAcceptedAt
     };
 }
 
@@ -4099,7 +4120,11 @@ async function savePartnerInvite(invite, options = {}) {
         note: normalized.note,
         inviteTokenHash: normalized.inviteTokenHash,
         inviteTokenCreatedAt: normalized.inviteTokenCreatedAt,
-        inviteTokenConsumedAt: normalized.inviteTokenConsumedAt
+        inviteTokenConsumedAt: normalized.inviteTokenConsumedAt,
+        magicLinkSentAt: normalized.magicLinkSentAt,
+        magicLinkLastError: normalized.magicLinkLastError,
+        inviteVerifiedVia: normalized.inviteVerifiedVia,
+        inviteAcceptedAt: normalized.inviteAcceptedAt
     };
 
     if (requireRemote && !db) {
@@ -4166,6 +4191,18 @@ async function patchPartnerInvite(login, patch = {}, options = {}) {
     }
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'inviteTokenConsumedAt')) {
         sanitizedPatch.inviteTokenConsumedAt = sanitizedPatch.inviteTokenConsumedAt || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'magicLinkSentAt')) {
+        sanitizedPatch.magicLinkSentAt = sanitizedPatch.magicLinkSentAt || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'magicLinkLastError')) {
+        sanitizedPatch.magicLinkLastError = String(sanitizedPatch.magicLinkLastError || '').trim();
+    }
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'inviteVerifiedVia')) {
+        sanitizedPatch.inviteVerifiedVia = String(sanitizedPatch.inviteVerifiedVia || '').trim();
+    }
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'inviteAcceptedAt')) {
+        sanitizedPatch.inviteAcceptedAt = sanitizedPatch.inviteAcceptedAt || null;
     }
 
     if (requireRemote && !db) {
@@ -4377,7 +4414,9 @@ async function finalizeEmailLinkVerification(login, signInLink) {
     const invite = await getPartnerInviteByLogin(login);
     if (invite) {
         await patchPartnerInvite(login, {
-            emailVerifiedAt: nowIso
+            emailVerifiedAt: nowIso,
+            inviteVerifiedVia: 'email_link',
+            inviteAcceptedAt: nowIso
         });
     }
 
@@ -6070,6 +6109,209 @@ function formatInviteExpiry(iso) {
     return date.toLocaleDateString('ru-RU');
 }
 
+async function sendPartnerInviteEmail(login, options = {}) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!isValidLogin(normalizedLogin)) {
+        throw new Error('Укажите корректный email');
+    }
+    const nowIso = new Date().toISOString();
+    try {
+        await sendMagicLinkToEmail(normalizedLogin, 'invite');
+        await patchPartnerInvite(normalizedLogin, {
+            magicLinkSentAt: nowIso,
+            magicLinkLastError: ''
+        });
+        return { sent: true, sentAt: nowIso, error: null };
+    } catch (error) {
+        const readableError = getReadableFirebaseAuthError(error, 'invite');
+        try {
+            await patchPartnerInvite(normalizedLogin, {
+                magicLinkLastError: readableError
+            });
+        } catch (patchError) {
+            console.warn('Failed to persist invite mail error:', patchError);
+        }
+        return { sent: false, sentAt: null, error, readableError };
+    }
+}
+
+async function issuePartnerInvite(login, days, options = {}) {
+    const normalizedLogin = normalizeLogin(login);
+    const boundedDays = Math.max(1, Math.min(365, Number(days || 30) || 30));
+    if (!isValidLogin(normalizedLogin)) {
+        throw new Error('Укажите корректный email');
+    }
+    const nowIso = new Date().toISOString();
+    const expiresAtDate = new Date();
+    expiresAtDate.setDate(expiresAtDate.getDate() + boundedDays);
+    const expiresAt = expiresAtDate.toISOString();
+    const inviteToken = generateOpaqueInviteToken();
+    const inviteTokenHash = await hashInviteToken(inviteToken);
+    const directInviteLink = buildDirectInviteLink(normalizedLogin, inviteToken);
+
+    await savePartnerInvite({
+        login: normalizedLogin,
+        role: 'user',
+        status: 'active',
+        expiresAt,
+        emailVerifiedAt: null,
+        createdAt: nowIso,
+        createdBy: currentUser?.login || '',
+        inviteTokenHash,
+        inviteTokenCreatedAt: nowIso,
+        inviteTokenConsumedAt: null,
+        magicLinkSentAt: null,
+        magicLinkLastError: '',
+        inviteVerifiedVia: '',
+        inviteAcceptedAt: null
+    });
+
+    await setAccessRevocation(normalizedLogin, false, {
+        updatedBy: currentUser?.login || ''
+    });
+
+    const existingUser = await getUserRecordByLogin(normalizedLogin);
+    if (existingUser && existingUser.role !== 'admin') {
+        await patchUserRecord(normalizedLogin, {
+            isBlocked: false,
+            blockedReason: null,
+            blockedAt: null,
+            failedLoginAttempts: 0,
+            failedLoginBackoffUntil: null,
+            sessionRevokedAt: null,
+            lastSeenAt: nowIso
+        });
+        await patchUserRecord(normalizedLogin, { role: 'user' });
+    }
+
+    const mailResult = options.sendEmail === false
+        ? { sent: false, sentAt: null, error: null, readableError: '' }
+        : await sendPartnerInviteEmail(normalizedLogin);
+    const invite = await getPartnerInviteByLogin(normalizedLogin);
+
+    return {
+        login: normalizedLogin,
+        days: boundedDays,
+        expiresAt,
+        directInviteLink,
+        invite,
+        mailResult
+    };
+}
+
+function formatInviteDateTime(iso) {
+    const timestampMs = parseIsoMs(iso || '');
+    if (!timestampMs) return '';
+    return new Date(timestampMs).toLocaleString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+function getInviteDaysFromExpiry(expiresAt) {
+    const expiresMs = parseIsoMs(expiresAt || '');
+    if (!expiresMs) return 30;
+    const remainingMs = expiresMs - Date.now();
+    if (remainingMs <= 0) return 1;
+    return Math.max(1, Math.min(365, Math.ceil(remainingMs / (24 * 60 * 60 * 1000))));
+}
+
+function getPartnerInviteProgress(invite) {
+    const normalizedInvite = normalizePartnerInvite(invite, invite?.login);
+    if (!normalizedInvite) {
+        return { label: '', tone: 'neutral', details: '' };
+    }
+    if (normalizedInvite.emailVerifiedAt) {
+        if (normalizedInvite.inviteVerifiedVia === 'direct_link') {
+            return {
+                label: 'Вошёл по прямой ссылке',
+                tone: 'ok',
+                details: normalizedInvite.inviteAcceptedAt ? `Принял ${formatInviteDateTime(normalizedInvite.inviteAcceptedAt)}` : ''
+            };
+        }
+        return {
+            label: 'Email подтверждён',
+            tone: 'ok',
+            details: normalizedInvite.inviteAcceptedAt ? `Подтвердил ${formatInviteDateTime(normalizedInvite.inviteAcceptedAt)}` : ''
+        };
+    }
+    if (!isPartnerInviteActive(normalizedInvite)) {
+        return {
+            label: 'Инвайт истёк',
+            tone: 'expired',
+            details: normalizedInvite.expiresAt ? `Был до ${formatInviteDateTime(normalizedInvite.expiresAt)}` : ''
+        };
+    }
+    if (normalizedInvite.magicLinkLastError) {
+        return {
+            label: 'Письмо не ушло',
+            tone: 'error',
+            details: normalizedInvite.magicLinkLastError
+        };
+    }
+    if (normalizedInvite.magicLinkSentAt) {
+        return {
+            label: 'Ждёт входа',
+            tone: 'pending',
+            details: `Письмо отправлено ${formatInviteDateTime(normalizedInvite.magicLinkSentAt)}`
+        };
+    }
+    return {
+        label: 'Инвайт создан',
+        tone: 'pending',
+        details: normalizedInvite.createdAt ? `Создан ${formatInviteDateTime(normalizedInvite.createdAt)}` : ''
+    };
+}
+
+function setAdminLatestInviteState(nextState = null) {
+    adminLatestInviteState = nextState ? { ...nextState } : null;
+    renderAdminLatestInvitePanel();
+}
+
+function renderAdminLatestInvitePanel() {
+    if (!adminLatestInvitePanel || !adminLatestInviteStatus || !adminLatestInviteSummary || !adminLatestInviteMeta) return;
+    const state = adminLatestInviteState;
+    if (!state?.login) {
+        adminLatestInvitePanel.hidden = true;
+        adminLatestInvitePanel.dataset.tone = '';
+        adminLatestInviteStatus.textContent = '';
+        adminLatestInviteSummary.textContent = '';
+        adminLatestInviteMeta.textContent = '';
+        if (adminLatestInviteCopyBtn) adminLatestInviteCopyBtn.disabled = true;
+        if (adminLatestInviteResendBtn) adminLatestInviteResendBtn.disabled = true;
+        if (adminLatestInviteReissueBtn) adminLatestInviteReissueBtn.disabled = true;
+        return;
+    }
+
+    const inviteProgress = state.invite ? getPartnerInviteProgress(state.invite) : {
+        label: state.mailSent ? 'Письмо отправлено' : 'Инвайт создан',
+        tone: state.mailSent ? 'ok' : 'pending',
+        details: state.mailError || ''
+    };
+    const metaParts = [];
+    if (state.expiresAt) metaParts.push(`Доступ до ${formatInviteDateTime(state.expiresAt)}`);
+    if (inviteProgress.details) metaParts.push(inviteProgress.details);
+    if (!state.directInviteLink) metaParts.push('Прямая ссылка доступна только до обновления страницы. Для новой ссылки перевыпустите инвайт.');
+
+    adminLatestInvitePanel.hidden = false;
+    adminLatestInvitePanel.dataset.tone = inviteProgress.tone || 'neutral';
+    adminLatestInviteStatus.textContent = inviteProgress.label || 'Инвайт подготовлен';
+    adminLatestInviteSummary.textContent = state.summary || `Инвайт для ${state.login}`;
+    adminLatestInviteMeta.textContent = metaParts.join(' • ');
+
+    if (adminLatestInviteCopyBtn) {
+        adminLatestInviteCopyBtn.disabled = adminLatestInviteActionInFlight || !state.directInviteLink;
+    }
+    if (adminLatestInviteResendBtn) {
+        adminLatestInviteResendBtn.disabled = adminLatestInviteActionInFlight || !state.login;
+    }
+    if (adminLatestInviteReissueBtn) {
+        adminLatestInviteReissueBtn.disabled = adminLatestInviteActionInFlight || !state.login;
+    }
+}
+
 function getAccessSourceLabel(login, user, invite, accessRevocation = null) {
     if (isAccessRevokedForLogin(accessRevocation, login)) {
         const reason = String(accessRevocation?.reason || '').trim();
@@ -6503,7 +6745,11 @@ function buildAdminRealtimeInviteRenderKey(invite) {
         createdBy: String(normalizedInvite.createdBy || ''),
         expiresAt: String(normalizedInvite.expiresAt || ''),
         emailVerifiedAt: String(normalizedInvite.emailVerifiedAt || ''),
-        note: String(normalizedInvite.note || '')
+        note: String(normalizedInvite.note || ''),
+        magicLinkSentAt: String(normalizedInvite.magicLinkSentAt || ''),
+        magicLinkLastError: String(normalizedInvite.magicLinkLastError || ''),
+        inviteVerifiedVia: String(normalizedInvite.inviteVerifiedVia || ''),
+        inviteAcceptedAt: String(normalizedInvite.inviteAcceptedAt || '')
     });
 }
 
@@ -6633,6 +6879,14 @@ function applyAdminRealtimeInvitesSnapshot(raw) {
         .filter(Boolean);
     adminRealtimeInvites = nextInvites;
     adminRealtimeInvitesByLogin = buildLoginIndexedMap(nextInvites);
+    if (adminLatestInviteState?.login && adminRealtimeInvitesByLogin.has(adminLatestInviteState.login)) {
+        adminLatestInviteState = {
+            ...adminLatestInviteState,
+            invite: adminRealtimeInvitesByLogin.get(adminLatestInviteState.login),
+            expiresAt: adminRealtimeInvitesByLogin.get(adminLatestInviteState.login)?.expiresAt || adminLatestInviteState.expiresAt
+        };
+        renderAdminLatestInvitePanel();
+    }
     rebuildAdminRealtimeSortedLogins();
     markAdminRealtimeTableDataReadyIfPossible();
 
@@ -7079,10 +7333,13 @@ function createAdminUsersTableRow(login) {
     statusCell.dataset.label = 'Статус';
     const statusMain = document.createElement('div');
     statusMain.className = 'admin-status-main';
+    const statusMeta = document.createElement('div');
+    statusMeta.className = 'admin-status-meta';
     const presenceText = document.createElement('span');
     presenceText.className = 'admin-presence';
     presenceText.style.display = 'inline';
     statusCell.appendChild(statusMain);
+    statusCell.appendChild(statusMeta);
     statusCell.appendChild(presenceText);
 
     const actionCell = document.createElement('td');
@@ -7090,6 +7347,84 @@ function createAdminUsersTableRow(login) {
     const actionGroup = document.createElement('div');
     actionGroup.className = 'admin-user-action-group';
     const actionBtn = document.createElement('button');
+    const inviteResendBtn = document.createElement('button');
+    inviteResendBtn.type = 'button';
+    inviteResendBtn.className = 'btn-change admin-user-invite-btn';
+    inviteResendBtn.textContent = 'Письмо';
+    inviteResendBtn.hidden = true;
+    inviteResendBtn.addEventListener('click', async () => {
+        const rowData = row._adminData;
+        if (!rowData?.invite) return;
+        inviteResendBtn.disabled = true;
+        try {
+            const result = await sendPartnerInviteEmail(rowData.login);
+            const invite = await getPartnerInviteByLogin(rowData.login);
+            setAdminLatestInviteState({
+                login: rowData.login,
+                days: getInviteDaysFromExpiry(invite?.expiresAt),
+                expiresAt: invite?.expiresAt || rowData.invite?.expiresAt || '',
+                directInviteLink: adminLatestInviteState?.login === rowData.login ? adminLatestInviteState.directInviteLink : '',
+                invite,
+                mailSent: !!result.sent,
+                mailError: result.readableError || '',
+                summary: `Инвайт для ${rowData.login}`
+            });
+            showCopyNotification(
+                result.sent
+                    ? `Письмо отправлено на ${rowData.login}`
+                    : `Письмо не отправлено. ${result.readableError || 'Проверьте настройки Firebase Auth.'}`
+            );
+            refreshAdminUsersTableAfterMutation();
+        } catch (error) {
+            console.error('Failed to resend invite email:', error);
+            showCopyNotification(error?.message || 'Не удалось отправить письмо');
+        } finally {
+            inviteResendBtn.disabled = false;
+        }
+    });
+    const inviteReissueBtn = document.createElement('button');
+    inviteReissueBtn.type = 'button';
+    inviteReissueBtn.className = 'btn-change admin-user-invite-btn';
+    inviteReissueBtn.textContent = 'Новая ссылка';
+    inviteReissueBtn.hidden = true;
+    inviteReissueBtn.addEventListener('click', async () => {
+        const rowData = row._adminData;
+        if (!rowData?.invite) return;
+        inviteReissueBtn.disabled = true;
+        try {
+            const inviteResult = await issuePartnerInvite(rowData.login, getInviteDaysFromExpiry(rowData.invite?.expiresAt), { sendEmail: true });
+            let copiedDirectLink = false;
+            if (navigator.clipboard?.writeText) {
+                try {
+                    await navigator.clipboard.writeText(inviteResult.directInviteLink);
+                    copiedDirectLink = true;
+                } catch (error) {
+                    console.warn('Failed to copy row reissue link:', error);
+                }
+            }
+            setAdminLatestInviteState({
+                login: inviteResult.login,
+                days: inviteResult.days,
+                expiresAt: inviteResult.expiresAt,
+                directInviteLink: inviteResult.directInviteLink,
+                invite: inviteResult.invite,
+                mailSent: !!inviteResult.mailResult?.sent,
+                mailError: inviteResult.mailResult?.readableError || '',
+                summary: `Инвайт для ${inviteResult.login}`
+            });
+            showCopyNotification(
+                copiedDirectLink
+                    ? `Новая ссылка для ${inviteResult.login} выпущена и скопирована`
+                    : `Новая ссылка для ${inviteResult.login} выпущена`
+            );
+            refreshAdminUsersTableAfterMutation();
+        } catch (error) {
+            console.error('Failed to reissue invite:', error);
+            showCopyNotification(error?.message || 'Не удалось перевыпустить ссылку');
+        } finally {
+            inviteReissueBtn.disabled = false;
+        }
+    });
     actionBtn.addEventListener('click', async () => {
         const rowData = row._adminData;
         if (!rowData) return;
@@ -7118,6 +7453,8 @@ function createAdminUsersTableRow(login) {
         }
     });
     actionGroup.appendChild(actionBtn);
+    actionGroup.appendChild(inviteResendBtn);
+    actionGroup.appendChild(inviteReissueBtn);
     actionCell.appendChild(actionGroup);
 
     row._adminCells = {
@@ -7128,9 +7465,12 @@ function createAdminUsersTableRow(login) {
         timeCell,
         statusCell,
         statusMain,
+        statusMeta,
         presenceText,
         actionCell,
-        actionBtn
+        actionBtn,
+        inviteResendBtn,
+        inviteReissueBtn
     };
 
     row.appendChild(loginCell);
@@ -7241,9 +7581,12 @@ function updateAdminUsersTableRow(row, rowData) {
         timeCell,
         statusCell,
         statusMain,
+        statusMeta,
         presenceText,
         actionCell,
-        actionBtn
+        actionBtn,
+        inviteResendBtn,
+        inviteReissueBtn
     } = row._adminCells;
 
     loginText.textContent = rowData.login;
@@ -7359,6 +7702,10 @@ function updateAdminUsersTableRow(row, rowData) {
 
     statusCell.className = `admin-access-status ${rowData.accessState.active ? 'is-active' : 'is-blocked'}`;
     statusMain.textContent = rowData.accessState.label;
+    const inviteProgress = getPartnerInviteProgress(rowData.invite);
+    statusMeta.textContent = inviteProgress.label || '';
+    statusMeta.hidden = !inviteProgress.label;
+    statusMeta.className = `admin-status-meta is-${inviteProgress.tone || 'neutral'}`.trim();
     const presenceMeta = getAdminPresenceMeta(rowData.login, rowData.user, rowData.presence);
     if (presenceMeta.label) {
         presenceText.className = `admin-presence ${presenceMeta.className}`.trim();
@@ -7370,7 +7717,15 @@ function updateAdminUsersTableRow(row, rowData) {
 
     actionBtn.className = `btn-change ${rowData.accessState.active ? 'btn-danger-subtle' : ''}`.trim();
     actionBtn.textContent = rowData.accessState.active ? 'Закрыть' : 'Открыть';
-    actionCell.dataset.hoverMeta = `Доступ: ${accessSourceLabel || '—'}\nАктивность: ${activeTimeLabel || '—'}`;
+    const canManageInvite = !!rowData.invite && rowData.user?.role !== 'admin';
+    inviteResendBtn.hidden = !canManageInvite;
+    inviteReissueBtn.hidden = !canManageInvite;
+    actionCell.dataset.hoverMeta = [
+        `Доступ: ${accessSourceLabel || '—'}`,
+        `Активность: ${activeTimeLabel || '—'}`,
+        inviteProgress.label ? `Инвайт: ${inviteProgress.label}` : '',
+        inviteProgress.details ? inviteProgress.details : ''
+    ].filter(Boolean).join('\n');
 }
 
 function getDialogHistoryOwnerLogin(login = currentUser?.login || '') {
@@ -9786,7 +10141,6 @@ function updateAdminUserTimeCell(login, activeMs) {
 async function handleCreatePartnerInvite() {
     if (!isAdmin()) return;
     const login = normalizeLogin(partnerInviteEmailInput?.value || '');
-    const role = 'user';
     const days = Math.max(1, Math.min(365, Number(partnerInviteDaysInput?.value || 30) || 30));
 
     if (!isValidLogin(login)) {
@@ -9799,67 +10153,19 @@ async function handleCreatePartnerInvite() {
         return;
     }
 
-    const expiresAtDate = new Date();
-    expiresAtDate.setDate(expiresAtDate.getDate() + days);
-    const expiresAt = expiresAtDate.toISOString();
-    const inviteToken = generateOpaqueInviteToken();
-    const inviteTokenHash = await hashInviteToken(inviteToken);
-    const directInviteLink = buildDirectInviteLink(login, inviteToken);
-    const nowIso = new Date().toISOString();
-
     if (partnerInviteCreateInFlight) return;
     partnerInviteCreateInFlight = true;
     if (partnerInviteAddBtn) partnerInviteAddBtn.disabled = true;
     try {
-        await savePartnerInvite({
-            login,
-            role,
-            status: 'active',
-            expiresAt,
-            emailVerifiedAt: null,
-            createdAt: nowIso,
-            createdBy: currentUser?.login || '',
-            inviteTokenHash,
-            inviteTokenCreatedAt: nowIso,
-            inviteTokenConsumedAt: null
-        });
-
-        await setAccessRevocation(login, false, {
-            updatedBy: currentUser?.login || ''
-        });
-
-        const existingUser = await getUserRecordByLogin(login);
-        if (existingUser && existingUser.role !== 'admin') {
-            await patchUserRecord(login, {
-                isBlocked: false,
-                blockedReason: null,
-                blockedAt: null,
-                failedLoginAttempts: 0,
-                failedLoginBackoffUntil: null,
-                sessionRevokedAt: null,
-                lastSeenAt: nowIso
-            });
-        }
-
-        if (existingUser && existingUser.role !== 'admin') {
-            await patchUserRecord(login, { role });
-        }
-
-        let mailSent = false;
-        let inviteMailError = null;
-        try {
-            await sendMagicLinkToEmail(login, 'invite');
-            mailSent = true;
-        } catch (error) {
-            inviteMailError = error;
-            console.warn('Invite email send failed, keeping direct invite link fallback:', error);
-        }
+        const inviteResult = await issuePartnerInvite(login, days, { sendEmail: true });
+        const mailSent = !!inviteResult.mailResult?.sent;
+        const inviteMailError = inviteResult.mailResult?.error || null;
 
         let copiedDirectLink = false;
         let showedDirectLinkPrompt = false;
         if (navigator.clipboard?.writeText) {
             try {
-                await navigator.clipboard.writeText(directInviteLink);
+                await navigator.clipboard.writeText(inviteResult.directInviteLink);
                 copiedDirectLink = true;
             } catch (error) {
                 console.warn('Failed to copy direct invite link:', error);
@@ -9867,18 +10173,29 @@ async function handleCreatePartnerInvite() {
         }
         if (!copiedDirectLink) {
             try {
-                window.prompt('Скопируйте ссылку приглашения вручную', directInviteLink);
+                window.prompt('Скопируйте ссылку приглашения вручную', inviteResult.directInviteLink);
                 showedDirectLinkPrompt = true;
             } catch (error) {
                 console.warn('Failed to show manual invite link prompt:', error);
             }
         }
 
+        setAdminLatestInviteState({
+            login: inviteResult.login,
+            days: inviteResult.days,
+            expiresAt: inviteResult.expiresAt,
+            directInviteLink: inviteResult.directInviteLink,
+            invite: inviteResult.invite,
+            mailSent,
+            mailError: inviteResult.mailResult?.readableError || '',
+            summary: `Инвайт для ${inviteResult.login}`
+        });
+
         if (mailSent) {
             showCopyNotification(
                 copiedDirectLink || showedDirectLinkPrompt
-                    ? `Инвайт создан: письмо отправлено на ${login}, резервная ссылка подготовлена.`
-                    : `Инвайт создан: письмо отправлено на ${login}.`
+                    ? `Инвайт создан: письмо отправлено на ${inviteResult.login}, резервная ссылка подготовлена.`
+                    : `Инвайт создан: письмо отправлено на ${inviteResult.login}.`
             );
         } else {
             const fallbackReason = getReadableFirebaseAuthError(inviteMailError, 'invite');
@@ -9896,7 +10213,90 @@ async function handleCreatePartnerInvite() {
     } finally {
         partnerInviteCreateInFlight = false;
         if (partnerInviteAddBtn) partnerInviteAddBtn.disabled = false;
+        renderAdminLatestInvitePanel();
     }
+}
+
+async function handleAdminLatestInviteCopy() {
+    const state = adminLatestInviteState;
+    if (!state?.directInviteLink) return;
+    try {
+        await navigator.clipboard.writeText(state.directInviteLink);
+        showCopyNotification(`Ссылка для ${state.login} скопирована`);
+    } catch (error) {
+        try {
+            window.prompt('Скопируйте ссылку приглашения вручную', state.directInviteLink);
+        } catch (promptError) {
+            console.warn('Failed to show invite link prompt:', promptError);
+        }
+    }
+}
+
+async function runAdminLatestInviteAction(task) {
+    if (adminLatestInviteActionInFlight) return;
+    adminLatestInviteActionInFlight = true;
+    renderAdminLatestInvitePanel();
+    try {
+        await task();
+    } finally {
+        adminLatestInviteActionInFlight = false;
+        renderAdminLatestInvitePanel();
+    }
+}
+
+async function handleAdminLatestInviteResend() {
+    const state = adminLatestInviteState;
+    if (!state?.login) return;
+    await runAdminLatestInviteAction(async () => {
+        const result = await sendPartnerInviteEmail(state.login);
+        const invite = await getPartnerInviteByLogin(state.login);
+        setAdminLatestInviteState({
+            ...state,
+            invite,
+            mailSent: !!result.sent,
+            mailError: result.readableError || ''
+        });
+        showCopyNotification(
+            result.sent
+                ? `Письмо повторно отправлено на ${state.login}`
+                : `Письмо не отправлено. ${result.readableError || 'Проверьте настройки Firebase Auth.'}`
+        );
+        refreshAdminUsersTableAfterMutation();
+    });
+}
+
+async function handleAdminLatestInviteReissue() {
+    const state = adminLatestInviteState;
+    if (!state?.login) return;
+    await runAdminLatestInviteAction(async () => {
+        const nextDays = state.days || getInviteDaysFromExpiry(state.expiresAt);
+        const inviteResult = await issuePartnerInvite(state.login, nextDays, { sendEmail: true });
+        let copiedDirectLink = false;
+        if (navigator.clipboard?.writeText) {
+            try {
+                await navigator.clipboard.writeText(inviteResult.directInviteLink);
+                copiedDirectLink = true;
+            } catch (error) {
+                console.warn('Failed to copy reissued invite link:', error);
+            }
+        }
+        setAdminLatestInviteState({
+            login: inviteResult.login,
+            days: inviteResult.days,
+            expiresAt: inviteResult.expiresAt,
+            directInviteLink: inviteResult.directInviteLink,
+            invite: inviteResult.invite,
+            mailSent: !!inviteResult.mailResult?.sent,
+            mailError: inviteResult.mailResult?.readableError || '',
+            summary: `Инвайт для ${inviteResult.login}`
+        });
+        showCopyNotification(
+            copiedDirectLink
+                ? `Новая ссылка для ${inviteResult.login} выпущена и скопирована`
+                : `Новая ссылка для ${inviteResult.login} выпущена`
+        );
+        refreshAdminUsersTableAfterMutation();
+    });
 }
 
 async function handleAuthSubmit() {
@@ -22358,6 +22758,24 @@ if (adminRefreshBtn) {
 if (partnerInviteAddBtn) {
     partnerInviteAddBtn.addEventListener('click', () => {
         handleCreatePartnerInvite();
+    });
+}
+
+if (adminLatestInviteCopyBtn) {
+    adminLatestInviteCopyBtn.addEventListener('click', () => {
+        handleAdminLatestInviteCopy();
+    });
+}
+
+if (adminLatestInviteResendBtn) {
+    adminLatestInviteResendBtn.addEventListener('click', () => {
+        handleAdminLatestInviteResend();
+    });
+}
+
+if (adminLatestInviteReissueBtn) {
+    adminLatestInviteReissueBtn.addEventListener('click', () => {
+        handleAdminLatestInviteReissue();
     });
 }
 

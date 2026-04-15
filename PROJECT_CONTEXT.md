@@ -144,6 +144,10 @@
   - admin invite creation now also generates a one-time direct invite link and prepares it immediately as a fallback if Firebase mail is delayed or blocked;
   - invite records are mirrored into a minimal public RTDB branch (`public_partner_invites`) so the one-time link can be validated before Firebase auth opens;
   - when a new partner opens that direct link, the app prefills the email, treats the link as proof for first password setup, marks the invite as verified, and consumes the one-time token.
+- Admin invite UX is now less blind:
+  - right after `Выдать доступ`, the admin panel shows a compact “Последний инвайт” card with status, expiry, and actions `скопировать ссылку / отправить письмо ещё раз / перевыпустить ссылку`;
+  - partner invites now store invite-delivery / acceptance metadata (`magicLinkSentAt`, `magicLinkLastError`, `inviteVerifiedVia`, `inviteAcceptedAt`) so the admin table can show a clearer per-user state;
+  - active invite rows now also expose quick actions for `Письмо` and `Новая ссылка` directly in the users table.
 - Smoke now also covers both auth repair paths: local-hash recovery through Firebase and auto-reset on Firebase password conflict.
 - Session restore no longer destroys the saved browser session immediately just because the Firebase auth session came back but the user profile read still returned empty once; that path is now treated as a soft restore miss first.
 - Auth observability is now exposed in the UI:

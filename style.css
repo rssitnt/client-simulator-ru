@@ -18575,3 +18575,108 @@ body.local-minimal-ui.light-theme #settingsModal .settings-panel .admin-invite-d
     background: var(--local-surface-elevated-final) !important;
     border-color: var(--local-border-strong-final) !important;
 }
+/* Admin invite UX */
+.admin-latest-invite {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 14px 16px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.admin-latest-invite-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.admin-latest-invite-kicker {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #8f8f8f;
+}
+
+.admin-latest-invite-status,
+.admin-status-meta {
+    font-size: 12px;
+    line-height: 1.35;
+    color: #b8b8b8;
+}
+
+.admin-latest-invite[data-tone="ok"] .admin-latest-invite-status,
+.admin-status-meta.is-ok {
+    color: #8bc59f;
+}
+
+.admin-latest-invite[data-tone="error"] .admin-latest-invite-status,
+.admin-status-meta.is-error {
+    color: #e19a9a;
+}
+
+.admin-latest-invite[data-tone="pending"] .admin-latest-invite-status,
+.admin-status-meta.is-pending {
+    color: #d5be8a;
+}
+
+.admin-latest-invite[data-tone="expired"] .admin-latest-invite-status,
+.admin-status-meta.is-expired {
+    color: #b59c8d;
+}
+
+.admin-latest-invite-summary {
+    font-size: 14px;
+    color: #ece7df;
+}
+
+.admin-latest-invite-meta {
+    font-size: 12px;
+    line-height: 1.45;
+    color: #a8a097;
+}
+
+.admin-latest-invite-actions,
+.admin-user-action-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.admin-user-action-group {
+    justify-content: flex-end;
+}
+
+.admin-user-invite-btn {
+    min-width: auto;
+}
+
+.admin-status-meta {
+    margin-top: 3px;
+}
+
+body.local-minimal-ui .admin-latest-invite {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.035);
+}
+
+body.local-minimal-ui.light-theme .admin-latest-invite {
+    border-color: rgba(117, 98, 76, 0.12);
+    background: #f6eee3;
+}
+
+body.local-minimal-ui.light-theme .admin-latest-invite-kicker {
+    color: #8b7761;
+}
+
+body.local-minimal-ui.light-theme .admin-latest-invite-summary {
+    color: #4d4033;
+}
+
+body.local-minimal-ui.light-theme .admin-latest-invite-meta,
+body.local-minimal-ui.light-theme .admin-latest-invite-status,
+body.local-minimal-ui.light-theme .admin-status-meta {
+    color: #746452;
+}
