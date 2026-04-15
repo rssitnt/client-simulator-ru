@@ -174,6 +174,7 @@ export function getAuth() {
   return authInstance;
 }
 export async function sendSignInLinkToEmail() { return null; }
+export async function sendPasswordResetEmail() { return null; }
 export function isSignInWithEmailLink() { return false; }
 export async function signInWithEmailLink() {
   return { user: null };
@@ -189,6 +190,22 @@ export async function createUserWithEmailAndPassword(_auth, email) {
 export async function signOut() {
   authInstance.currentUser = null;
   return null;
+}
+`.trim();
+
+const firebaseAppCheckStub = `
+export function initializeAppCheck() {
+  return { appCheckStub: true };
+}
+export class ReCaptchaV3Provider {
+  constructor(siteKey = '') {
+    this.siteKey = siteKey;
+  }
+}
+export async function getToken() {
+  return {
+    token: 'integration-app-check-token'
+  };
 }
 `.trim();
 
@@ -340,18 +357,54 @@ async function installIntegrationRoutes(context) {
     await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js', async (route) => {
         await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAuthStub });
     });
+    await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js', async (route) => {
+        await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAppCheckStub });
+    });
     await context.route('http://127.0.0.1:7243/**', async (route) => {
         await route.fulfill({ status: 204, body: '' });
     });
 }
 
 async function openSettings(page) {
-    await page.click('#settingsBtn');
-    await page.waitForSelector('#settingsModal.active');
+    const useLocalDrawer = await page.evaluate(() => document.body.classList.contains('local-minimal-ui') && window.innerWidth > 1024);
+    if (useLocalDrawer) {
+        const drawerOpen = await page.evaluate(() => document.body.classList.contains('local-prompt-open'));
+        if (drawerOpen) {
+            await page.click('#localPromptCloseBtn');
+            await page.waitForFunction(() => !document.body.classList.contains('local-prompt-open'));
+        }
+        const topSettingsButton = page.locator('#localSettingsTopBtn');
+        if (await topSettingsButton.isVisible().catch(() => false)) {
+            await topSettingsButton.click();
+        } else {
+            await page.evaluate(() => {
+                document.getElementById('localSettingsTopBtn')?.click();
+            });
+        }
+    } else {
+        const floatingSettingsButton = page.locator('#settingsBtn');
+        if (await floatingSettingsButton.isVisible().catch(() => false)) {
+            await floatingSettingsButton.click();
+        } else {
+            await page.evaluate(() => {
+                document.getElementById('settingsBtn')?.click();
+            });
+        }
+    }
+    await page.waitForFunction(() => document.getElementById('settingsModal')?.classList.contains('active'));
 }
 
 async function closeSettings(page) {
-    await page.click('#settingsBtn');
+    const closeButtonVisible = await page.locator('#settingsModalCloseBtn').isVisible().catch(() => false);
+    if (closeButtonVisible) {
+        await page.click('#settingsModalCloseBtn');
+    } else {
+        await page.evaluate(() => {
+            const modal = document.getElementById('settingsModal');
+            if (!modal) return;
+            modal.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+        });
+    }
     await page.waitForFunction(() => !document.getElementById('settingsModal')?.classList.contains('active'));
 }
 
