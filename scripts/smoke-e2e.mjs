@@ -1335,6 +1335,19 @@ async function seedAuthFlowState(context, options = {}) {
     });
 }
 
+async function seedSharedAppConfig(context, appConfig = {}) {
+    await context.addInitScript((payload) => {
+        const dbState = globalThis.__codexFirebaseDbState || (globalThis.__codexFirebaseDbState = {
+            data: {},
+            listeners: []
+        });
+        dbState.data = {
+            ...(dbState.data && typeof dbState.data === 'object' ? dbState.data : {}),
+            app_config: JSON.parse(JSON.stringify(payload || {}))
+        };
+    }, appConfig);
+}
+
 async function seedBrokenEmptyLocalPromptOverride(context) {
     const storageKey = buildLocalPromptsStorageKey();
     await context.addInitScript((key) => {
@@ -2420,6 +2433,64 @@ async function runRolePreviewVisibilityFlow(browser, baseUrl) {
     } catch (error) {
         await ensureOutputDir();
         await page.screenshot({ path: path.join(outputDir, 'smoke-role-preview-visibility-failure.png'), fullPage: true });
+        throw error;
+    } finally {
+        await context.close();
+    }
+}
+
+async function runVoiceSettingsEndpointPersistenceFlow(browser, baseUrl) {
+    const scenario = createIdleScenario();
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
+    await installCommonRoutes(context, scenario);
+    await seedLocalState(context);
+    await seedSharedAppConfig(context, {
+        geminiTokenEndpoint: 'https://client-simulator.ru/api/gemini-live-token'
+    });
+    const page = await context.newPage();
+
+    try {
+        logStep('run voice settings endpoint persistence scenario');
+        await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+        await waitForChatReady(page);
+
+        await openSettings(page);
+        await page.waitForFunction(() => {
+            const select = document.getElementById('geminiVoiceNameInput');
+            return !!select && select.options.length > 1;
+        });
+
+        const initialState = await page.evaluate(() => {
+            const appConfig = globalThis.__codexFirebaseDbState?.data?.app_config || {};
+            const select = document.getElementById('geminiVoiceNameInput');
+            return {
+                currentVoice: String(select?.value || ''),
+                sharedEndpoint: String(appConfig.geminiTokenEndpoint || '')
+            };
+        });
+        const nextVoice = initialState.currentVoice === 'Zephyr' ? 'Puck' : 'Zephyr';
+
+        await page.evaluate((voice) => {
+            const select = document.getElementById('geminiVoiceNameInput');
+            if (!select) return;
+            select.value = voice;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+        }, nextVoice);
+
+        await page.waitForFunction(({ voice, endpoint }) => {
+            const select = document.getElementById('geminiVoiceNameInput');
+            const appConfig = globalThis.__codexFirebaseDbState?.data?.app_config || {};
+            const notification = document.querySelector('.copy-notification');
+            return String(select?.value || '') === String(voice || '')
+                && String(appConfig.geminiTokenEndpoint || '') === String(endpoint || '')
+                && /голос gemini live сохранён на этом устройстве/i.test(String(notification?.textContent || ''));
+        }, {
+            voice: nextVoice,
+            endpoint: initialState.sharedEndpoint
+        });
+    } catch (error) {
+        await ensureOutputDir();
+        await page.screenshot({ path: path.join(outputDir, 'smoke-voice-settings-endpoint-persistence-failure.png'), fullPage: true });
         throw error;
     } finally {
         await context.close();
@@ -3574,6 +3645,7 @@ async function main() {
         await runHiddenRaterPromptFlow(browser, baseUrl);
         await runBrokenLocalPromptRecoveryFlow(browser, baseUrl);
         await runRolePreviewVisibilityFlow(browser, baseUrl);
+        await runVoiceSettingsEndpointPersistenceFlow(browser, baseUrl);
         await runPromptVariationVisibilityFlow(browser, baseUrl);
         await runPromptConflictRecoveryFlow(browser, baseUrl);
         await runPromptWorkflowFlow(browser, baseUrl);

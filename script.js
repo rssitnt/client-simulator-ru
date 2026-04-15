@@ -17482,9 +17482,12 @@ async function saveVoiceModeConfigFromInputs() {
     const previousTokenEndpoint = sanitizeGeminiTokenEndpointOrThrow(getConfiguredGeminiTokenEndpoint(), {
         source: 'Current voice token endpoint'
     });
+    const rawTokenEndpointValue = geminiTokenEndpointInput
+        ? geminiTokenEndpointInput.value
+        : previousTokenEndpoint;
     const previousVoiceName = getConfiguredGeminiVoiceName();
     const previousAudioInputDeviceId = getConfiguredGeminiAudioInputDeviceId();
-    const tokenEndpoint = sanitizeGeminiTokenEndpointOrThrow(geminiTokenEndpointInput?.value || '', {
+    const tokenEndpoint = sanitizeGeminiTokenEndpointOrThrow(rawTokenEndpointValue, {
         source: 'Voice token endpoint'
     });
     const voiceNameRaw = String(geminiVoiceNameInput?.value || '').trim();

@@ -20,6 +20,9 @@
 - Voice mode now also has a second recovery step after that: if the manager turn is already finalized but the assistant still does not start replying, the frontend does not stop at one blind retry anymore:
   - the assistant-response watchdog can retry the manager `activityEnd` boundary more than once;
   - if the gap still persists, a later hard stall-recovery retry fires, keeps the call in a waiting state, and logs `assistant_response_stall_recovery` into the local voice tech log.
+- Voice settings save no longer wipe the shared Gemini token endpoint when the endpoint field is absent from the current settings UI:
+  - changing only voice or microphone now preserves the existing shared endpoint;
+  - smoke now includes a dedicated `voice settings endpoint persistence` scenario for this regression.
 - Voice call status text is also smoothed now: fast race-condition flips between `Клиент говорит…` and `Ваша очередь говорить.` are briefly held so the top call status does not visibly blink during short boundary races.
 - The final voice-call summary card is now meant to live at the bottom of chat, not in the top voice status panel:
   - the top voice status panel is only for active/connecting call states;
