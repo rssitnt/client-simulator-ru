@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 import { createServer } from 'node:http';
-import { mkdir, readFile, stat } from 'node:fs/promises';
+import { mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -26,6 +26,20 @@ const mimeTypes = new Map([
 const firebaseAppStub = `
 export function initializeApp(config = {}) {
   return { config };
+}
+`.trim();
+
+const firebaseAppCheckStub = `
+export class ReCaptchaV3Provider {
+  constructor(siteKey = '') {
+    this.siteKey = siteKey;
+  }
+}
+export function initializeAppCheck(_app, options = {}) {
+  return { options };
+}
+export async function getToken() {
+  return { token: 'integration-app-check-token' };
 }
 `.trim();
 
@@ -174,6 +188,7 @@ export function getAuth() {
   return authInstance;
 }
 export async function sendSignInLinkToEmail() { return null; }
+export async function sendPasswordResetEmail() { return null; }
 export function isSignInWithEmailLink() { return false; }
 export async function signInWithEmailLink() {
   return { user: null };
@@ -282,6 +297,13 @@ async function ensureOutputDir() {
     await mkdir(outputDir, { recursive: true });
 }
 
+async function cleanupIntegrationFailureArtifacts() {
+    await Promise.all([
+        unlink(path.join(outputDir, 'integration-smoke-failure.png')).catch(() => null),
+        unlink(path.join(outputDir, 'integration-smoke-runtime.log')).catch(() => null)
+    ]);
+}
+
 function createStaticFileServer(rootDir) {
     const server = createServer(async (req, res) => {
         try {
@@ -334,6 +356,9 @@ async function installIntegrationRoutes(context) {
     await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js', async (route) => {
         await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAppStub });
     });
+    await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js', async (route) => {
+        await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAppCheckStub });
+    });
     await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js', async (route) => {
         await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseDatabaseStub });
     });
@@ -346,12 +371,33 @@ async function installIntegrationRoutes(context) {
 }
 
 async function openSettings(page) {
-    await page.click('#settingsBtn');
+    const opened = await page.evaluate(async () => {
+        const hooks = window.__CLIENT_SIMULATOR_TEST_HOOKS__;
+        if (hooks && typeof hooks.openSettingsAdminForTest === 'function') {
+            await hooks.openSettingsAdminForTest();
+            return true;
+        }
+        for (const id of ['mobileSettingsTabBtn', 'localSettingsTopBtn', 'settingsBtn']) {
+            const trigger = document.getElementById(id);
+            if (trigger) {
+                trigger.click();
+                return true;
+            }
+        }
+        return false;
+    });
+
+    if (!opened) {
+        throw new Error('Integration smoke could not find a settings trigger');
+    }
+
     await page.waitForSelector('#settingsModal.active');
 }
 
 async function closeSettings(page) {
-    await page.click('#settingsBtn');
+    await page.evaluate(() => {
+        document.getElementById('settingsModalCloseBtn')?.click();
+    });
     await page.waitForFunction(() => !document.getElementById('settingsModal')?.classList.contains('active'));
 }
 
@@ -441,7 +487,21 @@ async function runIntegrationFlow(browser, baseUrl) {
     });
     await seedLocalState(context);
     const page = await context.newPage();
+    const runtimeDiagnostics = [];
     const hiddenRaterPrompt = `Integration hidden rater suffix ${Date.now()}`;
+
+    page.on('console', (message) => {
+        if (!['error', 'warning'].includes(message.type())) return;
+        runtimeDiagnostics.push(`[console:${message.type()}] ${message.text()}`);
+    });
+    page.on('pageerror', (error) => {
+        runtimeDiagnostics.push(`[pageerror] ${error?.stack || error?.message || String(error)}`);
+    });
+    page.on('requestfailed', (request) => {
+        runtimeDiagnostics.push(
+            `[requestfailed] ${request.method()} ${request.url()} :: ${request.failure()?.errorText || 'failed'}`
+        );
+    });
 
     try {
         logStep('open page');
@@ -523,6 +583,13 @@ async function runIntegrationFlow(browser, baseUrl) {
     } catch (error) {
         await ensureOutputDir();
         await page.screenshot({ path: path.join(outputDir, 'integration-smoke-failure.png'), fullPage: true });
+        if (runtimeDiagnostics.length) {
+            await writeFile(
+                path.join(outputDir, 'integration-smoke-runtime.log'),
+                runtimeDiagnostics.join('\n\n'),
+                'utf8'
+            );
+        }
         throw error;
     } finally {
         await context.close();
@@ -531,6 +598,7 @@ async function runIntegrationFlow(browser, baseUrl) {
 
 async function main() {
     await ensureOutputDir();
+    await cleanupIntegrationFailureArtifacts();
     const { server, baseUrl } = await createStaticFileServer(projectRoot);
     const browser = await chromium.launch({
         headless: true,
@@ -539,6 +607,7 @@ async function main() {
 
     try {
         await runIntegrationFlow(browser, baseUrl);
+        await cleanupIntegrationFailureArtifacts();
         logStep('integration smoke passed');
     } finally {
         await browser.close();

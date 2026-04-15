@@ -38,6 +38,10 @@
   - entering `Аттестация` must open the main chat, not leave the start screen visible;
   - the scenario must survive through terminal dialog action, `Оценить`, and final certification webhook send with report attachment;
   - if that outbound attestation send stops happening, `C:\projects\sites\client-simulator\scripts\smoke-e2e.mjs` should fail.
+- As of `2026-04-15`, `C:\projects\sites\client-simulator\scripts\integration-smoke.mjs` is aligned with the current localhost shell/runtime again:
+  - it stubs `firebase-app-check.js` and `sendPasswordResetEmail`, because the app now imports both during local boot;
+  - it opens settings through the localhost test hook or direct DOM trigger instead of relying on a visible old `#settingsBtn`;
+  - on failure it writes a runtime log/screenshot, and on success it removes stale failure artifacts so later runs do not read old errors as fresh regressions.
 - Reopened saved dialogs now also preserve their stored mode on hydration:
   - a voice dialog reopened from history keeps `currentDialogHistoryMode = voice`;
   - this prevents continued work from history from silently drifting into text-mode bookkeeping.
