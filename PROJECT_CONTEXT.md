@@ -126,6 +126,9 @@
   - all three start cards must keep the same warm light-theme surface;
   - the composer input and prompt wrapper must stay transparent/flat in local light theme;
   - the active mobile tab must not fall back to the old accent-blue styling.
+- `C:\projects\sites\client-simulator\scripts\integration-smoke.mjs` was repaired on 2026-04-16:
+  - the harness now stubs `firebase-app-check.js` and the currently imported `firebase-auth` surface (`sendPasswordResetEmail` included), so the frontend can actually boot during integration smoke instead of silently staying on raw HTML;
+  - settings opening in that integration flow now follows the current shell contract (`localSettingsTopBtn` / mobile settings button / localhost test hook) instead of assuming the old visible floating `#settingsBtn`.
 - In the local desktop admin table, the `Статус` label and presence text are now intentionally inline in one row to keep user lines compact; avoid restoring the old stacked status layout there.
 
 ## Current auth state

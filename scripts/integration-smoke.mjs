@@ -174,6 +174,7 @@ export function getAuth() {
   return authInstance;
 }
 export async function sendSignInLinkToEmail() { return null; }
+export async function sendPasswordResetEmail() { return null; }
 export function isSignInWithEmailLink() { return false; }
 export async function signInWithEmailLink() {
   return { user: null };
@@ -189,6 +190,20 @@ export async function createUserWithEmailAndPassword(_auth, email) {
 export async function signOut() {
   authInstance.currentUser = null;
   return null;
+}
+`.trim();
+
+const firebaseAppCheckStub = `
+export function initializeAppCheck() {
+  return { appCheck: true };
+}
+export class ReCaptchaV3Provider {
+  constructor(siteKey = '') {
+    this.siteKey = siteKey;
+  }
+}
+export async function getToken() {
+  return { token: 'integration-smoke-app-check-token' };
 }
 `.trim();
 
@@ -340,18 +355,45 @@ async function installIntegrationRoutes(context) {
     await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js', async (route) => {
         await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAuthStub });
     });
+    await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js', async (route) => {
+        await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAppCheckStub });
+    });
     await context.route('http://127.0.0.1:7243/**', async (route) => {
         await route.fulfill({ status: 204, body: '' });
     });
 }
 
 async function openSettings(page) {
-    await page.click('#settingsBtn');
-    await page.waitForSelector('#settingsModal.active');
+    const triggerSelectors = ['#localSettingsTopBtn', '#settingsBtn', '#mobileSettingsTabBtn'];
+    for (const selector of triggerSelectors) {
+        const trigger = page.locator(selector);
+        if (await trigger.isVisible().catch(() => false)) {
+            await trigger.click();
+            await page.waitForSelector('#settingsModal.active');
+            return;
+        }
+    }
+    const openedViaHook = await page.evaluate(async () => {
+        const hooks = window.__CLIENT_SIMULATOR_TEST_HOOKS__;
+        if (!hooks?.openSettingsAdminForTest) return false;
+        await hooks.openSettingsAdminForTest();
+        return true;
+    });
+    if (openedViaHook) {
+        await page.waitForSelector('#settingsModal.active');
+        return;
+    }
+    throw new Error('No visible settings trigger found');
 }
 
 async function closeSettings(page) {
-    await page.click('#settingsBtn');
+    const closeBtn = page.locator('#settingsModalCloseBtn');
+    if (await closeBtn.isVisible().catch(() => false)) {
+        await closeBtn.click();
+        await page.waitForFunction(() => !document.getElementById('settingsModal')?.classList.contains('active'));
+        return;
+    }
+    await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.getElementById('settingsModal')?.classList.contains('active'));
 }
 
