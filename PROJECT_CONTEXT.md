@@ -38,6 +38,10 @@
   - entering `Аттестация` must open the main chat, not leave the start screen visible;
   - the scenario must survive through terminal dialog action, `Оценить`, and final certification webhook send with report attachment;
   - if that outbound attestation send stops happening, `C:\projects\sites\client-simulator\scripts\smoke-e2e.mjs` should fail.
+- `C:\projects\sites\client-simulator\scripts\integration-smoke.mjs` is stabilized for daily automation now:
+  - hidden rater prompt is injected directly into local storage instead of depending on the visually hidden legacy settings trigger;
+  - deterministic webhook replies are the default path, while live n8n is opt-in through `INTEGRATION_SMOKE_USE_LIVE_WEBHOOK=true`.
+- Firebase module stubs in `C:\projects\sites\client-simulator\scripts\integration-smoke.mjs` are opt-in only through `INTEGRATION_SMOKE_USE_FIREBASE_STUBS=true`; default integration smoke should exercise the real frontend boot path instead of incomplete forced stubs.
 - Reopened saved dialogs now also preserve their stored mode on hydration:
   - a voice dialog reopened from history keeps `currentDialogHistoryMode = voice`;
   - this prevents continued work from history from silently drifting into text-mode bookkeeping.

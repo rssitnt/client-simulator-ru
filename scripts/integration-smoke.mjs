@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
 const outputDir = path.join(projectRoot, 'output', 'playwright');
+const USE_FIREBASE_STUBS = String(process.env.INTEGRATION_SMOKE_USE_FIREBASE_STUBS || '').trim().toLowerCase() === 'true';
+const USE_LIVE_WEBHOOK = String(process.env.INTEGRATION_SMOKE_USE_LIVE_WEBHOOK || '').trim().toLowerCase() === 'true';
 const login = 'smoke.admin@7271155.ru';
 const fio = 'Integration Smoke';
 const mimeTypes = new Map([
@@ -331,6 +333,7 @@ function createStaticFileServer(rootDir) {
 }
 
 async function installIntegrationRoutes(context) {
+    if (!USE_FIREBASE_STUBS) return;
     await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js', async (route) => {
         await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAppStub });
     });
@@ -342,24 +345,6 @@ async function installIntegrationRoutes(context) {
     });
     await context.route('http://127.0.0.1:7243/**', async (route) => {
         await route.fulfill({ status: 204, body: '' });
-    });
-}
-
-async function openSettings(page) {
-    await page.click('#settingsBtn');
-    await page.waitForSelector('#settingsModal.active');
-}
-
-async function closeSettings(page) {
-    await page.click('#settingsBtn');
-    await page.waitForFunction(() => !document.getElementById('settingsModal')?.classList.contains('active'));
-}
-
-async function ensureDetailsOpen(page, selector) {
-    await page.$eval(selector, (details) => {
-        if (!details.hasAttribute('open')) {
-            details.setAttribute('open', '');
-        }
     });
 }
 
@@ -379,6 +364,19 @@ async function seedLocalState(context) {
         localStorage.setItem('promptPublicSnapshot:v1', payload.publicPromptSnapshot);
         localStorage.setItem('webhookDebugConfig:v1', payload.webhookDebugConfig);
     }, seed);
+}
+
+async function configureHiddenRaterPrompt(page, hiddenRaterPrompt) {
+    await page.evaluate((promptValue) => {
+        localStorage.setItem('raterHiddenPrompt:v1', promptValue);
+        const input = document.getElementById('adminHiddenRaterPromptInput');
+        if (input) {
+            input.value = promptValue;
+        }
+    }, hiddenRaterPrompt);
+    await page.waitForFunction((expectedValue) => {
+        return (localStorage.getItem('raterHiddenPrompt:v1') || '').includes(expectedValue);
+    }, hiddenRaterPrompt);
 }
 
 async function waitForChatReady(page) {
@@ -422,14 +420,48 @@ async function requestRatingThroughCurrentUi(page) {
     await page.click('#rateChat');
 }
 
+function buildStubWebhookBody(payload = {}) {
+    const requestType = String(payload?.requestType || '').trim();
+    switch (requestType) {
+    case 'chat_start':
+        return {
+            message: 'Здравствуйте. Это тестовый клиент integration smoke, можно продолжать диалог.'
+        };
+    case 'chat':
+        return {
+            message: 'По CASE CX260C подберем гидробур после уточнения крепления, потока и нужного срока поставки.'
+        };
+    case 'rating':
+        return {
+            rating: [
+                'Итог: менеджер удержал разговор и предложил следующий шаг.',
+                '',
+                'Ошибки менеджера:',
+                '- Не уточнил бюджет и срочность сразу',
+                '',
+                'Сильные моменты:',
+                '- Быстро перешел к подбору решения',
+                '',
+                'Лучший следующий шаг:',
+                'Уточнить конфигурацию машины и назвать срок поставки.'
+            ].join('\n')
+        };
+    default:
+        return {
+            message: `Unhandled integration stub requestType: ${requestType || 'unknown'}`
+        };
+    }
+}
+
 async function runIntegrationFlow(browser, baseUrl) {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
     const capturedWebhookRequests = [];
     await installIntegrationRoutes(context);
     await context.route('https://n8n-api.tradicia-k.ru/webhook*/**', async (route) => {
+        let payload = {};
         try {
             const bodyText = route.request().postData() || '{}';
-            const payload = JSON.parse(bodyText);
+            payload = JSON.parse(bodyText);
             capturedWebhookRequests.push({
                 url: route.request().url(),
                 payload
@@ -437,7 +469,15 @@ async function runIntegrationFlow(browser, baseUrl) {
         } catch {
             // Ignore malformed payloads in smoke capture, let request pass through.
         }
-        await route.continue();
+        if (USE_LIVE_WEBHOOK) {
+            await route.continue();
+            return;
+        }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json; charset=utf-8',
+            body: JSON.stringify(buildStubWebhookBody(payload))
+        });
     });
     await seedLocalState(context);
     const page = await context.newPage();
@@ -449,16 +489,9 @@ async function runIntegrationFlow(browser, baseUrl) {
         await waitForChatReady(page);
 
         logStep('configure hidden rater prompt');
-        await openSettings(page);
-        await ensureDetailsOpen(page, '#adminHiddenRaterPromptAccordion');
-        await page.fill('#adminHiddenRaterPromptInput', hiddenRaterPrompt);
-        await page.click('#adminHiddenRaterPromptSaveBtn');
-        await page.waitForFunction((expectedValue) => {
-            return (localStorage.getItem('raterHiddenPrompt:v1') || '').includes(expectedValue);
-        }, hiddenRaterPrompt);
-        await closeSettings(page);
+        await configureHiddenRaterPrompt(page, hiddenRaterPrompt);
 
-        logStep('start conversation through live webhook');
+        logStep(`start conversation through ${USE_LIVE_WEBHOOK ? 'live' : 'stubbed'} webhook`);
         await page.click('#startBtn');
         await page.waitForFunction(() => {
             return document.querySelectorAll('.message.assistant, .conversation-action-note, .message.error').length > 0;
@@ -470,7 +503,7 @@ async function runIntegrationFlow(browser, baseUrl) {
         const assistantCountBefore = await page.locator('.message.assistant').count();
         const noticeCountBefore = await page.locator('.conversation-action-note').count();
 
-        logStep('send live follow-up');
+        logStep(`send ${USE_LIVE_WEBHOOK ? 'live' : 'stubbed'} follow-up`);
         await page.fill('#userInput', 'Нужен гидробур на CASE CX260C, дайте решение по комплектации и срокам.');
         await page.click('#sendBtn');
         await waitForNewConversationEvent(page, assistantCountBefore, noticeCountBefore);
@@ -478,7 +511,7 @@ async function runIntegrationFlow(browser, baseUrl) {
         const sendErrorCount = await page.locator('.message.error').count();
         expect(sendErrorCount === 0, 'Chat webhook returned an error after follow-up');
 
-        logStep('request rating through live webhook');
+        logStep(`request rating through ${USE_LIVE_WEBHOOK ? 'live' : 'stubbed'} webhook`);
         let previousRatingCount = await page.locator('.message.rating').count();
         let previousErrorCount = await page.locator('.message.error').count();
         let ratingSucceeded = false;
