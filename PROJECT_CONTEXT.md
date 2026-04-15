@@ -50,6 +50,9 @@
   - pressing `Оценить` on that reopened dialog now goes through rerate flow instead of stacking a second rating blindly;
   - smoke now checks that `dlg_own_voice_1` keeps its stored rating after continuation.
 - The local admin panel now relies on an explicit final stabilization layer in `C:\projects\sites\client-simulator\style.css`: compact sizing lives there, and the users table now switches by `data-admin-layout="desktop|mobile"` instead of relying on ambiguous shared selectors.
+- Admin rights mutations are remote-first now:
+  - changing a user role, issuing an invite, and opening/closing access must succeed in Firebase before the UI confirms success;
+  - the admin panel should no longer silently keep local-only role/access changes after a network or RTDB failure.
 - The local settings surface is fullscreen now, not a narrow right drawer:
   - `#settingsModal .settings-panel` should occupy the full viewport width and height;
   - do not reintroduce the old ~480px right-column drawer width unless explicitly requested.

@@ -4252,10 +4252,15 @@ async function patchPartnerInvite(login, patch = {}, options = {}) {
     return normalizePartnerInvite(merged, normalizedLogin);
 }
 
-async function deletePartnerInvite(login) {
+async function deletePartnerInvite(login, options = {}) {
+    const requireRemote = !!options.requireRemote;
     const normalizedLogin = normalizeLogin(login);
     if (!isValidLogin(normalizedLogin)) return false;
     const key = loginToStorageKey(normalizedLogin);
+
+    if (requireRemote && !db) {
+        throw new Error('Firebase RTDB недоступна для обязательного удаления инвайта.');
+    }
 
     if (db) {
         try {
@@ -4266,13 +4271,19 @@ async function deletePartnerInvite(login) {
             );
         } catch (error) {
             console.error('Failed to delete partner invite in Firebase:', error);
+            if (requireRemote) {
+                throw error;
+            }
         }
     }
 
     try {
-        await deletePublicPartnerInviteMirror(normalizedLogin);
+        await deletePublicPartnerInviteMirror(normalizedLogin, { requireRemote });
     } catch (error) {
         console.error('Failed to delete public partner invite mirror:', error);
+        if (requireRemote) {
+            throw error;
+        }
     }
 
     const localStore = loadLocalPartnerInvitesStore();
@@ -5007,10 +5018,15 @@ async function patchUserRecord(login, patch = {}, options = {}) {
     return normalizedRecord;
 }
 
-async function deleteUserRecord(login) {
+async function deleteUserRecord(login, options = {}) {
+    const requireRemote = !!options.requireRemote;
     const normalizedLogin = normalizeLogin(login);
     if (!normalizedLogin) return false;
     const key = loginToStorageKey(normalizedLogin);
+
+    if (requireRemote && !db) {
+        throw new Error('Firebase RTDB недоступна для обязательного удаления пользователя.');
+    }
 
     if (db) {
         try {
@@ -5021,6 +5037,9 @@ async function deleteUserRecord(login) {
             );
         } catch (error) {
             console.error('Failed to delete user in Firebase:', error);
+            if (requireRemote) {
+                throw error;
+            }
         }
     }
 
@@ -6168,11 +6187,11 @@ async function issuePartnerInvite(login, days, options = {}) {
         magicLinkLastError: '',
         inviteVerifiedVia: '',
         inviteAcceptedAt: null
-    });
+    }, { requireRemote: true });
 
     await setAccessRevocation(normalizedLogin, false, {
         updatedBy: currentUser?.login || ''
-    });
+    }, { requireRemote: true });
 
     const existingUser = await getUserRecordByLogin(normalizedLogin);
     if (existingUser && existingUser.role !== 'admin') {
@@ -6184,8 +6203,8 @@ async function issuePartnerInvite(login, days, options = {}) {
             failedLoginBackoffUntil: null,
             sessionRevokedAt: null,
             lastSeenAt: nowIso
-        });
-        await patchUserRecord(normalizedLogin, { role: 'user' });
+        }, { requireRemote: true });
+        await patchUserRecord(normalizedLogin, { role: 'user' }, { requireRemote: true });
     }
 
     const mailResult = options.sendEmail === false
@@ -6609,14 +6628,14 @@ async function toggleAccessForLogin(login, nextActive, user, invite, accessRevoc
         await setAccessRevocation(normalizedLogin, true, {
             reason: 'manual',
             updatedBy: normalizeLogin(currentUser?.login || '')
-        });
+        }, { requireRemote: true });
 
         if (invite) {
-            await deletePartnerInvite(normalizedLogin);
+            await deletePartnerInvite(normalizedLogin, { requireRemote: true });
         }
 
         if (shouldDeleteUser) {
-            await deleteUserRecord(normalizedLogin);
+            await deleteUserRecord(normalizedLogin, { requireRemote: true });
         } else if (user) {
             await patchUserRecord(normalizedLogin, {
                 isBlocked: true,
@@ -6626,7 +6645,7 @@ async function toggleAccessForLogin(login, nextActive, user, invite, accessRevoc
                 failedLoginBackoffUntil: null,
                 sessionRevokedAt: nowIso,
                 lastSeenAt: nowIso
-            });
+            }, { requireRemote: true });
         }
 
         clearAuthCachesForRevocation(normalizedLogin);
@@ -6641,7 +6660,7 @@ async function toggleAccessForLogin(login, nextActive, user, invite, accessRevoc
         throw new Error('Для этого email сначала выдайте доступ по ссылке.');
     }
 
-    await setAccessRevocation(normalizedLogin, false);
+    await setAccessRevocation(normalizedLogin, false, {}, { requireRemote: true });
 
     if (user) {
         await patchUserRecord(normalizedLogin, {
@@ -6652,13 +6671,13 @@ async function toggleAccessForLogin(login, nextActive, user, invite, accessRevoc
             failedLoginBackoffUntil: null,
             sessionRevokedAt: null,
             lastSeenAt: nowIso
-        });
+        }, { requireRemote: true });
     }
 
     if (invite) {
         await patchPartnerInvite(normalizedLogin, {
             status: 'active'
-        });
+        }, { requireRemote: true });
     }
 
     if (currentUser && currentUser.login === normalizedLogin) {
@@ -7818,12 +7837,14 @@ function updateAdminUsersTableRow(row, rowData) {
                         setAdminRolePickerOpen(row._adminRolePicker, false);
                         return;
                     }
-                    syncAdminRolePickerState(row._adminRolePicker, currentRowData.user.role, true);
+                    let appliedRole = normalizeRole(currentRowData.user.role);
+                    syncAdminRolePickerState(row._adminRolePicker, appliedRole, true);
                     try {
                         await patchUserRecord(currentRowData.user.login, {
                             role: nextRole,
                             lastSeenAt: new Date().toISOString()
-                        });
+                        }, { requireRemote: true });
+                        appliedRole = nextRole;
 
                         if (currentUser && currentRowData.user.login === currentUser.login) {
                             const previousCurrentUserRole = normalizeRole(currentUser.role);
@@ -7839,8 +7860,11 @@ function updateAdminUsersTableRow(row, rowData) {
                         setAdminRolePickerOpen(row._adminRolePicker, false);
                         showCopyNotification(`Роль ${currentRowData.user.login} обновлена`);
                         refreshAdminUsersTableAfterMutation();
+                    } catch (error) {
+                        console.error('Failed to update user role:', error);
+                        showCopyNotification(error?.message || 'Не удалось обновить роль');
                     } finally {
-                        syncAdminRolePickerState(row._adminRolePicker, nextRole, false);
+                        syncAdminRolePickerState(row._adminRolePicker, appliedRole, false);
                     }
                 });
                 optionButtons.set(roleValue, optionButton);
