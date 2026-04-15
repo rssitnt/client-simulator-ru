@@ -1887,6 +1887,9 @@ const adminLatestInviteMeta = document.getElementById('adminLatestInviteMeta');
 const adminLatestInviteCopyBtn = document.getElementById('adminLatestInviteCopyBtn');
 const adminLatestInviteResendBtn = document.getElementById('adminLatestInviteResendBtn');
 const adminLatestInviteReissueBtn = document.getElementById('adminLatestInviteReissueBtn');
+const adminInviteJournalAccordion = document.getElementById('adminInviteJournalAccordion');
+const adminInviteJournalFilters = document.getElementById('adminInviteJournalFilters');
+const adminInviteJournalList = document.getElementById('adminInviteJournalList');
 const instructionSelectEl = document.getElementById('instructionSelect');
 const panelsContainer = document.querySelector('.panels-container');
 const instructionsPanelElement = document.getElementById('instructionsPanel');
@@ -2252,6 +2255,7 @@ let didClearLegacyLocalPromptsStorageKeys = false;
 let partnerInviteCreateInFlight = false;
 let adminLatestInviteState = null;
 let adminLatestInviteActionInFlight = false;
+let adminInviteJournalFilter = 'all';
 let sharedAppConfig = {
     geminiTokenEndpoint: '',
     clientConversationActionPrompt: '',
@@ -6312,6 +6316,160 @@ function renderAdminLatestInvitePanel() {
     }
 }
 
+function getAdminInviteJournalEntries() {
+    const invites = Array.isArray(adminRealtimeInvites)
+        ? adminRealtimeInvites
+        : [];
+    return [...invites].sort((a, b) => {
+        const aMs = parseIsoMs(a?.createdAt || '') || 0;
+        const bMs = parseIsoMs(b?.createdAt || '') || 0;
+        return bMs - aMs;
+    });
+}
+
+function matchesAdminInviteJournalFilter(invite, filter = adminInviteJournalFilter) {
+    const progress = getPartnerInviteProgress(invite);
+    switch (filter) {
+        case 'pending':
+            return progress.tone === 'pending';
+        case 'error':
+            return progress.tone === 'error';
+        case 'accepted':
+            return progress.tone === 'ok';
+        case 'expired':
+            return progress.tone === 'expired';
+        default:
+            return true;
+    }
+}
+
+function syncAdminInviteJournalFilterButtons() {
+    if (!adminInviteJournalFilters) return;
+    adminInviteJournalFilters.querySelectorAll('button[data-filter]').forEach((button) => {
+        button.classList.toggle('is-active', button.dataset.filter === adminInviteJournalFilter);
+    });
+}
+
+async function handleAdminInviteJournalResend(login) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!isValidLogin(normalizedLogin)) return;
+    const result = await sendPartnerInviteEmail(normalizedLogin);
+    const invite = await getPartnerInviteByLogin(normalizedLogin);
+    setAdminLatestInviteState({
+        login: normalizedLogin,
+        days: getInviteDaysFromExpiry(invite?.expiresAt),
+        expiresAt: invite?.expiresAt || '',
+        directInviteLink: adminLatestInviteState?.login === normalizedLogin ? adminLatestInviteState.directInviteLink : '',
+        invite,
+        mailSent: !!result.sent,
+        mailError: result.readableError || '',
+        summary: `Инвайт для ${normalizedLogin}`
+    });
+    showCopyNotification(
+        result.sent
+            ? `Письмо отправлено на ${normalizedLogin}`
+            : `Письмо не отправлено. ${result.readableError || 'Проверьте настройки Firebase Auth.'}`
+    );
+    refreshAdminUsersTableAfterMutation();
+}
+
+async function handleAdminInviteJournalReissue(login, invite) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!isValidLogin(normalizedLogin)) return;
+    const inviteResult = await issuePartnerInvite(normalizedLogin, getInviteDaysFromExpiry(invite?.expiresAt), { sendEmail: true });
+    setAdminLatestInviteState({
+        login: inviteResult.login,
+        days: inviteResult.days,
+        expiresAt: inviteResult.expiresAt,
+        directInviteLink: inviteResult.directInviteLink,
+        invite: inviteResult.invite,
+        mailSent: !!inviteResult.mailResult?.sent,
+        mailError: inviteResult.mailResult?.readableError || '',
+        summary: `Инвайт для ${inviteResult.login}`
+    });
+    if (navigator.clipboard?.writeText) {
+        try {
+            await navigator.clipboard.writeText(inviteResult.directInviteLink);
+        } catch (error) {
+            console.warn('Failed to copy reissued invite from journal:', error);
+        }
+    }
+    showCopyNotification(`Новая ссылка для ${inviteResult.login} готова`);
+    refreshAdminUsersTableAfterMutation();
+}
+
+function renderAdminInviteJournal() {
+    if (!adminInviteJournalList) return;
+    syncAdminInviteJournalFilterButtons();
+    const entries = getAdminInviteJournalEntries().filter((invite) => matchesAdminInviteJournalFilter(invite));
+    adminInviteJournalList.innerHTML = '';
+
+    if (!entries.length) {
+        const empty = document.createElement('div');
+        empty.className = 'admin-webhook-debug-empty';
+        empty.textContent = 'Под выбранный фильтр инвайтов нет';
+        adminInviteJournalList.appendChild(empty);
+        return;
+    }
+
+    entries.forEach((invite) => {
+        const progress = getPartnerInviteProgress(invite);
+        const row = document.createElement('div');
+        row.className = 'admin-invite-journal-item';
+        row.dataset.tone = progress.tone || 'neutral';
+
+        const main = document.createElement('div');
+        main.className = 'admin-invite-journal-main';
+
+        const login = document.createElement('div');
+        login.className = 'admin-invite-journal-login';
+        login.textContent = invite.login;
+
+        const meta = document.createElement('div');
+        meta.className = 'admin-invite-journal-meta';
+        meta.textContent = [
+            progress.label || 'Инвайт',
+            invite.expiresAt ? `до ${formatInviteDateTime(invite.expiresAt)}` : '',
+            progress.details || ''
+        ].filter(Boolean).join(' • ');
+
+        main.append(login, meta);
+
+        const actions = document.createElement('div');
+        actions.className = 'admin-invite-journal-actions';
+
+        const resendBtn = document.createElement('button');
+        resendBtn.type = 'button';
+        resendBtn.className = 'btn-change';
+        resendBtn.textContent = 'Письмо';
+        resendBtn.addEventListener('click', async () => {
+            resendBtn.disabled = true;
+            try {
+                await handleAdminInviteJournalResend(invite.login);
+            } finally {
+                resendBtn.disabled = false;
+            }
+        });
+
+        const reissueBtn = document.createElement('button');
+        reissueBtn.type = 'button';
+        reissueBtn.className = 'btn-change';
+        reissueBtn.textContent = 'Новая ссылка';
+        reissueBtn.addEventListener('click', async () => {
+            reissueBtn.disabled = true;
+            try {
+                await handleAdminInviteJournalReissue(invite.login, invite);
+            } finally {
+                reissueBtn.disabled = false;
+            }
+        });
+
+        actions.append(resendBtn, reissueBtn);
+        row.append(main, actions);
+        adminInviteJournalList.appendChild(row);
+    });
+}
+
 function getAccessSourceLabel(login, user, invite, accessRevocation = null) {
     if (isAccessRevokedForLogin(accessRevocation, login)) {
         const reason = String(accessRevocation?.reason || '').trim();
@@ -6566,6 +6724,7 @@ function resetAdminRealtimeTableData() {
     adminRealtimeRevocationsByLogin = null;
     adminRealtimePresenceByLogin = null;
     adminRealtimeSortedLogins = null;
+    renderAdminInviteJournal();
 }
 
 function resetAdminUsersTableDomState() {
@@ -6604,6 +6763,7 @@ function applyAdminUsersTableRows(rowsData = []) {
 
 function renderAdminUsersTableFromRealtimeState() {
     if (!isSettingsModalOpen() || !isAdmin() || !hasAdminRealtimeTableData()) return false;
+    renderAdminInviteJournal();
 
     let rowsData = buildAdminUsersTableRowsFromMaps(
         adminRealtimeUsersByLogin || buildLoginIndexedMap(Array.isArray(adminRealtimeUsers) ? adminRealtimeUsers : []),
@@ -6887,6 +7047,7 @@ function applyAdminRealtimeInvitesSnapshot(raw) {
         };
         renderAdminLatestInvitePanel();
     }
+    renderAdminInviteJournal();
     rebuildAdminRealtimeSortedLogins();
     markAdminRealtimeTableDataReadyIfPossible();
 
@@ -10011,11 +10172,13 @@ async function renderAdminUsersTable() {
 
     if (!isSettingsModalOpen()) {
         stopAdminRealtimeSync();
+        renderAdminInviteJournal();
         return;
     }
 
     if (!isAdmin()) {
         stopAdminRealtimeSync();
+        renderAdminInviteJournal();
         setAdminUsersTableEmptyState('Нет прав администратора для просмотра списка пользователей.');
         adminUsersTableInitialized = true;
         if (adminPanelAccordion) {
@@ -22776,6 +22939,16 @@ if (adminLatestInviteResendBtn) {
 if (adminLatestInviteReissueBtn) {
     adminLatestInviteReissueBtn.addEventListener('click', () => {
         handleAdminLatestInviteReissue();
+    });
+}
+
+if (adminInviteJournalFilters) {
+    adminInviteJournalFilters.querySelectorAll('button[data-filter]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const nextFilter = String(button.dataset.filter || 'all').trim() || 'all';
+            adminInviteJournalFilter = nextFilter;
+            renderAdminInviteJournal();
+        });
     });
 }
 

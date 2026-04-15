@@ -358,6 +358,23 @@
                             <button id="adminLatestInviteReissueBtn" class="btn-change" type="button">Перевыпустить ссылку</button>
                         </div>
                     </div>
+                    <details id="adminInviteJournalAccordion" class="admin-hidden-prompt-section">
+                        <summary class="admin-hidden-prompt-summary">Журнал инвайтов</summary>
+                        <div class="admin-hidden-prompt-body">
+                            <div class="admin-invite-journal-toolbar">
+                                <div class="admin-invite-journal-filters" id="adminInviteJournalFilters">
+                                    <button class="btn-change is-active" type="button" data-filter="all">Все</button>
+                                    <button class="btn-change" type="button" data-filter="pending">Ждут</button>
+                                    <button class="btn-change" type="button" data-filter="error">Ошибка</button>
+                                    <button class="btn-change" type="button" data-filter="accepted">Вошли</button>
+                                    <button class="btn-change" type="button" data-filter="expired">Истекли</button>
+                                </div>
+                            </div>
+                            <div id="adminInviteJournalList" class="admin-invite-journal-list">
+                                <div class="admin-webhook-debug-empty">Инвайтов пока нет</div>
+                            </div>
+                        </div>
+                    </details>
                     <details id="adminHiddenClientPromptAccordion" class="admin-hidden-prompt-section">
                         <summary class="admin-hidden-prompt-summary">Скрытый промпт клиента</summary>
                         <div class="admin-hidden-prompt-body">

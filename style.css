@@ -18680,3 +18680,87 @@ body.local-minimal-ui.light-theme .admin-latest-invite-status,
 body.local-minimal-ui.light-theme .admin-status-meta {
     color: #746452;
 }
+
+.admin-invite-journal-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.admin-invite-journal-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.admin-invite-journal-filters .btn-change.is-active {
+    border-color: rgba(212, 186, 146, 0.55);
+}
+
+.admin-invite-journal-list {
+    display: grid;
+    gap: 10px;
+}
+
+.admin-invite-journal-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.admin-invite-journal-item[data-tone="ok"] {
+    border-color: rgba(139, 197, 159, 0.26);
+}
+
+.admin-invite-journal-item[data-tone="error"] {
+    border-color: rgba(225, 154, 154, 0.24);
+}
+
+.admin-invite-journal-item[data-tone="pending"] {
+    border-color: rgba(213, 190, 138, 0.2);
+}
+
+.admin-invite-journal-main {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+}
+
+.admin-invite-journal-login {
+    font-size: 13px;
+    color: #ece7df;
+    word-break: break-word;
+}
+
+.admin-invite-journal-meta {
+    font-size: 12px;
+    line-height: 1.4;
+    color: #aaa096;
+}
+
+.admin-invite-journal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+body.local-minimal-ui.light-theme .admin-invite-journal-item {
+    border-color: rgba(117, 98, 76, 0.12);
+    background: #fbf5ec;
+}
+
+body.local-minimal-ui.light-theme .admin-invite-journal-login {
+    color: #4d4033;
+}
+
+body.local-minimal-ui.light-theme .admin-invite-journal-meta {
+    color: #7a6a58;
+}
