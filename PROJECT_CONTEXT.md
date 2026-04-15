@@ -140,6 +140,10 @@
   - smoke now verifies that the reset button restores its label and does not leave the main login submit disabled.
 - If the local stored password hash is stale but Firebase already accepts the employee's new password, password login now succeeds and silently rewrites the local hash right away during that login.
 - If the local password is still correct but Firebase has an old standalone password for the same email, login now auto-sends a reset email and shows an explicit next-step message instead of leaving the employee in a dead-end error.
+- Partner invites are no longer email-only:
+  - admin invite creation now also generates a one-time direct invite link and prepares it immediately as a fallback if Firebase mail is delayed or blocked;
+  - invite records are mirrored into a minimal public RTDB branch (`public_partner_invites`) so the one-time link can be validated before Firebase auth opens;
+  - when a new partner opens that direct link, the app prefills the email, treats the link as proof for first password setup, marks the invite as verified, and consumes the one-time token.
 - Smoke now also covers both auth repair paths: local-hash recovery through Firebase and auto-reset on Firebase password conflict.
 - Session restore no longer destroys the saved browser session immediately just because the Firebase auth session came back but the user profile read still returned empty once; that path is now treated as a soft restore miss first.
 - Auth observability is now exposed in the UI:

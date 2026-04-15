@@ -48,6 +48,13 @@
         ".write": "auth != null && (auth.token.admin === true || auth.token.role === 'admin')"
       }
     },
+    "public_partner_invites": {
+      ".read": false,
+      "$key": {
+        ".read": "data.exists() && data.child('status').val() === 'active'",
+        ".write": "auth != null && (auth.token.admin === true || auth.token.role === 'admin')"
+      }
+    },
     "access_revocations": {
       ".read": "auth != null && (auth.token.admin === true || auth.token.role === 'admin')",
       "$key": {

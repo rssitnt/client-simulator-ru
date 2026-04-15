@@ -135,6 +135,7 @@ const MARKDOWN_CACHE_TEXT_LIMIT = 40000;
 const AUTH_USERS_DB_PATH = 'users';
 const AUTH_USERS_BY_UID_DB_PATH = 'users_by_uid';
 const PARTNER_INVITES_DB_PATH = 'partner_invites';
+const PUBLIC_PARTNER_INVITES_DB_PATH = 'public_partner_invites';
 const APP_CONFIG_DB_PATH = 'app_config';
 const ACCESS_REVOKE_DB_PATH = 'access_revocations';
 const USER_PRESENCE_DB_PATH = 'user_presence';
@@ -3745,6 +3746,40 @@ function getAppBaseUrl() {
     return `${window.location.origin}${window.location.pathname}`;
 }
 
+function normalizeInviteToken(value) {
+    return String(value || '')
+        .trim()
+        .replace(/[^A-Za-z0-9\-_]/g, '');
+}
+
+function generateOpaqueInviteToken(byteLength = 24) {
+    if (!window.crypto?.getRandomValues) {
+        throw new Error('secure-crypto-unavailable');
+    }
+    const bytes = new Uint8Array(byteLength);
+    window.crypto.getRandomValues(bytes);
+    return bytesToBase64(bytes)
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/g, '');
+}
+
+async function hashInviteToken(token) {
+    const normalizedToken = normalizeInviteToken(token);
+    if (!normalizedToken) {
+        throw new Error('invalid-invite-token');
+    }
+    return hashPasswordSha256Legacy(normalizedToken);
+}
+
+function buildDirectInviteLink(login, token) {
+    const actionUrl = new URL(getAppBaseUrl());
+    actionUrl.searchParams.set('invite', '1');
+    actionUrl.searchParams.set('login', normalizeLogin(login));
+    actionUrl.searchParams.set('invite_token', normalizeInviteToken(token));
+    return actionUrl.toString();
+}
+
 function getEmailFromCurrentLink(rawUrl = window.location.href) {
     const urlCandidates = collectEmailLinkUrlCandidates(rawUrl);
     const emailParamNames = ['email', 'invited_email', 'login'];
@@ -3771,6 +3806,26 @@ function getEmailFromCurrentLink(rawUrl = window.location.href) {
     const fromContext = normalizeLogin(getEmailLinkContext()?.email || '');
     if (isValidLogin(fromContext)) return fromContext;
     return null;
+}
+
+function getInviteTokenFromCurrentLink(rawUrl = window.location.href) {
+    const urlCandidates = collectEmailLinkUrlCandidates(rawUrl);
+    const tokenParamNames = ['invite_token', 'inviteToken', 'token'];
+
+    for (const urlValue of urlCandidates) {
+        try {
+            const parsedUrl = new URL(urlValue);
+            for (const paramName of tokenParamNames) {
+                const token = normalizeInviteToken(parsedUrl.searchParams.get(paramName) || '');
+                if (token) {
+                    return token;
+                }
+            }
+        } catch (error) {
+            continue;
+        }
+    }
+    return '';
 }
 
 function cleanupEmailLinkUrl() {
@@ -3882,6 +3937,9 @@ function normalizePartnerInvite(raw, loginFallback = '', loginKey = '') {
     if (!isValidLogin(login)) return null;
     const role = 'user';
     const status = raw.status === 'revoked' ? 'revoked' : 'active';
+    const inviteTokenHash = String(raw.inviteTokenHash || '').trim();
+    const inviteTokenCreatedAt = raw.inviteTokenCreatedAt || null;
+    const inviteTokenConsumedAt = raw.inviteTokenConsumedAt || null;
     return {
         login,
         role,
@@ -3890,7 +3948,10 @@ function normalizePartnerInvite(raw, loginFallback = '', loginKey = '') {
         createdBy: normalizeLogin(raw.createdBy || ''),
         expiresAt: raw.expiresAt || null,
         emailVerifiedAt: raw.emailVerifiedAt || null,
-        note: String(raw.note || '')
+        note: String(raw.note || ''),
+        inviteTokenHash,
+        inviteTokenCreatedAt,
+        inviteTokenConsumedAt
     };
 }
 
@@ -3907,7 +3968,7 @@ async function getPartnerInviteByLogin(login) {
     if (!isValidLogin(normalizedLogin)) return null;
     const key = loginToStorageKey(normalizedLogin);
     const localStore = loadLocalPartnerInvitesStore();
-    return loadSingleFirebaseRecordWithVerifiedLocalFallback({
+    const protectedInvite = await loadSingleFirebaseRecordWithVerifiedLocalFallback({
         dbPath: PARTNER_INVITES_DB_PATH,
         key,
         localStore,
@@ -3915,6 +3976,110 @@ async function getPartnerInviteByLogin(login) {
         normalizeRecord: normalizePartnerInvite,
         normalizeArgs: [normalizedLogin, key],
         recordLabel: 'partner invite'
+    });
+    if (protectedInvite) {
+        return protectedInvite;
+    }
+    return getPublicPartnerInviteByLogin(normalizedLogin);
+}
+
+async function resolveDirectInviteTokenVerification(login, invite = null, rawUrl = window.location.href) {
+    const normalizedLogin = normalizeLogin(login);
+    const inviteToken = getInviteTokenFromCurrentLink(rawUrl);
+    if (!isValidLogin(normalizedLogin) || !inviteToken) {
+        return null;
+    }
+
+    const targetInvite = normalizePartnerInvite(invite, normalizedLogin) || await getPartnerInviteByLogin(normalizedLogin);
+    if (!isPartnerInviteActive(targetInvite)) {
+        return null;
+    }
+    if (targetInvite.inviteTokenConsumedAt || !targetInvite.inviteTokenHash) {
+        return null;
+    }
+
+    const inviteTokenHash = await hashInviteToken(inviteToken).catch(() => '');
+    if (!inviteTokenHash || inviteTokenHash !== targetInvite.inviteTokenHash) {
+        return null;
+    }
+
+    return {
+        login: normalizedLogin,
+        verifiedAt: new Date().toISOString(),
+        consumePatch: {
+            emailVerifiedAt: new Date().toISOString(),
+            inviteTokenHash: null,
+            inviteTokenConsumedAt: new Date().toISOString()
+        }
+    };
+}
+
+function buildPublicPartnerInvitePayload(invite) {
+    const normalized = normalizePartnerInvite(invite, invite?.login);
+    if (!normalized) return null;
+    return {
+        login: normalized.login,
+        status: normalized.status,
+        expiresAt: normalized.expiresAt,
+        emailVerifiedAt: normalized.emailVerifiedAt,
+        inviteTokenHash: normalized.inviteTokenHash,
+        inviteTokenCreatedAt: normalized.inviteTokenCreatedAt,
+        inviteTokenConsumedAt: normalized.inviteTokenConsumedAt
+    };
+}
+
+async function writePublicPartnerInviteMirror(login, invite, options = {}) {
+    const requireRemote = !!options.requireRemote;
+    const normalizedLogin = normalizeLogin(login);
+    const payload = buildPublicPartnerInvitePayload(invite);
+    if (!isValidLogin(normalizedLogin) || !payload) return false;
+    if (requireRemote && !db) {
+        throw new Error('Firebase RTDB недоступна для обязательной записи публичного инвайта.');
+    }
+    if (!db) return false;
+
+    await firebaseWritePathWithFallback(
+        `${PUBLIC_PARTNER_INVITES_DB_PATH}/${loginToStorageKey(normalizedLogin)}`,
+        () => set(ref(db, `${PUBLIC_PARTNER_INVITES_DB_PATH}/${loginToStorageKey(normalizedLogin)}`), payload),
+        payload,
+        'PUT',
+        FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
+        `Firebase write for ${PUBLIC_PARTNER_INVITES_DB_PATH}/${loginToStorageKey(normalizedLogin)}`
+    );
+    return true;
+}
+
+async function deletePublicPartnerInviteMirror(login, options = {}) {
+    const requireRemote = !!options.requireRemote;
+    const normalizedLogin = normalizeLogin(login);
+    if (!isValidLogin(normalizedLogin)) return false;
+    if (requireRemote && !db) {
+        throw new Error('Firebase RTDB недоступна для обязательного удаления публичного инвайта.');
+    }
+    if (!db) return false;
+
+    await firebaseWritePathWithFallback(
+        `${PUBLIC_PARTNER_INVITES_DB_PATH}/${loginToStorageKey(normalizedLogin)}`,
+        () => set(ref(db, `${PUBLIC_PARTNER_INVITES_DB_PATH}/${loginToStorageKey(normalizedLogin)}`), null),
+        null,
+        'DELETE',
+        FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
+        `Firebase delete for ${PUBLIC_PARTNER_INVITES_DB_PATH}/${loginToStorageKey(normalizedLogin)}`
+    );
+    return true;
+}
+
+async function getPublicPartnerInviteByLogin(login) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!isValidLogin(normalizedLogin)) return null;
+    const key = loginToStorageKey(normalizedLogin);
+    return loadSingleFirebaseRecordWithVerifiedLocalFallback({
+        dbPath: PUBLIC_PARTNER_INVITES_DB_PATH,
+        key,
+        localStore: {},
+        normalizeRecord: normalizePartnerInvite,
+        normalizeArgs: [normalizedLogin, key],
+        recordLabel: 'public partner invite'
     });
 }
 
@@ -3931,7 +4096,10 @@ async function savePartnerInvite(invite, options = {}) {
         createdBy: normalized.createdBy,
         expiresAt: normalized.expiresAt,
         emailVerifiedAt: normalized.emailVerifiedAt,
-        note: normalized.note
+        note: normalized.note,
+        inviteTokenHash: normalized.inviteTokenHash,
+        inviteTokenCreatedAt: normalized.inviteTokenCreatedAt,
+        inviteTokenConsumedAt: normalized.inviteTokenConsumedAt
     };
 
     if (requireRemote && !db) {
@@ -3953,6 +4121,15 @@ async function savePartnerInvite(invite, options = {}) {
             if (requireRemote) {
                 throw error;
             }
+        }
+    }
+
+    try {
+        await writePublicPartnerInviteMirror(normalized.login, payload, { requireRemote });
+    } catch (error) {
+        console.error('Failed to save public partner invite mirror:', error);
+        if (requireRemote) {
+            throw error;
         }
     }
 
@@ -3980,6 +4157,15 @@ async function patchPartnerInvite(login, patch = {}, options = {}) {
     }
     if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'emailVerifiedAt')) {
         sanitizedPatch.emailVerifiedAt = sanitizedPatch.emailVerifiedAt || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'inviteTokenHash')) {
+        sanitizedPatch.inviteTokenHash = String(sanitizedPatch.inviteTokenHash || '').trim();
+    }
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'inviteTokenCreatedAt')) {
+        sanitizedPatch.inviteTokenCreatedAt = sanitizedPatch.inviteTokenCreatedAt || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(sanitizedPatch, 'inviteTokenConsumedAt')) {
+        sanitizedPatch.inviteTokenConsumedAt = sanitizedPatch.inviteTokenConsumedAt || null;
     }
 
     if (requireRemote && !db) {
@@ -4010,6 +4196,16 @@ async function patchPartnerInvite(login, patch = {}, options = {}) {
         ...sanitizedPatch,
         login: normalizedLogin
     };
+
+    try {
+        await writePublicPartnerInviteMirror(normalizedLogin, merged, { requireRemote });
+    } catch (error) {
+        console.error('Failed to patch public partner invite mirror:', error);
+        if (requireRemote) {
+            throw error;
+        }
+    }
+
     localStore[key] = merged;
     saveLocalPartnerInvitesStore(localStore);
     return normalizePartnerInvite(merged, normalizedLogin);
@@ -4030,6 +4226,12 @@ async function deletePartnerInvite(login) {
         } catch (error) {
             console.error('Failed to delete partner invite in Firebase:', error);
         }
+    }
+
+    try {
+        await deletePublicPartnerInviteMirror(normalizedLogin);
+    } catch (error) {
+        console.error('Failed to delete public partner invite mirror:', error);
     }
 
     const localStore = loadLocalPartnerInvitesStore();
@@ -9600,12 +9802,27 @@ async function handleCreatePartnerInvite() {
     const expiresAtDate = new Date();
     expiresAtDate.setDate(expiresAtDate.getDate() + days);
     const expiresAt = expiresAtDate.toISOString();
+    const inviteToken = generateOpaqueInviteToken();
+    const inviteTokenHash = await hashInviteToken(inviteToken);
+    const directInviteLink = buildDirectInviteLink(login, inviteToken);
+    const nowIso = new Date().toISOString();
 
     if (partnerInviteCreateInFlight) return;
     partnerInviteCreateInFlight = true;
     if (partnerInviteAddBtn) partnerInviteAddBtn.disabled = true;
     try {
-        await sendMagicLinkToEmail(login, 'invite');
+        await savePartnerInvite({
+            login,
+            role,
+            status: 'active',
+            expiresAt,
+            emailVerifiedAt: null,
+            createdAt: nowIso,
+            createdBy: currentUser?.login || '',
+            inviteTokenHash,
+            inviteTokenCreatedAt: nowIso,
+            inviteTokenConsumedAt: null
+        });
 
         await setAccessRevocation(login, false, {
             updatedBy: currentUser?.login || ''
@@ -9620,25 +9837,57 @@ async function handleCreatePartnerInvite() {
                 failedLoginAttempts: 0,
                 failedLoginBackoffUntil: null,
                 sessionRevokedAt: null,
-                lastSeenAt: new Date().toISOString()
+                lastSeenAt: nowIso
             });
         }
-
-        await savePartnerInvite({
-            login,
-            role,
-            status: 'active',
-            expiresAt,
-            emailVerifiedAt: null,
-            createdAt: new Date().toISOString(),
-            createdBy: currentUser?.login || ''
-        });
 
         if (existingUser && existingUser.role !== 'admin') {
             await patchUserRecord(login, { role });
         }
 
-        showCopyNotification(`Ссылка отправлена на ${login}`);
+        let mailSent = false;
+        let inviteMailError = null;
+        try {
+            await sendMagicLinkToEmail(login, 'invite');
+            mailSent = true;
+        } catch (error) {
+            inviteMailError = error;
+            console.warn('Invite email send failed, keeping direct invite link fallback:', error);
+        }
+
+        let copiedDirectLink = false;
+        let showedDirectLinkPrompt = false;
+        if (navigator.clipboard?.writeText) {
+            try {
+                await navigator.clipboard.writeText(directInviteLink);
+                copiedDirectLink = true;
+            } catch (error) {
+                console.warn('Failed to copy direct invite link:', error);
+            }
+        }
+        if (!copiedDirectLink) {
+            try {
+                window.prompt('Скопируйте ссылку приглашения вручную', directInviteLink);
+                showedDirectLinkPrompt = true;
+            } catch (error) {
+                console.warn('Failed to show manual invite link prompt:', error);
+            }
+        }
+
+        if (mailSent) {
+            showCopyNotification(
+                copiedDirectLink || showedDirectLinkPrompt
+                    ? `Инвайт создан: письмо отправлено на ${login}, резервная ссылка подготовлена.`
+                    : `Инвайт создан: письмо отправлено на ${login}.`
+            );
+        } else {
+            const fallbackReason = getReadableFirebaseAuthError(inviteMailError, 'invite');
+            showCopyNotification(
+                copiedDirectLink || showedDirectLinkPrompt
+                    ? `Письмо не отправлено. Резервная ссылка подготовлена. ${fallbackReason}`
+                    : `Письмо не отправлено. Ссылка создана, но не скопировалась автоматически. ${fallbackReason}`
+            );
+        }
         if (partnerInviteEmailInput) partnerInviteEmailInput.value = '';
         refreshAdminUsersTableAfterMutation();
     } catch (error) {
@@ -9744,16 +9993,25 @@ async function handleAuthSubmit() {
         };
 
         const emailLinkVerifiedHint = getEmailLinkVerifiedHint();
+        const directInviteVerification = await runAuthStep(
+            'Проверяем приглашение...',
+            () => resolveDirectInviteTokenVerification(login, accessPolicy?.invite),
+            AUTH_FLOW_STEP_TIMEOUT_MS,
+            'Не удалось проверить ссылку приглашения. Попробуйте ещё раз.',
+            { stage: 'invite_link_check', debugContext: 'login', debugDetails: { login, sessionMode: 'password' } }
+        );
         const hasEmailLinkVerification = didVerifyEmailLinkNow || !!authReady || (!!emailLinkVerifiedHint &&
             emailLinkVerifiedHint.login === login &&
             (emailLinkVerifiedHint.action === 'invite' || emailLinkVerifiedHint.action === 'verify'));
+        const hasDirectInviteVerification = !!directInviteVerification;
+        const hasVerifiedInviteAccess = hasEmailLinkVerification || hasDirectInviteVerification;
         let shouldMarkInviteAsVerifiedFromHint = false;
         let targetUser = null;
 
         if (existingUser) {
             const existingIsVerified = !!existingUser.emailVerifiedAt;
             const passwordNeedsSetup = existingIsVerified && isPendingFirstPasswordSetup(existingUser);
-            const canSetPasswordAfterLink = existingIsVerified && hasEmailLinkVerification;
+            const canSetPasswordAfterLink = existingIsVerified && hasVerifiedInviteAccess;
             const shouldVerifyPassword = !passwordNeedsSetup && !canSetPasswordAfterLink;
             const isPasswordValid = shouldVerifyPassword ? await passwordValid() : true;
             const localhostLocalUser = isLocalhostAdminPreviewHost() ? getLocalUserRecordByLogin(login) : null;
@@ -9826,7 +10084,7 @@ async function handleAuthSubmit() {
                 ? 'admin'
                 : normalizeRole(accessPolicy.role || existingUser.role);
             let verifiedAt = existingUser.emailVerifiedAt || accessPolicy?.invite?.emailVerifiedAt || null;
-            if (!verifiedAt && hasEmailLinkVerification) {
+            if (!verifiedAt && hasVerifiedInviteAccess) {
                 verifiedAt = nowIso;
                 shouldMarkInviteAsVerifiedFromHint = true;
             }
@@ -9851,7 +10109,7 @@ async function handleAuthSubmit() {
             const passwordHash = await hashPassword(login, password);
             const resolvedRole = normalizeRole(accessPolicy.role || 'user');
             let verifiedAt = accessPolicy?.invite?.emailVerifiedAt || null;
-            if (!verifiedAt && hasEmailLinkVerification) {
+            if (!verifiedAt && hasVerifiedInviteAccess) {
                 verifiedAt = nowIso;
                 shouldMarkInviteAsVerifiedFromHint = true;
             }
@@ -9907,6 +10165,7 @@ async function handleAuthSubmit() {
             await runAuthStep(
                 'Обновляем приглашение...',
                 () => patchPartnerInvite(login, {
+                    ...(hasDirectInviteVerification ? directInviteVerification.consumePatch : {}),
                     emailVerifiedAt: nowIso
                 }, { requireRemote: true }),
                 AUTH_FLOW_STEP_TIMEOUT_MS,
@@ -9965,6 +10224,9 @@ async function handleAuthSubmit() {
         clearEmailLinkAuthReady();
         clearEmailLinkHint();
         clearEmailLinkVerifiedHint();
+        if (hasDirectInviteVerification || getInviteTokenFromCurrentLink(window.location.href)) {
+            cleanupEmailLinkUrl();
+        }
         recordAuthDebugEvent('login_complete', {
             status: 'ok',
             login,
@@ -15991,6 +16253,8 @@ function showNameModal() {
     didInteractWithAuthModalSinceOpen = false;
     syncLocalhostDevAuthActions();
     const localhostDevUser = getLocalhostDevAuthUser();
+    const inviteLinkLogin = getEmailFromCurrentLink(window.location.href);
+    const hasDirectInviteToken = !!getInviteTokenFromCurrentLink(window.location.href);
     if (nameModalStep1) {
         nameModalStep1.style.display = 'block';
     }
@@ -15999,13 +16263,16 @@ function showNameModal() {
         sanitizeModalNameInput();
     }
     if (modalLoginInput && !modalLoginInput.value) {
-        modalLoginInput.value = localhostDevUser?.login || getCachedStorageValue(USER_LOGIN_KEY) || '';
+        modalLoginInput.value = inviteLinkLogin || localhostDevUser?.login || getCachedStorageValue(USER_LOGIN_KEY) || '';
     }
     setModalPasswordAutocompleteMode('current-password');
     setPasswordVisibility(false);
     setAuthMailHelpVisible(false);
     setAuthStatus('');
     setAuthError('');
+    if (hasDirectInviteToken && isValidLogin(inviteLinkLogin)) {
+        setAuthStatus('Открыто приглашение. Заполните ФИО, придумайте пароль и нажмите «Войти».', 'pending');
+    }
     scheduleModalAutofillRepair();
     void syncModalPasswordAutocompleteMode();
     scheduleAuthModalInitialFocus();
