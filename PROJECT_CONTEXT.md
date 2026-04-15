@@ -114,6 +114,11 @@
 - That desktop admin-users smoke now also guards the new compact behavior:
   - separate `Доступ / Активность` headers must stay hidden on desktop;
   - when a real data row exists, its action cell must keep hover-bubble data for those two values.
+- As of `2026-04-15`, the current daily bug scan found the new breakage in `C:\projects\sites\client-simulator\scripts\integration-smoke.mjs`, not in product runtime:
+  - the harness had drifted behind the app by missing `firebase-app-check.js` stubbing and the now-always-imported `sendPasswordResetEmail` export in its Firebase auth stub;
+  - it also still assumed the old settings trigger path instead of the current minimal-shell settings controls.
+  - the integration harness now stubs App Check, exports `sendPasswordResetEmail`, captures page/runtime errors on failure, and opens/closes settings through the current shell-aware logic with a safe fallback click path.
+  - verification after that repair: both `npm run test:smoke` and `npm run test:smoke:integration` pass in this worktree.
 - A real admin-users load failure was fixed in `C:\projects\sites\client-simulator\script.js`:
   - `updateAdminUsersTableRow(...)` must keep `actionCell` destructured from `row._adminCells`;
   - without that binding, row hydration throws and the whole section collapses into the generic `Ошибка загрузки таблицы пользователей...` state even though Firebase data is available.

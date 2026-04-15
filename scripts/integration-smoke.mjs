@@ -174,6 +174,7 @@ export function getAuth() {
   return authInstance;
 }
 export async function sendSignInLinkToEmail() { return null; }
+export async function sendPasswordResetEmail() { return null; }
 export function isSignInWithEmailLink() { return false; }
 export async function signInWithEmailLink() {
   return { user: null };
@@ -189,6 +190,20 @@ export async function createUserWithEmailAndPassword(_auth, email) {
 export async function signOut() {
   authInstance.currentUser = null;
   return null;
+}
+`.trim();
+
+const firebaseAppCheckStub = `
+export function initializeAppCheck() {
+  return { appCheck: true };
+}
+export class ReCaptchaV3Provider {
+  constructor(siteKey = '') {
+    this.siteKey = siteKey;
+  }
+}
+export async function getToken() {
+  return { token: 'smoke-app-check-token' };
 }
 `.trim();
 
@@ -340,18 +355,63 @@ async function installIntegrationRoutes(context) {
     await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js', async (route) => {
         await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAuthStub });
     });
+    await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js', async (route) => {
+        await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAppCheckStub });
+    });
     await context.route('http://127.0.0.1:7243/**', async (route) => {
         await route.fulfill({ status: 204, body: '' });
     });
 }
 
 async function openSettings(page) {
-    await page.click('#settingsBtn');
+    const useLocalDrawer = await page.evaluate(() => document.body.classList.contains('local-minimal-ui') && window.innerWidth > 1024);
+    const visibleSelectors = useLocalDrawer
+        ? ['#localSettingsTopBtn', '#settingsBtn', '#mobileSettingsTabBtn']
+        : ['#settingsBtn', '#mobileSettingsTabBtn', '#localSettingsTopBtn'];
+    if (useLocalDrawer) {
+        const drawerOpen = await page.evaluate(() => document.body.classList.contains('local-prompt-open'));
+        if (drawerOpen) {
+            await page.click('#localPromptCloseBtn');
+            await page.waitForFunction(() => !document.body.classList.contains('local-prompt-open'));
+        }
+    }
+    for (const selector of visibleSelectors) {
+        const locator = page.locator(selector).first();
+        const exists = await locator.count().catch(() => 0);
+        if (!exists) continue;
+        const visible = await locator.isVisible().catch(() => false);
+        if (visible) {
+            await page.click(selector);
+            await page.waitForSelector('#settingsModal.active');
+            return;
+        }
+    }
+    const clickedSelector = await page.evaluate((selectors) => {
+        for (const selector of selectors) {
+            const element = document.querySelector(selector);
+            if (!(element instanceof HTMLElement)) continue;
+            element.click();
+            return selector;
+        }
+        return '';
+    }, visibleSelectors);
+    if (!clickedSelector) {
+        throw new Error('Settings trigger was not found');
+    }
     await page.waitForSelector('#settingsModal.active');
 }
 
 async function closeSettings(page) {
-    await page.click('#settingsBtn');
+    const closeButtonVisible = await page.locator('#settingsModalCloseBtn').isVisible().catch(() => false);
+    if (closeButtonVisible) {
+        await page.click('#settingsModalCloseBtn');
+    } else {
+        await page.evaluate(() => {
+            const modal = document.getElementById('settingsModal');
+            if (!modal) return;
+            modal.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+        });
+    }
     await page.waitForFunction(() => !document.getElementById('settingsModal')?.classList.contains('active'));
 }
 
@@ -398,6 +458,7 @@ async function waitForChatReady(page) {
         const startBtn = document.getElementById('startBtn');
         return !!startBtn && !startBtn.disabled;
     });
+    await page.waitForTimeout(500);
 }
 
 async function waitForNewConversationEvent(page, previousAssistantCount, previousNoticeCount) {
@@ -441,6 +502,16 @@ async function runIntegrationFlow(browser, baseUrl) {
     });
     await seedLocalState(context);
     const page = await context.newPage();
+    const pageErrors = [];
+    const consoleErrors = [];
+    page.on('pageerror', (error) => {
+        pageErrors.push(String(error?.message || error));
+    });
+    page.on('console', (message) => {
+        if (message.type() === 'error' || message.type() === 'warning') {
+            consoleErrors.push(`[${message.type()}] ${message.text()}`);
+        }
+    });
     const hiddenRaterPrompt = `Integration hidden rater suffix ${Date.now()}`;
 
     try {
@@ -525,6 +596,9 @@ async function runIntegrationFlow(browser, baseUrl) {
         await page.screenshot({ path: path.join(outputDir, 'integration-smoke-failure.png'), fullPage: true });
         throw error;
     } finally {
+        if (pageErrors.length || consoleErrors.length) {
+            process.stdout.write(`[integration-smoke] pageErrors=${JSON.stringify(pageErrors)} consoleErrors=${JSON.stringify(consoleErrors)}\n`);
+        }
         await context.close();
     }
 }
