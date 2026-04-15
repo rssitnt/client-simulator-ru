@@ -25,6 +25,10 @@
   - the top voice status panel is only for active/connecting call states;
   - after a call ends, `Звонок завершён / Разговор сохранён` should be the last dialog card appended after the messages.
   - in the local minimal shell, that footer card is also intentionally centered now and uses the same warm neutral surface ladder as the rest of the product instead of an older colder/system-note look.
+- Attestation send queue no longer lets one non-retryable webhook failure poison the whole queue:
+  - a hard-rejected attestation job is now dropped instead of being retried forever;
+  - later queued reports can continue sending;
+  - if the freshly created current report is dropped that way, the UI now surfaces it as a send failure instead of silently acting as if nothing happened.
 - The local left history rail now uses the settings-style thin scrollbar on the whole `.history-panel`, and in collapsed state that scrollbar is forced fully hidden.
 - Opening a saved dialog from the history rail now reuses the same main `#chatMessages` renderer as a fresh/new chat, so old records no longer fall back to a separate legacy viewer layout.
 - For the owner, a saved dialog opened from history is now the same live workspace as a new chat: the main composer stays usable, new text messages append into the same stored `dialogId`, and starting voice from that opened dialog continues the same conversation instead of resetting into a new one. Foreign/admin-opened dialogs remain read-only.
@@ -276,3 +280,4 @@
 ## Still watch
 - If one employee still cannot log in while others can, first check Firebase Authentication for an old standalone account or stale password on that exact email.
 - Keep auth fixes narrow and safe; do not reopen the earlier broad auth rewrite unless a reproducible blocker appears.
+- After local dependency install for smoke on `2026-04-15`, `npm audit` still reports 9 vulnerabilities (8 low, 1 moderate; the moderate one is `brace-expansion`). This needs a separate dependency refresh pass; it was not changed in product code during this scan.

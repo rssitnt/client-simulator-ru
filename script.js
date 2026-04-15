@@ -23263,18 +23263,20 @@ async function sendAttestationJobWithRetry(job, maxAttempts = ATTESTATION_SEND_A
 }
 
 async function flushAttestationQueue(options = {}) {
-    const { notifySuccess = false } = options;
+    const { notifySuccess = false, trackedJobId = '' } = options;
     if (!ATTESTATION_WEBHOOK_URL) return;
-    if (isAttestationQueueFlushInProgress) return;
-    if (!attestationQueue.length) return;
+    if (isAttestationQueueFlushInProgress) return { deliveredCount: 0, pendingCount: attestationQueue.length, droppedCount: 0, trackedJobDropped: false };
+    if (!attestationQueue.length) return { deliveredCount: 0, pendingCount: 0, droppedCount: 0, trackedJobDropped: false };
     if (typeof navigator !== 'undefined' && navigator && navigator.onLine === false) {
         scheduleAttestationQueueRetry();
-        return;
+        return { deliveredCount: 0, pendingCount: attestationQueue.length, droppedCount: 0, trackedJobDropped: false };
     }
 
     isAttestationQueueFlushInProgress = true;
     clearAttestationQueueRetryTimer();
     let deliveredCount = 0;
+    let droppedCount = 0;
+    let trackedJobDropped = false;
     let shouldRetryLater = false;
     let retryDelayMs = ATTESTATION_QUEUE_RETRY_DELAY_MS;
 
@@ -23293,7 +23295,14 @@ async function flushAttestationQueue(options = {}) {
                 job.lastTriedAt = new Date().toISOString();
                 saveAttestationQueue();
                 if (!retryable) {
-                    console.warn('Attestation send returned non-retryable error, will retry later:', error);
+                    console.warn('Attestation send returned non-retryable error, dropping job:', error);
+                    if (trackedJobId && job.id === trackedJobId) {
+                        trackedJobDropped = true;
+                    }
+                    attestationQueue.shift();
+                    saveAttestationQueue();
+                    droppedCount += 1;
+                    continue;
                 }
                 if (job.failures >= ATTESTATION_QUEUE_MAX_FAILURES) {
                     retryDelayMs = Math.max(retryDelayMs, 30000);
@@ -23312,6 +23321,12 @@ async function flushAttestationQueue(options = {}) {
     if (shouldRetryLater && attestationQueue.length > 0) {
         scheduleAttestationQueueRetry(retryDelayMs);
     }
+    return {
+        deliveredCount,
+        pendingCount: attestationQueue.length,
+        droppedCount,
+        trackedJobDropped
+    };
 }
 
 function isRetryableRatingError(error) {
@@ -23605,7 +23620,10 @@ async function sendAttestationResult(dialogText, ratingText) {
     }
 
     showCopyNotification('Отправляю отчет в Telegram...');
-    await flushAttestationQueue({ notifySuccess: true });
+    const flushResult = await flushAttestationQueue({ notifySuccess: true, trackedJobId: job.id });
+    if (flushResult?.trackedJobDropped) {
+        throw new Error('Отчет отклонен сервером и был удален из очереди.');
+    }
 
     const stillPending = attestationQueue.some(item => item.id === job.id);
     if (stillPending) {
