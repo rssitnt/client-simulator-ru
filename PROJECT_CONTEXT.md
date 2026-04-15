@@ -149,6 +149,7 @@
   - partner invites now store invite-delivery / acceptance metadata (`magicLinkSentAt`, `magicLinkLastError`, `inviteVerifiedVia`, `inviteAcceptedAt`) so the admin table can show a clearer per-user state;
   - active invite rows now also expose quick actions for `Письмо` and `Новая ссылка` directly in the users table.
   - there is now also a dedicated `Журнал инвайтов` section with filters (`Все / Ждут / Ошибка / Вошли / Истекли`) so admins can review invite flow separately from the full users table.
+  - those journal filters now also show live counters (`Ждут (N)`, `Ошибка (N)`, etc.) based on realtime invite state.
 - Smoke now also covers both auth repair paths: local-hash recovery through Firebase and auto-reset on Firebase password conflict.
 - Session restore no longer destroys the saved browser session immediately just because the Firebase auth session came back but the user profile read still returned empty once; that path is now treated as a soft restore miss first.
 - Auth observability is now exposed in the UI:

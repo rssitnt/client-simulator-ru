@@ -6343,10 +6343,31 @@ function matchesAdminInviteJournalFilter(invite, filter = adminInviteJournalFilt
     }
 }
 
+function getAdminInviteJournalFilterCounts() {
+    const entries = getAdminInviteJournalEntries();
+    return {
+        all: entries.length,
+        pending: entries.filter((invite) => matchesAdminInviteJournalFilter(invite, 'pending')).length,
+        error: entries.filter((invite) => matchesAdminInviteJournalFilter(invite, 'error')).length,
+        accepted: entries.filter((invite) => matchesAdminInviteJournalFilter(invite, 'accepted')).length,
+        expired: entries.filter((invite) => matchesAdminInviteJournalFilter(invite, 'expired')).length
+    };
+}
+
 function syncAdminInviteJournalFilterButtons() {
     if (!adminInviteJournalFilters) return;
+    const counts = getAdminInviteJournalFilterCounts();
+    const labels = {
+        all: 'Все',
+        pending: 'Ждут',
+        error: 'Ошибка',
+        accepted: 'Вошли',
+        expired: 'Истекли'
+    };
     adminInviteJournalFilters.querySelectorAll('button[data-filter]').forEach((button) => {
-        button.classList.toggle('is-active', button.dataset.filter === adminInviteJournalFilter);
+        const filterKey = String(button.dataset.filter || 'all').trim() || 'all';
+        button.classList.toggle('is-active', filterKey === adminInviteJournalFilter);
+        button.textContent = `${labels[filterKey] || labels.all} (${counts[filterKey] ?? 0})`;
     });
 }
 
