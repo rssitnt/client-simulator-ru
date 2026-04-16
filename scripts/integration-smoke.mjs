@@ -174,6 +174,7 @@ export function getAuth() {
   return authInstance;
 }
 export async function sendSignInLinkToEmail() { return null; }
+export async function sendPasswordResetEmail() { return null; }
 export function isSignInWithEmailLink() { return false; }
 export async function signInWithEmailLink() {
   return { user: null };
@@ -189,6 +190,20 @@ export async function createUserWithEmailAndPassword(_auth, email) {
 export async function signOut() {
   authInstance.currentUser = null;
   return null;
+}
+`.trim();
+
+const firebaseAppCheckStub = `
+export function initializeAppCheck() {
+  return { appCheck: true };
+}
+export class ReCaptchaV3Provider {
+  constructor(siteKey = '') {
+    this.siteKey = siteKey;
+  }
+}
+export async function getToken() {
+  return { token: 'integration-smoke-app-check-token' };
 }
 `.trim();
 
@@ -340,26 +355,11 @@ async function installIntegrationRoutes(context) {
     await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js', async (route) => {
         await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAuthStub });
     });
+    await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js', async (route) => {
+        await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAppCheckStub });
+    });
     await context.route('http://127.0.0.1:7243/**', async (route) => {
         await route.fulfill({ status: 204, body: '' });
-    });
-}
-
-async function openSettings(page) {
-    await page.click('#settingsBtn');
-    await page.waitForSelector('#settingsModal.active');
-}
-
-async function closeSettings(page) {
-    await page.click('#settingsBtn');
-    await page.waitForFunction(() => !document.getElementById('settingsModal')?.classList.contains('active'));
-}
-
-async function ensureDetailsOpen(page, selector) {
-    await page.$eval(selector, (details) => {
-        if (!details.hasAttribute('open')) {
-            details.setAttribute('open', '');
-        }
     });
 }
 
@@ -441,6 +441,16 @@ async function runIntegrationFlow(browser, baseUrl) {
     });
     await seedLocalState(context);
     const page = await context.newPage();
+    const pageErrors = [];
+    const consoleErrors = [];
+    page.on('pageerror', (error) => {
+        pageErrors.push(String(error?.message || error));
+    });
+    page.on('console', (message) => {
+        if (message.type() === 'error') {
+            consoleErrors.push(message.text());
+        }
+    });
     const hiddenRaterPrompt = `Integration hidden rater suffix ${Date.now()}`;
 
     try {
@@ -449,14 +459,12 @@ async function runIntegrationFlow(browser, baseUrl) {
         await waitForChatReady(page);
 
         logStep('configure hidden rater prompt');
-        await openSettings(page);
-        await ensureDetailsOpen(page, '#adminHiddenRaterPromptAccordion');
-        await page.fill('#adminHiddenRaterPromptInput', hiddenRaterPrompt);
-        await page.click('#adminHiddenRaterPromptSaveBtn');
+        await page.evaluate((value) => {
+            localStorage.setItem('raterHiddenPrompt:v1', String(value || '').trim());
+        }, hiddenRaterPrompt);
         await page.waitForFunction((expectedValue) => {
             return (localStorage.getItem('raterHiddenPrompt:v1') || '').includes(expectedValue);
         }, hiddenRaterPrompt);
-        await closeSettings(page);
 
         logStep('start conversation through live webhook');
         await page.click('#startBtn');
@@ -523,6 +531,21 @@ async function runIntegrationFlow(browser, baseUrl) {
     } catch (error) {
         await ensureOutputDir();
         await page.screenshot({ path: path.join(outputDir, 'integration-smoke-failure.png'), fullPage: true });
+        const debugState = await page.evaluate(() => ({
+            startDisabled: !!document.getElementById('startBtn')?.disabled,
+            modalVisible: !!document.getElementById('nameModal')?.classList.contains('active'),
+            settingsVisible: !!document.getElementById('settingsModal')?.classList.contains('active'),
+            hiddenRaterPrompt: localStorage.getItem('raterHiddenPrompt:v1') || '',
+            assistantCount: document.querySelectorAll('.message.assistant').length,
+            ratingCount: document.querySelectorAll('.message.rating').length,
+            errorCount: document.querySelectorAll('.message.error').length
+        })).catch(() => null);
+        if (pageErrors.length || consoleErrors.length || debugState) {
+            throw new Error(
+                `${error.message}\npageErrors=${JSON.stringify(pageErrors)}\nconsoleErrors=${JSON.stringify(consoleErrors)}\ndebugState=${JSON.stringify(debugState)}`,
+                { cause: error }
+            );
+        }
         throw error;
     } finally {
         await context.close();

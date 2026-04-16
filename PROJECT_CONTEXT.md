@@ -114,6 +114,9 @@
 - That desktop admin-users smoke now also guards the new compact behavior:
   - separate `Доступ / Активность` headers must stay hidden on desktop;
   - when a real data row exists, its action cell must keep hover-bubble data for those two values.
+- `C:\projects\sites\client-simulator\scripts\integration-smoke.mjs` is intentionally decoupled from transient settings-button layout now:
+  - hidden rater prompt is seeded through `localStorage` instead of clicking a possibly hidden settings trigger;
+  - Firebase test stubs there now also include password-reset export and App Check stub so smoke bootstrap does not drift behind current frontend imports.
 - A real admin-users load failure was fixed in `C:\projects\sites\client-simulator\script.js`:
   - `updateAdminUsersTableRow(...)` must keep `actionCell` destructured from `row._adminCells`;
   - without that binding, row hydration throws and the whole section collapses into the generic `Ошибка загрузки таблицы пользователей...` state even though Firebase data is available.
