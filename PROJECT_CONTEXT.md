@@ -167,6 +167,11 @@
 - Verification on `2026-04-14`:
   - `node --check server/gemini-token-server.mjs` passed;
   - `npm run test:smoke` passed end-to-end after the token-server fix.
+- Verification on `2026-04-16`:
+  - fresh worktree required local `npm install` before smoke because `playwright` was not installed yet in this copy;
+  - `npm run test:smoke` passed end-to-end again;
+  - safe `npm audit fix` updated the transitive `brace-expansion` package in `package-lock.json` from `5.0.4` to `5.0.5`;
+  - remaining `npm audit --omit=dev` findings are 8 low-severity upstream transitive issues under `firebase-admin` (`teeny-request` / `http-proxy-agent` / `@tootallnate/once`); do not use `npm audit fix --force` there without a separate compatibility pass.
 - Old global light-theme rules for mobile tabs, `#startBtn`, and generic dropdown active states are now isolated away from `body.local-minimal-ui`; if the warm local light shell drifts back toward old blue/grey styling, inspect that isolation first instead of piling on new overrides.
 - Fullscreen settings/admin in `body.local-minimal-ui.light-theme` now rely on one final warm-cream consistency layer at the very end of `C:\projects\sites\client-simulator\style.css`; treat that tail block as the canonical place for white-theme settings fixes so palette changes do not also mutate geometry or revive older dark/bluish controls.
 - Mobile tabs (`История / Чат / Роль`) now live in a top sticky app bar, not in a bottom dock.
