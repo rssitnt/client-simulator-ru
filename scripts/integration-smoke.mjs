@@ -509,6 +509,10 @@ async function runIntegrationFlow(browser, baseUrl) {
     });
     await seedLocalState(context);
     const page = await context.newPage();
+    const pageErrors = [];
+    page.on('pageerror', (error) => {
+        pageErrors.push(String(error?.message || error || 'Unknown page error'));
+    });
     const hiddenRaterPrompt = `Integration hidden rater suffix ${Date.now()}`;
 
     try {
@@ -588,6 +592,21 @@ async function runIntegrationFlow(browser, baseUrl) {
         const effectiveRaterPrompt = String(ratingRequest?.payload?.raterPrompt || '');
         expect(effectiveRaterPrompt.includes(hiddenRaterPrompt), 'Hidden rater prompt was not attached in integration rating payload');
         expect(!effectiveRaterPrompt.includes('СЛУЖЕБНЫЙ КОНТРАКТ ФОРМАТА ОЦЕНКИ'), 'Fixed rating contract must not be attached in integration rating payload');
+
+        logStep('guard settings name autosave during logout');
+        const pageErrorCountBeforeLogout = pageErrors.length;
+        await openSettings(page);
+        await page.fill('#settingsNameInput', `Integration Smoke Logout ${Date.now()}`);
+        await page.click('#settingsLogoutBtn');
+        await page.waitForFunction(() => {
+            const modal = document.getElementById('nameModal');
+            return !!modal && modal.classList.contains('active');
+        });
+        await page.waitForTimeout(700);
+        expect(
+            pageErrors.length === pageErrorCountBeforeLogout,
+            `Name autosave triggered page error after logout: ${pageErrors.slice(pageErrorCountBeforeLogout).join(' | ')}`
+        );
     } catch (error) {
         await ensureOutputDir();
         await page.screenshot({ path: path.join(outputDir, 'integration-smoke-failure.png'), fullPage: true });

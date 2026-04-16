@@ -141,6 +141,8 @@
   - if `patchUserRecord(...)` fails, the picker rolls back to the previous role instead of visually staying on the unsaved role.
 - Settings name autosave is now guarded against debounce-time session changes:
   - the delayed save captures the current login, skips the write if logout/account-switch happened before the timer fired, and catches remote save failures instead of throwing an uncaught error from the timeout callback.
+- `C:\projects\sites\client-simulator\scripts\integration-smoke.mjs` now also covers that logout edge case:
+  - after editing the settings name field, the test logs out before the debounce fires and asserts that no page error is raised by the delayed autosave callback.
 
 ## Current auth state
 - Password login now waits more patiently for the matching Firebase session instead of failing too early on delayed session exposure.
