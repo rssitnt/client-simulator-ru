@@ -11,6 +11,10 @@
 ## Current product state
 - Main UI target is the warm minimal shell; the old grey shell stays deprecated.
 - Production hosting should remain GitHub Pages unless the user explicitly asks to switch again.
+- 2026-04-16 daily bug scan:
+  - token server transcribe contract now accepts the same `audioBase64` payload shape that the frontend fallback transcript request actually sends;
+  - OpenAI realtime session endpoint now preserves upstream 4xx status/code instead of collapsing non-auth validation failures into generic `500 server_error`;
+  - added `npm run test:token-server-contract` plus a focused server contract smoke, and the browser smoke route stubs now validate minimal POST/JSON/transcribe payload shape instead of blindly returning `200`.
 - Favicon now points to `C:\projects\sites\client-simulator\favicon\1.png` copied from `C:\Users\qwert\Downloads\1.png`; the project copy is now circular with transparent corners, so keep `index.html` icon links aligned to that file unless the user asks to change the source again.
 - Prompt icon asset selected on `2026-04-12`:
   - `fluent:prompt-24-regular`

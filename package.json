@@ -6,7 +6,8 @@
   "scripts": {
     "start:token-server": "node server/gemini-token-server.mjs",
     "test:smoke": "node scripts/smoke-e2e.mjs",
-    "test:smoke:integration": "node scripts/integration-smoke.mjs"
+    "test:smoke:integration": "node scripts/integration-smoke.mjs",
+    "test:token-server-contract": "node scripts/token-server-contract-smoke.mjs"
   },
   "devDependencies": {
     "playwright": "^1.58.2"

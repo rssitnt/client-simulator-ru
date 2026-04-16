@@ -207,7 +207,8 @@ function validateTokenRequest(body) {
 }
 
 function validateTranscribeRequest(body) {
-    if (!body.audio || typeof body.audio !== 'string') {
+    const audioPayload = body?.audioBase64 ?? body?.data ?? body?.audio;
+    if (!audioPayload || typeof audioPayload !== 'string') {
         throw createHttpError(400, 'Audio payload is required.', { code: 'missing_audio' });
     }
 }
@@ -823,7 +824,11 @@ async function createOpenAiRealtimeSession(requestBody = {}) {
     );
     if (!response.ok) {
         const errorMessage = String(payload?.error?.message || payload?.message || 'Failed to create OpenAI realtime session');
-        throw new Error(errorMessage);
+        throw createHttpError(response.status, errorMessage, {
+            code: payload?.error?.code || payload?.error?.type || 'openai_realtime_session_failed',
+            provider: 'openai',
+            providerStatus: response.status
+        });
     }
 
     const clientSecret = String(payload?.client_secret?.value || '').trim();
