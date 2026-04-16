@@ -200,6 +200,11 @@ function createHttpError(statusCode, message, cause = null) {
     return error;
 }
 
+function extractTranscribeAudioPayload(body = {}) {
+    if (!body || typeof body !== 'object') return '';
+    return String(body.audioBase64 || body.data || body.audio || '').trim();
+}
+
 function validateTokenRequest(body) {
     if (body?.voice && typeof body.voice !== 'string') {
         throw createHttpError(400, 'Voice must be a string.', { code: 'invalid_voice' });
@@ -207,7 +212,7 @@ function validateTokenRequest(body) {
 }
 
 function validateTranscribeRequest(body) {
-    if (!body.audio || typeof body.audio !== 'string') {
+    if (!extractTranscribeAudioPayload(body)) {
         throw createHttpError(400, 'Audio payload is required.', { code: 'missing_audio' });
     }
 }
@@ -559,6 +564,10 @@ async function verifyLoginFallbackAccess(login) {
         // Legacy fallback has no Firebase auth context, so keep a narrow
         // compatibility path for temporary migrations when RTDB self-state
         // cannot be resolved here.
+        const statusCode = Number(error?.statusCode || 0);
+        if (statusCode && statusCode < 500 && statusCode !== 504) {
+            throw error;
+        }
     }
 
     const key = loginToStorageKey(normalizedLogin);
@@ -662,15 +671,19 @@ async function verifyFirebaseIdToken(idToken) {
     );
     if (!response.ok) {
         const errorMessage = String(payload?.error?.message || 'Firebase verification failed');
-        throw new Error(errorMessage);
+        const normalizedError = errorMessage.trim().toUpperCase();
+        throw createHttpError(normalizedError === 'USER_DISABLED' ? 403 : 401, errorMessage, {
+            code: (normalizedError || 'invalid_token').toLowerCase(),
+            upstreamStatus: response.status
+        });
     }
 
     const user = Array.isArray(payload?.users) ? payload.users[0] : null;
     if (!user) {
-        throw new Error('User record not found');
+        throw createHttpError(401, 'User record not found', { code: 'invalid_token' });
     }
     if (user.disabled) {
-        throw new Error('User account is disabled');
+        throw createHttpError(403, 'User account is disabled', { code: 'user_disabled' });
     }
 
     return user;
@@ -729,7 +742,7 @@ async function createGeminiAudioTranscription(requestBody = {}) {
         throw new Error('GEMINI_API_KEY is not configured');
     }
 
-    const audioBase64 = String(requestBody?.audioBase64 || requestBody?.data || '').trim();
+    const audioBase64 = extractTranscribeAudioPayload(requestBody);
     const mimeType = String(requestBody?.mimeType || 'audio/wav').trim().toLowerCase();
     if (!audioBase64) {
         throw createHttpError(400, 'audioBase64 is required');
@@ -823,7 +836,10 @@ async function createOpenAiRealtimeSession(requestBody = {}) {
     );
     if (!response.ok) {
         const errorMessage = String(payload?.error?.message || payload?.message || 'Failed to create OpenAI realtime session');
-        throw new Error(errorMessage);
+        throw createHttpError(response.status, errorMessage, {
+            code: String(payload?.error?.code || payload?.code || 'openai_upstream_error').trim().toLowerCase() || 'openai_upstream_error',
+            upstreamStatus: response.status
+        });
     }
 
     const clientSecret = String(payload?.client_secret?.value || '').trim();
@@ -879,13 +895,19 @@ export async function handleTokenServerRequest(req, res) {
     if (isHealthCheck && req.method === 'GET') {
         const missingConfigMessage = getMissingServerConfigMessage();
         const ok = !missingConfigMessage;
+        const appCheckReady = !FIREBASE_APP_CHECK_ENFORCE || hasServiceAccountConfig();
         const payload = {
             ok,
             service: 'gemini-token-server',
             geminiConfigured: !!GEMINI_API_KEY,
             openaiConfigured: !!OPENAI_API_KEY,
             firebaseConfigured: !!FIREBASE_WEB_API_KEY,
-            appCheckEnforced: FIREBASE_APP_CHECK_ENFORCE
+            appCheckEnforced: FIREBASE_APP_CHECK_ENFORCE,
+            routes: {
+                geminiToken: !!GEMINI_API_KEY && !!FIREBASE_WEB_API_KEY && appCheckReady,
+                geminiTranscribe: !!GEMINI_API_KEY && !!FIREBASE_WEB_API_KEY && appCheckReady,
+                openaiRealtime: !!OPENAI_API_KEY && !!FIREBASE_WEB_API_KEY && appCheckReady
+            }
         };
         sendJson(res, ok ? 200 : 503, payload, requestOrigin);
         logRequestEvent(ok ? 'info' : 'warn', buildRequestLogContext(req, requestId, {
@@ -1086,10 +1108,14 @@ export async function handleTokenServerRequest(req, res) {
         if (error?.cause?.limitBytes) {
             meta.limitBytes = error.cause.limitBytes;
         }
+        if (Number.isInteger(error?.cause?.upstreamStatus)) {
+            meta.upstreamStatus = error.cause.upstreamStatus;
+        }
         sendApiError(res, status, message, errorCode, requestOrigin, meta);
         logRequestEvent('error', buildRequestLogContext(req, requestId, {
             status,
             durationMs: Date.now() - startedAt,
+            mode: requestMode,
             error: message
         }));
     }

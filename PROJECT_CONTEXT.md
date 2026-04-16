@@ -144,6 +144,9 @@
   - admin invite creation now also generates a one-time direct invite link and prepares it immediately as a fallback if Firebase mail is delayed or blocked;
   - invite records are mirrored into a minimal public RTDB branch (`public_partner_invites`) so the one-time link can be validated before Firebase auth opens;
   - when a new partner opens that direct link, the app prefills the email, treats the link as proof for first password setup, marks the invite as verified, and consumes the one-time token.
+- `shared_dialogs` is no longer world-readable/writable:
+  - reads now require an authenticated user;
+  - writes are now limited to the source owner (or admin), so another signed-in user cannot overwrite someone else's shared link payload.
 - Admin invite UX is now less blind:
   - right after `Выдать доступ`, the admin panel shows a compact “Последний инвайт” card with status, expiry, and actions `скопировать ссылку / отправить письмо ещё раз / перевыпустить ссылку`;
   - partner invites now store invite-delivery / acceptance metadata (`magicLinkSentAt`, `magicLinkLastError`, `inviteVerifiedVia`, `inviteAcceptedAt`) so the admin table can show a clearer per-user state;
@@ -157,8 +160,15 @@
   - admin settings expose `Техлог входа и сброса пароля` with recent `login / restore / reset` events;
   - each event stores a compact browser/Firebase session snapshot so support can triage employee login issues from the app UI.
 - The Gemini token server now exposes `/health` (GET) for readiness checks and logs structured per-request events with status/duration.
+- `/health` now also exposes per-route readiness flags for Gemini token, Gemini transcribe, and OpenAI realtime instead of a single coarse green/red status.
 - The Gemini token client now honors `rate_limited` responses by delaying for `retryAfterMs` before retrying candidates.
 - Token server validation now emits structured error codes (`invalid_body`, `payload_too_large`) with size metadata.
+- `/api/gemini-live-transcribe` now accepts all frontend audio payload aliases (`audioBase64`, `data`, legacy `audio`) in both validation and execution, so fallback transcription no longer fails on a contract mismatch before reaching Gemini.
+- OpenAI realtime upstream failures now preserve upstream HTTP status/code (for example upstream `400` stays `400`) and expose `upstreamStatus` in the API error payload instead of collapsing into a generic `500`.
+- `C:\projects\sites\client-simulator\scripts\token-server-contract-smoke.mjs` now locks the token-server contract:
+  - health readiness shape;
+  - transcribe payload aliases;
+  - OpenAI upstream error passthrough.
 - As of `2026-04-14`, token-server runtime safety was tightened again:
   - rate limiting now keeps a real reset timestamp and returns a valid `retryAfterMs` instead of falling into a broken helper scope;
   - missing Firebase ID token now returns structured `401 { code: "missing_id_token" }` instead of a bare JSON error;
@@ -286,3 +296,6 @@
 ## Still watch
 - If one employee still cannot log in while others can, first check Firebase Authentication for an old standalone account or stale password on that exact email.
 - Keep auth fixes narrow and safe; do not reopen the earlier broad auth rewrite unless a reproducible blocker appears.
+- Frontend history/voice coordination still deserves a focused pass:
+  - likely risk remains around switching between foreign read-only dialogs and the current live dialog, where stale voice/history state can leak across mode changes;
+  - likely risk also remains in the `preserveDialogForRating` branch of voice-stop flow, which should eventually be unified with the main stop finalizer.
