@@ -38,6 +38,13 @@
   - entering `Аттестация` must open the main chat, not leave the start screen visible;
   - the scenario must survive through terminal dialog action, `Оценить`, and final certification webhook send with report attachment;
   - if that outbound attestation send stops happening, `C:\projects\sites\client-simulator\scripts\smoke-e2e.mjs` should fail.
+- `C:\projects\sites\client-simulator\scripts\integration-smoke.mjs` was refreshed on `2026-04-16` to match the current frontend Firebase import surface:
+  - the integration harness now stubs `firebase-app-check.js` as well;
+  - the auth stub now also exports `sendPasswordResetEmail`, which the real frontend imports;
+  - without those two updates, the page could die during module import resolution, leaving the start screen visible but the settings modal/API/event bindings dead.
+- Integration smoke settings access is now selector-robust too:
+  - it first clicks the visible current settings entrypoint (`local top button / mobile top-bar button / legacy floating button`);
+  - if the UI renders the button but visibility lags under the stubbed environment, the test can still trigger the existing DOM click path instead of failing on one stale selector.
 - Reopened saved dialogs now also preserve their stored mode on hydration:
   - a voice dialog reopened from history keeps `currentDialogHistoryMode = voice`;
   - this prevents continued work from history from silently drifting into text-mode bookkeeping.
@@ -111,6 +118,9 @@
   - active/search rows should not keep a permanent filled rectangle;
   - the visible card-like highlight is meant to appear only on hover/focus interaction.
 - Smoke coverage now explicitly includes the collapsed-history no-scrollbar case and the desktop admin-users real-table layout/desktop layout-flag case, so regressions there should fail `C:\projects\sites\client-simulator\scripts\smoke-e2e.mjs`.
+- Verification on `2026-04-16`:
+  - `npm run test:smoke` passed;
+  - `npm run test:smoke:integration` passed after the Firebase integration stub refresh.
 - That desktop admin-users smoke now also guards the new compact behavior:
   - separate `Доступ / Активность` headers must stay hidden on desktop;
   - when a real data row exists, its action cell must keep hover-bubble data for those two values.

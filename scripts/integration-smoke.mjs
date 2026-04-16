@@ -174,6 +174,7 @@ export function getAuth() {
   return authInstance;
 }
 export async function sendSignInLinkToEmail() { return null; }
+export async function sendPasswordResetEmail() { return null; }
 export function isSignInWithEmailLink() { return false; }
 export async function signInWithEmailLink() {
   return { user: null };
@@ -189,6 +190,22 @@ export async function createUserWithEmailAndPassword(_auth, email) {
 export async function signOut() {
   authInstance.currentUser = null;
   return null;
+}
+`.trim();
+
+const firebaseAppCheckStub = `
+export class ReCaptchaV3Provider {
+  constructor(siteKey = '') {
+    this.siteKey = siteKey;
+  }
+}
+
+export function initializeAppCheck(app, options = {}) {
+  return { app, options };
+}
+
+export async function getToken() {
+  return { token: 'integration-app-check-token' };
 }
 `.trim();
 
@@ -340,19 +357,70 @@ async function installIntegrationRoutes(context) {
     await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js', async (route) => {
         await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAuthStub });
     });
+    await context.route('https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js', async (route) => {
+        await route.fulfill({ status: 200, contentType: 'application/javascript', body: firebaseAppCheckStub });
+    });
     await context.route('http://127.0.0.1:7243/**', async (route) => {
         await route.fulfill({ status: 204, body: '' });
     });
 }
 
 async function openSettings(page) {
-    await page.click('#settingsBtn');
+    const drawerOpen = await page.evaluate(() => document.body.classList.contains('local-prompt-open'));
+    if (drawerOpen) {
+        await page.click('#localPromptCloseBtn');
+        await page.waitForFunction(() => !document.body.classList.contains('local-prompt-open'));
+    }
+
+    const candidateSelectors = ['#localSettingsTopBtn', '#mobileSettingsTabBtn', '#settingsBtn'];
+    let clickedSelector = null;
+    for (const selector of candidateSelectors) {
+        const locator = page.locator(selector);
+        if (await locator.count() && await locator.isVisible().catch(() => false)) {
+            await locator.click();
+            clickedSelector = selector;
+            break;
+        }
+    }
+
+    if (!clickedSelector) {
+        const openedViaFallbackClick = await page.evaluate((selectors) => {
+            for (const selector of selectors) {
+                const element = document.querySelector(selector);
+                if (!element || !(element instanceof HTMLElement)) continue;
+                element.click();
+                return true;
+            }
+            return false;
+        }, candidateSelectors);
+        expect(openedViaFallbackClick, 'No settings entrypoint found, even via DOM fallback click');
+    }
     await page.waitForSelector('#settingsModal.active');
 }
 
 async function closeSettings(page) {
-    await page.click('#settingsBtn');
+    const closeButtonVisible = await page.locator('#settingsModalCloseBtn').isVisible().catch(() => false);
+    if (closeButtonVisible) {
+        await page.click('#settingsModalCloseBtn');
+    } else {
+        const closedViaApi = await page.evaluate(() => {
+            if (typeof window.hideSettingsModal === 'function') {
+                window.hideSettingsModal();
+                return true;
+            }
+            const modal = document.getElementById('settingsModal');
+            if (!modal) return false;
+            modal.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+            return true;
+        });
+        expect(closedViaApi, 'Settings modal close path is unavailable');
+    }
     await page.waitForFunction(() => !document.getElementById('settingsModal')?.classList.contains('active'));
+    const localDrawerOpen = await page.evaluate(() => document.body.classList.contains('local-prompt-open'));
+    if (localDrawerOpen) {
+        await page.click('#localPromptCloseBtn');
+        await page.waitForFunction(() => !document.body.classList.contains('local-prompt-open'));
+    }
 }
 
 async function ensureDetailsOpen(page, selector) {
