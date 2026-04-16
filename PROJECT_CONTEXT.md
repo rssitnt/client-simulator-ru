@@ -164,9 +164,17 @@
   - missing Firebase ID token now returns structured `401 { code: "missing_id_token" }` instead of a bare JSON error;
   - success logs now use the correct request mode for OpenAI vs Gemini endpoints, and Gemini transcribe success is logged too;
   - OpenAI realtime-session input now rejects non-string `model` / `instructions` payloads before they reach the upstream API.
+- As of `2026-04-16`, token-server contract drift in this worktree was repaired:
+  - `/api/gemini-live-transcribe` now accepts `audioBase64`, `data`, and legacy `audio` payload fields consistently in both validation and execution;
+  - OpenAI realtime upstream `4xx/429` responses now preserve their original HTTP status/code instead of collapsing into generic `500`;
+  - `/health` now reports per-route readiness (`geminiLiveToken`, `geminiLiveTranscribe`, `openaiRealtimeSession`) so partial provider config is visible without reading logs;
+  - `scripts/token-server-contract-smoke.mjs` plus `npm run test:token-server-contract` now lock these server contracts, and the Playwright smoke stub for transcribe rejects malformed payloads instead of always returning `200`.
 - Verification on `2026-04-14`:
   - `node --check server/gemini-token-server.mjs` passed;
   - `npm run test:smoke` passed end-to-end after the token-server fix.
+- Verification on `2026-04-16`:
+  - `npm run test:token-server-contract` passed;
+  - `npm run test:smoke` passed end-to-end after the contract fixes.
 - Old global light-theme rules for mobile tabs, `#startBtn`, and generic dropdown active states are now isolated away from `body.local-minimal-ui`; if the warm local light shell drifts back toward old blue/grey styling, inspect that isolation first instead of piling on new overrides.
 - Fullscreen settings/admin in `body.local-minimal-ui.light-theme` now rely on one final warm-cream consistency layer at the very end of `C:\projects\sites\client-simulator\style.css`; treat that tail block as the canonical place for white-theme settings fixes so palette changes do not also mutate geometry or revive older dark/bluish controls.
 - Mobile tabs (`История / Чат / Роль`) now live in a top sticky app bar, not in a bottom dock.

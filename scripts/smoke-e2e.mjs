@@ -1062,6 +1062,15 @@ async function installGeminiVoiceSmokeRoutes(context, tokenBucket, transcribeBuc
             url: request.url(),
             payload
         });
+        const audioPayload = String(payload?.audioBase64 || payload?.data || payload?.audio || '').trim();
+        if (request.method() !== 'POST' || !audioPayload) {
+            await route.fulfill({
+                status: 400,
+                contentType: 'application/json; charset=utf-8',
+                body: JSON.stringify({ error: 'Invalid transcribe payload' })
+            });
+            return;
+        }
         const transcript = voiceScenario === 'audio-only-first-reply-fallback'
             ? 'Здравствуйте. Под задачу есть вариант, могу коротко по срокам и сервису.'
             : voiceScenario === 'partial-first-reply-merged-with-fallback'

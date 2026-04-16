@@ -206,8 +206,47 @@ function validateTokenRequest(body) {
     }
 }
 
-function validateTranscribeRequest(body) {
-    if (!body.audio || typeof body.audio !== 'string') {
+export function extractTranscribeAudioBase64(body = {}) {
+    const candidates = [body?.audioBase64, body?.data, body?.audio];
+    for (const candidate of candidates) {
+        if (typeof candidate !== 'string') continue;
+        const normalized = candidate.trim();
+        if (normalized) {
+            return normalized;
+        }
+    }
+    return '';
+}
+
+function collectSharedRouteMissingConfig() {
+    const missing = [];
+    if (!FIREBASE_WEB_API_KEY) {
+        missing.push('FIREBASE_WEB_API_KEY');
+    }
+    if (FIREBASE_APP_CHECK_ENFORCE && !hasServiceAccountConfig()) {
+        missing.push('FIREBASE_SERVICE_ACCOUNT_JSON|FIREBASE_SERVICE_ACCOUNT_PATH');
+    }
+    return missing;
+}
+
+function collectGeminiRouteMissingConfig() {
+    const missing = collectSharedRouteMissingConfig();
+    if (!GEMINI_API_KEY) {
+        missing.push('GEMINI_API_KEY');
+    }
+    return missing;
+}
+
+function collectOpenAiRouteMissingConfig() {
+    const missing = collectSharedRouteMissingConfig();
+    if (!OPENAI_API_KEY) {
+        missing.push('OPENAI_API_KEY');
+    }
+    return missing;
+}
+
+export function validateTranscribeRequest(body) {
+    if (!extractTranscribeAudioBase64(body)) {
         throw createHttpError(400, 'Audio payload is required.', { code: 'missing_audio' });
     }
 }
@@ -466,6 +505,17 @@ async function readJsonWithTimeout(response, timeoutMs, timeoutMessage, fallback
             clearTimeout(timeoutId);
         }
     }
+}
+
+export function createUpstreamApiError(response, payload = {}, defaultMessage = 'Upstream request failed') {
+    const upstreamStatus = Number(response?.status);
+    const statusCode = Number.isInteger(upstreamStatus) && upstreamStatus >= 400 ? upstreamStatus : 502;
+    const message = String(payload?.error?.message || payload?.message || defaultMessage).trim() || defaultMessage;
+    const upstreamCode = String(payload?.error?.code || payload?.code || '').trim();
+    return createHttpError(statusCode, message, {
+        code: upstreamCode || (statusCode === 429 ? 'upstream_rate_limited' : 'upstream_error'),
+        upstreamStatus: Number.isInteger(upstreamStatus) ? upstreamStatus : null
+    });
 }
 
 async function readDbJson(path, authToken = '') {
@@ -729,13 +779,13 @@ async function createGeminiAudioTranscription(requestBody = {}) {
         throw new Error('GEMINI_API_KEY is not configured');
     }
 
-    const audioBase64 = String(requestBody?.audioBase64 || requestBody?.data || '').trim();
+    const audioBase64 = extractTranscribeAudioBase64(requestBody);
     const mimeType = String(requestBody?.mimeType || 'audio/wav').trim().toLowerCase();
     if (!audioBase64) {
-        throw createHttpError(400, 'audioBase64 is required');
+        throw createHttpError(400, 'Audio payload is required.', { code: 'missing_audio' });
     }
     if (!mimeType.startsWith('audio/')) {
-        throw createHttpError(400, 'mimeType must be an audio/* value');
+        throw createHttpError(400, 'mimeType must be an audio/* value', { code: 'invalid_mime_type' });
     }
 
     const prompt = 'Сделай дословную транскрипцию речи на аудио. Верни только сам текст без комментариев, без кавычек, без форматирования. Если речи нет или она неразборчива, верни пустую строку.';
@@ -822,13 +872,15 @@ async function createOpenAiRealtimeSession(requestBody = {}) {
         {}
     );
     if (!response.ok) {
-        const errorMessage = String(payload?.error?.message || payload?.message || 'Failed to create OpenAI realtime session');
-        throw new Error(errorMessage);
+        throw createUpstreamApiError(response, payload, 'Failed to create OpenAI realtime session');
     }
 
     const clientSecret = String(payload?.client_secret?.value || '').trim();
     if (!clientSecret) {
-        throw new Error('OpenAI session response is missing client_secret');
+        throw createHttpError(502, 'OpenAI session response is missing client_secret', {
+            code: 'missing_client_secret',
+            upstreamStatus: Number(response?.status) || null
+        });
     }
 
     return {
@@ -838,6 +890,33 @@ async function createOpenAiRealtimeSession(requestBody = {}) {
         },
         model: String(payload?.model || OPENAI_REALTIME_MODEL),
         voice: sanitizeOpenAiVoiceName(payload?.voice || OPENAI_DEFAULT_VOICE)
+    };
+}
+
+export function buildHealthPayload() {
+    const geminiMissing = collectGeminiRouteMissingConfig();
+    const openAiMissing = collectOpenAiRouteMissingConfig();
+    return {
+        ok: !getMissingServerConfigMessage(),
+        service: 'gemini-token-server',
+        geminiConfigured: !!GEMINI_API_KEY,
+        openaiConfigured: !!OPENAI_API_KEY,
+        firebaseConfigured: !!FIREBASE_WEB_API_KEY,
+        appCheckEnforced: FIREBASE_APP_CHECK_ENFORCE,
+        routes: {
+            geminiLiveToken: {
+                ready: geminiMissing.length === 0,
+                missing: geminiMissing
+            },
+            geminiLiveTranscribe: {
+                ready: geminiMissing.length === 0,
+                missing: geminiMissing
+            },
+            openaiRealtimeSession: {
+                ready: openAiMissing.length === 0,
+                missing: openAiMissing
+            }
+        }
     };
 }
 
@@ -877,16 +956,8 @@ export async function handleTokenServerRequest(req, res) {
     }
 
     if (isHealthCheck && req.method === 'GET') {
-        const missingConfigMessage = getMissingServerConfigMessage();
-        const ok = !missingConfigMessage;
-        const payload = {
-            ok,
-            service: 'gemini-token-server',
-            geminiConfigured: !!GEMINI_API_KEY,
-            openaiConfigured: !!OPENAI_API_KEY,
-            firebaseConfigured: !!FIREBASE_WEB_API_KEY,
-            appCheckEnforced: FIREBASE_APP_CHECK_ENFORCE
-        };
+        const payload = buildHealthPayload();
+        const ok = !!payload.ok;
         sendJson(res, ok ? 200 : 503, payload, requestOrigin);
         logRequestEvent(ok ? 'info' : 'warn', buildRequestLogContext(req, requestId, {
             status: ok ? 200 : 503,
@@ -1085,6 +1156,9 @@ export async function handleTokenServerRequest(req, res) {
         const meta = {};
         if (error?.cause?.limitBytes) {
             meta.limitBytes = error.cause.limitBytes;
+        }
+        if (error?.cause?.upstreamStatus) {
+            meta.upstreamStatus = error.cause.upstreamStatus;
         }
         sendApiError(res, status, message, errorCode, requestOrigin, meta);
         logRequestEvent('error', buildRequestLogContext(req, requestId, {
