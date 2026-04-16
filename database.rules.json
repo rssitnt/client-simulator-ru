@@ -101,7 +101,9 @@
     },
     "shared_dialogs": {
       ".read": true,
-      ".write": "auth != null"
+      "$shareId": {
+        ".write": "auth != null && ((auth.token.admin === true || auth.token.role === 'admin') || (newData.exists() && newData.child('source').child('login').val() === auth.token.email) || (!newData.exists() && data.child('source').child('login').val() === auth.token.email))"
+      }
     },
     "app_config": {
       ".read": "auth != null",

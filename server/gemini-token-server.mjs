@@ -207,7 +207,8 @@ function validateTokenRequest(body) {
 }
 
 function validateTranscribeRequest(body) {
-    if (!body.audio || typeof body.audio !== 'string') {
+    const audioPayload = body?.audioBase64 || body?.data || body?.audio;
+    if (!audioPayload || typeof audioPayload !== 'string') {
         throw createHttpError(400, 'Audio payload is required.', { code: 'missing_audio' });
     }
 }
@@ -729,7 +730,7 @@ async function createGeminiAudioTranscription(requestBody = {}) {
         throw new Error('GEMINI_API_KEY is not configured');
     }
 
-    const audioBase64 = String(requestBody?.audioBase64 || requestBody?.data || '').trim();
+    const audioBase64 = String(requestBody?.audioBase64 || requestBody?.data || requestBody?.audio || '').trim();
     const mimeType = String(requestBody?.mimeType || 'audio/wav').trim().toLowerCase();
     if (!audioBase64) {
         throw createHttpError(400, 'audioBase64 is required');
@@ -823,12 +824,18 @@ async function createOpenAiRealtimeSession(requestBody = {}) {
     );
     if (!response.ok) {
         const errorMessage = String(payload?.error?.message || payload?.message || 'Failed to create OpenAI realtime session');
-        throw new Error(errorMessage);
+        throw createHttpError(response.status || 502, errorMessage, {
+            code: String(payload?.error?.code || payload?.code || '').trim() || 'openai_upstream_error',
+            upstreamStatus: response.status || 502
+        });
     }
 
     const clientSecret = String(payload?.client_secret?.value || '').trim();
     if (!clientSecret) {
-        throw new Error('OpenAI session response is missing client_secret');
+        throw createHttpError(502, 'OpenAI session response is missing client_secret', {
+            code: 'invalid_openai_response',
+            upstreamStatus: response.status || 200
+        });
     }
 
     return {
@@ -879,13 +886,29 @@ export async function handleTokenServerRequest(req, res) {
     if (isHealthCheck && req.method === 'GET') {
         const missingConfigMessage = getMissingServerConfigMessage();
         const ok = !missingConfigMessage;
+        const baseRouteReady = !!FIREBASE_WEB_API_KEY && (!FIREBASE_APP_CHECK_ENFORCE || hasServiceAccountConfig());
         const payload = {
             ok,
             service: 'gemini-token-server',
             geminiConfigured: !!GEMINI_API_KEY,
             openaiConfigured: !!OPENAI_API_KEY,
             firebaseConfigured: !!FIREBASE_WEB_API_KEY,
-            appCheckEnforced: FIREBASE_APP_CHECK_ENFORCE
+            appCheckEnforced: FIREBASE_APP_CHECK_ENFORCE,
+            missingConfig: missingConfigMessage || null,
+            routes: {
+                geminiToken: {
+                    configured: !!GEMINI_API_KEY,
+                    ready: !!GEMINI_API_KEY && baseRouteReady
+                },
+                geminiTranscribe: {
+                    configured: !!GEMINI_API_KEY,
+                    ready: !!GEMINI_API_KEY && baseRouteReady
+                },
+                openaiRealtime: {
+                    configured: !!OPENAI_API_KEY,
+                    ready: !!OPENAI_API_KEY && baseRouteReady
+                }
+            }
         };
         sendJson(res, ok ? 200 : 503, payload, requestOrigin);
         logRequestEvent(ok ? 'info' : 'warn', buildRequestLogContext(req, requestId, {
@@ -1081,10 +1104,14 @@ export async function handleTokenServerRequest(req, res) {
             : /MISSING|INVALID|EXPIRED|TOKEN/i.test(message)
                 ? 401
                 : 500;
-        const errorCode = error?.cause?.code || error?.code || (status === 401 ? 'unauthorized' : 'server_error');
+        const causeMeta = error?.cause && typeof error.cause === 'object' ? error.cause : {};
+        const errorCode = causeMeta.code || error?.code || (status === 401 ? 'unauthorized' : 'server_error');
         const meta = {};
-        if (error?.cause?.limitBytes) {
-            meta.limitBytes = error.cause.limitBytes;
+        if (causeMeta.limitBytes) {
+            meta.limitBytes = causeMeta.limitBytes;
+        }
+        if (causeMeta.upstreamStatus) {
+            meta.upstreamStatus = causeMeta.upstreamStatus;
         }
         sendApiError(res, status, message, errorCode, requestOrigin, meta);
         logRequestEvent('error', buildRequestLogContext(req, requestId, {

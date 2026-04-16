@@ -159,6 +159,10 @@
 - The Gemini token server now exposes `/health` (GET) for readiness checks and logs structured per-request events with status/duration.
 - The Gemini token client now honors `rate_limited` responses by delaying for `retryAfterMs` before retrying candidates.
 - Token server validation now emits structured error codes (`invalid_body`, `payload_too_large`) with size metadata.
+- The token/transcribe server contract is now locked tighter:
+  - `/api/gemini-live-transcribe` accepts `audioBase64`, `data`, and legacy `audio`;
+  - OpenAI realtime upstream `4xx` errors keep their real status/code instead of collapsing into generic `500`;
+  - `/health` reports per-route readiness for Gemini token/transcribe and OpenAI realtime endpoints.
 - As of `2026-04-14`, token-server runtime safety was tightened again:
   - rate limiting now keeps a real reset timestamp and returns a valid `retryAfterMs` instead of falling into a broken helper scope;
   - missing Firebase ID token now returns structured `401 { code: "missing_id_token" }` instead of a bare JSON error;
@@ -263,6 +267,7 @@
 - Public share links now use `shared_dialogs` in RTDB:
   - sharing creates a permanent `?share=` link;
   - opening that link after login clones the dialog into a new live conversation so it can be continued.
+  - write/delete permissions for `shared_dialogs` are now restricted to the source owner or admin instead of any authenticated user.
 - Dialog history rename is now inline in the list:
   - double-click on a dialog title starts inline editing;
   - the `Переименовать` menu action edits the title in place instead of a prompt dialog.
