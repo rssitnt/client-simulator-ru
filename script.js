@@ -7814,16 +7814,19 @@ function updateAdminUsersTableRow(row, rowData) {
                     const currentRowData = row._adminData;
                     if (!currentRowData?.user) return;
                     const nextRole = normalizeRole(roleValue);
+                    const previousRole = normalizeRole(currentRowData.user.role);
                     if (nextRole === normalizeRole(currentRowData.user.role)) {
                         setAdminRolePickerOpen(row._adminRolePicker, false);
                         return;
                     }
-                    syncAdminRolePickerState(row._adminRolePicker, currentRowData.user.role, true);
+                    let persistedRole = previousRole;
+                    syncAdminRolePickerState(row._adminRolePicker, previousRole, true);
                     try {
                         await patchUserRecord(currentRowData.user.login, {
                             role: nextRole,
                             lastSeenAt: new Date().toISOString()
                         });
+                        persistedRole = nextRole;
 
                         if (currentUser && currentRowData.user.login === currentUser.login) {
                             const previousCurrentUserRole = normalizeRole(currentUser.role);
@@ -7839,8 +7842,11 @@ function updateAdminUsersTableRow(row, rowData) {
                         setAdminRolePickerOpen(row._adminRolePicker, false);
                         showCopyNotification(`Роль ${currentRowData.user.login} обновлена`);
                         refreshAdminUsersTableAfterMutation();
+                    } catch (error) {
+                        console.error('Failed to update user role:', error);
+                        showCopyNotification(error?.message || `Не удалось обновить роль ${currentRowData.user.login}`);
                     } finally {
-                        syncAdminRolePickerState(row._adminRolePicker, nextRole, false);
+                        syncAdminRolePickerState(row._adminRolePicker, persistedRole, false);
                     }
                 });
                 optionButtons.set(roleValue, optionButton);
@@ -22444,6 +22450,7 @@ bindEvent(settingsNameInput, 'input', () => {
     autoResizeNameInput();
     const newName = normalizeFio(settingsNameInput.value);
     if (!newName || !currentUser) return;
+    const loginToUpdate = normalizeLogin(currentUser.login);
     managerNameInput.value = newName;
     currentUser.fio = newName;
     setCachedStorageValue(USER_NAME_KEY, newName);
@@ -22451,9 +22458,15 @@ bindEvent(settingsNameInput, 'input', () => {
 
     if (fioSaveTimeout) clearTimeout(fioSaveTimeout);
     fioSaveTimeout = setTimeout(() => {
-        patchUserRecord(currentUser.login, {
+        if (!loginToUpdate || normalizeLogin(currentUser?.login) !== loginToUpdate) return;
+        void patchUserRecord(loginToUpdate, {
             fio: newName,
             lastSeenAt: new Date().toISOString()
+        }).catch((error) => {
+            console.warn('Failed to autosave display name:', error);
+            if (normalizeLogin(currentUser?.login) === loginToUpdate) {
+                showCopyNotification('Не удалось сохранить имя. Повторите позже.');
+            }
         });
     }, 450);
 });

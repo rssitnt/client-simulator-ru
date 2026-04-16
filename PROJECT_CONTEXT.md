@@ -137,6 +137,10 @@
   - the composer input and prompt wrapper must stay transparent/flat in local light theme;
   - the active mobile tab must not fall back to the old accent-blue styling.
 - In the local desktop admin table, the `Статус` label and presence text are now intentionally inline in one row to keep user lines compact; avoid restoring the old stacked status layout there.
+- Admin role switching in `Пользователи и доступ` is no longer allowed to stay in a false optimistic state:
+  - if `patchUserRecord(...)` fails, the picker rolls back to the previous role instead of visually staying on the unsaved role.
+- Settings name autosave is now guarded against debounce-time session changes:
+  - the delayed save captures the current login, skips the write if logout/account-switch happened before the timer fired, and catches remote save failures instead of throwing an uncaught error from the timeout callback.
 
 ## Current auth state
 - Password login now waits more patiently for the matching Firebase session instead of failing too early on delayed session exposure.
