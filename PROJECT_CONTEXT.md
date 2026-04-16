@@ -159,6 +159,13 @@
 - The Gemini token server now exposes `/health` (GET) for readiness checks and logs structured per-request events with status/duration.
 - The Gemini token client now honors `rate_limited` responses by delaying for `retryAfterMs` before retrying candidates.
 - Token server validation now emits structured error codes (`invalid_body`, `payload_too_large`) with size metadata.
+- The Gemini transcribe route/server contract is locked again:
+  - frontend fallback transcript requests send `audioBase64`;
+  - the token server accepts `audioBase64`, `data`, and legacy `audio` on `/api/gemini-live-transcribe`;
+  - `scripts/token-server-contract-smoke.mjs` now guards that contract plus a basic OpenAI request validation path.
+- `shared_dialogs` RTDB rules are tightened again in this branch:
+  - read now requires auth;
+  - create/update/delete is limited to the source owner or admin instead of any authenticated user.
 - As of `2026-04-14`, token-server runtime safety was tightened again:
   - rate limiting now keeps a real reset timestamp and returns a valid `retryAfterMs` instead of falling into a broken helper scope;
   - missing Firebase ID token now returns structured `401 { code: "missing_id_token" }` instead of a bare JSON error;

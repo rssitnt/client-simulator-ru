@@ -207,7 +207,8 @@ function validateTokenRequest(body) {
 }
 
 function validateTranscribeRequest(body) {
-    if (!body.audio || typeof body.audio !== 'string') {
+    const audioPayload = String(body?.audioBase64 || body?.data || body?.audio || '').trim();
+    if (!audioPayload) {
         throw createHttpError(400, 'Audio payload is required.', { code: 'missing_audio' });
     }
 }
@@ -729,10 +730,10 @@ async function createGeminiAudioTranscription(requestBody = {}) {
         throw new Error('GEMINI_API_KEY is not configured');
     }
 
-    const audioBase64 = String(requestBody?.audioBase64 || requestBody?.data || '').trim();
+    const audioBase64 = String(requestBody?.audioBase64 || requestBody?.data || requestBody?.audio || '').trim();
     const mimeType = String(requestBody?.mimeType || 'audio/wav').trim().toLowerCase();
     if (!audioBase64) {
-        throw createHttpError(400, 'audioBase64 is required');
+        throw createHttpError(400, 'Audio payload is required.', { code: 'missing_audio' });
     }
     if (!mimeType.startsWith('audio/')) {
         throw createHttpError(400, 'mimeType must be an audio/* value');

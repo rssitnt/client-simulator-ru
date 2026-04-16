@@ -1032,6 +1032,14 @@ async function installGeminiVoiceSmokeRoutes(context, tokenBucket, transcribeBuc
     });
     await context.route('**/api/gemini-live-token', async (route) => {
         const request = route.request();
+        if (request.method() !== 'POST') {
+            await route.fulfill({
+                status: 405,
+                contentType: 'application/json; charset=utf-8',
+                body: JSON.stringify({ error: 'Method not allowed' })
+            });
+            return;
+        }
         const rawBody = request.postData() || '{}';
         let payload = {};
         try {
@@ -1041,6 +1049,14 @@ async function installGeminiVoiceSmokeRoutes(context, tokenBucket, transcribeBuc
             url: request.url(),
             payload
         });
+        if (payload?.voice != null && typeof payload.voice !== 'string') {
+            await route.fulfill({
+                status: 400,
+                contentType: 'application/json; charset=utf-8',
+                body: JSON.stringify({ error: 'Voice must be a string.' })
+            });
+            return;
+        }
         await route.fulfill({
             status: 200,
             contentType: 'application/json; charset=utf-8',
@@ -1053,6 +1069,14 @@ async function installGeminiVoiceSmokeRoutes(context, tokenBucket, transcribeBuc
     });
     await context.route('**/api/gemini-live-transcribe', async (route) => {
         const request = route.request();
+        if (request.method() !== 'POST') {
+            await route.fulfill({
+                status: 405,
+                contentType: 'application/json; charset=utf-8',
+                body: JSON.stringify({ error: 'Method not allowed' })
+            });
+            return;
+        }
         const rawBody = request.postData() || '{}';
         let payload = {};
         try {
@@ -1062,6 +1086,15 @@ async function installGeminiVoiceSmokeRoutes(context, tokenBucket, transcribeBuc
             url: request.url(),
             payload
         });
+        const audioPayload = String(payload?.audioBase64 || payload?.data || payload?.audio || '').trim();
+        if (!audioPayload) {
+            await route.fulfill({
+                status: 400,
+                contentType: 'application/json; charset=utf-8',
+                body: JSON.stringify({ error: 'Audio payload is required.' })
+            });
+            return;
+        }
         const transcript = voiceScenario === 'audio-only-first-reply-fallback'
             ? 'Здравствуйте. Под задачу есть вариант, могу коротко по срокам и сервису.'
             : voiceScenario === 'partial-first-reply-merged-with-fallback'

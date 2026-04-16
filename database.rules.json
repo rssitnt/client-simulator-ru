@@ -100,8 +100,10 @@
       }
     },
     "shared_dialogs": {
-      ".read": true,
-      ".write": "auth != null"
+      "$shareId": {
+        ".read": "auth != null",
+        ".write": "auth != null && ((auth.token.admin === true || auth.token.role === 'admin') || ((!data.exists() && newData.child('source').child('login').val() === auth.token.email) || (data.exists() && data.child('source').child('login').val() === auth.token.email && (!newData.exists() || newData.child('source').child('login').val() === data.child('source').child('login').val()))))"
+      }
     },
     "app_config": {
       ".read": "auth != null",
