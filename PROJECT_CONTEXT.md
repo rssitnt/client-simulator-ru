@@ -114,6 +114,9 @@
 - That desktop admin-users smoke now also guards the new compact behavior:
   - separate `Доступ / Активность` headers must stay hidden on desktop;
   - when a real data row exists, its action cell must keep hover-bubble data for those two values.
+- Integration smoke is intentionally UI-agnostic for hidden rater prompt setup now:
+  - it writes `raterHiddenPrompt:v1` directly into localStorage instead of clicking `#settingsBtn`, because that floating button can be hidden in the local minimal UI;
+  - its Firebase stubs must include both `sendPasswordResetEmail()` and `firebase-app-check.js`, otherwise `script.js` can fail before the real integration assertions even begin.
 - A real admin-users load failure was fixed in `C:\projects\sites\client-simulator\script.js`:
   - `updateAdminUsersTableRow(...)` must keep `actionCell` destructured from `row._adminCells`;
   - without that binding, row hydration throws and the whole section collapses into the generic `Ошибка загрузки таблицы пользователей...` state even though Firebase data is available.
