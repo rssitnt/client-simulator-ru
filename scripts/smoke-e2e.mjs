@@ -1032,11 +1032,34 @@ async function installGeminiVoiceSmokeRoutes(context, tokenBucket, transcribeBuc
     });
     await context.route('**/api/gemini-live-token', async (route) => {
         const request = route.request();
+        if (request.method() !== 'POST') {
+            await route.fulfill({
+                status: 405,
+                contentType: 'application/json; charset=utf-8',
+                body: JSON.stringify({ error: 'Method not allowed' })
+            });
+            return;
+        }
         const rawBody = request.postData() || '{}';
         let payload = {};
         try {
             payload = JSON.parse(rawBody);
-        } catch {}
+        } catch {
+            await route.fulfill({
+                status: 400,
+                contentType: 'application/json; charset=utf-8',
+                body: JSON.stringify({ error: 'Invalid JSON body', code: 'invalid_body' })
+            });
+            return;
+        }
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+            await route.fulfill({
+                status: 400,
+                contentType: 'application/json; charset=utf-8',
+                body: JSON.stringify({ error: 'JSON body must be an object', code: 'invalid_body' })
+            });
+            return;
+        }
         tokenBucket.push({
             url: request.url(),
             payload
@@ -1053,11 +1076,42 @@ async function installGeminiVoiceSmokeRoutes(context, tokenBucket, transcribeBuc
     });
     await context.route('**/api/gemini-live-transcribe', async (route) => {
         const request = route.request();
+        if (request.method() !== 'POST') {
+            await route.fulfill({
+                status: 405,
+                contentType: 'application/json; charset=utf-8',
+                body: JSON.stringify({ error: 'Method not allowed' })
+            });
+            return;
+        }
         const rawBody = request.postData() || '{}';
         let payload = {};
         try {
             payload = JSON.parse(rawBody);
-        } catch {}
+        } catch {
+            await route.fulfill({
+                status: 400,
+                contentType: 'application/json; charset=utf-8',
+                body: JSON.stringify({ error: 'Invalid JSON body', code: 'invalid_body' })
+            });
+            return;
+        }
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+            await route.fulfill({
+                status: 400,
+                contentType: 'application/json; charset=utf-8',
+                body: JSON.stringify({ error: 'JSON body must be an object', code: 'invalid_body' })
+            });
+            return;
+        }
+        if (typeof payload.audioBase64 !== 'string' && typeof payload.data !== 'string' && typeof payload.audio !== 'string') {
+            await route.fulfill({
+                status: 400,
+                contentType: 'application/json; charset=utf-8',
+                body: JSON.stringify({ error: 'Audio payload is required', code: 'missing_audio' })
+            });
+            return;
+        }
         transcribeBucket.push({
             url: request.url(),
             payload

@@ -157,8 +157,13 @@
   - admin settings expose `Техлог входа и сброса пароля` with recent `login / restore / reset` events;
   - each event stores a compact browser/Firebase session snapshot so support can triage employee login issues from the app UI.
 - The Gemini token server now exposes `/health` (GET) for readiness checks and logs structured per-request events with status/duration.
+- `/health` now also reports per-route readiness for `geminiToken`, `geminiTranscribe`, and `openaiRealtime`, so partial provider breakage no longer looks fully healthy.
 - The Gemini token client now honors `rate_limited` responses by delaying for `retryAfterMs` before retrying candidates.
 - Token server validation now emits structured error codes (`invalid_body`, `payload_too_large`) with size metadata.
+- Token-server contract drift is now fixed in this workspace too:
+  - `/api/gemini-live-transcribe` accepts `audioBase64`, `data`, and legacy `audio`;
+  - OpenAI realtime upstream errors preserve their original HTTP status/code and expose `upstreamStatus`;
+  - `scripts/token-server-contract-smoke.mjs` verifies those contracts, and `scripts/smoke-e2e.mjs` route stubs now reject malformed token/transcribe requests instead of always returning `200`.
 - As of `2026-04-14`, token-server runtime safety was tightened again:
   - rate limiting now keeps a real reset timestamp and returns a valid `retryAfterMs` instead of falling into a broken helper scope;
   - missing Firebase ID token now returns structured `401 { code: "missing_id_token" }` instead of a bare JSON error;
@@ -263,6 +268,7 @@
 - Public share links now use `shared_dialogs` in RTDB:
   - sharing creates a permanent `?share=` link;
   - opening that link after login clones the dialog into a new live conversation so it can be continued.
+  - write/delete rules for `shared_dialogs` are now limited to the source dialog owner (by `source.login`) or admin; public read stays open for the share-link flow.
 - Dialog history rename is now inline in the list:
   - double-click on a dialog title starts inline editing;
   - the `Переименовать` menu action edits the title in place instead of a prompt dialog.
