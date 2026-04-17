@@ -6269,6 +6269,46 @@ function getPartnerInviteProgress(invite) {
     };
 }
 
+async function copyInviteLinkWithFallback(directInviteLink, promptText = 'Скопируйте ссылку приглашения вручную') {
+    const safeLink = String(directInviteLink || '').trim();
+    let copiedDirectLink = false;
+    let showedDirectLinkPrompt = false;
+    if (!safeLink) {
+        return { copiedDirectLink, showedDirectLinkPrompt };
+    }
+    if (navigator.clipboard?.writeText) {
+        try {
+            await navigator.clipboard.writeText(safeLink);
+            copiedDirectLink = true;
+        } catch (error) {
+            console.warn('Failed to copy invite link:', error);
+        }
+    }
+    if (!copiedDirectLink) {
+        try {
+            window.prompt(promptText, safeLink);
+            showedDirectLinkPrompt = true;
+        } catch (error) {
+            console.warn('Failed to show manual invite link prompt:', error);
+        }
+    }
+    return { copiedDirectLink, showedDirectLinkPrompt };
+}
+
+function buildInviteReissueNotification(login, { mailSent = false, mailError = '', copiedDirectLink = false, showedDirectLinkPrompt = false } = {}) {
+    const safeLogin = normalizeLogin(login) || 'пользователя';
+    const linkStateText = copiedDirectLink
+        ? 'ссылка скопирована'
+        : showedDirectLinkPrompt
+            ? 'ссылка показана для ручного копирования'
+            : 'ссылка сохранена в карточке инвайта';
+    if (mailSent) {
+        return `Новая ссылка для ${safeLogin} выпущена, письмо отправлено, ${linkStateText}.`;
+    }
+    const safeMailError = String(mailError || '').trim() || 'Проверьте настройки Firebase Auth.';
+    return `Письмо не отправлено. Для ${safeLogin} новая ссылка выпущена, ${linkStateText}. ${safeMailError}`;
+}
+
 function setAdminLatestInviteState(nextState = null) {
     adminLatestInviteState = nextState ? { ...nextState } : null;
     renderAdminLatestInvitePanel();
@@ -6408,14 +6448,12 @@ async function handleAdminInviteJournalReissue(login, invite) {
         mailError: inviteResult.mailResult?.readableError || '',
         summary: `Инвайт для ${inviteResult.login}`
     });
-    if (navigator.clipboard?.writeText) {
-        try {
-            await navigator.clipboard.writeText(inviteResult.directInviteLink);
-        } catch (error) {
-            console.warn('Failed to copy reissued invite from journal:', error);
-        }
-    }
-    showCopyNotification(`Новая ссылка для ${inviteResult.login} готова`);
+    const copyState = await copyInviteLinkWithFallback(inviteResult.directInviteLink);
+    showCopyNotification(buildInviteReissueNotification(inviteResult.login, {
+        mailSent: !!inviteResult.mailResult?.sent,
+        mailError: inviteResult.mailResult?.readableError || '',
+        ...copyState
+    }));
     refreshAdminUsersTableAfterMutation();
 }
 
@@ -7575,15 +7613,7 @@ function createAdminUsersTableRow(login) {
         inviteReissueBtn.disabled = true;
         try {
             const inviteResult = await issuePartnerInvite(rowData.login, getInviteDaysFromExpiry(rowData.invite?.expiresAt), { sendEmail: true });
-            let copiedDirectLink = false;
-            if (navigator.clipboard?.writeText) {
-                try {
-                    await navigator.clipboard.writeText(inviteResult.directInviteLink);
-                    copiedDirectLink = true;
-                } catch (error) {
-                    console.warn('Failed to copy row reissue link:', error);
-                }
-            }
+            const copyState = await copyInviteLinkWithFallback(inviteResult.directInviteLink);
             setAdminLatestInviteState({
                 login: inviteResult.login,
                 days: inviteResult.days,
@@ -7594,11 +7624,11 @@ function createAdminUsersTableRow(login) {
                 mailError: inviteResult.mailResult?.readableError || '',
                 summary: `Инвайт для ${inviteResult.login}`
             });
-            showCopyNotification(
-                copiedDirectLink
-                    ? `Новая ссылка для ${inviteResult.login} выпущена и скопирована`
-                    : `Новая ссылка для ${inviteResult.login} выпущена`
-            );
+            showCopyNotification(buildInviteReissueNotification(inviteResult.login, {
+                mailSent: !!inviteResult.mailResult?.sent,
+                mailError: inviteResult.mailResult?.readableError || '',
+                ...copyState
+            }));
             refreshAdminUsersTableAfterMutation();
         } catch (error) {
             console.error('Failed to reissue invite:', error);
@@ -10455,15 +10485,7 @@ async function handleAdminLatestInviteReissue() {
     await runAdminLatestInviteAction(async () => {
         const nextDays = state.days || getInviteDaysFromExpiry(state.expiresAt);
         const inviteResult = await issuePartnerInvite(state.login, nextDays, { sendEmail: true });
-        let copiedDirectLink = false;
-        if (navigator.clipboard?.writeText) {
-            try {
-                await navigator.clipboard.writeText(inviteResult.directInviteLink);
-                copiedDirectLink = true;
-            } catch (error) {
-                console.warn('Failed to copy reissued invite link:', error);
-            }
-        }
+        const copyState = await copyInviteLinkWithFallback(inviteResult.directInviteLink);
         setAdminLatestInviteState({
             login: inviteResult.login,
             days: inviteResult.days,
@@ -10474,11 +10496,11 @@ async function handleAdminLatestInviteReissue() {
             mailError: inviteResult.mailResult?.readableError || '',
             summary: `Инвайт для ${inviteResult.login}`
         });
-        showCopyNotification(
-            copiedDirectLink
-                ? `Новая ссылка для ${inviteResult.login} выпущена и скопирована`
-                : `Новая ссылка для ${inviteResult.login} выпущена`
-        );
+        showCopyNotification(buildInviteReissueNotification(inviteResult.login, {
+            mailSent: !!inviteResult.mailResult?.sent,
+            mailError: inviteResult.mailResult?.readableError || '',
+            ...copyState
+        }));
         refreshAdminUsersTableAfterMutation();
     });
 }

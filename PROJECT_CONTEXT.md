@@ -160,6 +160,8 @@
   - active invite rows now also expose quick actions for `Письмо` and `Новая ссылка` directly in the users table.
   - there is now also a dedicated `Журнал инвайтов` section with filters (`Все / Ждут / Ошибка / Вошли / Истекли`) so admins can review invite flow separately from the full users table.
   - those journal filters now also show live counters (`Ждут (N)`, `Ошибка (N)`, etc.) based on realtime invite state.
+  - reissuing an invite now uses the same direct-link fallback path as first invite creation: if clipboard copy is blocked, the UI opens a manual copy prompt instead of silently losing the fresh link.
+  - reissue notifications are now explicit about both delivery channels: they tell the admin whether the email was actually sent and whether the fallback link was copied, shown for manual copy, or only left in the latest-invite card.
 - Smoke now also covers both auth repair paths: local-hash recovery through Firebase and auto-reset on Firebase password conflict.
 - Session restore no longer destroys the saved browser session immediately just because the Firebase auth session came back but the user profile read still returned empty once; that path is now treated as a soft restore miss first.
 - Auth observability is now exposed in the UI:
@@ -169,6 +171,10 @@
 - The Gemini token server now exposes `/health` (GET) for readiness checks and logs structured per-request events with status/duration.
 - The Gemini token client now honors `rate_limited` responses by delaying for `retryAfterMs` before retrying candidates.
 - Token server validation now emits structured error codes (`invalid_body`, `payload_too_large`) with size metadata.
+- Dependency audit on `2026-04-17`:
+  - transitive `protobufjs` is pinned to `7.5.5` and `brace-expansion` to `5.0.5` via `package.json` overrides;
+  - this removes the critical `protobufjs` advisory and the moderate `brace-expansion` advisory;
+  - remaining audit output is 8 low-severity issues inside the current `firebase-admin` dependency chain.
 - As of `2026-04-14`, token-server runtime safety was tightened again:
   - rate limiting now keeps a real reset timestamp and returns a valid `retryAfterMs` instead of falling into a broken helper scope;
   - missing Firebase ID token now returns structured `401 { code: "missing_id_token" }` instead of a bare JSON error;
