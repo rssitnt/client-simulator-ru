@@ -121,6 +121,10 @@
 - Verification on `2026-04-16`:
   - `npm run test:smoke` passed;
   - `npm run test:smoke:integration` passed after the Firebase integration stub refresh.
+- Verification on `2026-04-17`:
+  - daily bug scan reinstalled local deps with `npm ci` in the worktree, then `npm run test:smoke` and `npm run test:smoke:integration` both passed again;
+  - `package.json` / `package-lock.json` now pin `protobufjs` to `7.5.5` and `brace-expansion` to `5.0.5` via `overrides`, removing the prior critical+moderate audit findings without changing app behavior;
+  - `npm audit` still reports 8 low-severity transitive findings through the current `firebase-admin` chain; no behavior change was made there yet.
 - That desktop admin-users smoke now also guards the new compact behavior:
   - separate `Доступ / Активность` headers must stay hidden on desktop;
   - when a real data row exists, its action cell must keep hover-bubble data for those two values.
