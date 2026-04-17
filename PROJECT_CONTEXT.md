@@ -160,6 +160,14 @@
   - active invite rows now also expose quick actions for `Письмо` and `Новая ссылка` directly in the users table.
   - there is now also a dedicated `Журнал инвайтов` section with filters (`Все / Ждут / Ошибка / Вошли / Истекли`) so admins can review invite flow separately from the full users table.
   - those journal filters now also show live counters (`Ждут (N)`, `Ошибка (N)`, etc.) based on realtime invite state.
+- Admin invite/access mutations were hardened again on `2026-04-17`:
+  - invite issue/reissue now requires a real remote Firebase write before the UI reports success, so a local-only cache write cannot masquerade as a valid invite anymore;
+  - access open/close now also requires remote Firebase confirmation for invite/user mutations, and access reopen clears the revocation flag last so partial failures stay fail-closed instead of reopening access too early.
+- Token-server legacy login fallback is still only a temporary compatibility path:
+  - `ALLOW_LEGACY_LOGIN_FALLBACK` should stay disabled in production unless a migration explicitly requires it, because that path bypasses the stricter Firebase ID token gate.
+- Dependency safety baseline was restored on `2026-04-17`:
+  - `package.json` overrides now pin `protobufjs` to `7.5.5` and `brace-expansion` to `5.0.5`;
+  - `npm audit --omit=dev` is back to the known baseline of 8 low-severity findings in the `firebase-admin` transitive chain only.
 - Smoke now also covers both auth repair paths: local-hash recovery through Firebase and auto-reset on Firebase password conflict.
 - Session restore no longer destroys the saved browser session immediately just because the Firebase auth session came back but the user profile read still returned empty once; that path is now treated as a soft restore miss first.
 - Auth observability is now exposed in the UI:

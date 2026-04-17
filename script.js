@@ -4252,27 +4252,41 @@ async function patchPartnerInvite(login, patch = {}, options = {}) {
     return normalizePartnerInvite(merged, normalizedLogin);
 }
 
-async function deletePartnerInvite(login) {
+async function deletePartnerInvite(login, options = {}) {
+    const requireRemote = !!options.requireRemote;
     const normalizedLogin = normalizeLogin(login);
     if (!isValidLogin(normalizedLogin)) return false;
     const key = loginToStorageKey(normalizedLogin);
 
+    if (requireRemote && !db) {
+        throw new Error('Firebase RTDB недоступна для обязательного удаления инвайта.');
+    }
+
     if (db) {
         try {
-            await firebaseWriteWithTimeout(
+            await firebaseWritePathWithFallback(
+                `${PARTNER_INVITES_DB_PATH}/${key}`,
                 () => set(ref(db, `${PARTNER_INVITES_DB_PATH}/${key}`), null),
+                null,
+                'DELETE',
                 FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
                 `Firebase delete for ${PARTNER_INVITES_DB_PATH}/${key}`
             );
         } catch (error) {
             console.error('Failed to delete partner invite in Firebase:', error);
+            if (requireRemote) {
+                throw error;
+            }
         }
     }
 
     try {
-        await deletePublicPartnerInviteMirror(normalizedLogin);
+        await deletePublicPartnerInviteMirror(normalizedLogin, { requireRemote });
     } catch (error) {
         console.error('Failed to delete public partner invite mirror:', error);
+        if (requireRemote) {
+            throw error;
+        }
     }
 
     const localStore = loadLocalPartnerInvitesStore();
@@ -5007,20 +5021,31 @@ async function patchUserRecord(login, patch = {}, options = {}) {
     return normalizedRecord;
 }
 
-async function deleteUserRecord(login) {
+async function deleteUserRecord(login, options = {}) {
+    const requireRemote = !!options.requireRemote;
     const normalizedLogin = normalizeLogin(login);
     if (!normalizedLogin) return false;
     const key = loginToStorageKey(normalizedLogin);
 
+    if (requireRemote && !db) {
+        throw new Error('Firebase RTDB недоступна для обязательного удаления пользователя.');
+    }
+
     if (db) {
         try {
-            await firebaseWriteWithTimeout(
+            await firebaseWritePathWithFallback(
+                `${AUTH_USERS_DB_PATH}/${key}`,
                 () => set(ref(db, `${AUTH_USERS_DB_PATH}/${key}`), null),
+                null,
+                'DELETE',
                 FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
                 `Firebase delete for ${AUTH_USERS_DB_PATH}/${key}`
             );
         } catch (error) {
             console.error('Failed to delete user in Firebase:', error);
+            if (requireRemote) {
+                throw error;
+            }
         }
     }
 
@@ -6140,6 +6165,7 @@ async function sendPartnerInviteEmail(login, options = {}) {
 }
 
 async function issuePartnerInvite(login, days, options = {}) {
+    const requireRemote = options.requireRemote !== false;
     const normalizedLogin = normalizeLogin(login);
     const boundedDays = Math.max(1, Math.min(365, Number(days || 30) || 30));
     if (!isValidLogin(normalizedLogin)) {
@@ -6168,11 +6194,11 @@ async function issuePartnerInvite(login, days, options = {}) {
         magicLinkLastError: '',
         inviteVerifiedVia: '',
         inviteAcceptedAt: null
-    });
+    }, { requireRemote });
 
     await setAccessRevocation(normalizedLogin, false, {
         updatedBy: currentUser?.login || ''
-    });
+    }, { requireRemote });
 
     const existingUser = await getUserRecordByLogin(normalizedLogin);
     if (existingUser && existingUser.role !== 'admin') {
@@ -6184,8 +6210,8 @@ async function issuePartnerInvite(login, days, options = {}) {
             failedLoginBackoffUntil: null,
             sessionRevokedAt: null,
             lastSeenAt: nowIso
-        });
-        await patchUserRecord(normalizedLogin, { role: 'user' });
+        }, { requireRemote });
+        await patchUserRecord(normalizedLogin, { role: 'user' }, { requireRemote });
     }
 
     const mailResult = options.sendEmail === false
@@ -6600,6 +6626,7 @@ async function toggleAccessForLogin(login, nextActive, user, invite, accessRevoc
     const isCorporate = isCorporateEmail(normalizedLogin);
     const currentlyRevoked = isAccessRevokedForLogin(accessRevocation, normalizedLogin);
     const shouldDeleteUser = Boolean(user) && !isAdminUser;
+    const remoteMutationOptions = { requireRemote: true };
 
     if (!nextActive) {
         if (!user && !invite && !currentlyRevoked) {
@@ -6609,14 +6636,14 @@ async function toggleAccessForLogin(login, nextActive, user, invite, accessRevoc
         await setAccessRevocation(normalizedLogin, true, {
             reason: 'manual',
             updatedBy: normalizeLogin(currentUser?.login || '')
-        });
+        }, remoteMutationOptions);
 
         if (invite) {
-            await deletePartnerInvite(normalizedLogin);
+            await deletePartnerInvite(normalizedLogin, remoteMutationOptions);
         }
 
         if (shouldDeleteUser) {
-            await deleteUserRecord(normalizedLogin);
+            await deleteUserRecord(normalizedLogin, remoteMutationOptions);
         } else if (user) {
             await patchUserRecord(normalizedLogin, {
                 isBlocked: true,
@@ -6626,7 +6653,7 @@ async function toggleAccessForLogin(login, nextActive, user, invite, accessRevoc
                 failedLoginBackoffUntil: null,
                 sessionRevokedAt: nowIso,
                 lastSeenAt: nowIso
-            });
+            }, remoteMutationOptions);
         }
 
         clearAuthCachesForRevocation(normalizedLogin);
@@ -6641,8 +6668,6 @@ async function toggleAccessForLogin(login, nextActive, user, invite, accessRevoc
         throw new Error('Для этого email сначала выдайте доступ по ссылке.');
     }
 
-    await setAccessRevocation(normalizedLogin, false);
-
     if (user) {
         await patchUserRecord(normalizedLogin, {
             isBlocked: false,
@@ -6652,14 +6677,16 @@ async function toggleAccessForLogin(login, nextActive, user, invite, accessRevoc
             failedLoginBackoffUntil: null,
             sessionRevokedAt: null,
             lastSeenAt: nowIso
-        });
+        }, remoteMutationOptions);
     }
 
     if (invite) {
         await patchPartnerInvite(normalizedLogin, {
             status: 'active'
-        });
+        }, remoteMutationOptions);
     }
+
+    await setAccessRevocation(normalizedLogin, false, {}, remoteMutationOptions);
 
     if (currentUser && currentUser.login === normalizedLogin) {
         const refreshedUser = await getUserRecordByLogin(normalizedLogin);
