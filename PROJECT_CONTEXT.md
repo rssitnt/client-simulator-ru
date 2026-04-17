@@ -20,6 +20,9 @@
 - Voice mode now also has a second recovery step after that: if the manager turn is already finalized but the assistant still does not start replying, the frontend does not stop at one blind retry anymore:
   - the assistant-response watchdog can retry the manager `activityEnd` boundary more than once;
   - if the gap still persists, a later hard stall-recovery retry fires, keeps the call in a waiting state, and logs `assistant_response_stall_recovery` into the local voice tech log.
+- Gemini fallback transcription request format is now aligned end-to-end again:
+  - the frontend sends `audioBase64` to `/api/gemini-live-transcribe`;
+  - the token server now validates `audioBase64` / legacy `data` / legacy `audio` instead of rejecting the real frontend payload before transcription starts.
 - Voice call status text is also smoothed now: fast race-condition flips between `Клиент говорит…` and `Ваша очередь говорить.` are briefly held so the top call status does not visibly blink during short boundary races.
 - The final voice-call summary card is now meant to live at the bottom of chat, not in the top voice status panel:
   - the top voice status panel is only for active/connecting call states;
@@ -121,6 +124,11 @@
 - Verification on `2026-04-16`:
   - `npm run test:smoke` passed;
   - `npm run test:smoke:integration` passed after the Firebase integration stub refresh.
+- Verification on `2026-04-17`:
+  - `node --check server/gemini-token-server.mjs` passed;
+  - `npm run test:smoke` passed;
+  - `npm run test:smoke:integration` passed;
+  - dependency overrides now pin `protobufjs@7.5.5` and `brace-expansion@5.0.5`, which removes the previous critical and moderate `npm audit` findings; 8 low-severity transitive findings remain under `firebase-admin`.
 - That desktop admin-users smoke now also guards the new compact behavior:
   - separate `Доступ / Активность` headers must stay hidden on desktop;
   - when a real data row exists, its action cell must keep hover-bubble data for those two values.

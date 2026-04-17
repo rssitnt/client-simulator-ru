@@ -207,8 +207,9 @@ function validateTokenRequest(body) {
 }
 
 function validateTranscribeRequest(body) {
-    if (!body.audio || typeof body.audio !== 'string') {
-        throw createHttpError(400, 'Audio payload is required.', { code: 'missing_audio' });
+    const audioBase64 = String(body?.audioBase64 || body?.data || body?.audio || '').trim();
+    if (!audioBase64) {
+        throw createHttpError(400, 'audioBase64 is required.', { code: 'missing_audio' });
     }
 }
 
