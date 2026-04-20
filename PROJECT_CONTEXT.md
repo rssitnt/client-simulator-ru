@@ -16,6 +16,10 @@
   - `fluent:prompt-24-regular`
   - saved locally as `C:\projects\sites\client-simulator\prompt-icon-fluent-24-regular.svg`
 - Voice mode is Gemini Live through the token server; first-turn handling and mic/voice settings were recently stabilized.
+- Dependency safety guard is expected to stay in `package.json` overrides:
+  - `protobufjs` must stay at `7.5.5`;
+  - `brace-expansion` must stay at `5.0.5`;
+  - if those overrides disappear, `npm audit --omit=dev` regresses from the known 8 low-severity `firebase-admin` baseline back to critical/moderate findings.
 - Voice mode now also has a local idle-boundary watchdog: if Gemini fails to emit an explicit end-of-manager-turn boundary (`input finished / waitingForInput`), the frontend retries `activityEnd`, finalizes the pending manager turn locally, and keeps the call in a waiting state instead of leaving the turn stuck in preview forever.
 - Voice mode now also has a second recovery step after that: if the manager turn is already finalized but the assistant still does not start replying, the frontend does not stop at one blind retry anymore:
   - the assistant-response watchdog can retry the manager `activityEnd` boundary more than once;
