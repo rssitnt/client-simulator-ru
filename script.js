@@ -54,7 +54,7 @@ const SIMULATOR_WEBHOOK_PROXY_ENDPOINT_PATH = '/api/simulator-webhook';
 const CERTIFICATION_WEBHOOK_PROXY_ENDPOINT_PATH = '/api/certification-webhook';
 const GEMINI_SDK_CDN_URL = 'https://cdn.jsdelivr.net/npm/@google/genai@1.40.0/+esm';
 const GEMINI_LIVE_MODEL = 'gemini-3.1-flash-live-preview';
-const GEMINI_LIVE_REMOTE_TOKEN_ENDPOINT = 'https://ti-client-simulator-studio.vercel.app/api/gemini-live-token';
+const GEMINI_LIVE_REMOTE_TOKEN_ENDPOINT = 'https://api.client-simulator.ru/api/gemini-live-token';
 const GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY = 'geminiLiveTokenEndpoint';
 const GEMINI_LIVE_VOICE_NAME_STORAGE_KEY = 'geminiLiveVoiceName';
 const GEMINI_LIVE_AUDIO_INPUT_DEVICE_STORAGE_KEY = 'geminiLiveAudioInputDeviceId';
@@ -68,6 +68,7 @@ const AUTH_PASSWORD_RESET_EMAIL_ENDPOINT_PATH = '/api/auth-password-reset-email'
 const TRUSTED_VOICE_TOKEN_ENDPOINT_ORIGINS = new Set([
     'https://client-simulator.ru',
     'https://www.client-simulator.ru',
+    'https://api.client-simulator.ru',
     'https://ti-client-simulator-studio.vercel.app',
     'https://client-simulator-gemini-token.onrender.com'
 ]);
