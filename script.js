@@ -72,7 +72,7 @@ const TRUSTED_VOICE_TOKEN_ENDPOINT_ORIGINS = new Set([
     'https://www.client-simulator.ru',
     'https://ti-client-simulator-studio.vercel.app',
     'https://client-simulator-gemini-token.onrender.com',
-    'https://apartment-prove-manufacturing-endorsed.trycloudflare.com'
+    'https://spots-cabinet-dayton-begun.trycloudflare.com'
 ]);
 const GEMINI_VOICE_FIRST_AUDIO_DELAY_MS = 200;
 const GEMINI_VOICE_LATE_TRANSCRIPT_GRACE_MS = 650;
