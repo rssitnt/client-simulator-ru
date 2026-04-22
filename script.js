@@ -5238,7 +5238,7 @@ function setAuthError(message = '') {
     }
     authErrorText.textContent = message;
     authErrorText.style.display = 'block';
-    setAuthStatus(message, 'error');
+    setAuthStatus('', 'idle');
 }
 
 function syncLocalhostDevAuthActions() {
