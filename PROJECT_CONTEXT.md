@@ -296,3 +296,6 @@
 ## Still watch
 - If one employee still cannot log in while others can, first check Firebase Authentication for an old standalone account or stale password on that exact email.
 - Keep auth fixes narrow and safe; do not reopen the earlier broad auth rewrite unless a reproducible blocker appears.
+- The public `client-simulator.ru` frontend repo currently points its remote Gemini backend at the active quick-tunnel URL on the local backend PC.
+- Invite and auth mail endpoints are derived from that Gemini token endpoint origin, so production mail delivery follows the same backend route.
+- Because this uses a temporary `trycloudflare` hostname, any tunnel hostname rotation requires updating both the frontend token endpoint and the CSP `connect-src` allowlist together.

@@ -56,7 +56,7 @@ const MANAGER_ASSISTANT_WEBHOOK_URL = UNIFIED_SIMULATOR_WEBHOOK_URL;
 const AI_IMPROVE_WEBHOOK_URL = UNIFIED_SIMULATOR_WEBHOOK_URL;
 const GEMINI_SDK_CDN_URL = 'https://cdn.jsdelivr.net/npm/@google/genai@1.40.0/+esm';
 const GEMINI_LIVE_MODEL = 'gemini-3.1-flash-live-preview';
-const GEMINI_LIVE_REMOTE_TOKEN_ENDPOINT = 'https://client-simulator-gemini-token.onrender.com/api/gemini-live-token';
+const GEMINI_LIVE_REMOTE_TOKEN_ENDPOINT = 'https://commit-submissions-authorized-island.trycloudflare.com/api/gemini-live-token';
 const GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY = 'geminiLiveTokenEndpoint';
 const GEMINI_LIVE_VOICE_NAME_STORAGE_KEY = 'geminiLiveVoiceName';
 const GEMINI_LIVE_AUDIO_INPUT_DEVICE_STORAGE_KEY = 'geminiLiveAudioInputDeviceId';
@@ -68,7 +68,8 @@ const TRUSTED_VOICE_TOKEN_ENDPOINT_ORIGINS = new Set([
     'https://client-simulator.ru',
     'https://www.client-simulator.ru',
     'https://ti-client-simulator-studio.vercel.app',
-    'https://client-simulator-gemini-token.onrender.com'
+    'https://client-simulator-gemini-token.onrender.com',
+    'https://commit-submissions-authorized-island.trycloudflare.com'
 ]);
 const GEMINI_VOICE_FIRST_AUDIO_DELAY_MS = 200;
 const GEMINI_VOICE_LATE_TRANSCRIPT_GRACE_MS = 650;
