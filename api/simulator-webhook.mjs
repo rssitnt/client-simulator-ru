@@ -1,5 +1,5 @@
-import { handleTokenServerRequest } from '../server/gemini-token-server.mjs';
+import { proxyToPublicBackend } from './_backend-proxy.mjs';
 
 export default async function handler(req, res) {
-    return handleTokenServerRequest(req, res);
+    return proxyToPublicBackend(req, res, '/api/simulator-webhook');
 }
