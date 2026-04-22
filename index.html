@@ -67,9 +67,9 @@
                     <p class="auth-dev-caption">Только для localhost. Создаёт локальную dev-сессию и не трогает боевую авторизацию.</p>
                 </div>
                 <details id="authMailHelp" class="auth-mail-help" hidden open>
-                    <summary>Где письмо и куда нажимать</summary>
+                    <summary>Где искать письмо</summary>
                     <img id="authMailHelpImage" src="1.png" alt="Пример письма подтверждения с выделенной ссылкой входа" loading="lazy">
-                    <p class="auth-mail-help-caption">После нажатия «Войти» откройте письмо и нажмите ссылку <strong>Sign in to client-simulator</strong>. Если письма нет, проверьте папку «Спам».</p>
+                    <p class="auth-mail-help-caption">После нажатия «Войти» откройте письмо и нажмите ссылку для входа. Если письма нет, проверьте папку «Спам».</p>
                 </details>
                 </form>
             </div>
@@ -471,11 +471,11 @@
                         </div>
                     </details>
                     <details id="adminAuthDebugAccordion" class="admin-hidden-prompt-section">
-                        <summary class="admin-hidden-prompt-summary">Техлог входа и сброса пароля</summary>
+                        <summary class="admin-hidden-prompt-summary">Журнал входа и сброса пароля</summary>
                         <div class="admin-webhook-debug-body">
                             <div class="admin-webhook-debug-toolbar">
                                 <div id="adminAuthDebugMeta" class="admin-webhook-debug-meta">
-                                    Здесь видны последние шаги авторизации в этом браузере: поиск аккаунта, проверка доступа, открытие Firebase-сессии, восстановление сессии и сброс пароля.
+                                    Здесь видны последние шаги входа в этом браузере: поиск аккаунта, проверка доступа, восстановление входа и сброс пароля.
                                 </div>
                                 <div class="admin-webhook-debug-actions">
                                     <button id="adminAuthDebugCopyBtn" class="btn-change" type="button">Скопировать техлог</button>
@@ -483,7 +483,7 @@
                                 </div>
                             </div>
                             <div id="adminAuthDebugList" class="admin-webhook-debug-list">
-                                <div class="admin-webhook-debug-empty">Техлог пока пуст</div>
+                                <div class="admin-webhook-debug-empty">Журнал пока пуст</div>
                             </div>
                         </div>
                     </details>
@@ -936,7 +936,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js" integrity="sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3" crossorigin="anonymous" defer></script>
     <!-- Turndown for HTML to Markdown conversion (WYSIWYG editing) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js" integrity="sha384-m6AyXEhyWRg2s2wrkDV64LGkaManYgMSAjn2U+zymzSJ42WthRSjCu1AqZJhoQV0" crossorigin="anonymous" defer></script>
-<script type="module" src="script.js?v=20260422-04"></script>
+<script type="module" src="script.js?v=20260422-05"></script>
     <!-- Last deployment trigger: 2026-03-24 15:00 -->
 </body>
 </html>

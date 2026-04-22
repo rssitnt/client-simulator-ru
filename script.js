@@ -11988,7 +11988,7 @@ function renderWebhookDebugPanel() {
     const errorCount = webhookDebugEntries.filter((entry) => entry.status === 'error').length;
     adminWebhookDebugMeta.textContent = total
         ? `Показаны последние ${Math.min(total, WEBHOOK_DEBUG_LOG_MAX_ENTRIES)} запросов. В работе: ${pendingCount}. Ошибок: ${errorCount}.`
-        : 'Показываются последние запросы этого браузера. Здесь удобно смотреть requestId, endpoint, время и текст ошибки.';
+        : 'Здесь видны последние запросы этого браузера: адрес, время ответа и текст ошибки.';
 
     if (!total) {
         adminWebhookDebugList.innerHTML = '<div class="admin-webhook-debug-empty">Лог пока пуст</div>';
@@ -12005,7 +12005,7 @@ function renderWebhookDebugPanel() {
             : `${startedAtText} • ${durationText}`;
         const detailFields = [
             {
-                label: 'Endpoint',
+                label: 'Адрес',
                 value: `<code>${escapeHtml(entry.endpointLabel || '-')}</code>`
             },
             {
@@ -12171,13 +12171,13 @@ function getAuthDebugStageLabel(stage = '') {
         case 'account_lookup': return 'Поиск аккаунта';
         case 'access_policy': return 'Проверка доступа';
         case 'failed_attempt_save': return 'Фиксация неверной попытки';
-        case 'firebase_session_open': return 'Открытие Firebase-сессии';
+        case 'firebase_session_open': return 'Открытие входа';
         case 'user_save': return 'Сохранение аккаунта';
         case 'invite_update': return 'Обновление приглашения';
         case 'verify_email_send': return 'Отправка письма подтверждения';
         case 'verify_email_mark': return 'Фиксация отправки письма';
-        case 'protected_refresh': return 'Подключение защищённых данных';
-        case 'access_mirror_sync': return 'Синхронизация access mirror';
+        case 'protected_refresh': return 'Загрузка данных после входа';
+        case 'access_mirror_sync': return 'Проверка и сохранение прав';
         case 'login_blocked': return 'Вход отклонён';
         case 'login_complete': return 'Вход завершён';
         case 'login_failed': return 'Вход завершился ошибкой';
@@ -12185,11 +12185,11 @@ function getAuthDebugStageLabel(stage = '') {
         case 'reset_sent': return 'Письмо для сброса отправлено';
         case 'reset_failed': return 'Сброс пароля завершился ошибкой';
         case 'restore_started': return 'Старт восстановления сессии';
-        case 'restore_wait_firebase': return 'Ожидание Firebase-сессии';
+        case 'restore_wait_firebase': return 'Ожидание восстановления входа';
         case 'restore_profile_lookup': return 'Поиск профиля при восстановлении';
         case 'restore_complete': return 'Сессия восстановлена';
         case 'restore_failed': return 'Восстановление сессии сорвалось';
-        default: return stage || 'Auth-событие';
+        default: return stage || 'Событие входа';
     }
 }
 
@@ -12247,8 +12247,8 @@ function renderAuthDebugPanel() {
     const errorCount = authDebugEntries.filter((entry) => entry.status === 'error').length;
     const loginCount = new Set(authDebugEntries.map((entry) => String(entry.login || '').trim()).filter(Boolean)).size;
     adminAuthDebugMeta.textContent = total
-        ? `Показаны последние ${Math.min(total, AUTH_DEBUG_LOG_MAX_ENTRIES)} auth-событий. Email: ${loginCount}. Ошибок: ${errorCount}.`
-        : 'Здесь видно шаги входа, восстановления сессии и сброса пароля в этом браузере.';
+        ? `Показаны последние ${Math.min(total, AUTH_DEBUG_LOG_MAX_ENTRIES)} событий входа. Email: ${loginCount}. Ошибок: ${errorCount}.`
+        : 'Здесь видны шаги входа, восстановления доступа и сброса пароля в этом браузере.';
 
     if (!total) {
         adminAuthDebugList.innerHTML = '<div class="admin-webhook-debug-empty">Техлог пока пуст</div>';
@@ -12260,12 +12260,12 @@ function renderAuthDebugPanel() {
         const badgeStatus = status === 'error' ? 'error' : status === 'ok' ? 'ok' : 'pending';
         const detailFields = [
             entry.login ? { label: 'Email', value: `<code>${escapeHtml(entry.login)}</code>` } : null,
-            entry.context ? { label: 'Контур', value: escapeHtml(entry.context) } : null,
+            entry.context ? { label: 'Сценарий', value: escapeHtml(entry.context) } : null,
             entry.code ? { label: 'Код', value: `<code>${escapeHtml(entry.code)}</code>` } : null,
             entry.accessReason ? { label: 'Доступ', value: escapeHtml(entry.accessReason) } : null,
             entry.sessionMode ? { label: 'Режим', value: escapeHtml(entry.sessionMode) } : null,
-            entry.browserSessionLogin ? { label: 'Browser session', value: `<code>${escapeHtml(entry.browserSessionLogin)}</code>` } : null,
-            entry.firebaseLogin ? { label: 'Firebase session', value: `<code>${escapeHtml(entry.firebaseLogin)}</code>` } : null,
+            entry.browserSessionLogin ? { label: 'Сессия в браузере', value: `<code>${escapeHtml(entry.browserSessionLogin)}</code>` } : null,
+            entry.firebaseLogin ? { label: 'Текущий вход', value: `<code>${escapeHtml(entry.firebaseLogin)}</code>` } : null,
             entry.message ? { label: 'Сообщение', value: escapeHtml(entry.message) } : null
         ].filter(Boolean);
         const startedAtText = formatWebhookDebugTime(entry.startedAt);
@@ -12299,7 +12299,7 @@ function clearAuthDebugEntries() {
 
 function buildAuthDebugClipboardText() {
     if (!authDebugEntries.length) {
-        return 'Техлог авторизации пуст.';
+        return 'Журнал входа пуст.';
     }
     return authDebugEntries
         .slice()
@@ -12355,11 +12355,11 @@ function getVoiceDebugStageLabel(stage = '') {
     switch (String(stage || '').trim()) {
         case 'start_requested': return 'Старт звонка';
         case 'sdk_loaded': return 'SDK загружен';
-        case 'token_request_started': return 'Запрос session key';
-        case 'token_request_succeeded': return 'Session key получен';
-        case 'token_request_failed': return 'Session key не получен';
+        case 'token_request_started': return 'Запрос ключа подключения';
+        case 'token_request_succeeded': return 'Ключ подключения получен';
+        case 'token_request_failed': return 'Ключ подключения не получен';
         case 'live_connect_started': return 'Открытие Gemini Live';
-        case 'live_open': return 'Соединение открыто';
+        case 'live_open': return 'Соединение установлено';
         case 'capture_fallback_default': return 'Микрофон переключён';
         case 'capture_ready': return 'Микрофон готов';
         case 'capture_failed': return 'Микрофон не инициализирован';
@@ -12368,7 +12368,7 @@ function getVoiceDebugStageLabel(stage = '') {
         case 'setup_complete': return 'Gemini готов';
         case 'first_user_audio': return 'Пошёл первый звук менеджера';
         case 'first_assistant_text': return 'Пришёл первый текст клиента';
-        case 'first_audio_chunk': return 'Пришёл первый аудиочанк клиента';
+        case 'first_audio_chunk': return 'Пришёл первый фрагмент аудио клиента';
         case 'first_audio_playback': return 'Стартовало первое воспроизведение';
         case 'transport_error': return 'Ошибка транспорта';
         case 'transport_close': return 'Соединение закрыто';
@@ -22616,37 +22616,37 @@ bindEvent(adminHiddenRaterPromptInput, 'keydown', (e) => {
 
 bindEvent(adminWebhookDebugClearBtn, 'click', () => {
     clearWebhookDebugEntries();
-    showCopyNotification('Лог webhook очищен');
+        showCopyNotification('Журнал запросов очищен');
 });
 
 bindEvent(adminVoiceDebugCopyBtn, 'click', async () => {
     try {
         await copyVoiceDebugEntriesToClipboard();
-        showCopyNotification('Техлог голоса скопирован');
+        showCopyNotification('Журнал голосового режима скопирован');
     } catch (error) {
         console.error('Failed to copy voice debug log:', error);
-        showCopyNotification('Не удалось скопировать техлог голоса');
+        showCopyNotification('Не удалось скопировать журнал голосового режима');
     }
 });
 
 bindEvent(adminVoiceDebugClearBtn, 'click', () => {
     clearVoiceDebugEntries();
-    showCopyNotification('Техлог голоса очищен');
+    showCopyNotification('Журнал голосового режима очищен');
 });
 
 bindEvent(adminAuthDebugCopyBtn, 'click', async () => {
     try {
         await copyAuthDebugEntriesToClipboard();
-        showCopyNotification('Техлог входа скопирован');
+        showCopyNotification('Журнал входа скопирован');
     } catch (error) {
         console.error('Failed to copy auth debug log:', error);
-        showCopyNotification('Не удалось скопировать техлог входа');
+        showCopyNotification('Не удалось скопировать журнал входа');
     }
 });
 
 bindEvent(adminAuthDebugClearBtn, 'click', () => {
     clearAuthDebugEntries();
-    showCopyNotification('Техлог входа очищен');
+    showCopyNotification('Журнал входа очищен');
 });
 
 dialogHistoryUiSets.forEach((ui) => {
@@ -23644,7 +23644,7 @@ async function sendMessage() {
         const { message: assistantMessage, conversationAction } = await readWebhookEnvelope(response, CHAT_WEBHOOK_TIMEOUT_MS);
         ensureChatUiRequestGuardCurrent(requestGuard);
         if (!assistantMessage && !conversationAction) {
-            failWebhookDebugRequest(debugEntryId, new Error('Пустой ответ webhook'), response.status);
+            failWebhookDebugRequest(debugEntryId, new Error('Пустой ответ сервера'), response.status);
             console.warn('Empty webhook response for user message.');
             loadingMsg.remove();
             addMessage('Ошибка: что-то сломалось. Обратитесь к администратору сайта.', 'error', false);
@@ -23761,7 +23761,7 @@ async function startConversationHandler() {
         const { message: assistantMessage, conversationAction } = await readWebhookEnvelope(response, CHAT_WEBHOOK_TIMEOUT_MS);
         ensureChatUiRequestGuardCurrent(requestGuard);
         if (!assistantMessage && !conversationAction) {
-            failWebhookDebugRequest(debugEntryId, new Error('Пустой ответ webhook'), response.status);
+            failWebhookDebugRequest(debugEntryId, new Error('Пустой ответ сервера'), response.status);
             console.warn('Empty webhook response for /start.');
             loadingMsg.remove();
             restoreStartConversationBlock();
