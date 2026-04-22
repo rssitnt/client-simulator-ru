@@ -3304,7 +3304,7 @@ async function runAuthFirebaseConflictAutoResetFlow(browser, baseUrl) {
             const error = document.getElementById('passwordError');
             return (
                 (!!notification && /сброса пароля/i.test(String(notification.textContent || '')))
-                || (!!error && /локальный пароль обновится автоматически/i.test(String(error.textContent || '')))
+                || (!!error && /я отправил письмо для сброса/i.test(String(error.textContent || '')))
             );
         });
 
@@ -3321,7 +3321,10 @@ async function runAuthFirebaseConflictAutoResetFlow(browser, baseUrl) {
         });
         expect(result.modalStillOpen, 'Firebase conflict flow must keep the auth modal open');
         expect(result.resetEmails.includes(conflictLogin), 'Firebase conflict flow did not auto-send a password reset email');
-        expect(/локальный пароль обновится автоматически/i.test(result.errorText), 'Firebase conflict flow did not explain the automatic local password sync');
+        expect(
+            /я отправил письмо для сброса/i.test(result.errorText) && /войдите с ним/i.test(result.errorText),
+            'Firebase conflict flow did not explain the password-reset recovery flow'
+        );
     } catch (error) {
         await ensureOutputDir();
         await page.screenshot({ path: path.join(outputDir, 'smoke-auth-firebase-conflict-auto-reset-failure.png'), fullPage: true });
