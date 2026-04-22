@@ -1261,7 +1261,15 @@ async function waitForFirebaseAuthReady() {
     if (!auth) return;
     try {
         if (typeof auth.authStateReady === 'function') {
-            await auth.authStateReady();
+            const timeoutMs = 4000;
+            await Promise.race([
+                auth.authStateReady(),
+                new Promise((_, reject) => {
+                    setTimeout(() => {
+                        reject(new Error(`Firebase authStateReady timed out after ${timeoutMs}ms`));
+                    }, timeoutMs);
+                })
+            ]);
         }
     } catch (error) {
         console.warn('waitForFirebaseAuthReady failed:', error);
