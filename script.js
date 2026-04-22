@@ -64,6 +64,9 @@ const LEGACY_GEMINI_LIVE_API_KEY_STORAGE_KEY = 'geminiLiveApiKey';
 const GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT = '/api/gemini-live-token';
 const GEMINI_LIVE_TRANSCRIBE_ENDPOINT_PATH = '/api/gemini-live-transcribe';
 const GEMINI_LIVE_ALLOWED_TOKEN_ENDPOINT_PATH = '/api/gemini-live-token';
+const PARTNER_INVITE_EMAIL_ENDPOINT_PATH = '/api/partner-invite-email';
+const AUTH_MAGIC_LINK_EMAIL_ENDPOINT_PATH = '/api/auth-email-link';
+const AUTH_PASSWORD_RESET_EMAIL_ENDPOINT_PATH = '/api/auth-password-reset-email';
 const TRUSTED_VOICE_TOKEN_ENDPOINT_ORIGINS = new Set([
     'https://client-simulator.ru',
     'https://www.client-simulator.ru',
@@ -2136,21 +2139,10 @@ let geminiDialToneTimerId = 0;
 let geminiDialToneOscillators = [];
 let geminiDialToneGain = null;
 let isVoiceModeScreenActive = false;
-let openAiVoicePeerConnection = null;
-let openAiVoiceDataChannel = null;
-let openAiVoiceRemoteAudio = null;
-let openAiResponsePending = false;
-let openAiResponseQueued = false;
-let openAiPendingUserTurn = '';
-let openAiHasUnansweredUserTurn = false;
-let openAiLastUserTurnCompact = '';
-let openAiLastUserTurnAt = 0;
-let openAiUserTranscriptByItemId = new Map();
 let elevenLabsSocketBridgeInstalled = false;
 let elevenLabsActiveSocketCount = 0;
 let elevenLabsConversationFinished = false;
 let elevenLabsWidgetLoadPromise = null;
-let activeVoiceModeProvider = 'gemini';
 let voiceModeOpenRequestId = 0;
 let voiceModeWidgetHideTimerId = 0;
 const elevenLabsSocketOpenState = new WeakMap();
@@ -3918,7 +3910,7 @@ async function sendMagicLinkToEmail(email, purpose = 'verify') {
     };
 
     await withPromiseTimeout(
-        sendSignInLinkToEmail(auth, normalizedEmail, actionCodeSettings),
+        runAuthRequestWithRetry(() => sendSignInLinkToEmail(auth, normalizedEmail, actionCodeSettings)),
         AUTH_MAGIC_LINK_SEND_TIMEOUT_MS,
         `Не удалось дождаться отправки письма (${AUTH_MAGIC_LINK_SEND_TIMEOUT_MS / 1000}с).`
     );
@@ -3929,20 +3921,66 @@ async function sendMagicLinkToEmail(email, purpose = 'verify') {
     });
 }
 
+async function sendMagicLinkToEmailWithServerFallback(email, purpose = 'verify') {
+    const normalizedEmail = normalizeLogin(email);
+    if (!isValidLogin(normalizedEmail)) {
+        throw new Error('Некорректный email');
+    }
+    if (!auth) {
+        throw new Error('Сервис входа сейчас недоступен. Сообщите администратору.');
+    }
+
+    const serverResult = await sendMagicLinkToEmailViaServer(normalizedEmail, purpose);
+    if (!serverResult.sent) {
+        const fallbackAllowed = serverResult.fallbackAllowed !== false;
+        if (!fallbackAllowed) {
+            throw serverResult.error || new Error(serverResult.readableError || 'Не удалось отправить письмо подтверждения.');
+        }
+
+        console.warn('Auth magic link server delivery failed, falling back to Firebase client delivery:', serverResult.error || serverResult.readableError);
+
+        await sendMagicLinkToEmail(normalizedEmail, purpose);
+        saveEmailLinkContext({
+            email: normalizedEmail,
+            purpose,
+            sentAt: new Date().toISOString(),
+            delivery: 'firebase-client-fallback'
+        });
+        return;
+    }
+
+    saveEmailLinkContext({
+        email: normalizedEmail,
+        purpose,
+        sentAt: serverResult.sentAt || new Date().toISOString(),
+        delivery: serverResult.delivery || 'smtp'
+    });
+}
+
 async function sendPasswordResetLinkToEmail(email) {
     const normalizedEmail = normalizeLogin(email);
     if (!isValidLogin(normalizedEmail)) {
         throw new Error('Укажите корректный email.');
     }
-    if (!auth) {
-        throw new Error('Сервис сброса пароля сейчас недоступен. Сообщите администратору.');
-    }
 
-    await withPromiseTimeout(
-        runAuthRequestWithRetry(() => sendPasswordResetEmail(auth, normalizedEmail)),
-        AUTH_MAGIC_LINK_SEND_TIMEOUT_MS,
-        `Не удалось дождаться письма для сброса (${AUTH_MAGIC_LINK_SEND_TIMEOUT_MS / 1000}с).`
-    );
+    const serverResult = await sendPasswordResetLinkToEmailViaServer(normalizedEmail);
+    if (!serverResult.sent) {
+        const fallbackAllowed = serverResult.fallbackAllowed !== false;
+        if (!fallbackAllowed) {
+            throw serverResult.error || new Error(serverResult.readableError || 'Не удалось отправить письмо для сброса.');
+        }
+        if (!auth) {
+            throw serverResult.error || new Error('Сервис сброса пароля сейчас недоступен. Сообщите администратору.');
+        }
+
+        console.warn('Password reset server delivery failed, falling back to Firebase client delivery:', serverResult.error || serverResult.readableError);
+
+        await withPromiseTimeout(
+            runAuthRequestWithRetry(() => sendPasswordResetEmail(auth, normalizedEmail)),
+            AUTH_MAGIC_LINK_SEND_TIMEOUT_MS,
+            `Не удалось дождаться письма для сброса (${AUTH_MAGIC_LINK_SEND_TIMEOUT_MS / 1000}с).`
+        );
+    }
 }
 
 function normalizePartnerInvite(raw, loginFallback = '', loginKey = '') {
@@ -5238,7 +5276,7 @@ function setAuthError(message = '') {
     }
     authErrorText.textContent = message;
     authErrorText.style.display = 'block';
-    setAuthStatus('', 'idle');
+    setAuthStatus(message, 'error');
 }
 
 function syncLocalhostDevAuthActions() {
@@ -6114,30 +6152,425 @@ function formatInviteExpiry(iso) {
     return date.toLocaleDateString('ru-RU');
 }
 
+function buildSiblingGeminiServerEndpointUrl(targetPath = '', source = 'Gemini server endpoint') {
+    const normalizedTargetPath = normalizeGeminiTokenEndpoint(targetPath).replace(/\/+$/, '') || '/';
+    try {
+        let tokenEndpoint = sanitizeGeminiTokenEndpointOrThrow(getConfiguredGeminiTokenEndpoint(), { source });
+        if (!tokenEndpoint) return '';
+
+        let parsed = new URL(tokenEndpoint, window.location.origin);
+        const normalizedTokenPath = normalizeGeminiTokenEndpoint(parsed.pathname || '').replace(/\/+$/, '') || '/';
+        const frontendPort = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
+        const parsedPort = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
+        const isLoopbackPreviewSameOriginTokenPath = isLoopbackHostname(window.location.hostname || '')
+            && parsed.origin === window.location.origin
+            && parsedPort === frontendPort
+            && normalizedTokenPath === GEMINI_LIVE_ALLOWED_TOKEN_ENDPOINT_PATH;
+
+        if (isLoopbackPreviewSameOriginTokenPath) {
+            const defaultTokenEndpoint = getTrustedGeminiTokenEndpointOrEmpty(getDefaultGeminiTokenEndpoint(), { source });
+            if (defaultTokenEndpoint) {
+                parsed = new URL(defaultTokenEndpoint, window.location.origin);
+            }
+        }
+
+        parsed.pathname = normalizedTargetPath;
+        parsed.search = '';
+        parsed.hash = '';
+        if (parsed.origin === window.location.origin) {
+            return normalizedTargetPath;
+        }
+        return `${parsed.origin}${normalizedTargetPath}`;
+    } catch (error) {
+        return '';
+    }
+}
+
+function buildPartnerInviteEmailEndpointUrl() {
+    return buildSiblingGeminiServerEndpointUrl(
+        PARTNER_INVITE_EMAIL_ENDPOINT_PATH,
+        'Partner invite email endpoint'
+    );
+}
+
+function buildAuthMagicLinkEmailEndpointUrl() {
+    return buildSiblingGeminiServerEndpointUrl(
+        AUTH_MAGIC_LINK_EMAIL_ENDPOINT_PATH,
+        'Auth email endpoint'
+    );
+}
+
+function buildAuthPasswordResetEmailEndpointUrl() {
+    return buildSiblingGeminiServerEndpointUrl(
+        AUTH_PASSWORD_RESET_EMAIL_ENDPOINT_PATH,
+        'Auth password reset email endpoint'
+    );
+}
+
+async function buildAuthMagicLinkEmailRequestHeaders() {
+    const headers = { 'Content-Type': 'application/json' };
+    if (auth?.currentUser) {
+        const idToken = await getFirebaseAuthIdToken().catch(() => '');
+        if (idToken) {
+            headers.Authorization = `Bearer ${idToken}`;
+        }
+    }
+    const appCheckToken = await getFirebaseAppCheckToken().catch(() => '');
+    if (appCheckToken) {
+        headers['X-Firebase-AppCheck'] = appCheckToken;
+    }
+    return headers;
+}
+
+function isPartnerInviteEmailRetryableError(error) {
+    const message = String(error?.message || '').toLowerCase();
+    return error?.name === 'AbortError'
+        || message.includes('failed to fetch')
+        || message.includes('networkerror')
+        || message.includes('load failed')
+        || message.includes('network request failed')
+        || message.includes('timeout')
+        || message.includes('таймаут');
+}
+
+function isAuthMagicLinkEmailRetryableError(error) {
+    const message = String(error?.message || '').toLowerCase();
+    return error?.name === 'AbortError'
+        || message.includes('failed to fetch')
+        || message.includes('networkerror')
+        || message.includes('load failed')
+        || message.includes('network request failed')
+        || message.includes('timeout')
+        || message.includes('С‚Р°Р№РјР°СѓС‚');
+}
+
+function canFallbackToClientMagicLinkFromServerResponse(statusCode = 0, code = '') {
+    const normalizedCode = String(code || '').trim().toLowerCase();
+    if (statusCode === 429) return false;
+    if (statusCode === 400 || statusCode === 403) return false;
+    if (normalizedCode === 'rate_limited' || normalizedCode === 'email_mismatch') return false;
+    return statusCode >= 500
+        || statusCode === 401
+        || statusCode === 404
+        || statusCode === 405
+        || normalizedCode === 'missing_config'
+        || normalizedCode === 'server_error'
+        || normalizedCode === 'missing_id_token';
+}
+
+function canFallbackToClientPasswordResetFromServerResponse(statusCode = 0, code = '') {
+    const normalizedCode = String(code || '').trim().toLowerCase();
+    if (statusCode === 429) return false;
+    if (statusCode === 400 || statusCode === 403) return false;
+    if (normalizedCode === 'rate_limited' || normalizedCode === 'email_mismatch') return false;
+    if (normalizedCode === 'auth/user-not-found') return false;
+    return statusCode >= 500
+        || statusCode === 401
+        || statusCode === 404
+        || statusCode === 405
+        || normalizedCode === 'missing_config'
+        || normalizedCode === 'server_error'
+        || normalizedCode === 'missing_id_token';
+}
+
+async function sendMagicLinkToEmailViaServer(email, purpose = 'verify') {
+    const normalizedLogin = normalizeLogin(email);
+    const endpoint = buildAuthMagicLinkEmailEndpointUrl();
+    if (!endpoint) {
+        return {
+            sent: false,
+            sentAt: null,
+            error: new Error('Auth email endpoint не настроен.'),
+            readableError: 'Auth email endpoint не настроен.',
+            delivery: '',
+            fallbackAllowed: true
+        };
+    }
+
+    const headers = await buildAuthMagicLinkEmailRequestHeaders();
+    const retryableStatuses = new Set([401, 404, 405, 408, 425, 500, 502, 503, 504]);
+    const requestPayload = {
+        source: 'client-simulator-web',
+        email: normalizedLogin,
+        login: normalizedLogin,
+        purpose,
+        appBaseUrl: getAppBaseUrl()
+    };
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+        let response;
+        try {
+            response = await fetchWithTimeout(endpoint, {
+                method: 'POST',
+                headers,
+                credentials: 'omit',
+                body: JSON.stringify(requestPayload)
+            }, AUTH_MAGIC_LINK_SEND_TIMEOUT_MS);
+        } catch (error) {
+            if (attempt === 0 && isAuthMagicLinkEmailRetryableError(error)) {
+                await waitForDelay(1200);
+                continue;
+            }
+            return {
+                sent: false,
+                sentAt: null,
+                error,
+                readableError: String(error?.message || 'Не удалось отправить письмо подтверждения через сервер.'),
+                delivery: '',
+                fallbackAllowed: true
+            };
+        }
+
+        const payload = await readResponseJsonWithTimeout(
+            response,
+            AUTH_MAGIC_LINK_SEND_TIMEOUT_MS,
+            `Таймаут чтения ответа auth mail endpoint (${AUTH_MAGIC_LINK_SEND_TIMEOUT_MS / 1000}с).`,
+            {}
+        );
+        if (response.ok) {
+            return {
+                sent: true,
+                sentAt: String(payload?.sentAt || new Date().toISOString()).trim(),
+                error: null,
+                readableError: '',
+                delivery: String(payload?.delivery || 'smtp').trim(),
+                fallbackAllowed: false
+            };
+        }
+
+        const code = String(payload?.code || '').trim();
+        const readableError = String(payload?.error || payload?.message || '').trim()
+            || `Не удалось отправить письмо подтверждения (HTTP ${response.status}).`;
+        if (attempt === 0 && retryableStatuses.has(response.status)) {
+            await waitForDelay(1200);
+            continue;
+        }
+        return {
+            sent: false,
+            sentAt: null,
+            error: new Error(readableError),
+            readableError,
+            delivery: String(payload?.delivery || '').trim(),
+            fallbackAllowed: canFallbackToClientMagicLinkFromServerResponse(response.status, code)
+        };
+    }
+
+    return {
+        sent: false,
+        sentAt: null,
+        error: new Error('Не удалось отправить письмо подтверждения через сервер.'),
+        readableError: 'Не удалось отправить письмо подтверждения через сервер.',
+        delivery: '',
+        fallbackAllowed: true
+    };
+}
+
+async function sendPasswordResetLinkToEmailViaServer(email) {
+    const normalizedLogin = normalizeLogin(email);
+    const endpoint = buildAuthPasswordResetEmailEndpointUrl();
+    if (!endpoint) {
+        return {
+            sent: false,
+            sentAt: null,
+            error: new Error('Password reset email endpoint не настроен.'),
+            readableError: 'Password reset email endpoint не настроен.',
+            delivery: '',
+            fallbackAllowed: true
+        };
+    }
+
+    const headers = await buildAuthMagicLinkEmailRequestHeaders();
+    const retryableStatuses = new Set([401, 404, 405, 408, 425, 500, 502, 503, 504]);
+    const requestPayload = {
+        source: 'client-simulator-web',
+        email: normalizedLogin,
+        login: normalizedLogin,
+        appBaseUrl: getAppBaseUrl()
+    };
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+        let response;
+        try {
+            response = await fetchWithTimeout(endpoint, {
+                method: 'POST',
+                headers,
+                credentials: 'omit',
+                body: JSON.stringify(requestPayload)
+            }, AUTH_MAGIC_LINK_SEND_TIMEOUT_MS);
+        } catch (error) {
+            if (attempt === 0 && isAuthMagicLinkEmailRetryableError(error)) {
+                await waitForDelay(1200);
+                continue;
+            }
+            return {
+                sent: false,
+                sentAt: null,
+                error,
+                readableError: String(error?.message || 'Не удалось отправить письмо для сброса через сервер.'),
+                delivery: '',
+                fallbackAllowed: true
+            };
+        }
+
+        const payload = await readResponseJsonWithTimeout(
+            response,
+            AUTH_MAGIC_LINK_SEND_TIMEOUT_MS,
+            `Таймаут чтения ответа password reset mail endpoint (${AUTH_MAGIC_LINK_SEND_TIMEOUT_MS / 1000}с).`,
+            {}
+        );
+        if (response.ok) {
+            return {
+                sent: true,
+                sentAt: String(payload?.sentAt || new Date().toISOString()).trim(),
+                error: null,
+                readableError: '',
+                delivery: String(payload?.delivery || 'smtp').trim(),
+                fallbackAllowed: false
+            };
+        }
+
+        const code = String(payload?.code || '').trim();
+        const readableError = String(payload?.error || payload?.message || '').trim()
+            || `Не удалось отправить письмо для сброса (HTTP ${response.status}).`;
+        if (attempt === 0 && retryableStatuses.has(response.status) && code !== 'auth/user-not-found') {
+            await waitForDelay(1200);
+            continue;
+        }
+        const requestError = new Error(readableError);
+        requestError.code = code || requestError.code || '';
+        requestError.statusCode = response.status;
+        return {
+            sent: false,
+            sentAt: null,
+            error: requestError,
+            readableError,
+            delivery: String(payload?.delivery || '').trim(),
+            fallbackAllowed: canFallbackToClientPasswordResetFromServerResponse(response.status, code)
+        };
+    }
+
+    return {
+        sent: false,
+        sentAt: null,
+        error: new Error('Не удалось отправить письмо для сброса через сервер.'),
+        readableError: 'Не удалось отправить письмо для сброса через сервер.',
+        delivery: '',
+        fallbackAllowed: true
+    };
+}
+
+async function sendPartnerInviteEmailViaServer(email, options = {}) {
+    const normalizedLogin = normalizeLogin(email);
+    const directInviteLink = String(options?.directInviteLink || '').trim();
+    if (!directInviteLink) {
+        return {
+            sent: false,
+            sentAt: null,
+            error: new Error('Исходная ссылка приглашения больше недоступна. Перевыпустите инвайт.'),
+            readableError: 'Исходная ссылка приглашения больше недоступна. Перевыпустите инвайт.'
+        };
+    }
+
+    const endpoint = buildPartnerInviteEmailEndpointUrl();
+    if (!endpoint) {
+        return {
+            sent: false,
+            sentAt: null,
+            error: new Error('Mail endpoint не настроен. Используйте прямую ссылку или настройте token server.'),
+            readableError: 'Mail endpoint не настроен. Используйте прямую ссылку или настройте token server.'
+        };
+    }
+
+    const headers = await buildGeminiVoiceServerRequestHeaders(getConfiguredGeminiTokenEndpoint());
+    const retryableStatuses = new Set([408, 425, 429, 500, 502, 503, 504]);
+    const requestPayload = {
+        source: 'client-simulator-web',
+        login: getGeminiVoiceRequestLogin(),
+        email: normalizedLogin,
+        directInviteLink,
+        expiresAt: String(options?.expiresAt || '').trim(),
+        appBaseUrl: getAppBaseUrl()
+    };
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+        let response;
+        try {
+            response = await fetchWithTimeout(endpoint, {
+                method: 'POST',
+                headers,
+                credentials: 'omit',
+                body: JSON.stringify(requestPayload)
+            }, AUTH_MAGIC_LINK_SEND_TIMEOUT_MS);
+        } catch (error) {
+            if (attempt === 0 && isPartnerInviteEmailRetryableError(error)) {
+                await waitForDelay(1200);
+                continue;
+            }
+            return {
+                sent: false,
+                sentAt: null,
+                error,
+                readableError: String(error?.message || 'Не удалось отправить письмо с приглашением.')
+            };
+        }
+
+        const payload = await readResponseJsonWithTimeout(
+            response,
+            AUTH_MAGIC_LINK_SEND_TIMEOUT_MS,
+            `Таймаут чтения ответа invite mail endpoint (${AUTH_MAGIC_LINK_SEND_TIMEOUT_MS / 1000}с).`,
+            {}
+        );
+        if (response.ok) {
+            return {
+                sent: true,
+                sentAt: String(payload?.sentAt || new Date().toISOString()).trim(),
+                error: null,
+                readableError: '',
+                delivery: String(payload?.delivery || 'smtp').trim()
+            };
+        }
+
+        const readableError = String(payload?.error || payload?.message || '').trim()
+            || `Не удалось отправить письмо с приглашением (HTTP ${response.status}).`;
+        if (attempt === 0 && retryableStatuses.has(response.status)) {
+            await waitForDelay(1200);
+            continue;
+        }
+        return {
+            sent: false,
+            sentAt: null,
+            error: new Error(readableError),
+            readableError,
+            delivery: String(payload?.delivery || '').trim()
+        };
+    }
+
+    return {
+        sent: false,
+        sentAt: null,
+        error: new Error('Не удалось отправить письмо с приглашением.'),
+        readableError: 'Не удалось отправить письмо с приглашением.'
+    };
+}
+
 async function sendPartnerInviteEmail(login, options = {}) {
     const normalizedLogin = normalizeLogin(login);
     if (!isValidLogin(normalizedLogin)) {
         throw new Error('Укажите корректный email');
     }
-    const nowIso = new Date().toISOString();
+    const mailResult = await sendPartnerInviteEmailViaServer(normalizedLogin, options);
     try {
-        await sendMagicLinkToEmail(normalizedLogin, 'invite');
-        await patchPartnerInvite(normalizedLogin, {
-            magicLinkSentAt: nowIso,
-            magicLinkLastError: ''
-        });
-        return { sent: true, sentAt: nowIso, error: null };
-    } catch (error) {
-        const readableError = getReadableFirebaseAuthError(error, 'invite');
-        try {
-            await patchPartnerInvite(normalizedLogin, {
-                magicLinkLastError: readableError
-            });
-        } catch (patchError) {
-            console.warn('Failed to persist invite mail error:', patchError);
+        const invitePatch = {
+            magicLinkLastError: mailResult.sent ? '' : String(mailResult.readableError || '').trim()
+        };
+        if (mailResult.sent) {
+            invitePatch.magicLinkSentAt = mailResult.sentAt || new Date().toISOString();
         }
-        return { sent: false, sentAt: null, error, readableError };
+        await patchPartnerInvite(normalizedLogin, invitePatch);
+    } catch (patchError) {
+        console.warn('Failed to persist invite mail state:', patchError);
     }
+    return mailResult;
 }
 
 async function issuePartnerInvite(login, days, options = {}) {
@@ -6191,7 +6624,10 @@ async function issuePartnerInvite(login, days, options = {}) {
 
     const mailResult = options.sendEmail === false
         ? { sent: false, sentAt: null, error: null, readableError: '' }
-        : await sendPartnerInviteEmail(normalizedLogin);
+        : await sendPartnerInviteEmail(normalizedLogin, {
+            directInviteLink,
+            expiresAt
+        });
     const invite = await getPartnerInviteByLogin(normalizedLogin);
 
     return {
@@ -6201,6 +6637,41 @@ async function issuePartnerInvite(login, days, options = {}) {
         directInviteLink,
         invite,
         mailResult
+    };
+}
+
+async function resendPartnerInviteEmail(login, options = {}) {
+    const normalizedLogin = normalizeLogin(login);
+    if (!isValidLogin(normalizedLogin)) {
+        throw new Error('Укажите корректный email');
+    }
+
+    const currentInvite = options?.invite || await getPartnerInviteByLogin(normalizedLogin);
+    const directInviteLink = String(options?.directInviteLink || '').trim();
+    const expiresAt = String(options?.expiresAt || currentInvite?.expiresAt || '').trim();
+    const days = Math.max(1, Math.min(365, Number(options?.days || getInviteDaysFromExpiry(expiresAt)) || 30));
+
+    if (directInviteLink) {
+        const mailResult = await sendPartnerInviteEmail(normalizedLogin, {
+            directInviteLink,
+            expiresAt
+        });
+        const invite = await getPartnerInviteByLogin(normalizedLogin);
+        return {
+            mode: 'resend',
+            login: normalizedLogin,
+            days,
+            expiresAt: invite?.expiresAt || expiresAt,
+            directInviteLink,
+            invite,
+            mailResult
+        };
+    }
+
+    const inviteResult = await issuePartnerInvite(normalizedLogin, days, { sendEmail: true });
+    return {
+        mode: 'reissue',
+        ...inviteResult
     };
 }
 
@@ -6375,22 +6846,31 @@ function syncAdminInviteJournalFilterButtons() {
 async function handleAdminInviteJournalResend(login) {
     const normalizedLogin = normalizeLogin(login);
     if (!isValidLogin(normalizedLogin)) return;
-    const result = await sendPartnerInviteEmail(normalizedLogin);
     const invite = await getPartnerInviteByLogin(normalizedLogin);
+    const resendResult = await resendPartnerInviteEmail(normalizedLogin, {
+        invite,
+        directInviteLink: adminLatestInviteState?.login === normalizedLogin
+            ? String(adminLatestInviteState?.directInviteLink || '').trim()
+            : '',
+        expiresAt: invite?.expiresAt || '',
+        days: getInviteDaysFromExpiry(invite?.expiresAt)
+    });
     setAdminLatestInviteState({
         login: normalizedLogin,
-        days: getInviteDaysFromExpiry(invite?.expiresAt),
-        expiresAt: invite?.expiresAt || '',
-        directInviteLink: adminLatestInviteState?.login === normalizedLogin ? adminLatestInviteState.directInviteLink : '',
-        invite,
-        mailSent: !!result.sent,
-        mailError: result.readableError || '',
+        days: resendResult.days,
+        expiresAt: resendResult.expiresAt || invite?.expiresAt || '',
+        directInviteLink: resendResult.directInviteLink || '',
+        invite: resendResult.invite || invite,
+        mailSent: !!resendResult.mailResult?.sent,
+        mailError: resendResult.mailResult?.readableError || '',
         summary: `Инвайт для ${normalizedLogin}`
     });
     showCopyNotification(
-        result.sent
-            ? `Письмо отправлено на ${normalizedLogin}`
-            : `Письмо не отправлено. ${result.readableError || 'Сообщите администратору.'}`
+        resendResult.mailResult?.sent
+            ? (resendResult.mode === 'reissue'
+                ? `Ссылка перевыпущена и письмо отправлено на ${normalizedLogin}`
+                : `Письмо отправлено на ${normalizedLogin}`)
+            : `Письмо не отправлено. ${resendResult.mailResult?.readableError || 'Используйте прямую ссылку или перевыпустите инвайт.'}`
     );
     refreshAdminUsersTableAfterMutation();
 }
@@ -7540,22 +8020,31 @@ function createAdminUsersTableRow(login) {
         if (!rowData?.invite) return;
         inviteResendBtn.disabled = true;
         try {
-            const result = await sendPartnerInviteEmail(rowData.login);
-            const invite = await getPartnerInviteByLogin(rowData.login);
+            const directInviteLink = adminLatestInviteState?.login === rowData.login
+                ? String(adminLatestInviteState?.directInviteLink || '').trim()
+                : '';
+            const resendResult = await resendPartnerInviteEmail(rowData.login, {
+                invite: rowData.invite,
+                directInviteLink,
+                expiresAt: rowData.invite?.expiresAt || '',
+                days: getInviteDaysFromExpiry(rowData.invite?.expiresAt)
+            });
             setAdminLatestInviteState({
                 login: rowData.login,
-                days: getInviteDaysFromExpiry(invite?.expiresAt),
-                expiresAt: invite?.expiresAt || rowData.invite?.expiresAt || '',
-                directInviteLink: adminLatestInviteState?.login === rowData.login ? adminLatestInviteState.directInviteLink : '',
-                invite,
-                mailSent: !!result.sent,
-                mailError: result.readableError || '',
+                days: resendResult.days,
+                expiresAt: resendResult.expiresAt || rowData.invite?.expiresAt || '',
+                directInviteLink: resendResult.directInviteLink || '',
+                invite: resendResult.invite || rowData.invite,
+                mailSent: !!resendResult.mailResult?.sent,
+                mailError: resendResult.mailResult?.readableError || '',
                 summary: `Инвайт для ${rowData.login}`
             });
             showCopyNotification(
-                result.sent
-                    ? `Письмо отправлено на ${rowData.login}`
-                    : `Письмо не отправлено. ${result.readableError || 'Сообщите администратору.'}`
+                resendResult.mailResult?.sent
+                    ? (resendResult.mode === 'reissue'
+                        ? `Ссылка перевыпущена и письмо отправлено на ${rowData.login}`
+                        : `Письмо отправлено на ${rowData.login}`)
+                    : `Письмо не отправлено. ${resendResult.mailResult?.readableError || 'Используйте прямую ссылку или перевыпустите инвайт.'}`
             );
             refreshAdminUsersTableAfterMutation();
         } catch (error) {
@@ -10433,18 +10922,27 @@ async function handleAdminLatestInviteResend() {
     const state = adminLatestInviteState;
     if (!state?.login) return;
     await runAdminLatestInviteAction(async () => {
-        const result = await sendPartnerInviteEmail(state.login);
-        const invite = await getPartnerInviteByLogin(state.login);
+        const resendResult = await resendPartnerInviteEmail(state.login, {
+            invite: state.invite,
+            directInviteLink: state.directInviteLink || '',
+            expiresAt: state.expiresAt || '',
+            days: state.days || getInviteDaysFromExpiry(state.expiresAt)
+        });
         setAdminLatestInviteState({
             ...state,
-            invite,
-            mailSent: !!result.sent,
-            mailError: result.readableError || ''
+            days: resendResult.days,
+            expiresAt: resendResult.expiresAt || state.expiresAt || '',
+            directInviteLink: resendResult.directInviteLink || '',
+            invite: resendResult.invite || state.invite,
+            mailSent: !!resendResult.mailResult?.sent,
+            mailError: resendResult.mailResult?.readableError || ''
         });
         showCopyNotification(
-            result.sent
-                ? `Письмо повторно отправлено на ${state.login}`
-                : `Письмо не отправлено. ${result.readableError || 'Сообщите администратору.'}`
+            resendResult.mailResult?.sent
+                ? (resendResult.mode === 'reissue'
+                    ? `Ссылка перевыпущена и письмо отправлено на ${state.login}`
+                    : `Письмо повторно отправлено на ${state.login}`)
+                : `Письмо не отправлено. ${resendResult.mailResult?.readableError || 'Используйте прямую ссылку или перевыпустите инвайт.'}`
         );
         refreshAdminUsersTableAfterMutation();
     });
@@ -10763,7 +11261,7 @@ async function handleAuthSubmit() {
         if (!isVerified) {
             await runAuthStep(
                 'Отправляем письмо...',
-                () => sendMagicLinkToEmail(login, 'verify'),
+                () => sendMagicLinkToEmailWithServerFallback(login, 'verify'),
                 AUTH_MAGIC_LINK_SEND_TIMEOUT_MS,
                 'Не удалось отправить письмо подтверждения. Попробуйте ещё раз.',
                 { stage: 'verify_email_send', debugContext: 'verify', debugDetails: { login, sessionMode: 'password' } }
@@ -18644,6 +19142,7 @@ async function loadGeminiSdkModule() {
 async function buildGeminiVoiceServerRequestHeaders(tokenEndpoint = '') {
     const now = Date.now();
     let idToken = '';
+    const canUseLocalFallback = canUseLocalhostDevVoiceTokenFallback(tokenEndpoint);
     if (voiceAuthCachedIdToken && (now - voiceAuthCachedIdTokenAt) < VOICE_AUTH_TOKEN_TTL_MS) {
         idToken = voiceAuthCachedIdToken;
     } else {
@@ -18651,11 +19150,12 @@ async function buildGeminiVoiceServerRequestHeaders(tokenEndpoint = '') {
             await withPromiseTimeout(waitForFirebaseAuthReady(), 4000, 'Таймаут восстановления Firebase-сессии.');
         } catch (error) {
             console.warn('Firebase auth readiness timed out for voice:', error);
-            throw new Error('Вход ещё восстанавливается. Подождите несколько секунд и попробуйте снова.');
+            if (!canUseLocalFallback) {
+                throw new Error('Вход ещё восстанавливается. Подождите несколько секунд и попробуйте снова.');
+            }
         }
         idToken = await getFirebaseAuthIdToken();
     }
-    const canUseLocalFallback = !idToken && canUseLocalhostDevVoiceTokenFallback(tokenEndpoint);
     if (!idToken && !canUseLocalFallback) {
         throw new Error('Для голосового режима нужен подтвержденный вход через email.');
     }
@@ -18734,6 +19234,9 @@ function getGeminiVoiceTokenEndpointCandidates(preferredEndpoint = '') {
     }
 
     if (preferredIsSameOriginEndpoint) {
+        if (!isProdHost && typeof window !== 'undefined' && isLoopbackHostname(window.location.hostname || '')) {
+            addCandidate(getDefaultGeminiTokenEndpoint());
+        }
         addCandidate(GEMINI_LIVE_REMOTE_TOKEN_ENDPOINT);
     } else if (!isProdHost) {
         addCandidate(GEMINI_LIVE_ALLOWED_TOKEN_ENDPOINT_PATH);
@@ -19788,7 +20291,6 @@ function getRecentAssistantTranscriptForEchoGuard() {
 
 function hasRecentRussianVoiceContext() {
     const directCandidates = [
-        openAiPendingUserTurn,
         geminiVoiceUserPreview,
         geminiVoiceAssistantPreview,
         geminiVoiceUserDraft,
@@ -19886,9 +20388,6 @@ function sanitizeUserCompletedTranscript(rawText) {
 }
 
 function getRecentUserTranscriptForEchoGuard() {
-    const pendingTurn = normalizeVoiceDialogText(openAiPendingUserTurn);
-    if (pendingTurn) return pendingTurn;
-
     const preview = normalizeVoiceDialogText(geminiVoiceUserPreview);
     if (preview) return preview;
 
@@ -20144,13 +20643,6 @@ function resetGeminiVoiceDialogBuffer() {
     clearGeminiVoiceMicUnlockTimer();
     clearVoiceCallNotice();
     clearGeminiVoiceFinishedNotice();
-    openAiPendingUserTurn = '';
-    openAiResponsePending = false;
-    openAiResponseQueued = false;
-    openAiHasUnansweredUserTurn = false;
-    openAiLastUserTurnCompact = '';
-    openAiLastUserTurnAt = 0;
-    openAiUserTranscriptByItemId = new Map();
     geminiVoiceSessionConfig = null;
 }
 
@@ -20451,45 +20943,6 @@ function clearVoiceCallNotice() {
     geminiVoiceCallNotice = null;
 }
 
-function sendOpenAiRealtimeEvent(payload) {
-    if (!openAiVoiceDataChannel || openAiVoiceDataChannel.readyState !== 'open') return false;
-    try {
-        openAiVoiceDataChannel.send(JSON.stringify(payload));
-        return true;
-    } catch (error) {
-        debugLog('Failed to send OpenAI realtime event', error);
-        return false;
-    }
-}
-
-async function waitForOpenAiDataChannelReady(timeoutMs = 8000) {
-    if (openAiVoiceDataChannel?.readyState === 'open') return true;
-    return new Promise((resolve) => {
-        let settled = false;
-        const channel = openAiVoiceDataChannel;
-        if (!channel) {
-            resolve(false);
-            return;
-        }
-        const finish = (value) => {
-            if (settled) return;
-            settled = true;
-            clearTimeout(timeoutId);
-            channel.removeEventListener('open', handleOpen);
-            channel.removeEventListener('close', handleClose);
-            channel.removeEventListener('error', handleError);
-            resolve(value);
-        };
-        const handleOpen = () => finish(true);
-        const handleClose = () => finish(false);
-        const handleError = () => finish(false);
-        const timeoutId = setTimeout(() => finish(false), timeoutMs);
-        channel.addEventListener('open', handleOpen, { once: true });
-        channel.addEventListener('close', handleClose, { once: true });
-        channel.addEventListener('error', handleError, { once: true });
-    });
-}
-
 function handleGeminiVoiceTransportFailure(message = 'Соединение голосового канала прервано. Попробуйте начать звонок заново.') {
     if (geminiVoiceCloseExpected || (!isGeminiVoiceActive && !isGeminiVoiceConnecting)) {
         return false;
@@ -20561,87 +21014,27 @@ function handleGeminiVoiceTransportFailure(message = 'Соединение го�
     return true;
 }
 
-function requestOpenAiAssistantResponse(instructions = '') {
-    const payload = {
-        modalities: ['audio', 'text']
-    };
-
-    const cleanInstructions = normalizeVoiceDialogText(instructions);
-    payload.instructions = cleanInstructions
-        ? `${cleanInstructions}\n\n${OPENAI_FAST_PACE_INSTRUCTIONS}`
-        : OPENAI_FAST_PACE_INSTRUCTIONS;
-
-    if (openAiResponsePending) {
-        openAiResponseQueued = true;
-        return true;
-    }
-
-    const sent = sendOpenAiRealtimeEvent({
-        type: 'response.create',
-        response: payload
-    });
-
-    if (sent) {
-        openAiResponsePending = true;
-        openAiResponseQueued = false;
-        openAiHasUnansweredUserTurn = false;
-        geminiVoiceAssistantPreview = '';
-        geminiVoiceAssistantDraft = '';
-        setVoiceModeStatus(getVoiceModeStatusCopy('aiThinking', 'ИИ-клиент готовит ответ…'), 'waiting');
-    }
-    return sent;
+function requestLegacyVoiceAssistantResponseUnused() {
+    return false;
 }
 
-function appendVoiceUserTranscriptLine(text, options = {}) {
-    const { markUnanswered = true } = options;
+function appendLegacyVoiceUserTranscriptLine(text) {
     const normalized = normalizeVoiceDialogText(text);
     if (!normalized) return false;
-
-    const currentCompact = normalizeVoiceDialogCompact(normalized);
-    const now = Date.now();
-    if (
-        currentCompact &&
-        openAiLastUserTurnCompact &&
-        currentCompact === openAiLastUserTurnCompact &&
-        now - openAiLastUserTurnAt < 12000
-    ) {
-        return false;
-    }
-
-    openAiLastUserTurnCompact = currentCompact;
-    openAiLastUserTurnAt = now;
-
     geminiVoiceUserDraft = normalized;
     flushGeminiVoiceDraftLine('user');
-    if (markUnanswered) {
-        openAiHasUnansweredUserTurn = true;
-    }
     return true;
 }
 
-function flushOpenAiPendingUserTurn(options = {}) {
-    const { requestResponse = true } = options;
-    const userText = normalizeVoiceDialogText(openAiPendingUserTurn);
-    openAiPendingUserTurn = '';
-
-    if (!userText) return false;
-    const appended = appendVoiceUserTranscriptLine(userText, { markUnanswered: true });
-    if (!appended) return false;
-
-    if (!requestResponse) return true;
-    return requestOpenAiAssistantResponse();
+function flushLegacyVoicePendingUserTurnUnused() {
+    return false;
 }
 
-function queueOpenAiPendingUserTurn(text) {
-    const normalized = normalizeVoiceDialogText(text);
-    if (!normalized) return '';
-    openAiPendingUserTurn = normalizeVoiceDialogText(
-        mergeVoiceStreamingText(openAiPendingUserTurn, normalized)
-    );
-    return openAiPendingUserTurn;
+function queueLegacyVoicePendingUserTurnUnused() {
+    return '';
 }
 
-function extractOpenAiConversationItemTranscript(item) {
+function extractLegacyVoiceConversationItemTranscriptUnused(item) {
     if (!item || typeof item !== 'object') return '';
     const directTranscript = normalizeVoiceDialogText(item.transcript || item.text || '');
     if (directTranscript) return directTranscript;
@@ -20661,28 +21054,28 @@ function extractOpenAiConversationItemTranscript(item) {
     return normalizeVoiceDialogText(chunks.join(' '));
 }
 
-function consumeOpenAiUserTranscript(rawText, itemId = '') {
+function consumeLegacyVoiceUserTranscriptUnused(rawText, itemId = '') {
     const text = normalizeVoiceDialogText(rawText);
     if (!text) return false;
 
     const safeItemId = String(itemId || '').trim();
     if (safeItemId) {
-        const known = normalizeVoiceDialogText(openAiUserTranscriptByItemId.get(safeItemId) || '');
+        const known = normalizeVoiceDialogText(legacyVoiceUserTranscriptByItemIdUnused.get(safeItemId) || '');
         if (known && normalizeVoiceDialogCompact(known) === normalizeVoiceDialogCompact(text)) {
             return false;
         }
-        openAiUserTranscriptByItemId.set(safeItemId, text);
+        legacyVoiceUserTranscriptByItemIdUnused.set(safeItemId, text);
     }
 
-    queueOpenAiPendingUserTurn(text);
+    queueLegacyVoicePendingUserTurnUnused(text);
     geminiVoiceUserPreview = '';
-    const appended = flushOpenAiPendingUserTurn({ requestResponse: false });
+    const appended = flushLegacyVoicePendingUserTurnUnused({ requestResponse: false });
     if (!appended) return false;
 
-    if (openAiResponsePending) {
-        openAiResponseQueued = true;
-    } else if (openAiHasUnansweredUserTurn) {
-        const requested = requestOpenAiAssistantResponse();
+    if (legacyVoiceResponsePendingUnused) {
+        legacyVoiceResponseQueuedUnused = true;
+    } else if (legacyVoiceHasUnansweredUserTurnUnused) {
+        const requested = requestLegacyVoiceAssistantResponseUnused();
         if (!requested) {
             setVoiceModeStatus('Не удалось запросить ответ ИИ-клиента.', 'error');
         }
@@ -21214,14 +21607,6 @@ function teardownGeminiVoiceCapture() {
             try { track.stop(); } catch (e) {}
         });
         geminiVoiceInputStream = null;
-    }
-
-    if (openAiVoiceRemoteAudio) {
-        try {
-            openAiVoiceRemoteAudio.pause();
-            openAiVoiceRemoteAudio.srcObject = null;
-        } catch (e) {}
-        openAiVoiceRemoteAudio = null;
     }
 
     if (geminiLiveSession && typeof geminiLiveSession.close === 'function') {
@@ -21827,7 +22212,6 @@ function setVoiceModeScreenActive(active) {
 async function showVoiceModeModal() {
     hideTooltip(true);
     const openRequestId = ++voiceModeOpenRequestId;
-    activeVoiceModeProvider = 'gemini';
     try {
         resetVoiceModeSessionState();
         setVoiceModeStatus(getVoiceModeStatusCopy('opening', 'Открываю голосовой режим…'), 'idle');
@@ -21857,7 +22241,6 @@ function hideVoiceModeModal() {
     }
     setVoiceModeScreenActive(false);
     geminiVoiceConversationFinished = false;
-    activeVoiceModeProvider = 'gemini';
 }
 
 function buildPromptCompareDiffHtml(publicContent = '', draftContent = '') {
@@ -22478,7 +22861,7 @@ bindEvent(saveVoiceConfigBtn, 'click', () => {
 bindEvent(clearVoiceConfigBtn, 'click', () => {
     clearVoiceModeConfig().catch((error) => {
         console.error('Failed to clear voice config:', error);
-        showCopyNotification('Ошибка очистки настроек OpenAI Voice');
+        showCopyNotification('Ошибка очистки настроек Gemini Live');
     });
 });
 
@@ -25986,6 +26369,32 @@ function installLocalhostTestHooks() {
             }
             await renderAdminUsersTable();
             return true;
+        },
+        async resendPartnerInviteWithoutCachedLinkForTest(login = '') {
+            const normalizedLogin = normalizeLogin(login);
+            if (!isValidLogin(normalizedLogin)) return null;
+            const invite = await getPartnerInviteByLogin(normalizedLogin);
+            const resendResult = await resendPartnerInviteEmail(normalizedLogin, {
+                invite,
+                directInviteLink: '',
+                expiresAt: invite?.expiresAt || '',
+                days: getInviteDaysFromExpiry(invite?.expiresAt)
+            });
+            setAdminLatestInviteState({
+                login: normalizedLogin,
+                days: resendResult.days,
+                expiresAt: resendResult.expiresAt || invite?.expiresAt || '',
+                directInviteLink: resendResult.directInviteLink || '',
+                invite: resendResult.invite || invite,
+                mailSent: !!resendResult.mailResult?.sent,
+                mailError: resendResult.mailResult?.readableError || '',
+                summary: `Инвайт для ${normalizedLogin}`
+            });
+            return {
+                mode: resendResult.mode,
+                mailSent: !!resendResult.mailResult?.sent,
+                directInviteLink: resendResult.directInviteLink || ''
+            };
         },
         async openDialogHistoryScopeForTest(login = '', options = {}) {
             await openDialogHistoryScope(login, {
