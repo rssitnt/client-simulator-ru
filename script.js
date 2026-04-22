@@ -1425,11 +1425,11 @@ function buildFirebasePasswordConflictError(originalError = null) {
 
 async function ensureFirebaseAuthPasswordSession(login, password, options = {}) {
     if (!auth || !login || !password) {
-        throw new Error('Firebase Auth недоступен для открытия сессии.');
+        throw new Error('Сервис входа временно недоступен.');
     }
     const email = normalizeLogin(login);
     if (!isValidLogin(email)) {
-        throw new Error('Укажите корректный email для Firebase Auth.');
+        throw new Error('Укажите корректный email.');
     }
     const allowCreateOnPasswordFailure = options?.allowCreateOnPasswordFailure !== false;
 
@@ -1492,7 +1492,7 @@ async function ensureFirebaseAuthPasswordSession(login, password, options = {}) 
     if (await waitForOpenedSession()) {
         return true;
     }
-    throw new Error('Не удалось открыть Firebase Auth-сессию.');
+    throw new Error('Не удалось открыть вход.');
 }
 
 async function tryRecoverLocalPasswordHashViaFirebase(login, password) {
@@ -2690,7 +2690,7 @@ async function syncCurrentUserAccessMirror(user = currentUser, options = {}) {
     const normalizedUser = normalizeUserRecord(user, user?.login);
     if (!normalizedUser || !canSyncCurrentUserAccessMirror(normalizedUser)) {
         if (requireRemote) {
-            throw new Error('Невозможно синхронизировать access mirror без активной Firebase Auth-сессии.');
+            throw new Error('Не удалось проверить права доступа без активного входа.');
         }
         return false;
     }
@@ -2734,7 +2734,7 @@ async function ensureCurrentUserAccessMirror(user = currentUser, options = {}) {
     const requireRemote = !!options.requireRemote;
     if (!canSyncCurrentUserAccessMirror(user)) {
         if (requireRemote) {
-            throw new Error('Firebase Auth-сессия не готова для записи access mirror.');
+            throw new Error('Вход ещё не успел полностью открыться. Попробуйте ещё раз.');
         }
         return false;
     }
@@ -3855,19 +3855,19 @@ function getReadableFirebaseAuthError(error, context = 'generic') {
         return 'Для этого email уже есть старый пароль. Откройте письмо для сброса, задайте новый пароль и затем войдите с ним.';
     }
     if (code === 'auth/configuration-not-found' || code === 'auth/operation-not-allowed') {
-        return 'Email-подтверждение не настроено в Firebase. Включите Authentication -> Sign-in method -> Email link (passwordless) и добавьте домен сайта в Authorized domains.';
+        return 'Не удалось отправить письмо для входа. Сообщите администратору.';
     }
     if (code === 'auth/invalid-credential' || code === 'auth/invalid-login-credentials' || code === 'auth/wrong-password') {
-        return 'Не удалось открыть Firebase-сессию по этому email/паролю. Попробуйте войти ещё раз. Если ошибка повторяется только у одного сотрудника, проверьте в Firebase Authentication, не остался ли у этого email старый отдельный пароль.';
+        return 'Не удалось войти. Проверьте email и пароль. Если не получается, запросите сброс пароля.';
     }
     if (code === 'auth/email-already-in-use') {
-        return 'Для этого email уже есть отдельный аккаунт в Firebase Auth с другим паролем. Нужен вход тем паролем или сброс/очистка этого аккаунта в Firebase Authentication.';
+        return 'Для этого email уже есть учётная запись с другим паролем. Попробуйте войти со старым паролем или запросите сброс пароля.';
     }
     if (code === 'auth/weak-password') {
-        return 'Firebase не принял пароль. Скорее всего он слишком короткий для Firebase Auth.';
+        return 'Пароль слишком короткий. Используйте не меньше 6 символов.';
     }
     if (code === 'auth/unauthorized-domain') {
-        return 'Домен сайта не разрешен в Firebase Auth. Добавьте текущий домен в Authorized domains.';
+        return 'Не удалось открыть вход с этого адреса сайта. Сообщите администратору.';
     }
     if (code === 'auth/invalid-email') {
         return 'Укажите корректный email.';
@@ -3876,13 +3876,13 @@ function getReadableFirebaseAuthError(error, context = 'generic') {
         return 'Этот email не совпадает с адресом в ссылке подтверждения. Введите email из письма.';
     }
     if (code === 'auth/network-request-failed') {
-        return 'Ошибка сети при обращении к Firebase. Проверьте интернет и повторите попытку.';
+        return 'Проблема с интернет-соединением. Проверьте сеть и попробуйте ещё раз.';
     }
     if (code === 'auth/too-many-requests' || code === 'auth/quota-exceeded') {
-        return 'Превышен лимит отправки писем Firebase. Подождите и повторите позже или проверьте квоты в Authentication -> Usage.';
+        return 'Слишком много попыток. Подождите немного и попробуйте ещё раз.';
     }
     if (code === 'auth/invalid-continue-uri' || code === 'auth/missing-continue-uri' || code === 'auth/unauthorized-continue-uri') {
-        return 'Ссылка продолжения настроена неверно. Проверьте authorized domains и URL приложения в настройках Firebase Auth.';
+        return 'Не удалось подготовить ссылку для входа. Сообщите администратору.';
     }
     if (code === 'auth/expired-action-code' || code === 'auth/invalid-action-code') {
         return 'Ссылка подтверждения устарела. Запросите новую и повторите вход.';
@@ -3904,7 +3904,7 @@ async function sendMagicLinkToEmail(email, purpose = 'verify') {
         throw new Error('Некорректный email');
     }
     if (!auth) {
-        throw new Error('Email-сервис не инициализирован. Проверьте Firebase Auth.');
+        throw new Error('Сервис входа сейчас недоступен. Сообщите администратору.');
     }
 
     const actionUrl = new URL(getAppBaseUrl());
@@ -3935,7 +3935,7 @@ async function sendPasswordResetLinkToEmail(email) {
         throw new Error('Укажите корректный email.');
     }
     if (!auth) {
-        throw new Error('Сервис сброса пароля не инициализирован. Проверьте Firebase Auth.');
+        throw new Error('Сервис сброса пароля сейчас недоступен. Сообщите администратору.');
     }
 
     await withPromiseTimeout(
@@ -6390,7 +6390,7 @@ async function handleAdminInviteJournalResend(login) {
     showCopyNotification(
         result.sent
             ? `Письмо отправлено на ${normalizedLogin}`
-            : `Письмо не отправлено. ${result.readableError || 'Проверьте настройки Firebase Auth.'}`
+            : `Письмо не отправлено. ${result.readableError || 'Сообщите администратору.'}`
     );
     refreshAdminUsersTableAfterMutation();
 }
@@ -7555,7 +7555,7 @@ function createAdminUsersTableRow(login) {
             showCopyNotification(
                 result.sent
                     ? `Письмо отправлено на ${rowData.login}`
-                    : `Письмо не отправлено. ${result.readableError || 'Проверьте настройки Firebase Auth.'}`
+                    : `Письмо не отправлено. ${result.readableError || 'Сообщите администратору.'}`
             );
             refreshAdminUsersTableAfterMutation();
         } catch (error) {
@@ -10223,7 +10223,7 @@ async function renderAdminUsersTable() {
     }
     adminUsersTableRenderWatchdogTimer = setTimeout(() => {
         if (!adminUsersTableInitialized && adminUsersTableBody) {
-            setAdminUsersTableEmptyState('Не удалось загрузить таблицу пользователей. Проверьте подключение к Firebase и обновите страницу.');
+            setAdminUsersTableEmptyState('Не удалось загрузить таблицу пользователей. Проверьте интернет и обновите страницу.');
             adminUsersTableInitialized = true;
         }
     }, 15000);
@@ -10232,7 +10232,7 @@ async function renderAdminUsersTable() {
     try {
         const canReadUsers = await ensureCurrentUserAccessMirror();
         if (!canReadUsers && !db) {
-            setAdminUsersTableEmptyState('Не удалось синхронизировать права доступа Firebase. Проверьте подключение к интернету или войдите повторно.');
+            setAdminUsersTableEmptyState('Не удалось проверить права доступа. Проверьте интернет или войдите ещё раз.');
             adminUsersTableInitialized = true;
             return;
         }
@@ -10292,8 +10292,8 @@ async function renderAdminUsersTable() {
         if (!rowsData.length) {
             const isEmailVerified = !!auth?.currentUser?.emailVerified;
             const hint = isEmailVerified
-                ? 'Пользователи не найдены или нет доступа к таблице. Проверьте права админа или обновите Firebase Security Rules.'
-                : 'Проверьте подтверждение email в Firebase Auth (email не подтверждён), затем обновите страницу.';
+                ? 'Пользователи не найдены или доступ к таблице закрыт. Проверьте права администратора.'
+                : 'Подтвердите email и затем обновите страницу.';
             setAdminUsersTableEmptyState(hint);
             adminUsersTableInitialized = true;
             return;
@@ -10302,7 +10302,7 @@ async function renderAdminUsersTable() {
         applyAdminUsersTableRows(rowsData);
     } catch (error) {
         console.error('Failed to render admin users table:', error);
-        setAdminUsersTableEmptyState('Ошибка загрузки таблицы пользователей. Проверьте права доступа Firebase и актуальность сессии.');
+        setAdminUsersTableEmptyState('Ошибка загрузки таблицы пользователей. Проверьте права доступа и войдите заново при необходимости.');
         adminUsersTableInitialized = true;
     } finally {
         if (adminUsersTableRenderWatchdogTimer) {
@@ -10444,7 +10444,7 @@ async function handleAdminLatestInviteResend() {
         showCopyNotification(
             result.sent
                 ? `Письмо повторно отправлено на ${state.login}`
-                : `Письмо не отправлено. ${result.readableError || 'Проверьте настройки Firebase Auth.'}`
+                : `Письмо не отправлено. ${result.readableError || 'Сообщите администратору.'}`
         );
         refreshAdminUsersTableAfterMutation();
     });
@@ -10721,10 +10721,10 @@ async function handleAuthSubmit() {
         }
 
         await runAuthStep(
-            'Открываем Firebase-сессию...',
+            'Подключаем вход...',
             () => ensureFirebaseAuthPasswordSession(login, password),
             AUTH_SESSION_OPEN_TIMEOUT_MS,
-            'Не удалось открыть Firebase-сессию. Проверьте интернет и повторите вход.',
+            'Не удалось подключить вход. Проверьте интернет и попробуйте ещё раз.',
             { stage: 'firebase_session_open', debugContext: 'login', debugDetails: { login, sessionMode: 'password' } }
         );
 
@@ -10738,7 +10738,7 @@ async function handleAuthSubmit() {
                     : { skipRemote: true, flushLocal: true }
             ),
             AUTH_FLOW_STEP_TIMEOUT_MS,
-            'Не удалось сохранить аккаунт в Firebase. Проверьте RTDB Rules и повторите вход.',
+            'Не удалось сохранить аккаунт. Попробуйте войти ещё раз.',
             { stage: 'user_save', debugContext: 'login', debugDetails: { login, sessionMode: 'password' } }
         );
         if (!requireRemoteUserSave && db) {
@@ -10774,7 +10774,7 @@ async function handleAuthSubmit() {
                     emailVerificationSentAt: nowIso
                 }, { requireRemote: true }),
                 AUTH_FLOW_STEP_TIMEOUT_MS,
-                'Письмо отправлено, но не удалось сохранить статус отправки в Firebase. Проверьте RTDB Rules.',
+                'Письмо отправлено, но не удалось сохранить его статус. Сообщите администратору.',
                 { stage: 'verify_email_mark', debugContext: 'verify', debugDetails: { login, sessionMode: 'password' } }
             ) || savedUser;
             setAuthError('Мы отправили ссылку подтверждения на email. Откройте письмо и повторите вход.');
@@ -10787,7 +10787,7 @@ async function handleAuthSubmit() {
             'Подключаем промпты...',
             () => refreshProtectedFirebaseDataAfterAuth(login),
             AUTH_FLOW_STEP_TIMEOUT_MS,
-            'Firebase-сессия открыта, но не удалось заново подключить промпты. Обновите страницу и повторите вход.',
+            'Вход выполнен, но не удалось полностью загрузить данные. Обновите страницу и попробуйте ещё раз.',
             { stage: 'protected_refresh', debugContext: 'login', debugDetails: { login, sessionMode: 'password' } }
         );
         setAuthSession(savedUser.login);
@@ -10797,7 +10797,7 @@ async function handleAuthSubmit() {
                 'Синхронизируем доступ...',
                 () => ensureCurrentUserAccessMirror(savedUser, { requireRemote: true }),
                 AUTH_FLOW_STEP_TIMEOUT_MS,
-                'Firebase-сессия открыта, но не удалось записать access mirror. Проверьте RTDB Rules.',
+                'Вход выполнен, но не удалось сохранить права доступа. Сообщите администратору.',
                 { stage: 'access_mirror_sync', debugContext: 'login', debugDetails: { login, sessionMode: 'password' } }
             );
         } else {
@@ -10982,7 +10982,7 @@ async function restoreAuthSession() {
     if (isStaleRestoreAttempt()) return false;
     if (!hasMatchingFirebaseSession) {
         stopProtectedRealtimeListeners();
-        pendingAuthRestoreMessage = 'Не удалось быстро подтянуть прошлую Firebase-сессию после обновления. Если доступ сам не вернётся, войдите ещё раз.';
+        pendingAuthRestoreMessage = 'Не удалось быстро восстановить прошлый вход после обновления. Если доступ сам не вернётся, войдите ещё раз.';
         recordAuthDebugEvent('restore_failed', {
             status: 'error',
             login: session.login,
@@ -12469,7 +12469,7 @@ function renderVoiceDebugPanel() {
     const sessionCount = new Set(voiceDebugEntries.map((entry) => String(entry.sessionId || '').trim()).filter(Boolean)).size;
     adminVoiceDebugMeta.textContent = total
         ? `Показаны последние ${Math.min(total, VOICE_DEBUG_LOG_MAX_ENTRIES)} событий. Сессий: ${sessionCount}. Ошибок: ${errorCount}.`
-        : 'Здесь видно этапы Gemini Live: старт, token endpoint, первый текст, первое аудио, причины close/error.';
+        : 'Здесь видны этапы Gemini Live: старт, адрес голосового сервера, первый текст, первое аудио и причины ошибок.';
 
     if (!total) {
         adminVoiceDebugList.innerHTML = '<div class="admin-webhook-debug-empty">Техлог пока пуст</div>';
@@ -18170,7 +18170,7 @@ function buildGeminiLiveSaveNotificationMessage(options = {}) {
 
     if (!hasTokenEndpoint && !hasVoiceName && !hasAudioInputDeviceId) {
         return hasApiKey
-            ? 'API key в браузере больше не используется. Настройте token endpoint.'
+            ? 'Ключ в браузере больше не используется. Укажите адрес голосового сервера.'
             : 'Настройки голосового режима очищены';
     }
 
@@ -18183,26 +18183,26 @@ function buildGeminiLiveSaveNotificationMessage(options = {}) {
     }
 
     if (saveSource === 'endpoint') {
-        if (sharedSaved) return 'Адрес Gemini Live сохранён для всех пользователей';
-        return endpointChanged ? 'Адрес Gemini Live сохранён на этом устройстве' : 'Адрес Gemini Live уже сохранён';
+        if (sharedSaved) return 'Адрес голосового сервера сохранён для всех пользователей';
+        return endpointChanged ? 'Адрес голосового сервера сохранён на этом устройстве' : 'Адрес голосового сервера уже сохранён';
     }
 
     if (sharedSaved && (voiceChanged || audioInputChanged)) {
-        return 'Общий адрес Gemini Live сохранён. Голос и микрофон сохранены на этом устройстве.';
+        return 'Общий адрес голосового сервера сохранён. Голос и микрофон сохранены на этом устройстве.';
     }
     if (sharedSaved) {
-        return 'Настройки Gemini Live сохранены для всех пользователей';
+        return 'Настройки голосового режима сохранены для всех пользователей';
     }
     if (endpointChanged && (voiceChanged || audioInputChanged)) {
-        return 'Настройки Gemini Live сохранены на этом устройстве';
+        return 'Настройки голосового режима сохранены на этом устройстве';
     }
     if (endpointChanged) {
-        return 'Адрес Gemini Live сохранён на этом устройстве';
+        return 'Адрес голосового сервера сохранён на этом устройстве';
     }
     if (voiceChanged || audioInputChanged) {
-        return 'Локальные настройки Gemini Live сохранены';
+        return 'Локальные настройки голосового режима сохранены';
     }
-    return 'Настройки Gemini Live уже сохранены';
+    return 'Настройки голосового режима уже сохранены';
 }
 
 function populateVoiceConfigFields() {
@@ -18380,8 +18380,8 @@ async function saveVoiceModeConfigFromInputs() {
 
     if (tokenEndpointChanged) {
         const endpointMessage = sharedSaved
-            ? (tokenEndpoint ? 'Token endpoint Gemini Live сохранён для всех пользователей' : 'Общий token endpoint Gemini Live очищен')
-            : (tokenEndpoint ? 'Token endpoint Gemini Live сохранён на этом устройстве' : 'Token endpoint Gemini Live очищен на этом устройстве');
+            ? (tokenEndpoint ? 'Адрес голосового сервера сохранён для всех пользователей' : 'Общий адрес голосового сервера очищен')
+            : (tokenEndpoint ? 'Адрес голосового сервера сохранён на этом устройстве' : 'Адрес голосового сервера очищен на этом устройстве');
         if (voiceNameChanged && audioInputDeviceIdChanged) {
             showCopyNotification(`${endpointMessage}. Голос и микрофон сохранены на этом устройстве.`);
         } else if (voiceNameChanged) {
@@ -18398,9 +18398,9 @@ async function saveVoiceModeConfigFromInputs() {
     } else if (audioInputDeviceIdChanged) {
         showCopyNotification('Микрофон Gemini Live сохранён на этом устройстве');
     } else if (apiKey) {
-        showCopyNotification('API key в браузере больше не используется. Настройте token endpoint.');
+        showCopyNotification('Ключ в браузере больше не используется. Укажите адрес голосового сервера.');
     } else {
-        showCopyNotification('Настройки Gemini Live не изменились');
+        showCopyNotification('Настройки голосового режима не изменились');
     }
 }
 
@@ -18773,7 +18773,7 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
         source: 'Voice token endpoint'
     });
     if (!tokenEndpoint) {
-        throw new Error('Голосовой режим не настроен: нужен token endpoint сервера.');
+        throw new Error('Голосовой режим пока не настроен. Обратитесь к администратору.');
     }
 
     const headers = await buildGeminiVoiceServerRequestHeaders(tokenEndpoint);
@@ -18868,7 +18868,7 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
                     await waitForDelay(delayMs);
                 }
                 sawTimeoutLikeFailure = true;
-                lastError = new Error(tokenErrorText || 'Слишком много запросов к token endpoint.');
+                lastError = new Error(tokenErrorText || 'Слишком много попыток подключения к голосовому режиму.');
                 if (attemptIndex < endpointCandidates.length - 1) {
                     continue;
                 }
@@ -18883,7 +18883,7 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
                 lastError = new Error(tokenErrorText || `HTTP ${tokenResponse.status}`);
                 continue;
             }
-            throw new Error(tokenErrorText || `Не удалось получить ключ сессии (HTTP ${tokenResponse.status})`);
+            throw new Error(tokenErrorText || `Не удалось подключить голосовой режим (HTTP ${tokenResponse.status})`);
         }
 
         try {
@@ -18909,7 +18909,7 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
                 });
                 return token;
             }
-            throw new Error('Эндпоинт ключа сессии вернул пустой ответ');
+            throw new Error('Сервер голосового режима вернул пустой ответ');
         } catch (error) {
             recordVoiceDebugEvent('token_request_failed', {
                 status: 'error',
@@ -18933,10 +18933,10 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
     }
 
     if (sawTimeoutLikeFailure) {
-        throw new Error('Token endpoint не ответил вовремя даже после повторной попытки. Сервер может просыпаться после простоя — подождите 10–20 секунд и попробуйте ещё раз.');
+        throw new Error('Сервер голосового режима отвечает слишком долго. Подождите 10–20 секунд и попробуйте ещё раз.');
     }
     if (sawFallbackableFailure) {
-        throw new Error('Token endpoint вернул некорректный ответ на основном маршруте и не смог переключиться на рабочий запасной маршрут.');
+        throw new Error('Не удалось подключить голосовой режим: сервер вернул некорректный ответ.');
     }
     if (lastError) {
         throw lastError;
@@ -24503,7 +24503,7 @@ function isDialogHistoryPermissionDeniedError(error) {
 
 function getDialogHistorySaveFailureMessage(error) {
     if (isDialogHistoryPermissionDeniedError(error)) {
-        return 'Оценка получена, но не сохранилась в историю. Нужно опубликовать новые Firebase rules.';
+        return 'Оценка получена, но не сохранилась в историю. Сообщите администратору.';
     }
     return 'Оценка получена, но не удалось сохранить её в историю.';
 }
@@ -24520,7 +24520,7 @@ async function refreshFirebaseAuthTokenForProtectedRead() {
 }
 
 function buildDialogHistoryPermissionError() {
-    return new Error('Нет доступа к истории. Обновите вход на сайте. Если rules только что меняли, подождите несколько секунд и попробуйте снова.');
+    return new Error('Нет доступа к истории. Обновите вход на сайте и попробуйте снова.');
 }
 
 function textToDocxParagraphs(text) {
