@@ -24,6 +24,48 @@ const mimeTypes = new Map([
     ['.txt', 'text/plain; charset=utf-8']
 ]);
 
+const WINDOWS_CHROMIUM_EXECUTABLES = [
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'
+];
+
+async function resolveChromiumExecutablePath() {
+    if (process.platform !== 'win32') return '';
+    for (const candidate of WINDOWS_CHROMIUM_EXECUTABLES) {
+        try {
+            await stat(candidate);
+            return candidate;
+        } catch {}
+    }
+    return '';
+}
+
+async function launchSmokeBrowser() {
+    const launchOptions = {
+        headless: true,
+        args: ['--no-first-run', '--no-default-browser-check']
+    };
+
+    try {
+        return await chromium.launch(launchOptions);
+    } catch (error) {
+        const message = String(error?.message || '');
+        if (!/Executable doesn't exist/i.test(message) && !/spawn EPERM/i.test(message)) {
+            throw error;
+        }
+        const executablePath = await resolveChromiumExecutablePath();
+        if (!executablePath) {
+            throw error;
+        }
+        return chromium.launch({
+            ...launchOptions,
+            executablePath
+        });
+    }
+}
+
 const firebaseAppStub = `
 export function initializeApp(config = {}) {
   return { config };
@@ -199,6 +241,20 @@ export async function sendSignInLinkToEmail() {
   const delayMs = Number(globalThis.__codexAuthSendLinkDelayMs || 0);
   if (delayMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  const email = normalizeEmail(arguments[1]);
+  const attempts = globalThis.__codexMagicLinkAttemptsByEmail || (globalThis.__codexMagicLinkAttemptsByEmail = {});
+  const sentEmails = globalThis.__codexMagicLinkEmails || (globalThis.__codexMagicLinkEmails = []);
+  if (email) {
+    attempts[email] = Number(attempts[email] || 0) + 1;
+  }
+  const behavior = getAuthBehavior(email);
+  const failCount = Math.max(0, Number(behavior?.sendLinkFailCount || 0));
+  if (behavior?.sendLinkErrorCode && email && attempts[email] <= failCount) {
+    throw buildFirebaseAuthError(behavior.sendLinkErrorCode, behavior.sendLinkErrorMessage || behavior.sendLinkErrorCode);
+  }
+  if (email) {
+    sentEmails.push(email);
   }
   return null;
 }
@@ -963,7 +1019,44 @@ async function installCommonRoutes(context, scenario) {
     await context.route('http://127.0.0.1:7243/**', async (route) => {
         await route.fulfill({ status: 204, body: '' });
     });
-    await context.route('https://n8n-api.tradicia-k.ru/webhook*/**', async (route) => {
+    await context.route('**/api/partner-invite-email', async (route) => {
+        const request = route.request();
+        const rawBody = request.postData() || '{}';
+        let payload = {};
+        try {
+            payload = JSON.parse(rawBody);
+        } catch {}
+        if (!Array.isArray(scenario.inviteMailRequests)) {
+            scenario.inviteMailRequests = [];
+        }
+        scenario.inviteMailRequests.push({
+            url: request.url(),
+            payload
+        });
+        const failCount = Math.max(0, Number(scenario.inviteMailFailCount || 0));
+        if (failCount > 0) {
+            scenario.inviteMailFailCount = failCount - 1;
+            await route.fulfill({
+                status: 503,
+                contentType: 'application/json; charset=utf-8',
+                body: JSON.stringify({
+                    error: 'temporary invite mail failure',
+                    code: 'server_error'
+                })
+            });
+            return;
+        }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json; charset=utf-8',
+            body: JSON.stringify({
+                ok: true,
+                delivery: 'smtp',
+                sentAt: new Date().toISOString()
+            })
+        });
+    });
+    const webhookRouteHandler = async (route) => {
         const url = route.request().url();
         const bodyText = route.request().postData() || '{}';
         const payload = JSON.parse(bodyText);
@@ -1018,7 +1111,10 @@ async function installCommonRoutes(context, scenario) {
             contentType: 'application/json',
             body: JSON.stringify({ ok: true })
         });
-    });
+    };
+    await context.route('https://n8n-api.tradicia-k.ru/webhook*/**', webhookRouteHandler);
+    await context.route('**/api/simulator-webhook', webhookRouteHandler);
+    await context.route('**/api/certification-webhook', webhookRouteHandler);
 }
 
 async function installGeminiVoiceSmokeRoutes(context, tokenBucket, transcribeBucket, options = {}) {
@@ -3071,7 +3167,8 @@ async function runAttestationStartFlow(browser, baseUrl) {
         let attestationRequest = null;
         for (let attempt = 0; attempt < 40; attempt += 1) {
             attestationRequest = scenario.requests.find((item) => {
-                return String(item.url || '').includes('/webhook/certification')
+                const requestUrl = String(item.url || '');
+                return (requestUrl.includes('/webhook/certification') || requestUrl.includes('/api/certification-webhook'))
                     && String(item.payload?.mode || '').trim() === 'attestation';
             });
             if (attestationRequest) break;
@@ -3169,6 +3266,99 @@ async function runAuthPasswordResetFlow(browser, baseUrl) {
     } catch (error) {
         await ensureOutputDir();
         await page.screenshot({ path: path.join(outputDir, 'smoke-auth-password-reset-failure.png'), fullPage: true });
+        throw error;
+    } finally {
+        await context.close();
+    }
+}
+
+async function runPartnerInviteEmailRetryFlow(browser, baseUrl) {
+    const scenario = createIdleScenario();
+    scenario.inviteMailFailCount = 1;
+    scenario.inviteMailRequests = [];
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
+    await installCommonRoutes(context, scenario);
+    await seedLocalState(context);
+    const inviteLogin = 'partner.retry@example.com';
+    const page = await context.newPage();
+
+    try {
+        logStep('run partner invite email retry flow');
+        await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+        await waitForChatReady(page);
+        await page.evaluate(async () => {
+            const hooks = window.__CLIENT_SIMULATOR_TEST_HOOKS__;
+            if (!hooks?.openSettingsAdminForTest) {
+                throw new Error('Missing admin test hooks for invite flow');
+            }
+            await hooks.openSettingsAdminForTest();
+        });
+
+        await page.fill('#partnerInviteEmailInput', inviteLogin);
+        await page.fill('#partnerInviteDaysInput', '30');
+        await page.click('#partnerInviteAddBtn');
+
+        const deadlineAt = Date.now() + 8000;
+        while (Date.now() < deadlineAt && scenario.inviteMailRequests.length < 2) {
+            await page.waitForTimeout(100);
+        }
+
+        await page.waitForFunction((login) => {
+            const key = Array.from(String(login || '').trim().toLowerCase())
+                .map((char) => char.codePointAt(0).toString(16))
+                .join('_');
+            const invite = globalThis.__codexFirebaseDbState?.data?.partner_invites?.[key] || null;
+            return !!invite?.magicLinkSentAt;
+        }, inviteLogin);
+
+        const result = await page.evaluate((login) => {
+            const key = Array.from(String(login || '').trim().toLowerCase())
+                .map((char) => char.codePointAt(0).toString(16))
+                .join('_');
+            const invite = globalThis.__codexFirebaseDbState?.data?.partner_invites?.[key] || null;
+            const latestInviteStatus = document.getElementById('adminLatestInviteStatus')?.textContent || '';
+            const latestInviteMeta = document.getElementById('adminLatestInviteMeta')?.textContent || '';
+            return {
+                invite,
+                latestInviteStatus: String(latestInviteStatus || '').trim(),
+                latestInviteMeta: String(latestInviteMeta || '').trim()
+            };
+        }, inviteLogin);
+
+        expect(scenario.inviteMailRequests.length === 2, `Invite email endpoint must retry once after transient server failure, got ${scenario.inviteMailRequests.length} requests`);
+        expect(String(scenario.inviteMailRequests[0]?.payload?.login || '').trim().toLowerCase() === login, 'Invite email endpoint must receive the acting admin login for legacy fallback auth');
+        expect(String(scenario.inviteMailRequests[0]?.payload?.email || '').trim().toLowerCase() === inviteLogin, 'Invite email endpoint must receive target email');
+        expect(String(scenario.inviteMailRequests[1]?.payload?.login || '').trim().toLowerCase() === login, 'Invite email retry must keep the same acting admin login');
+        expect(String(scenario.inviteMailRequests[1]?.payload?.email || '').trim().toLowerCase() === inviteLogin, 'Invite email retry must keep the same target email');
+        expect(String(scenario.inviteMailRequests[0]?.payload?.directInviteLink || '').includes('invite=1'), 'Invite email endpoint must receive direct invite link payload');
+        expect(!!result.invite?.magicLinkSentAt, 'Invite must persist magicLinkSentAt after retry succeeds');
+        expect(!String(result.invite?.magicLinkLastError || '').trim(), `Invite must clear magicLinkLastError after retry succeeds, got ${result.invite?.magicLinkLastError}`);
+        expect(/жд/i.test(result.latestInviteStatus.toLowerCase()) || /отправлено/i.test(result.latestInviteMeta.toLowerCase()), `Admin latest invite panel must show pending/sent state after retry succeeds, got ${result.latestInviteStatus} / ${result.latestInviteMeta}`);
+
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await waitForChatReady(page);
+        const resendAfterReload = await page.evaluate(async (login) => {
+            const hooks = window.__CLIENT_SIMULATOR_TEST_HOOKS__;
+            if (!hooks?.openSettingsAdminForTest || !hooks?.resendPartnerInviteWithoutCachedLinkForTest) {
+                throw new Error('Missing admin test hooks for invite resend reload flow');
+            }
+            await hooks.openSettingsAdminForTest();
+            return hooks.resendPartnerInviteWithoutCachedLinkForTest(login);
+        }, inviteLogin);
+
+        const resendDeadlineAt = Date.now() + 8000;
+        while (Date.now() < resendDeadlineAt && scenario.inviteMailRequests.length < 3) {
+            await page.waitForTimeout(100);
+        }
+
+        expect(resendAfterReload?.mode === 'reissue', `Invite resend without cached link must fall back to reissue, got ${resendAfterReload?.mode}`);
+        expect(resendAfterReload?.mailSent === true, 'Invite resend without cached link must still send mail');
+        expect(scenario.inviteMailRequests.length === 3, `Invite resend after reload must trigger a new mail request, got ${scenario.inviteMailRequests.length} requests`);
+        expect(String(scenario.inviteMailRequests[2]?.payload?.email || '').trim().toLowerCase() === inviteLogin, 'Invite resend after reload must keep the same target email');
+        expect(String(scenario.inviteMailRequests[2]?.payload?.directInviteLink || '').includes('invite=1'), 'Invite resend after reload must rebuild a direct invite link');
+    } catch (error) {
+        await ensureOutputDir();
+        await page.screenshot({ path: path.join(outputDir, 'smoke-partner-invite-email-retry-failure.png'), fullPage: true });
         throw error;
     } finally {
         await context.close();
@@ -3567,10 +3757,7 @@ async function runLightThemeMobileRegressionFlow(browser, baseUrl) {
 async function main() {
     await ensureOutputDir();
     const { server, baseUrl } = await createStaticFileServer(projectRoot);
-    const browser = await chromium.launch({
-        headless: true,
-        args: ['--no-first-run', '--no-default-browser-check']
-    });
+    const browser = await launchSmokeBrowser();
 
     try {
         await runHiddenClientPromptFlow(browser, baseUrl);
@@ -3630,6 +3817,7 @@ async function main() {
         await runAttestationStartFlow(browser, baseUrl);
         await runEmailAuthVerificationFlow(browser, baseUrl);
         await runAuthPasswordResetFlow(browser, baseUrl);
+        await runPartnerInviteEmailRetryFlow(browser, baseUrl);
         await runAuthFirebasePasswordRecoveryFlow(browser, baseUrl);
         await runAuthFirebaseConflictAutoResetFlow(browser, baseUrl);
         await runLocalhostDevAuthFlow(browser, baseUrl);

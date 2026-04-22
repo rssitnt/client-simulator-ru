@@ -23,6 +23,48 @@ const mimeTypes = new Map([
     ['.txt', 'text/plain; charset=utf-8']
 ]);
 
+const WINDOWS_CHROMIUM_EXECUTABLES = [
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'
+];
+
+async function resolveChromiumExecutablePath() {
+    if (process.platform !== 'win32') return '';
+    for (const candidate of WINDOWS_CHROMIUM_EXECUTABLES) {
+        try {
+            await stat(candidate);
+            return candidate;
+        } catch {}
+    }
+    return '';
+}
+
+async function launchSmokeBrowser() {
+    const launchOptions = {
+        headless: true,
+        args: ['--no-first-run', '--no-default-browser-check']
+    };
+
+    try {
+        return await chromium.launch(launchOptions);
+    } catch (error) {
+        const message = String(error?.message || '');
+        if (!/Executable doesn't exist/i.test(message) && !/spawn EPERM/i.test(message)) {
+            throw error;
+        }
+        const executablePath = await resolveChromiumExecutablePath();
+        if (!executablePath) {
+            throw error;
+        }
+        return chromium.launch({
+            ...launchOptions,
+            executablePath
+        });
+    }
+}
+
 const firebaseAppStub = `
 export function initializeApp(config = {}) {
   return { config };
@@ -170,6 +212,17 @@ const firebaseAuthStub = `
 const authInstance = {
   currentUser: null
 };
+function normalizeEmail(value = '') {
+  return String(value || '').trim().toLowerCase();
+}
+function createAuthUser(email = '') {
+  return {
+    email,
+    async getIdToken() {
+      return 'integration-smoke-firebase-token';
+    }
+  };
+}
 export function getAuth() {
   return authInstance;
 }
@@ -180,11 +233,11 @@ export async function signInWithEmailLink() {
   return { user: null };
 }
 export async function signInWithEmailAndPassword(_auth, email) {
-  authInstance.currentUser = { email };
+  authInstance.currentUser = createAuthUser(normalizeEmail(email));
   return { user: authInstance.currentUser };
 }
 export async function createUserWithEmailAndPassword(_auth, email) {
-  authInstance.currentUser = { email };
+  authInstance.currentUser = createAuthUser(normalizeEmail(email));
   return { user: authInstance.currentUser };
 }
 export async function signOut() {
@@ -194,18 +247,16 @@ export async function signOut() {
 `.trim();
 
 const firebaseAppCheckStub = `
+export function initializeAppCheck() {
+  return { appCheck: true };
+}
 export class ReCaptchaV3Provider {
   constructor(siteKey = '') {
     this.siteKey = siteKey;
   }
 }
-
-export function initializeAppCheck(app, options = {}) {
-  return { app, options };
-}
-
 export async function getToken() {
-  return { token: 'integration-app-check-token' };
+  return { token: 'integration-smoke-app-check-token' };
 }
 `.trim();
 
@@ -213,6 +264,12 @@ function expect(condition, message) {
     if (!condition) {
         throw new Error(message);
     }
+}
+
+async function getLatestUiErrorText(page) {
+    const errorCount = await page.locator('.message.error').count();
+    if (!errorCount) return '';
+    return String(await page.locator('.message.error').last().textContent() || '').trim();
 }
 
 function logStep(message) {
@@ -228,6 +285,68 @@ function isRetryableRatingSmokeError(message) {
         normalized.includes('networkerror') ||
         normalized.includes('http 5')
     );
+}
+
+async function diagnoseWebhookRequest(url = '', payload = null, timeoutMs = 45000) {
+    const targetUrl = String(url || '').trim();
+    if (!targetUrl || !payload || typeof payload !== 'object') {
+        return null;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 45000));
+
+    try {
+        const response = await fetch(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload),
+            signal: controller.signal
+        });
+        const bodyText = await response.text().catch(() => '');
+        return {
+            ok: response.ok,
+            status: response.status,
+            bodyText: String(bodyText || '').trim()
+        };
+    } catch (error) {
+        return {
+            ok: false,
+            status: 0,
+            bodyText: String(error?.message || error || '').trim()
+        };
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+async function buildWebhookFailureDetails(page, capturedWebhookRequests, requestType = '') {
+    const uiErrorText = await getLatestUiErrorText(page);
+    const normalizedRequestType = String(requestType || '').trim();
+    const capturedRequest = capturedWebhookRequests.find((item) => item?.payload?.requestType === normalizedRequestType) || null;
+    if (!capturedRequest || !/failed to fetch/i.test(uiErrorText)) {
+        return uiErrorText;
+    }
+
+    const diagnostic = await diagnoseWebhookRequest(capturedRequest.url, capturedRequest.payload);
+    if (!diagnostic) {
+        return uiErrorText;
+    }
+
+    const diagnosticParts = [];
+    if (uiErrorText) {
+        diagnosticParts.push(uiErrorText);
+    }
+    if (diagnostic.status) {
+        diagnosticParts.push(`diagnostic HTTP ${diagnostic.status}`);
+    }
+    if (diagnostic.bodyText) {
+        diagnosticParts.push(diagnostic.bodyText.slice(0, 500));
+    }
+
+    return diagnosticParts.join(' | ').trim();
 }
 
 function loginToStorageKey(value) {
@@ -365,62 +484,38 @@ async function installIntegrationRoutes(context) {
     });
 }
 
-async function openSettings(page) {
-    const drawerOpen = await page.evaluate(() => document.body.classList.contains('local-prompt-open'));
-    if (drawerOpen) {
-        await page.click('#localPromptCloseBtn');
-        await page.waitForFunction(() => !document.body.classList.contains('local-prompt-open'));
+async function clickFirstVisible(page, selectors) {
+    for (const selector of selectors) {
+        const locator = page.locator(selector);
+        if (!await locator.count()) continue;
+        if (!await locator.first().isVisible()) continue;
+        await locator.first().click();
+        return selector;
     }
 
-    const candidateSelectors = ['#localSettingsTopBtn', '#mobileSettingsTabBtn', '#settingsBtn'];
-    let clickedSelector = null;
-    for (const selector of candidateSelectors) {
-        const locator = page.locator(selector);
-        if (await locator.count() && await locator.isVisible().catch(() => false)) {
-            await locator.click();
-            clickedSelector = selector;
-            break;
+    for (const selector of selectors) {
+        const clicked = await page.evaluate((currentSelector) => {
+            const element = document.querySelector(currentSelector);
+            if (!element) return false;
+            element.click();
+            return true;
+        }, selector);
+        if (clicked) {
+            return selector;
         }
     }
 
-    if (!clickedSelector) {
-        const openedViaFallbackClick = await page.evaluate((selectors) => {
-            for (const selector of selectors) {
-                const element = document.querySelector(selector);
-                if (!element || !(element instanceof HTMLElement)) continue;
-                element.click();
-                return true;
-            }
-            return false;
-        }, candidateSelectors);
-        expect(openedViaFallbackClick, 'No settings entrypoint found, even via DOM fallback click');
-    }
+    throw new Error(`Visible or existing element not found for selectors: ${selectors.join(', ')}`);
+}
+
+async function openSettings(page) {
+    await clickFirstVisible(page, ['#mobileSettingsTabBtn', '#localSettingsTopBtn', '#settingsBtn']);
     await page.waitForSelector('#settingsModal.active');
 }
 
 async function closeSettings(page) {
-    const closeButtonVisible = await page.locator('#settingsModalCloseBtn').isVisible().catch(() => false);
-    if (closeButtonVisible) {
-        await page.click('#settingsModalCloseBtn');
-    } else {
-        const closedViaApi = await page.evaluate(() => {
-            if (typeof window.hideSettingsModal === 'function') {
-                window.hideSettingsModal();
-                return true;
-            }
-            const modal = document.getElementById('settingsModal');
-            if (!modal) return false;
-            modal.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-            return true;
-        });
-        expect(closedViaApi, 'Settings modal close path is unavailable');
-    }
+    await clickFirstVisible(page, ['#settingsModalCloseBtn']);
     await page.waitForFunction(() => !document.getElementById('settingsModal')?.classList.contains('active'));
-    const localDrawerOpen = await page.evaluate(() => document.body.classList.contains('local-prompt-open'));
-    if (localDrawerOpen) {
-        await page.click('#localPromptCloseBtn');
-        await page.waitForFunction(() => !document.body.classList.contains('local-prompt-open'));
-    }
 }
 
 async function ensureDetailsOpen(page, selector) {
@@ -494,7 +589,7 @@ async function runIntegrationFlow(browser, baseUrl) {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
     const capturedWebhookRequests = [];
     await installIntegrationRoutes(context);
-    await context.route('https://n8n-api.tradicia-k.ru/webhook*/**', async (route) => {
+    const webhookCaptureHandler = async (route) => {
         try {
             const bodyText = route.request().postData() || '{}';
             const payload = JSON.parse(bodyText);
@@ -506,7 +601,10 @@ async function runIntegrationFlow(browser, baseUrl) {
             // Ignore malformed payloads in smoke capture, let request pass through.
         }
         await route.continue();
-    });
+    };
+    await context.route('https://n8n-api.tradicia-k.ru/webhook*/**', webhookCaptureHandler);
+    await context.route('**/api/simulator-webhook', webhookCaptureHandler);
+    await context.route('**/api/certification-webhook', webhookCaptureHandler);
     await seedLocalState(context);
     const page = await context.newPage();
     const hiddenRaterPrompt = `Integration hidden rater suffix ${Date.now()}`;
@@ -533,7 +631,10 @@ async function runIntegrationFlow(browser, baseUrl) {
         }, { timeout: 70000 });
 
         const startErrorCount = await page.locator('.message.error').count();
-        expect(startErrorCount === 0, 'Start conversation returned an error');
+        const startErrorText = startErrorCount > 0
+            ? await buildWebhookFailureDetails(page, capturedWebhookRequests, 'chat_start')
+            : '';
+        expect(startErrorCount === 0, `Start conversation returned an error${startErrorText ? `: ${startErrorText}` : ''}`);
 
         const assistantCountBefore = await page.locator('.message.assistant').count();
         const noticeCountBefore = await page.locator('.conversation-action-note').count();
@@ -544,7 +645,10 @@ async function runIntegrationFlow(browser, baseUrl) {
         await waitForNewConversationEvent(page, assistantCountBefore, noticeCountBefore);
 
         const sendErrorCount = await page.locator('.message.error').count();
-        expect(sendErrorCount === 0, 'Chat webhook returned an error after follow-up');
+        const sendErrorText = sendErrorCount > 0
+            ? await buildWebhookFailureDetails(page, capturedWebhookRequests, 'chat')
+            : '';
+        expect(sendErrorCount === 0, `Chat webhook returned an error after follow-up${sendErrorText ? `: ${sendErrorText}` : ''}`);
 
         logStep('request rating through live webhook');
         let previousRatingCount = await page.locator('.message.rating').count();
@@ -600,10 +704,7 @@ async function runIntegrationFlow(browser, baseUrl) {
 async function main() {
     await ensureOutputDir();
     const { server, baseUrl } = await createStaticFileServer(projectRoot);
-    const browser = await chromium.launch({
-        headless: true,
-        args: ['--no-first-run', '--no-default-browser-check']
-    });
+    const browser = await launchSmokeBrowser();
 
     try {
         await runIntegrationFlow(browser, baseUrl);

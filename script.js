@@ -49,11 +49,9 @@ try {
 // n8n Webhook Configuration
 // Unified simulator flows must use the production webhook; `webhook-test` only works while the workflow is armed in n8n.
 const UNIFIED_SIMULATOR_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/client-simulator';
-const WEBHOOK_URL = UNIFIED_SIMULATOR_WEBHOOK_URL;
-const RATE_WEBHOOK_URL = UNIFIED_SIMULATOR_WEBHOOK_URL;
 const ATTESTATION_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/certification';
-const MANAGER_ASSISTANT_WEBHOOK_URL = UNIFIED_SIMULATOR_WEBHOOK_URL;
-const AI_IMPROVE_WEBHOOK_URL = UNIFIED_SIMULATOR_WEBHOOK_URL;
+const SIMULATOR_WEBHOOK_PROXY_ENDPOINT_PATH = '/api/simulator-webhook';
+const CERTIFICATION_WEBHOOK_PROXY_ENDPOINT_PATH = '/api/certification-webhook';
 const GEMINI_SDK_CDN_URL = 'https://cdn.jsdelivr.net/npm/@google/genai@1.40.0/+esm';
 const GEMINI_LIVE_MODEL = 'gemini-3.1-flash-live-preview';
 const GEMINI_LIVE_REMOTE_TOKEN_ENDPOINT = 'https://spots-cabinet-dayton-begun.trycloudflare.com/api/gemini-live-token';
@@ -1277,6 +1275,35 @@ async function waitForFirebaseAuthReady() {
     }
 }
 
+async function createWebhookHttpError(response, timeoutMs = WEBHOOK_DEFAULT_TIMEOUT_MS) {
+    const status = Number(response?.status || 0);
+    let bodyText = '';
+    try {
+        bodyText = await readResponseTextWithTimeout(
+            response,
+            timeoutMs,
+            `Таймаут чтения ошибки webhook (${timeoutMs / 1000}с).`
+        );
+    } catch (error) {
+        bodyText = '';
+    }
+
+    const normalizedBody = String(bodyText || '').toLowerCase();
+    const isInactiveWorkflow = status === 404 && (
+        normalizedBody.includes('not registered')
+        || normalizedBody.includes('workflow must be active')
+    );
+
+    const message = isInactiveWorkflow
+        ? 'Сценарий сейчас выключен на сервере. Нужно включить workflow в n8n.'
+        : `HTTP ${status}`;
+
+    const httpError = new Error(message);
+    httpError.httpStatus = status;
+    httpError.responseText = bodyText;
+    return httpError;
+}
+
 function isAuthRestoreTimeoutError(error) {
     const message = String(error?.message || '').toLowerCase();
     return message.includes('таймаут') || message.includes('timeout');
@@ -1626,7 +1653,8 @@ function buildUnifiedSimulatorWebhookPayload(requestType, payload = {}) {
 }
 
 async function requestAiImproveResponseText(requestId, userMessage, timeoutMs = AI_HELPER_WEBHOOK_TIMEOUT_MS, options = {}) {
-    const response = await fetchWithTimeout(AI_IMPROVE_WEBHOOK_URL, {
+    const webhookUrl = buildUnifiedSimulatorWebhookEndpointUrl();
+    const response = await fetchWithTimeout(webhookUrl, {
         method: 'POST',
         headers: buildJsonRequestHeaders(requestId, 'improve', 'improve'),
         signal: options?.signal,
@@ -1637,9 +1665,7 @@ async function requestAiImproveResponseText(requestId, userMessage, timeoutMs = 
     }, timeoutMs);
 
     if (!response.ok) {
-        const httpError = new Error(`HTTP ${response.status}`);
-        httpError.httpStatus = response.status;
-        throw httpError;
+        throw await createWebhookHttpError(response, timeoutMs);
     }
 
     const responseText = await readResponseTextWithTimeout(
@@ -1655,7 +1681,7 @@ async function requestAiImproveResponseText(requestId, userMessage, timeoutMs = 
     return {
         response,
         responseText,
-        endpoint: AI_IMPROVE_WEBHOOK_URL
+        endpoint: webhookUrl
     };
 }
 
@@ -6216,6 +6242,20 @@ function buildAuthPasswordResetEmailEndpointUrl() {
     );
 }
 
+function buildUnifiedSimulatorWebhookEndpointUrl() {
+    return buildSiblingGeminiServerEndpointUrl(
+        SIMULATOR_WEBHOOK_PROXY_ENDPOINT_PATH,
+        'Simulator webhook endpoint'
+    ) || UNIFIED_SIMULATOR_WEBHOOK_URL;
+}
+
+function buildCertificationWebhookEndpointUrl() {
+    return buildSiblingGeminiServerEndpointUrl(
+        CERTIFICATION_WEBHOOK_PROXY_ENDPOINT_PATH,
+        'Certification webhook endpoint'
+    ) || ATTESTATION_WEBHOOK_URL;
+}
+
 async function buildAuthMagicLinkEmailRequestHeaders() {
     const headers = { 'Content-Type': 'application/json' };
     if (auth?.currentUser) {
@@ -6296,7 +6336,6 @@ async function sendMagicLinkToEmailViaServer(email, purpose = 'verify') {
         };
     }
 
-    const headers = await buildAuthMagicLinkEmailRequestHeaders();
     const retryableStatuses = new Set([401, 404, 405, 408, 425, 500, 502, 503, 504]);
     const requestPayload = {
         source: 'client-simulator-web',
@@ -6309,6 +6348,7 @@ async function sendMagicLinkToEmailViaServer(email, purpose = 'verify') {
     for (let attempt = 0; attempt < 2; attempt += 1) {
         let response;
         try {
+            const headers = await buildAuthMagicLinkEmailRequestHeaders();
             response = await fetchWithTimeout(endpoint, {
                 method: 'POST',
                 headers,
@@ -6388,7 +6428,6 @@ async function sendPasswordResetLinkToEmailViaServer(email) {
         };
     }
 
-    const headers = await buildAuthMagicLinkEmailRequestHeaders();
     const retryableStatuses = new Set([401, 404, 405, 408, 425, 500, 502, 503, 504]);
     const requestPayload = {
         source: 'client-simulator-web',
@@ -6400,6 +6439,7 @@ async function sendPasswordResetLinkToEmailViaServer(email) {
     for (let attempt = 0; attempt < 2; attempt += 1) {
         let response;
         try {
+            const headers = await buildAuthMagicLinkEmailRequestHeaders();
             response = await fetchWithTimeout(endpoint, {
                 method: 'POST',
                 headers,
@@ -22574,9 +22614,10 @@ async function improvePromptWithAI() {
     let response = null;
     try {
         const requestId = buildRequestId('improve');
+        const webhookUrl = buildUnifiedSimulatorWebhookEndpointUrl();
         debugEntryId = startWebhookDebugRequest({
             type: 'improve',
-            endpoint: AI_IMPROVE_WEBHOOK_URL,
+            endpoint: webhookUrl,
             requestId,
             timeoutMs: AI_HELPER_WEBHOOK_TIMEOUT_MS
         });
@@ -24006,14 +24047,15 @@ async function sendMessage() {
     
     try {
         const requestId = buildRequestId('chat');
+        const webhookUrl = buildUnifiedSimulatorWebhookEndpointUrl();
         debugEntryId = startWebhookDebugRequest({
             type: 'chat',
-            endpoint: WEBHOOK_URL,
+            endpoint: webhookUrl,
             requestId,
             timeoutMs: CHAT_WEBHOOK_TIMEOUT_MS
         });
 
-        response = await fetchWithTimeout(WEBHOOK_URL, {
+        response = await fetchWithTimeout(webhookUrl, {
             method: 'POST',
             headers: buildJsonRequestHeaders(requestId, 'chat', 'chat'),
             signal: requestGuard.signal,
@@ -24028,9 +24070,7 @@ async function sendMessage() {
         }, CHAT_WEBHOOK_TIMEOUT_MS);
         
         if (!response.ok) {
-            const httpError = new Error(`HTTP ${response.status}`);
-            httpError.httpStatus = response.status;
-            throw httpError;
+            throw await createWebhookHttpError(response, CHAT_WEBHOOK_TIMEOUT_MS);
         }
         
         const { message: assistantMessage, conversationAction } = await readWebhookEnvelope(response, CHAT_WEBHOOK_TIMEOUT_MS);
@@ -24124,13 +24164,14 @@ async function startConversationHandler() {
     
     try {
         const requestId = buildRequestId('chat_start');
+        const webhookUrl = buildUnifiedSimulatorWebhookEndpointUrl();
         debugEntryId = startWebhookDebugRequest({
             type: 'chat_start',
-            endpoint: WEBHOOK_URL,
+            endpoint: webhookUrl,
             requestId,
             timeoutMs: CHAT_WEBHOOK_TIMEOUT_MS
         });
-        response = await fetchWithTimeout(WEBHOOK_URL, {
+        response = await fetchWithTimeout(webhookUrl, {
             method: 'POST',
             headers: buildJsonRequestHeaders(requestId, 'chat_start', 'chat_start'),
             signal: requestGuard.signal,
@@ -24145,9 +24186,7 @@ async function startConversationHandler() {
         }, CHAT_WEBHOOK_TIMEOUT_MS);
         
         if (!response.ok) {
-            const httpError = new Error(`HTTP ${response.status}`);
-            httpError.httpStatus = response.status;
-            throw httpError;
+            throw await createWebhookHttpError(response, CHAT_WEBHOOK_TIMEOUT_MS);
         }
         
         const { message: assistantMessage, conversationAction } = await readWebhookEnvelope(response, CHAT_WEBHOOK_TIMEOUT_MS);
@@ -24472,6 +24511,7 @@ function isRetryableAttestationError(error) {
 }
 
 async function sendAttestationJobWithRetry(job, maxAttempts = ATTESTATION_SEND_ATTEMPTS) {
+    const webhookUrl = buildCertificationWebhookEndpointUrl();
     const { fileName, fileBase64, fileMime } = await buildAttestationDocxPayload(job.dialog, job.rating, {
         managerName: job.managerName,
         timestamp: job.createdAt
@@ -24484,12 +24524,12 @@ async function sendAttestationJobWithRetry(job, maxAttempts = ATTESTATION_SEND_A
         try {
             debugEntryId = startWebhookDebugRequest({
                 type: 'attestation',
-                endpoint: ATTESTATION_WEBHOOK_URL,
+                endpoint: webhookUrl,
                 requestId: job.requestId,
                 attempt,
                 timeoutMs: ATTESTATION_WEBHOOK_TIMEOUT_MS
             });
-            response = await fetchWithTimeout(ATTESTATION_WEBHOOK_URL, {
+            response = await fetchWithTimeout(webhookUrl, {
                 method: 'POST',
                 headers: buildJsonRequestHeaders(job.requestId, 'attestation'),
                 body: JSON.stringify({
@@ -24511,9 +24551,7 @@ async function sendAttestationJobWithRetry(job, maxAttempts = ATTESTATION_SEND_A
             }, ATTESTATION_WEBHOOK_TIMEOUT_MS);
 
             if (!response.ok) {
-                const err = new Error(`HTTP ${response.status}`);
-                err.httpStatus = response.status;
-                throw err;
+                throw await createWebhookHttpError(response, ATTESTATION_WEBHOOK_TIMEOUT_MS);
             }
             finishWebhookDebugRequest(debugEntryId, {
                 httpStatus: response.status,
@@ -24536,7 +24574,7 @@ async function sendAttestationJobWithRetry(job, maxAttempts = ATTESTATION_SEND_A
 
 async function flushAttestationQueue(options = {}) {
     const { notifySuccess = false } = options;
-    if (!ATTESTATION_WEBHOOK_URL) return;
+    if (!buildCertificationWebhookEndpointUrl()) return;
     if (isAttestationQueueFlushInProgress) return;
     if (!attestationQueue.length) return;
     if (typeof navigator !== 'undefined' && navigator && navigator.onLine === false) {
@@ -24602,6 +24640,7 @@ function isRetryableRatingError(error) {
 async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RATING_SEND_ATTEMPTS, options = {}) {
     const signal = options?.signal;
     const requestId = buildRequestId('rating');
+    const webhookUrl = buildUnifiedSimulatorWebhookEndpointUrl();
     let lastError = null;
     const runtimeRatingConfig = getRuntimeRatingRequestConfig();
     const conversationOutcomeState = getConversationActionStatePayload();
@@ -24620,12 +24659,12 @@ async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RAT
             }
             debugEntryId = startWebhookDebugRequest({
                 type: 'rating',
-                endpoint: RATE_WEBHOOK_URL,
+                endpoint: webhookUrl,
                 requestId,
                 attempt,
                 timeoutMs: runtimeRatingConfig.timeoutMs
             });
-            response = await fetchWithTimeout(RATE_WEBHOOK_URL, {
+            response = await fetchWithTimeout(webhookUrl, {
                 method: 'POST',
                 headers: buildJsonRequestHeaders(requestId, 'rating', 'rating'),
                 signal,
@@ -24645,9 +24684,7 @@ async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RAT
             }, runtimeRatingConfig.timeoutMs);
 
             if (!response.ok) {
-                const err = new Error(`HTTP ${response.status}`);
-                err.httpStatus = response.status;
-                throw err;
+                throw await createWebhookHttpError(response, runtimeRatingConfig.timeoutMs);
             }
 
             const rawRatingMessage = await readWebhookResponse(response, runtimeRatingConfig.timeoutMs);
@@ -24846,8 +24883,9 @@ function addImproveFromRatingButton(dialogText, ratingText) {
 }
 
 async function sendAttestationResult(dialogText, ratingText) {
-    if (!ATTESTATION_WEBHOOK_URL) {
-        console.warn('ATTESTATION_WEBHOOK_URL is not set');
+    const webhookUrl = buildCertificationWebhookEndpointUrl();
+    if (!webhookUrl) {
+        console.warn('Certification webhook endpoint is not set');
         return;
     }
     const dialog = String(dialogText || '').trim();
@@ -25010,14 +25048,15 @@ async function generateAIResponse() {
         const managerName = getManagerName();
         const fullPrompt = `Тебя зовут ${managerName}.\n\n${basePrompt}`;
         const requestId = buildRequestId('manager_assist');
+        const webhookUrl = buildUnifiedSimulatorWebhookEndpointUrl();
         
         debugEntryId = startWebhookDebugRequest({
             type: 'manager_assist',
-            endpoint: MANAGER_ASSISTANT_WEBHOOK_URL,
+            endpoint: webhookUrl,
             requestId,
             timeoutMs: AI_HELPER_WEBHOOK_TIMEOUT_MS
         });
-        response = await fetchWithTimeout(MANAGER_ASSISTANT_WEBHOOK_URL, {
+        response = await fetchWithTimeout(webhookUrl, {
             method: 'POST',
             headers: buildJsonRequestHeaders(requestId, 'manager_assist', 'manager_assist'),
             signal: requestGuard.signal,
@@ -25031,9 +25070,7 @@ async function generateAIResponse() {
         }, AI_HELPER_WEBHOOK_TIMEOUT_MS);
         
         if (!response.ok) {
-            const httpError = new Error(`HTTP ${response.status}`);
-            httpError.httpStatus = response.status;
-            throw httpError;
+            throw await createWebhookHttpError(response, AI_HELPER_WEBHOOK_TIMEOUT_MS);
         }
         
         const aiMessage = await readWebhookResponse(response, AI_HELPER_WEBHOOK_TIMEOUT_MS);
