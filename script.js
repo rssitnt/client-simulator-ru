@@ -1413,7 +1413,7 @@ function isFirebasePasswordCredentialError(error) {
 
 function buildFirebasePasswordConflictError(originalError = null) {
     const error = new Error(
-        'Для этого email локальный пароль уже принят, но Firebase Auth видит другой пароль или старый отдельный аккаунт.'
+        'Для этого email уже есть старый пароль. Сначала нужно сменить его через письмо для сброса, а потом войти с новым паролем.'
     );
     error.code = 'auth/firebase-password-conflict';
     if (originalError) {
@@ -3852,7 +3852,7 @@ function cleanupEmailLinkUrl() {
 function getReadableFirebaseAuthError(error, context = 'generic') {
     const code = String(error?.code || '').trim();
     if (code === 'auth/firebase-password-conflict') {
-        return 'Для этого email в Firebase остался старый пароль или старый отдельный аккаунт. Нужен сброс пароля через письмо, после чего вход новым паролем синхронизирует локальный пароль автоматически.';
+        return 'Для этого email уже есть старый пароль. Откройте письмо для сброса, задайте новый пароль и затем войдите с ним.';
     }
     if (code === 'auth/configuration-not-found' || code === 'auth/operation-not-allowed') {
         return 'Email-подтверждение не настроено в Firebase. Включите Authentication -> Sign-in method -> Email link (passwordless) и добавьте домен сайта в Authorized domains.';
@@ -10845,7 +10845,7 @@ async function handleAuthSubmit() {
                     message: 'После конфликта Firebase автоматически отправлено письмо для сброса.'
                 });
                 showCopyNotification(`На ${login} отправлено письмо для сброса пароля.`);
-                setAuthError('Для этого email в Firebase остался старый пароль. Я уже отправил письмо для сброса. Смените пароль по письму и затем войдите новым паролем — локальный пароль обновится автоматически.');
+                setAuthError('Для этого email уже есть старый пароль. Я отправил письмо для сброса. Откройте письмо, задайте новый пароль и затем войдите с ним.');
             } catch (resetError) {
                 console.error('Auto password reset after Firebase conflict failed:', resetError);
                 recordAuthDebugEvent('reset_failed', {
