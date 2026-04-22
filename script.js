@@ -55,6 +55,7 @@ const CERTIFICATION_WEBHOOK_PROXY_ENDPOINT_PATH = '/api/certification-webhook';
 const GEMINI_SDK_CDN_URL = 'https://cdn.jsdelivr.net/npm/@google/genai@1.40.0/+esm';
 const GEMINI_LIVE_MODEL = 'gemini-3.1-flash-live-preview';
 const GEMINI_LIVE_REMOTE_TOKEN_ENDPOINT = 'https://api.client-simulator.ru/api/gemini-live-token';
+const GEMINI_LIVE_STABLE_REMOTE_ORIGIN = 'https://api.client-simulator.ru';
 const GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY = 'geminiLiveTokenEndpoint';
 const GEMINI_LIVE_VOICE_NAME_STORAGE_KEY = 'geminiLiveVoiceName';
 const GEMINI_LIVE_AUDIO_INPUT_DEVICE_STORAGE_KEY = 'geminiLiveAudioInputDeviceId';
@@ -62,6 +63,10 @@ const LEGACY_GEMINI_LIVE_API_KEY_STORAGE_KEY = 'geminiLiveApiKey';
 const GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT = '/api/gemini-live-token';
 const GEMINI_LIVE_TRANSCRIBE_ENDPOINT_PATH = '/api/gemini-live-transcribe';
 const GEMINI_LIVE_ALLOWED_TOKEN_ENDPOINT_PATH = '/api/gemini-live-token';
+const LEGACY_PRODUCTION_VOICE_TOKEN_ENDPOINT_ORIGINS = new Set([
+    'https://ti-client-simulator-studio.vercel.app',
+    'https://client-simulator-gemini-token.onrender.com'
+]);
 const PARTNER_INVITE_EMAIL_ENDPOINT_PATH = '/api/partner-invite-email';
 const AUTH_MAGIC_LINK_EMAIL_ENDPOINT_PATH = '/api/auth-email-link';
 const AUTH_PASSWORD_RESET_EMAIL_ENDPOINT_PATH = '/api/auth-password-reset-email';
@@ -18221,9 +18226,30 @@ function isSameOriginGeminiTokenEndpoint(endpoint = '') {
     }
 }
 
+function isLegacyProductionGeminiTokenEndpoint(endpoint = '') {
+    const normalizedEndpoint = String(endpoint || '').trim();
+    if (!normalizedEndpoint || typeof window === 'undefined' || !isProductionHost()) return false;
+    try {
+        const parsed = new URL(normalizedEndpoint, window.location.origin);
+        const normalizedPath = normalizeGeminiTokenEndpoint(parsed.pathname || '').replace(/\/+$/, '') || '/';
+        if (normalizedPath !== GEMINI_LIVE_ALLOWED_TOKEN_ENDPOINT_PATH) return false;
+        if (parsed.origin === GEMINI_LIVE_STABLE_REMOTE_ORIGIN) return false;
+        if (parsed.origin === window.location.origin) return true;
+        if (LEGACY_PRODUCTION_VOICE_TOKEN_ENDPOINT_ORIGINS.has(parsed.origin)) return true;
+        return /\.trycloudflare\.com$/i.test(parsed.hostname || '');
+    } catch (error) {
+        return false;
+    }
+}
+
 function getConfiguredGeminiTokenEndpoint() {
+    const rawLocalOverride = getCachedStorageValue(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY);
+    const hasLegacyLocalOverride = isLegacyProductionGeminiTokenEndpoint(rawLocalOverride);
+    if (hasLegacyLocalOverride) {
+        removeCachedStorageValue(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY);
+    }
     const localOverride = getTrustedGeminiTokenEndpointOrEmpty(
-        getCachedStorageValue(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY),
+        hasLegacyLocalOverride ? '' : rawLocalOverride,
         {
             source: 'local voice token endpoint',
             clearStorageKey: GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY
@@ -18240,6 +18266,11 @@ function getConfiguredGeminiTokenEndpoint() {
 
     const sharedEndpoint = getSharedGeminiTokenEndpoint();
     if (sharedEndpoint) {
+        if (isLegacyProductionGeminiTokenEndpoint(sharedEndpoint)) {
+            return getTrustedGeminiTokenEndpointOrEmpty(getDefaultGeminiTokenEndpoint(), {
+                source: 'production remote voice token endpoint'
+            }) || sharedEndpoint;
+        }
         if (isProductionHost() && isSameOriginGeminiTokenEndpoint(sharedEndpoint)) {
             return getTrustedGeminiTokenEndpointOrEmpty(getDefaultGeminiTokenEndpoint(), {
                 source: 'production remote voice token endpoint'
