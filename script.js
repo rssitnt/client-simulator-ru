@@ -802,7 +802,8 @@ function setAuthResetPasswordState(isLoading = false, label = AUTH_RESET_PASSWOR
 function setAuthStatus(message = '', state = 'idle') {
     if (!authStatusText) return;
     const normalized = String(message || '').trim();
-    if (!normalized) {
+    const normalizedState = String(state || 'idle').trim() || 'idle';
+    if (!normalized || normalizedState === 'error') {
         authStatusText.textContent = '';
         authStatusText.style.display = 'none';
         authStatusText.hidden = true;
@@ -810,7 +811,7 @@ function setAuthStatus(message = '', state = 'idle') {
         return;
     }
     authStatusText.textContent = normalized;
-    authStatusText.dataset.state = String(state || 'idle').trim() || 'idle';
+    authStatusText.dataset.state = normalizedState;
     authStatusText.hidden = false;
     authStatusText.style.display = 'block';
 }
