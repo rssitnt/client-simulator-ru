@@ -11,7 +11,33 @@ import {
     signOut
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { initializeAppCheck, ReCaptchaV3Provider, getToken as getAppCheckToken } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js";
+import { createDialogHistoryHelpers } from "./dialog-history-core.js";
+import { createDialogHistoryControllerHelpers } from "./dialog-history-controller.js";
+import { createDialogHistoryLoaderHelpers } from "./dialog-history-loader.js";
+import { createDialogHistoryMutationHelpers } from "./dialog-history-mutations.js";
+import { createDialogHistorySharingHelpers } from "./dialog-history-sharing.js";
+import { createDialogHistoryStoreHelpers } from "./dialog-history-store.js";
+import { createPromptCompareHelpers } from "./prompt-compare-core.js";
+import { createPromptCompareControlHelpers } from "./prompt-compare-controls.js";
+import { createPromptCompareWorkflowHelpers } from "./prompt-compare-workflow.js";
+import { createPromptHistoryHelpers } from "./prompt-history-core.js";
+import { createPromptHistoryWorkflowHelpers } from "./prompt-history-workflow.js";
+import { createPromptHistoryRuntimeHelpers } from "./prompt-history-runtime.js";
+import { createPromptUiDisplayHelpers } from "./prompt-ui-display.js";
+import { createPromptOverridesRuntimeHelpers } from "./prompt-overrides-runtime.js";
+import { createPromptOverridesSubscriptionHelpers } from "./prompt-overrides-subscription.js";
+import { createPromptStateHelpers } from "./prompt-state-core.js";
+import { createPromptSyncHelpers } from "./prompt-sync-core.js";
 import { firebaseConfig } from "./firebase-config.js";
+
+const dialogHistoryCore = createDialogHistoryHelpers({
+    isValidLogin,
+    normalizeLogin,
+    normalizeVoiceDialogCompact,
+    normalizeVoiceDialogForCompare,
+    parseIsoMs,
+    resolveNormalizedLogin
+});
 
 // Initialize Firebase
 let db = null;
@@ -176,6 +202,160 @@ const AUTH_DEBUG_LOG_STORAGE_KEY = 'authDebugLog:v1';
 const AUTH_DEBUG_LOG_MAX_ENTRIES = 120;
 const VOICE_DEBUG_LOG_STORAGE_KEY = 'voiceDebugLog:v1';
 const VOICE_DEBUG_LOG_MAX_ENTRIES = 80;
+const dialogHistorySharing = createDialogHistorySharingHelpers({
+    clampDialogHistoryTitle,
+    dialogHistoryIndexDbPath: DIALOG_HISTORY_INDEX_DB_PATH,
+    dialogHistoryMessagesDbPath: DIALOG_HISTORY_MESSAGES_DB_PATH,
+    getDialogHistoryRecordEffectiveTitle,
+    loginToStorageKey,
+    normalizeDialogHistoryText,
+    normalizeLogin,
+    sharedDialogsDbPath: SHARED_DIALOGS_DB_PATH
+});
+const dialogHistoryController = createDialogHistoryControllerHelpers({
+    normalizeDialogHistoryIndexRecord,
+    normalizeLogin,
+    sortDialogHistoryRecords
+});
+const dialogHistoryLoader = createDialogHistoryLoaderHelpers({
+    buildCurrentDialogHistorySnapshot,
+    clearDialogHistorySelectionState,
+    defaultPageSize: DIALOG_HISTORY_PAGE_SIZE,
+    fetchDialogHistoryPayload,
+    fetchDialogHistoryScopeRecords,
+    getState: () => ({
+        currentDialogHistoryId,
+        currentDialogHistoryPinnedAt,
+        currentUserLogin: currentUser?.login || '',
+        dialogHistoryMenuOpenId,
+        dialogHistoryScopeLogin,
+        dialogHistoryScopeRecords,
+        dialogHistorySelectedId,
+        dialogHistorySelectedPayload,
+        dialogHistorySelectedRecord,
+        dialogHistoryViewerLoading,
+        dialogHistoryVisibleCount
+    }),
+    isAdmin,
+    isDialogHistoryScopeOwned,
+    isSettingsModalOpen,
+    normalizeLogin,
+    renderDialogHistoryList,
+    renderDialogHistoryScopeMeta,
+    renderDialogHistoryViewer,
+    resolveDialogHistoryScopeSelection: (options = {}) => dialogHistoryController.resolveDialogHistoryScopeSelection(options),
+    revealDialogHistoryAccordion,
+    setState: (patch = {}) => {
+        if (Object.prototype.hasOwnProperty.call(patch, 'currentDialogHistoryPinnedAt')) currentDialogHistoryPinnedAt = patch.currentDialogHistoryPinnedAt;
+        if (Object.prototype.hasOwnProperty.call(patch, 'dialogHistoryMenuOpenId')) dialogHistoryMenuOpenId = patch.dialogHistoryMenuOpenId;
+        if (Object.prototype.hasOwnProperty.call(patch, 'dialogHistoryScopeLogin')) dialogHistoryScopeLogin = patch.dialogHistoryScopeLogin;
+        if (Object.prototype.hasOwnProperty.call(patch, 'dialogHistoryScopeRecords')) dialogHistoryScopeRecords = patch.dialogHistoryScopeRecords;
+        if (Object.prototype.hasOwnProperty.call(patch, 'dialogHistorySelectedId')) dialogHistorySelectedId = patch.dialogHistorySelectedId;
+        if (Object.prototype.hasOwnProperty.call(patch, 'dialogHistorySelectedPayload')) dialogHistorySelectedPayload = patch.dialogHistorySelectedPayload;
+        if (Object.prototype.hasOwnProperty.call(patch, 'dialogHistorySelectedRecord')) dialogHistorySelectedRecord = patch.dialogHistorySelectedRecord;
+        if (Object.prototype.hasOwnProperty.call(patch, 'dialogHistoryViewerLoading')) dialogHistoryViewerLoading = patch.dialogHistoryViewerLoading;
+        if (Object.prototype.hasOwnProperty.call(patch, 'dialogHistoryVisibleCount')) dialogHistoryVisibleCount = patch.dialogHistoryVisibleCount;
+    },
+    showSettingsModal,
+    sortDialogHistoryRecords,
+    upsertDialogHistoryScopeRecord
+});
+const dialogHistoryMutations = createDialogHistoryMutationHelpers({
+    buildCurrentDialogHistorySnapshot,
+    buildSharedDialogPayload,
+    buildSharedDialogUrl,
+    canDeleteDialogHistoryRecord,
+    canDeleteSelectedDialogHistory,
+    canRenameDialogHistoryRecord,
+    clampDialogHistoryTitle,
+    closeDialogHistoryItemMenu,
+    confirmDelete: (title = '') => confirm(`Удалить "${title}"?`),
+    fetchDialogHistoryPayload,
+    formatDialogHistoryFallbackTitle,
+    getDialogHistoryIndexPath,
+    getDialogHistoryMessagesPath,
+    getDialogHistoryRecordEffectiveTitle,
+    getState: () => ({
+        currentDialogHistoryAutoTitle,
+        currentDialogHistoryId,
+        currentDialogHistoryPinnedAt,
+        currentDialogHistoryTitle,
+        currentDialogHistoryTitleEdited,
+        dialogHistoryScopeLogin,
+        dialogHistoryScopeRecords,
+        dialogHistorySelectedId,
+        dialogHistorySelectedRecord
+    }),
+    isDialogHistoryScopeOwned,
+    loadDialogHistorySelection,
+    normalizeDialogHistoryIndexRecord,
+    normalizeLogin,
+    normalizeSharedDialogId,
+    removeDialogHistoryScopeRecord,
+    renderDialogHistoryList,
+    renderDialogHistoryViewer,
+    resetCurrentDialogHistoryState,
+    saveCurrentDialogHistoryNow,
+    saveSharedDialogPayload,
+    setState: (patch = {}) => {
+        if (Object.prototype.hasOwnProperty.call(patch, 'currentDialogHistoryAutoTitle')) currentDialogHistoryAutoTitle = patch.currentDialogHistoryAutoTitle;
+        if (Object.prototype.hasOwnProperty.call(patch, 'currentDialogHistoryId')) currentDialogHistoryId = patch.currentDialogHistoryId;
+        if (Object.prototype.hasOwnProperty.call(patch, 'currentDialogHistoryPinnedAt')) currentDialogHistoryPinnedAt = patch.currentDialogHistoryPinnedAt;
+        if (Object.prototype.hasOwnProperty.call(patch, 'currentDialogHistoryTitle')) currentDialogHistoryTitle = patch.currentDialogHistoryTitle;
+        if (Object.prototype.hasOwnProperty.call(patch, 'currentDialogHistoryTitleEdited')) currentDialogHistoryTitleEdited = patch.currentDialogHistoryTitleEdited;
+        if (Object.prototype.hasOwnProperty.call(patch, 'dialogHistorySelectedRecord')) dialogHistorySelectedRecord = patch.dialogHistorySelectedRecord;
+        if (Object.prototype.hasOwnProperty.call(patch, 'dialogHistoryTitleInputValue')) {
+            dialogHistoryTitleInputs.forEach((input) => {
+                input.value = patch.dialogHistoryTitleInputValue || '';
+            });
+        }
+    },
+    shareNavigator: async (payload) => {
+        if (!navigator.share) return null;
+        try {
+            await navigator.share(payload);
+            return true;
+        } catch (error) {
+            if (error?.name === 'AbortError') {
+                return false;
+            }
+            return null;
+        }
+    },
+    showCopyNotification,
+    upsertDialogHistoryScopeRecord,
+    writeClipboard: async (value = '') => navigator.clipboard.writeText(value),
+    writePath: (path, value, method = 'PUT') => firebaseWritePathWithFallback(
+        path,
+        () => set(ref(db, path), method === 'DELETE' ? null : value),
+        method === 'DELETE' ? null : value,
+        method,
+        FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
+        `Firebase ${method === 'DELETE' ? 'delete' : 'write'} for ${path}`
+    )
+});
+const dialogHistoryStore = createDialogHistoryStoreHelpers({
+    buildPermissionError: buildDialogHistoryPermissionError,
+    getDialogHistoryIndexPath,
+    getDialogHistoryMessagesPath,
+    getSharedDialogPath,
+    isPermissionDeniedError: isDialogHistoryPermissionDeniedError,
+    normalizeDialogHistoryIndexRecord,
+    normalizeDialogHistoryMessagesPayload,
+    normalizeLogin,
+    normalizeSharedDialogPayload,
+    readPath: (path) => firebaseGetWithTimeout(path),
+    refreshProtectedRead: () => refreshFirebaseAuthTokenForProtectedRead(),
+    sortDialogHistoryRecords,
+    writePath: (path, value, method = 'PUT') => firebaseWritePathWithFallback(
+        path,
+        () => set(ref(db, path), method === 'DELETE' ? null : value),
+        method === 'DELETE' ? null : value,
+        method,
+        FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
+        `Firebase ${method === 'DELETE' ? 'delete' : 'write'} for ${path}`
+    )
+});
 const ENABLE_LOCAL_WEBHOOK_DEBUG = false;
 const FIREBASE_FRONTEND_GET_TIMEOUT_MS = 4000;
 const FIREBASE_REST_FALLBACK_BASE_DELAY_MS = 2000;
@@ -1488,6 +1668,7 @@ async function ensureFirebaseAuthPasswordSession(login, password, options = {}) 
             }
             return true;
         }
+        clearCachedVoiceAuthTokens();
         try {
             await signOut(auth);
         } catch (error) {
@@ -1661,7 +1842,7 @@ async function requestAiImproveResponseText(requestId, userMessage, timeoutMs = 
     const webhookUrl = buildUnifiedSimulatorWebhookEndpointUrl();
     const response = await fetchWithTimeout(webhookUrl, {
         method: 'POST',
-        headers: buildJsonRequestHeaders(requestId, 'improve', 'improve'),
+        headers: await buildAuthenticatedJsonRequestHeaders(requestId, 'improve', 'improve'),
         signal: options?.signal,
         body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('improve', {
             userMessage,
@@ -2168,6 +2349,7 @@ let geminiVoicePendingAssistantBeforeFirstUserTurn = false;
 let voiceAuthWarmupPromise = null;
 let voiceAuthCachedIdToken = '';
 let voiceAuthCachedIdTokenAt = 0;
+let voiceAuthCachedIdTokenLogin = '';
 let voiceAuthCachedAppCheckToken = '';
 let voiceAuthCachedAppCheckTokenAt = 0;
 let geminiVoiceStartupWarmupPromise = null;
@@ -2303,6 +2485,12 @@ let publicActiveIds = {
 const PROMPT_ROLES = ['client', 'manager', 'manager_call', 'rater'];
 const ATTESTATION_PROMPT_ROLES = ['client', 'manager', 'rater'];
 const MANAGER_CALL_PROMPT_MAX_CHARS = 4000;
+const promptStateCore = createPromptStateHelpers({
+    generateId,
+    hasMeaningfulPromptSnapshot: firebasePromptSnapshotHasMeaningfulContent,
+    promptRoles: PROMPT_ROLES,
+    unescapeMarkdown
+});
 
 // Prompt Variations Data
 let promptsData = {
@@ -2313,6 +2501,289 @@ let promptsData = {
 };
 const promptEditRemoteBaselineHashes = {};
 const promptSyncConflictMessages = {};
+const promptSyncCore = createPromptSyncHelpers({
+    buildNormalizedPromptOverridesStoreState,
+    buildNormalizedPromptSnapshotState,
+    buildPromptOverridesPayload,
+    buildPromptsSyncPayload,
+    findLocalOverrideForPublicVariation,
+    generateId,
+    getPromptOverridesStoreRoleHash,
+    getPromptSnapshotRoleHash,
+    getPromptVariationDisplayName,
+    getPublicPromptRoleSnapshotFromNormalizedData,
+    getState: () => ({
+        buildNormalizedPromptOverridesStoreState,
+        dirtyPromptOverrideRoles,
+        dirtyPublicPromptRoles,
+        lastPromptsFirebaseSnapshotState,
+        pendingPromptsFirebaseSnapshot,
+        pendingPromptsFirebaseSnapshotState,
+        promptEditRemoteBaselineHashes,
+        promptSyncConflictMessages,
+        promptsData
+    }),
+    normalizePromptOverridesStore,
+    normalizePromptSnapshotVariations,
+    promptRoles: PROMPT_ROLES,
+    saveLocalPromptsData
+});
+const promptCompareCore = createPromptCompareHelpers({
+    diffWordsWithSpace: (...args) => globalThis.Diff?.diffWordsWithSpace?.(...args) || null,
+    escapeHtml,
+    findBasePublicVariationForLocal,
+    findLocalOverrideForPublicVariation,
+    getActiveVariation,
+    getPromptHistoryEntries,
+    promptRoles: PROMPT_ROLES
+});
+const promptCompareControls = createPromptCompareControlHelpers({
+    elements: {
+        promptCompareBtn,
+        promptHistoryBtn
+    },
+    getActiveVariation,
+    getPromptCompareContext,
+    getPromptHistoryVariation,
+    getPromptRollbackEntry,
+    isAdmin,
+    setCustomTooltip
+});
+const promptUiDisplay = createPromptUiDisplayHelpers({
+    elements: {
+        promptContextRoleName,
+        promptContextVariationBadge,
+        promptLengthInfo,
+        promptVisibilityBtn
+    },
+    eyeOffIcon: EYE_OFF_ICON,
+    eyeOpenIcon: EYE_OPEN_ICON,
+    getActiveContent,
+    getActiveVariation,
+    getRoleLabel,
+    isAdmin,
+    isLocalMinimalUiEnabled,
+    managerCallPromptMaxChars: MANAGER_CALL_PROMPT_MAX_CHARS,
+    setCustomTooltip
+});
+const promptHistoryCore = createPromptHistoryHelpers({
+    historyLimit: HISTORY_LIMIT
+});
+const promptHistoryRuntime = createPromptHistoryRuntimeHelpers({
+    buildPromptHistoryEntryHash,
+    buildPromptHistorySnapshotHash,
+    clonePromptHistoryEntry,
+    clearCachedLocalStorageJson,
+    debugLog,
+    debounceMs: PROMPT_HISTORY_REMOTE_SYNC_DEBOUNCE_MS,
+    ensureCurrentUserAccessMirror,
+    generateId,
+    getPromptHistoryEntries: (history, role, variationId) => promptHistoryCore.getPromptHistoryEntries(history, role, variationId),
+    getState: () => ({
+        db,
+        lastHistoryContent,
+        lastPromptHistorySnapshotHash,
+        promptHistory,
+        promptHistoryRemoteSyncInFlight,
+        promptHistoryRemoteSyncTimer,
+        promptsData,
+        queuedPromptHistoryRemoteEntries,
+        syncedPromptHistoryEntryIds
+    }),
+    isAdmin,
+    isPromptHistoryModalActive: () => !!promptHistoryModal?.classList.contains('active'),
+    localStorageKey: LOCAL_PROMPTS_HISTORY_STORAGE_KEY,
+    normalizePromptHistoryEntries,
+    renderPromptHistory: () => renderPromptHistory(),
+    setCachedLocalStorageJson,
+    setState: (patch = {}) => {
+        if (Object.prototype.hasOwnProperty.call(patch, 'lastHistoryContent')) lastHistoryContent = patch.lastHistoryContent;
+        if (Object.prototype.hasOwnProperty.call(patch, 'lastPromptHistorySnapshotHash')) lastPromptHistorySnapshotHash = patch.lastPromptHistorySnapshotHash;
+        if (Object.prototype.hasOwnProperty.call(patch, 'promptHistory')) promptHistory = patch.promptHistory;
+        if (Object.prototype.hasOwnProperty.call(patch, 'promptHistoryRemoteSyncInFlight')) promptHistoryRemoteSyncInFlight = patch.promptHistoryRemoteSyncInFlight;
+        if (Object.prototype.hasOwnProperty.call(patch, 'promptHistoryRemoteSyncTimer')) promptHistoryRemoteSyncTimer = patch.promptHistoryRemoteSyncTimer;
+        if (Object.prototype.hasOwnProperty.call(patch, 'queuedPromptHistoryRemoteEntries')) queuedPromptHistoryRemoteEntries = patch.queuedPromptHistoryRemoteEntries;
+        if (Object.prototype.hasOwnProperty.call(patch, 'syncedPromptHistoryEntryIds')) syncedPromptHistoryEntryIds = patch.syncedPromptHistoryEntryIds;
+    },
+    writePromptHistoryBatch: async (updatesPayload = {}) => {
+        await update(ref(db, 'prompt_history'), updatesPayload);
+        return true;
+    }
+});
+const promptHistoryWorkflow = createPromptHistoryWorkflowHelpers({
+    buildPromptHistoryEntryDiffHtml: (previousContent = '', currentContent = '') => buildPromptHistoryEntryDiffHtml(previousContent, currentContent),
+    checkpointPromptHistory: (role, variationId, options = {}) => checkpointPromptHistory(role, variationId, options),
+    elements: {
+        promptCompareModal,
+        promptHistoryItemDiffView,
+        promptHistoryItemMeta,
+        promptHistoryItemModal,
+        promptHistoryItemTitle,
+        promptHistoryList,
+        promptHistoryModal,
+        promptHistoryTitle
+    },
+    escapeHtml,
+    formatHistoryTime,
+    getActiveRole,
+    getActiveVariation,
+    getPromptHistoryEntries: (role, variationId) => getPromptHistoryEntries(role, variationId),
+    getPromptHistoryKindLabel: (kind = 'edit') => getPromptHistoryKindLabel(kind),
+    getPromptHistoryVariation,
+    getRoleLabel,
+    getState: () => ({
+        promptHistory,
+        promptsData
+    }),
+    hideTooltip,
+    historyLimit: HISTORY_LIMIT,
+    isAdmin,
+    renderPromptCompareModalContent: (role = '') => renderPromptCompareModalContent(role),
+    renderVariations,
+    savePromptsToFirebaseNow,
+    updateEditorContent
+});
+const promptCompareWorkflow = createPromptCompareWorkflowHelpers({
+    buildPromptCompareDiffHtml: (publicContent = '', draftContent = '') => buildPromptCompareDiffHtml(publicContent, draftContent),
+    elements: {
+        promptCompareDiffView,
+        promptCompareModal,
+        promptCompareSummary,
+        promptCompareTitle
+    },
+    escapeHtml,
+    getActiveVariation,
+    getPromptCompareContext,
+    getPromptHistoryVariation,
+    getPromptRollbackEntry,
+    getPromptVariationDisplayName,
+    getRoleLabel,
+    getState: () => ({
+        activePromptCompareContext,
+        promptsData
+    }),
+    hideTooltip,
+    publishActiveLocalPrompt,
+    renderVariations,
+    restorePromptVersion,
+    setState: (patch = {}) => {
+        if (Object.prototype.hasOwnProperty.call(patch, 'activePromptCompareContext')) activePromptCompareContext = patch.activePromptCompareContext;
+    },
+    showCopyNotification,
+    syncCurrentEditorNow,
+    updateEditorContent
+});
+const promptOverridesRuntime = createPromptOverridesRuntimeHelpers({
+    buildMergedPromptOverridesStore,
+    buildMergedPromptsSnapshot,
+    buildNormalizedPromptOverridesStoreState,
+    buildPromptOverridesPayload,
+    canSyncPromptOverrides,
+    getPromptOverridesDbPath,
+    getState: () => ({
+        currentUser,
+        currentUserPromptOverridesListenerLogin,
+        currentUserPromptOverridesSaveTimer,
+        currentUserPromptOverridesStore,
+        currentUserPromptOverridesStoreState,
+        dirtyPromptOverrideRoles,
+        dirtyPublicPromptRoles,
+        isUserEditing,
+        lastPromptOverridesRemoteHash,
+        pendingPromptOverridesRemoteHash,
+        pendingPromptOverridesRemoteStore,
+        pendingPromptOverridesRemoteStoreState,
+        pendingPromptsFirebaseSnapshot,
+        pendingPromptsFirebaseSnapshotState,
+        promptOverridesSyncInFlight,
+        promptOverridesSyncRetryTimerId,
+        queuedPromptOverridesPayload,
+        queuedPromptOverridesPayloadState
+    }),
+    initPromptsData,
+    normalizeLogin,
+    persistPromptOverridesStoreLocally,
+    resolvePromptSyncConflicts,
+    retryDelayMs: PROMPT_REMOTE_SYNC_RETRY_DELAY_MS,
+    savePromptsToFirebase: () => savePromptsToFirebase(),
+    setState: (patch = {}) => {
+        if (Object.prototype.hasOwnProperty.call(patch, 'currentUserPromptOverridesSaveTimer')) currentUserPromptOverridesSaveTimer = patch.currentUserPromptOverridesSaveTimer;
+        if (Object.prototype.hasOwnProperty.call(patch, 'currentUserPromptOverridesStore')) currentUserPromptOverridesStore = patch.currentUserPromptOverridesStore;
+        if (Object.prototype.hasOwnProperty.call(patch, 'currentUserPromptOverridesStoreState')) currentUserPromptOverridesStoreState = patch.currentUserPromptOverridesStoreState;
+        if (Object.prototype.hasOwnProperty.call(patch, 'lastPromptOverridesRemoteHash')) lastPromptOverridesRemoteHash = patch.lastPromptOverridesRemoteHash;
+        if (Object.prototype.hasOwnProperty.call(patch, 'pendingPromptOverridesRemoteHash')) pendingPromptOverridesRemoteHash = patch.pendingPromptOverridesRemoteHash;
+        if (Object.prototype.hasOwnProperty.call(patch, 'pendingPromptOverridesRemoteStore')) pendingPromptOverridesRemoteStore = patch.pendingPromptOverridesRemoteStore;
+        if (Object.prototype.hasOwnProperty.call(patch, 'pendingPromptOverridesRemoteStoreState')) pendingPromptOverridesRemoteStoreState = patch.pendingPromptOverridesRemoteStoreState;
+        if (Object.prototype.hasOwnProperty.call(patch, 'pendingPromptsFirebaseSnapshot')) pendingPromptsFirebaseSnapshot = patch.pendingPromptsFirebaseSnapshot;
+        if (Object.prototype.hasOwnProperty.call(patch, 'pendingPromptsFirebaseSnapshotState')) pendingPromptsFirebaseSnapshotState = patch.pendingPromptsFirebaseSnapshotState;
+        if (Object.prototype.hasOwnProperty.call(patch, 'promptOverridesSyncInFlight')) promptOverridesSyncInFlight = patch.promptOverridesSyncInFlight;
+        if (Object.prototype.hasOwnProperty.call(patch, 'promptOverridesSyncRetryTimerId')) promptOverridesSyncRetryTimerId = patch.promptOverridesSyncRetryTimerId;
+        if (Object.prototype.hasOwnProperty.call(patch, 'queuedPromptOverridesPayload')) queuedPromptOverridesPayload = patch.queuedPromptOverridesPayload;
+        if (Object.prototype.hasOwnProperty.call(patch, 'queuedPromptOverridesPayloadState')) queuedPromptOverridesPayloadState = patch.queuedPromptOverridesPayloadState;
+    },
+    writePromptOverrides: async (remotePath, payload) => {
+        await set(ref(db, remotePath), payload);
+        return true;
+    }
+});
+const promptOverridesSubscription = createPromptOverridesSubscriptionHelpers({
+    buildNormalizedPromptOverridesStoreState,
+    canSyncPromptOverrides,
+    clearPromptOverridesSyncRetry: () => clearPromptOverridesSyncRetry(),
+    debugLog,
+    defaultRecoveryDelayMs: PROTECTED_REALTIME_RECOVERY_DELAY_MS,
+    getNextRealtimeRecoveryDelay,
+    getPromptOverridesDbPath,
+    getState: () => ({
+        currentUser,
+        currentUserPromptOverridesListenerLogin,
+        currentUserPromptOverridesRecoveryTimerId,
+        currentUserPromptOverridesSaveTimer,
+        currentUserPromptOverridesStore,
+        currentUserPromptOverridesStoreState,
+        currentUserPromptOverridesSubscriptionHealthy,
+        currentUserPromptOverridesUnsubscribe,
+        dirtyPromptOverrideRoles,
+        isUserEditing,
+        lastPromptsFirebaseSnapshot,
+        lastPromptOverridesRemoteHash,
+        pendingPromptOverridesRemoteHash,
+        pendingPromptOverridesRemoteStore,
+        pendingPromptOverridesRemoteStoreState,
+        promptOverridesSyncInFlight,
+        queuedPromptOverridesPayload,
+        queuedPromptOverridesPayloadState
+    }),
+    initPromptsData: (snapshot = {}) => initPromptsData(snapshot),
+    loadLocalPromptsStoreState,
+    normalizeLogin,
+    persistPromptOverridesStoreLocally,
+    queuePromptOverridesSave: (payload = null) => queuePromptOverridesSave(payload),
+    resetRealtimeRecoveryBackoff,
+    setState: (patch = {}) => {
+        if (Object.prototype.hasOwnProperty.call(patch, 'currentUserPromptOverridesListenerLogin')) currentUserPromptOverridesListenerLogin = patch.currentUserPromptOverridesListenerLogin;
+        if (Object.prototype.hasOwnProperty.call(patch, 'currentUserPromptOverridesRecoveryTimerId')) currentUserPromptOverridesRecoveryTimerId = patch.currentUserPromptOverridesRecoveryTimerId;
+        if (Object.prototype.hasOwnProperty.call(patch, 'currentUserPromptOverridesSaveTimer')) currentUserPromptOverridesSaveTimer = patch.currentUserPromptOverridesSaveTimer;
+        if (Object.prototype.hasOwnProperty.call(patch, 'currentUserPromptOverridesStore')) currentUserPromptOverridesStore = patch.currentUserPromptOverridesStore;
+        if (Object.prototype.hasOwnProperty.call(patch, 'currentUserPromptOverridesStoreState')) currentUserPromptOverridesStoreState = patch.currentUserPromptOverridesStoreState;
+        if (Object.prototype.hasOwnProperty.call(patch, 'currentUserPromptOverridesSubscriptionHealthy')) currentUserPromptOverridesSubscriptionHealthy = patch.currentUserPromptOverridesSubscriptionHealthy;
+        if (Object.prototype.hasOwnProperty.call(patch, 'currentUserPromptOverridesUnsubscribe')) currentUserPromptOverridesUnsubscribe = patch.currentUserPromptOverridesUnsubscribe;
+        if (Object.prototype.hasOwnProperty.call(patch, 'lastPromptOverridesRemoteHash')) lastPromptOverridesRemoteHash = patch.lastPromptOverridesRemoteHash;
+        if (Object.prototype.hasOwnProperty.call(patch, 'pendingPromptOverridesRemoteHash')) pendingPromptOverridesRemoteHash = patch.pendingPromptOverridesRemoteHash;
+        if (Object.prototype.hasOwnProperty.call(patch, 'pendingPromptOverridesRemoteStore')) pendingPromptOverridesRemoteStore = patch.pendingPromptOverridesRemoteStore;
+        if (Object.prototype.hasOwnProperty.call(patch, 'pendingPromptOverridesRemoteStoreState')) pendingPromptOverridesRemoteStoreState = patch.pendingPromptOverridesRemoteStoreState;
+        if (Object.prototype.hasOwnProperty.call(patch, 'promptOverridesSyncInFlight')) promptOverridesSyncInFlight = patch.promptOverridesSyncInFlight;
+        if (Object.prototype.hasOwnProperty.call(patch, 'queuedPromptOverridesPayload')) queuedPromptOverridesPayload = patch.queuedPromptOverridesPayload;
+        if (Object.prototype.hasOwnProperty.call(patch, 'queuedPromptOverridesPayloadState')) queuedPromptOverridesPayloadState = patch.queuedPromptOverridesPayloadState;
+    },
+    subscribeToPromptOverrides: (remotePath, onValueHandler, onErrorHandler) => (
+        onValue(
+            ref(db, remotePath),
+            (snapshot) => onValueHandler(snapshot.exists() ? snapshot.val() : {}),
+            onErrorHandler
+        )
+    )
+});
 
 function normalizeFio(value) {
     return String(value || '').trim().replace(/\s+/g, ' ');
@@ -3012,6 +3483,15 @@ function getAuthSession() {
 function clearAuthSession() {
     removeCachedStorageValue(AUTH_SESSION_STORAGE_KEY);
     clearAuthClaimsCache();
+    clearCachedVoiceAuthTokens();
+}
+
+function clearCachedVoiceAuthTokens() {
+    voiceAuthCachedIdToken = '';
+    voiceAuthCachedIdTokenAt = 0;
+    voiceAuthCachedIdTokenLogin = '';
+    voiceAuthCachedAppCheckToken = '';
+    voiceAuthCachedAppCheckTokenAt = 0;
 }
 
 function isLocalhostDevBypassSession(session = getAuthSession()) {
@@ -3912,6 +4392,20 @@ function getReadableFirebaseAuthError(error, context = 'generic') {
     }
     if (code === 'auth/too-many-requests' || code === 'auth/quota-exceeded') {
         return 'Слишком много попыток. Подождите немного и попробуйте ещё раз.';
+    }
+    if (code === 'rate_limited') {
+        return 'Слишком много попыток. Подождите немного и попробуйте ещё раз.';
+    }
+    if (code === 'missing_id_token') {
+        return 'Сессия входа ещё восстанавливается. Подождите несколько секунд и попробуйте снова.';
+    }
+    if (code === 'email_mismatch') {
+        return 'Этот email не совпадает с подтверждённой сессией. Войдите снова и повторите попытку.';
+    }
+    if (code === 'missing_config') {
+        return context === 'reset-password'
+            ? 'Сервис письма для сброса сейчас не настроен. Сообщите администратору.'
+            : 'Сервис письма для входа сейчас не настроен. Сообщите администратору.';
     }
     if (code === 'auth/invalid-continue-uri' || code === 'auth/missing-continue-uri' || code === 'auth/unauthorized-continue-uri') {
         return 'Не удалось подготовить ссылку для входа. Сообщите администратору.';
@@ -6276,6 +6770,19 @@ async function buildAuthMagicLinkEmailRequestHeaders() {
     return headers;
 }
 
+async function buildAuthenticatedJsonRequestHeaders(requestId, scope = 'request', requestType = '') {
+    const headers = buildJsonRequestHeaders(requestId, scope, requestType);
+    const idToken = await getFirebaseAuthIdToken().catch(() => '');
+    if (idToken) {
+        headers.Authorization = `Bearer ${idToken}`;
+    }
+    const appCheckToken = await getFirebaseAppCheckToken().catch(() => '');
+    if (appCheckToken) {
+        headers['X-Firebase-AppCheck'] = appCheckToken;
+    }
+    return headers;
+}
+
 function isPartnerInviteEmailRetryableError(error) {
     const message = String(error?.message || '').toLowerCase();
     return error?.name === 'AbortError'
@@ -6399,10 +6906,13 @@ async function sendMagicLinkToEmailViaServer(email, purpose = 'verify') {
             await waitForDelay(1200);
             continue;
         }
+        const requestError = new Error(readableError);
+        requestError.code = code || requestError.code || '';
+        requestError.statusCode = response.status;
         return {
             sent: false,
             sentAt: null,
-            error: new Error(readableError),
+            error: requestError,
             readableError,
             delivery: String(payload?.delivery || '').trim(),
             fallbackAllowed: canFallbackToClientMagicLinkFromServerResponse(response.status, code)
@@ -6535,8 +7045,7 @@ async function sendPartnerInviteEmailViaServer(email, options = {}) {
         };
     }
 
-    const headers = await buildGeminiVoiceServerRequestHeaders(getConfiguredGeminiTokenEndpoint());
-    const retryableStatuses = new Set([408, 425, 429, 500, 502, 503, 504]);
+    const retryableStatuses = new Set([401, 404, 405, 408, 425, 500, 502, 503, 504]);
     const requestPayload = {
         source: 'client-simulator-web',
         login: getGeminiVoiceRequestLogin(),
@@ -6549,6 +7058,7 @@ async function sendPartnerInviteEmailViaServer(email, options = {}) {
     for (let attempt = 0; attempt < 2; attempt += 1) {
         let response;
         try {
+            const headers = await buildAuthMagicLinkEmailRequestHeaders();
             response = await fetchWithTimeout(endpoint, {
                 method: 'POST',
                 headers,
@@ -8455,49 +8965,31 @@ function updateAdminUsersTableRow(row, rowData) {
 }
 
 function getDialogHistoryOwnerLogin(login = currentUser?.login || '') {
-    return normalizeLogin(login);
+    return dialogHistorySharing.getDialogHistoryOwnerLogin(login);
 }
 
 function getDialogHistoryOwnerKey(login = currentUser?.login || '') {
-    const normalizedLogin = getDialogHistoryOwnerLogin(login);
-    return normalizedLogin ? loginToStorageKey(normalizedLogin) : '';
+    return dialogHistorySharing.getDialogHistoryOwnerKey(login);
 }
 
 function getDialogHistoryIndexPath(login = currentUser?.login || '', dialogId = '') {
-    const ownerKey = getDialogHistoryOwnerKey(login);
-    if (!ownerKey) return '';
-    return dialogId
-        ? `${DIALOG_HISTORY_INDEX_DB_PATH}/${ownerKey}/${dialogId}`
-        : `${DIALOG_HISTORY_INDEX_DB_PATH}/${ownerKey}`;
+    return dialogHistorySharing.getDialogHistoryIndexPath(login, dialogId);
 }
 
   function getDialogHistoryMessagesPath(login = currentUser?.login || '', dialogId = '') {
-      const ownerKey = getDialogHistoryOwnerKey(login);
-      if (!ownerKey) return '';
-      return dialogId
-          ? `${DIALOG_HISTORY_MESSAGES_DB_PATH}/${ownerKey}/${dialogId}`
-          : `${DIALOG_HISTORY_MESSAGES_DB_PATH}/${ownerKey}`;
+      return dialogHistorySharing.getDialogHistoryMessagesPath(login, dialogId);
   }
 
   function getSharedDialogPath(shareId = '') {
-      const normalized = normalizeSharedDialogId(shareId);
-      if (!normalized) return '';
-      return `${SHARED_DIALOGS_DB_PATH}/${normalized}`;
+      return dialogHistorySharing.getSharedDialogPath(shareId);
   }
 
   function normalizeSharedDialogId(value = '') {
-      const normalized = String(value || '').trim();
-      if (!normalized) return '';
-      return normalized.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80);
+      return dialogHistorySharing.normalizeSharedDialogId(value);
   }
 
   function buildSharedDialogUrl(shareId = '') {
-      const normalized = normalizeSharedDialogId(shareId);
-      if (!normalized) return '';
-      const url = new URL(window.location.href);
-      url.searchParams.set('share', normalized);
-      url.hash = '';
-      return url.toString();
+      return dialogHistorySharing.buildSharedDialogUrl(shareId, window.location.href);
   }
 
   function getPendingSharedDialogId() {
@@ -8529,84 +9021,19 @@ function getDialogHistoryIndexPath(login = currentUser?.login || '', dialogId = 
   }
 
   function buildSharedDialogPayload(record = null, payload = null, shareId = '') {
-      const normalizedShareId = normalizeSharedDialogId(shareId);
-      if (!record || !payload || !normalizedShareId) return null;
-      const messages = Array.isArray(payload.messages) ? payload.messages : [];
-      const normalizedMessages = messages.map((message, index) => {
-          const content = normalizeDialogHistoryText(message?.content || '');
-          if (!content) return null;
-          return {
-              id: String(message?.id || `m_${String(index + 1).padStart(4, '0')}`).trim(),
-              seq: Math.max(0, Number(message?.seq) || index + 1),
-              role: message?.role === 'assistant' ? 'assistant' : 'user',
-              content
-          };
-      }).filter(Boolean);
-      if (!normalizedMessages.length) return null;
-      const ratingText = normalizeDialogHistoryText(payload?.rating?.text || '');
-      return {
-          id: normalizedShareId,
-          title: clampDialogHistoryTitle(getDialogHistoryRecordEffectiveTitle(record)),
-          mode: payload?.mode === 'voice' ? 'voice' : 'text',
-          createdAt: new Date().toISOString(),
-          source: {
-              login: normalizeLogin(record.login || ''),
-              dialogId: String(record.id || '').trim()
-          },
-          messages: normalizedMessages,
-          rating: ratingText
-              ? { text: ratingText }
-              : null
-      };
+      return dialogHistorySharing.buildSharedDialogPayload(record, payload, shareId);
   }
 
   function normalizeSharedDialogPayload(raw, shareId = '') {
-      if (!raw || typeof raw !== 'object') return null;
-      const normalizedShareId = normalizeSharedDialogId(raw.id || shareId);
-      if (!normalizedShareId) return null;
-      const messages = Array.isArray(raw.messages) ? raw.messages : [];
-      const normalizedMessages = messages.map((message, index) => {
-          const content = normalizeDialogHistoryText(message?.content || '');
-          if (!content) return null;
-          return {
-              id: String(message?.id || `m_${String(index + 1).padStart(4, '0')}`).trim(),
-              seq: Math.max(0, Number(message?.seq) || index + 1),
-              role: message?.role === 'assistant' ? 'assistant' : 'user',
-              content
-          };
-      }).filter(Boolean);
-      if (!normalizedMessages.length) return null;
-      const ratingText = normalizeDialogHistoryText(raw?.rating?.text || raw?.ratingText || '');
-      return {
-          id: normalizedShareId,
-          title: clampDialogHistoryTitle(raw.title || ''),
-          mode: raw.mode === 'voice' ? 'voice' : 'text',
-          createdAt: String(raw.createdAt || '').trim() || new Date().toISOString(),
-          messages: normalizedMessages,
-          rating: ratingText ? { text: ratingText } : null
-      };
+      return dialogHistorySharing.normalizeSharedDialogPayload(raw, shareId);
   }
 
   async function saveSharedDialogPayload(shareId = '', payload = null) {
-      const dbPath = getSharedDialogPath(shareId);
-      if (!dbPath || !payload) return false;
-      await firebaseWritePathWithFallback(
-          dbPath,
-          () => set(ref(db, dbPath), payload),
-          payload,
-          'PUT',
-          FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
-          `Firebase write for ${dbPath}`
-      );
-      return true;
+      return dialogHistoryStore.saveSharedDialogPayload(shareId, payload);
   }
 
   async function fetchSharedDialogPayload(shareId = '') {
-      const dbPath = getSharedDialogPath(shareId);
-      if (!dbPath) return null;
-      const snapshot = await firebaseGetWithTimeout(dbPath);
-      if (!snapshot?.exists()) return null;
-      return normalizeSharedDialogPayload(snapshot.val(), shareId);
+      return dialogHistoryStore.fetchSharedDialogPayload(shareId);
   }
 
   function applySharedDialogContinuation(payload) {
@@ -8711,17 +9138,11 @@ function getDialogHistoryIndexPath(login = currentUser?.login || '', dialogId = 
   }
 
 function normalizeDialogHistoryText(value = '') {
-    return String(value || '')
-        .replace(/\r\n/g, '\n')
-        .replace(/\u0000/g, '')
-        .trim();
+    return dialogHistoryCore.normalizeDialogHistoryText(value);
 }
 
 function clampDialogHistoryTitle(value = '', fallback = '') {
-    const normalized = normalizeDialogHistoryText(value || fallback)
-        .replace(/\s+/g, ' ')
-        .trim();
-    return normalized.slice(0, 140);
+    return dialogHistoryCore.clampDialogHistoryTitle(value, fallback);
 }
 
 function summarizeDialogHistoryTitleCandidate(value = '') {
@@ -8958,156 +9379,35 @@ function deriveDialogHistoryAutoTitle(messages = [], createdAt = '') {
 }
 
 function buildDialogHistoryPreview(messages = [], ratingText = '') {
-    const normalizedMessages = Array.isArray(messages)
-        ? messages
-            .map((message) => normalizeDialogHistoryText(message?.content || ''))
-            .filter(Boolean)
-        : [];
-    const lastMessage = normalizedMessages[normalizedMessages.length - 1] || '';
-    if (lastMessage) {
-        return lastMessage.slice(0, 160);
-    }
-    return normalizeDialogHistoryText(ratingText).slice(0, 160);
+    return dialogHistoryCore.buildDialogHistoryPreview(messages, ratingText);
 }
 
 function buildDialogHistoryMessagesMap(messages = []) {
-    const normalizedMessages = Array.isArray(messages) ? messages : [];
-    return normalizedMessages.reduce((acc, message, index) => {
-        const content = normalizeDialogHistoryText(message?.content || '');
-        if (!content) return acc;
-        const id = `m_${String(index + 1).padStart(4, '0')}`;
-        acc[id] = {
-            id,
-            seq: index + 1,
-            role: message?.role === 'assistant' ? 'assistant' : 'user',
-            content
-        };
-        return acc;
-    }, {});
+    return dialogHistoryCore.buildDialogHistoryMessagesMap(messages);
 }
 
 function normalizeDialogHistoryIndexRecord(raw, dialogId = '', loginFallback = '') {
-    if (!raw || typeof raw !== 'object') return null;
-    const login = resolveNormalizedLogin(raw, loginFallback);
-    if (!isValidLogin(login)) return null;
-    const id = String(raw.id || dialogId || '').trim();
-    if (!id) return null;
-    const createdAt = String(raw.createdAt || '').trim() || new Date().toISOString();
-    const preview = normalizeDialogHistoryText(raw.preview || '').slice(0, 160);
-    let autoTitle = clampDialogHistoryTitle(raw.autoTitle, formatDialogHistoryFallbackTitle(createdAt));
-    const titleEdited = !!raw.titleEdited;
-    let title = clampDialogHistoryTitle(raw.title, autoTitle);
-
-    const derivedAutoTitle = clampDialogHistoryTitle(deriveDialogHistoryAutoTitleFromRecord({
-        title,
-        autoTitle,
-        preview
-    }, createdAt), formatDialogHistoryFallbackTitle(createdAt));
-
-    if (isMeaningfulDialogHistoryTitleCandidate(derivedAutoTitle)) {
-        autoTitle = derivedAutoTitle;
-    }
-
-    if (shouldReplaceDialogHistoryTitleWithDerived({ title, autoTitle: raw.autoTitle, titleEdited }, derivedAutoTitle)) {
-        title = derivedAutoTitle;
-    }
-
-    return {
-        id,
-        login,
-        uid: String(raw.uid || '').trim() || null,
-        mode: raw.mode === 'voice' ? 'voice' : 'text',
-        title,
-        autoTitle,
-        titleEdited,
-        preview,
-        messageCount: Math.max(0, Number(raw.messageCount) || 0),
-        hasRating: !!raw.hasRating,
-        pinnedAt: String(raw.pinnedAt || '').trim() || null,
-        createdAt,
-        updatedAt: String(raw.updatedAt || raw.lastMessageAt || createdAt).trim() || createdAt,
-        lastMessageAt: String(raw.lastMessageAt || raw.updatedAt || createdAt).trim() || createdAt,
-        closedAt: String(raw.closedAt || '').trim() || null,
-        ratedAt: String(raw.ratedAt || '').trim() || null
-    };
+    return dialogHistoryCore.normalizeDialogHistoryIndexRecord(raw, dialogId, loginFallback);
 }
 
 function normalizeDialogHistoryMessagesPayload(raw, loginFallback = '', dialogId = '') {
-    if (!raw || typeof raw !== 'object') return null;
-    const login = resolveNormalizedLogin(raw, loginFallback);
-    if (!isValidLogin(login)) return null;
-    const id = String(raw.id || dialogId || '').trim();
-    if (!id) return null;
-    const messagesRaw = raw.messages && typeof raw.messages === 'object' ? raw.messages : {};
-    const messages = Object.entries(messagesRaw)
-        .map(([messageId, item], index) => {
-            const content = normalizeDialogHistoryText(item?.content || '');
-            if (!content) return null;
-            return {
-                id: String(item?.id || messageId || '').trim() || `m_${String(index + 1).padStart(4, '0')}`,
-                seq: Math.max(0, Number(item?.seq) || index + 1),
-                role: item?.role === 'assistant' ? 'assistant' : 'user',
-                content
-            };
-        })
-        .filter(Boolean)
-        .sort((a, b) => {
-            if (a.seq !== b.seq) return a.seq - b.seq;
-            return a.id.localeCompare(b.id);
-        });
-    const ratingText = normalizeDialogHistoryText(raw?.rating?.text || '');
-    const createdAt = String(raw.createdAt || '').trim() || new Date().toISOString();
-    return {
-        id,
-        login,
-        uid: String(raw.uid || '').trim() || null,
-        mode: raw.mode === 'voice' ? 'voice' : 'text',
-        createdAt,
-        updatedAt: String(raw.updatedAt || createdAt).trim() || createdAt,
-        closedAt: String(raw.closedAt || '').trim() || null,
-        ratedAt: String(raw.ratedAt || raw?.rating?.createdAt || '').trim() || null,
-        messages,
-        rating: ratingText
-            ? {
-                text: ratingText,
-                createdAt: String(raw?.rating?.createdAt || raw.ratedAt || '').trim() || null
-            }
-            : null
-    };
+    return dialogHistoryCore.normalizeDialogHistoryMessagesPayload(raw, loginFallback, dialogId);
 }
 
 function sortDialogHistoryRecords(records = []) {
-    return [...records].sort((a, b) => {
-        const aPinned = parseIsoMs(a?.pinnedAt || '') || 0;
-        const bPinned = parseIsoMs(b?.pinnedAt || '') || 0;
-        if (aPinned || bPinned) {
-            if (!aPinned) return 1;
-            if (!bPinned) return -1;
-            if (bPinned !== aPinned) return bPinned - aPinned;
-        }
-        const updatedDiff = (parseIsoMs(b?.updatedAt || '') || 0) - (parseIsoMs(a?.updatedAt || '') || 0);
-        if (updatedDiff !== 0) return updatedDiff;
-        const createdDiff = (parseIsoMs(b?.createdAt || '') || 0) - (parseIsoMs(a?.createdAt || '') || 0);
-        if (createdDiff !== 0) return createdDiff;
-        return String(a?.id || '').localeCompare(String(b?.id || ''));
-    });
+    return dialogHistoryCore.sortDialogHistoryRecords(records);
 }
 
 function isDialogHistoryScopeOwned(login = dialogHistoryScopeLogin) {
-    const normalizedScopeLogin = normalizeLogin(login);
-    const normalizedCurrentLogin = normalizeLogin(currentUser?.login || '');
-    return !!normalizedScopeLogin && normalizedScopeLogin === normalizedCurrentLogin;
+    return dialogHistoryController.isDialogHistoryScopeOwned(login, currentUser?.login || '');
 }
 
 function canRenameDialogHistoryRecord(record = null) {
-    if (!record) return false;
-    return isDialogHistoryScopeOwned(record.login);
+    return dialogHistoryController.canRenameDialogHistoryRecord(record, currentUser?.login || '');
 }
 
 function canDeleteDialogHistoryRecord(record = null) {
-    if (!record) return false;
-    if (isDialogHistoryScopeOwned(record.login)) return true;
-    return isAdmin();
+    return dialogHistoryController.canDeleteDialogHistoryRecord(record, currentUser?.login || '', isAdmin());
 }
 
 function canRenameSelectedDialogHistory() {
@@ -9309,61 +9609,39 @@ function buildCurrentDialogHistorySnapshot(options = {}) {
 }
 
 async function persistDialogHistorySnapshot(snapshot) {
-    if (!snapshot?.indexRecord || !snapshot?.messagesPayload) return false;
-    const ownerLogin = normalizeLogin(snapshot.login || snapshot.indexRecord.login || snapshot.messagesPayload.login || '');
-    const dialogId = String(snapshot.id || snapshot.indexRecord.id || snapshot.messagesPayload.id || '').trim();
-    if (!ownerLogin || !dialogId) return false;
-    const indexPath = getDialogHistoryIndexPath(ownerLogin, dialogId);
-    const messagesPath = getDialogHistoryMessagesPath(ownerLogin, dialogId);
-    if (!indexPath || !messagesPath) return false;
-
-    await Promise.all([
-        firebaseWritePathWithFallback(
-            indexPath,
-            () => set(ref(db, indexPath), snapshot.indexRecord),
-            snapshot.indexRecord,
-            'PUT',
-            FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
-            `Firebase write for ${indexPath}`
-        ),
-        firebaseWritePathWithFallback(
-            messagesPath,
-            () => set(ref(db, messagesPath), snapshot.messagesPayload),
-            snapshot.messagesPayload,
-            'PUT',
-            FIREBASE_FRONTEND_WRITE_TIMEOUT_MS,
-            `Firebase write for ${messagesPath}`
-        )
-    ]);
-    return true;
+    return dialogHistoryStore.persistDialogHistorySnapshot(snapshot);
 }
 
 function upsertDialogHistoryScopeRecord(record) {
-    const normalized = normalizeDialogHistoryIndexRecord(record, record?.id, record?.login);
-    if (!normalized) return;
-    if (normalizeLogin(dialogHistoryScopeLogin) !== normalizeLogin(normalized.login)) return;
-    if (normalized.id === currentDialogHistoryId && isDialogHistoryScopeOwned(normalized.login)) {
-        currentDialogHistoryPinnedAt = normalized.pinnedAt || null;
-    }
-    const nextMap = new Map(dialogHistoryScopeRecords.map((item) => [item.id, item]));
-    nextMap.set(normalized.id, normalized);
-    dialogHistoryScopeRecords = sortDialogHistoryRecords(Array.from(nextMap.values()));
-    if (dialogHistorySelectedId === normalized.id) {
-        dialogHistorySelectedRecord = normalized;
-    }
+    const nextState = dialogHistoryController.upsertDialogHistoryScopeRecord({
+        currentDialogId: currentDialogHistoryId,
+        currentDialogPinnedAt: currentDialogHistoryPinnedAt,
+        currentUserLogin: currentUser?.login || '',
+        records: dialogHistoryScopeRecords,
+        scopeLogin: dialogHistoryScopeLogin,
+        selectedId: dialogHistorySelectedId,
+        selectedRecord: dialogHistorySelectedRecord
+    }, record);
+    if (!nextState.updated) return;
+    currentDialogHistoryPinnedAt = nextState.currentDialogPinnedAt;
+    dialogHistoryScopeRecords = nextState.records;
+    dialogHistorySelectedRecord = nextState.selectedRecord;
     renderDialogHistoryScopeMeta();
     renderDialogHistoryList();
 }
 
 function removeDialogHistoryScopeRecord(dialogId = '') {
-    const normalizedId = String(dialogId || '').trim();
-    if (!normalizedId) return;
-    dialogHistoryScopeRecords = dialogHistoryScopeRecords.filter((record) => record.id !== normalizedId);
-    if (dialogHistorySelectedId === normalizedId) {
-        dialogHistorySelectedId = '';
-        dialogHistorySelectedRecord = null;
-        dialogHistorySelectedPayload = null;
-    }
+    const nextState = dialogHistoryController.removeDialogHistoryScopeRecord({
+        records: dialogHistoryScopeRecords,
+        selectedId: dialogHistorySelectedId,
+        selectedPayload: dialogHistorySelectedPayload,
+        selectedRecord: dialogHistorySelectedRecord
+    }, dialogId);
+    if (!nextState.updated) return;
+    dialogHistoryScopeRecords = nextState.records;
+    dialogHistorySelectedId = nextState.selectedId;
+    dialogHistorySelectedRecord = nextState.selectedRecord;
+    dialogHistorySelectedPayload = nextState.selectedPayload;
     renderDialogHistoryScopeMeta();
     renderDialogHistoryList();
     renderDialogHistoryViewer();
@@ -9477,62 +9755,11 @@ async function flushCurrentDialogHistoryForReset(options = {}) {
 }
 
 async function fetchDialogHistoryScopeRecords(login = '') {
-    const normalizedLogin = normalizeLogin(login);
-    if (!normalizedLogin) return [];
-    const dbPath = getDialogHistoryIndexPath(normalizedLogin);
-    if (!dbPath) return [];
-    let snapshot = null;
-    try {
-        snapshot = await firebaseGetWithTimeout(dbPath);
-    } catch (error) {
-        if (!isDialogHistoryPermissionDeniedError(error)) throw error;
-        const refreshed = await refreshFirebaseAuthTokenForProtectedRead();
-        if (!refreshed) {
-            throw buildDialogHistoryPermissionError();
-        }
-        try {
-            snapshot = await firebaseGetWithTimeout(dbPath);
-        } catch (retryError) {
-            if (isDialogHistoryPermissionDeniedError(retryError)) {
-                throw buildDialogHistoryPermissionError();
-            }
-            throw retryError;
-        }
-    }
-    if (!snapshot?.exists()) return [];
-    const raw = snapshot.val();
-    const records = Object.entries(raw || {})
-        .map(([dialogId, item]) => normalizeDialogHistoryIndexRecord(item, dialogId, normalizedLogin))
-        .filter(Boolean);
-    return sortDialogHistoryRecords(records);
+    return dialogHistoryStore.fetchDialogHistoryScopeRecords(login);
 }
 
 async function fetchDialogHistoryPayload(login = '', dialogId = '') {
-    const normalizedLogin = normalizeLogin(login);
-    const normalizedDialogId = String(dialogId || '').trim();
-    if (!normalizedLogin || !normalizedDialogId) return null;
-    const dbPath = getDialogHistoryMessagesPath(normalizedLogin, normalizedDialogId);
-    if (!dbPath) return null;
-    let snapshot = null;
-    try {
-        snapshot = await firebaseGetWithTimeout(dbPath);
-    } catch (error) {
-        if (!isDialogHistoryPermissionDeniedError(error)) throw error;
-        const refreshed = await refreshFirebaseAuthTokenForProtectedRead();
-        if (!refreshed) {
-            throw buildDialogHistoryPermissionError();
-        }
-        try {
-            snapshot = await firebaseGetWithTimeout(dbPath);
-        } catch (retryError) {
-            if (isDialogHistoryPermissionDeniedError(retryError)) {
-                throw buildDialogHistoryPermissionError();
-            }
-            throw retryError;
-        }
-    }
-    if (!snapshot?.exists()) return null;
-    return normalizeDialogHistoryMessagesPayload(snapshot.val(), normalizedLogin, normalizedDialogId);
+    return dialogHistoryStore.fetchDialogHistoryPayload(login, dialogId);
 }
 
 function formatDialogHistoryDialogsCount(count = 0) {
@@ -9545,10 +9772,11 @@ function formatDialogHistoryDialogsCount(count = 0) {
 }
 
 function clearDialogHistorySelectionState() {
-    dialogHistorySelectedId = '';
-    dialogHistorySelectedRecord = null;
-    dialogHistorySelectedPayload = null;
-    dialogHistoryViewerLoading = false;
+    const emptyState = dialogHistoryController.createEmptyDialogHistorySelectionState();
+    dialogHistorySelectedId = emptyState.selectedId;
+    dialogHistorySelectedRecord = emptyState.selectedRecord;
+    dialogHistorySelectedPayload = emptyState.selectedPayload;
+    dialogHistoryViewerLoading = emptyState.viewerLoading;
 }
 
 function activateShellPanel(panelName = 'chat') {
@@ -9988,6 +10216,8 @@ function positionDialogHistoryItemMenu(menuToggle = null, menu = null, ui = null
 }
 
 async function getDialogHistoryPayloadForRecord(record = null) {
+    return dialogHistoryMutations.getDialogHistoryPayloadForRecord(record);
+    /*
     if (!record) throw new Error('Диалог не найден');
     const normalizedLogin = normalizeLogin(record.login || dialogHistoryScopeLogin || '');
     if (!normalizedLogin) {
@@ -10000,6 +10230,7 @@ async function getDialogHistoryPayloadForRecord(record = null) {
         }
     }
     return fetchDialogHistoryPayload(normalizedLogin, record.id);
+    */
 }
 
 function buildDialogHistoryShareText(record = null, payload = null) {
@@ -10019,6 +10250,8 @@ function buildDialogHistoryShareText(record = null, payload = null) {
 }
 
 async function shareDialogHistoryRecord(record = null) {
+    return dialogHistoryMutations.shareDialogHistoryRecord(record);
+    /*
     if (!record) return false;
     const payload = await getDialogHistoryPayloadForRecord(record);
     const shareId = normalizeSharedDialogId(`sh_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`);
@@ -10049,9 +10282,12 @@ async function shareDialogHistoryRecord(record = null) {
     await navigator.clipboard.writeText(shareUrl);
     showCopyNotification('Ссылка на диалог скопирована');
     return true;
+    */
 }
 
 async function saveDialogHistoryRecordTitle(record = null, nextTitleRaw = '') {
+    return dialogHistoryMutations.saveDialogHistoryRecordTitle(record, nextTitleRaw);
+    /*
     if (!record || !canRenameDialogHistoryRecord(record)) return false;
     const fallbackTitle = clampDialogHistoryTitle(record.autoTitle, formatDialogHistoryFallbackTitle(record.createdAt));
     const nextTitleValue = clampDialogHistoryTitle(nextTitleRaw);
@@ -10120,6 +10356,7 @@ async function saveDialogHistoryRecordTitle(record = null, nextTitleRaw = '') {
     upsertDialogHistoryScopeRecord(updatedRecord);
     renderDialogHistoryViewer();
     return true;
+    */
 }
 
 async function renameDialogHistoryRecord(record = null) {
@@ -10128,6 +10365,8 @@ async function renameDialogHistoryRecord(record = null) {
 }
 
 async function deleteDialogHistoryRecord(record = null) {
+    return dialogHistoryMutations.deleteDialogHistoryRecord(record);
+    /*
     if (!record || !canDeleteDialogHistoryRecord(record)) return false;
     const title = getDialogHistoryRecordEffectiveTitle(record);
     if (!confirm(`Удалить "${title}"?`)) {
@@ -10170,6 +10409,7 @@ async function deleteDialogHistoryRecord(record = null) {
     }
     showCopyNotification('Диалог удалён');
     return true;
+    */
 }
 
 function renderDialogHistoryListInto(ui) {
@@ -10489,110 +10729,11 @@ function syncDialogHistoryUiWithCurrentConversation() {
 }
 
 async function loadDialogHistorySelection(dialogId = '') {
-    const normalizedDialogId = String(dialogId || '').trim();
-    dialogHistoryMenuOpenId = '';
-    if (!normalizedDialogId) {
-        clearDialogHistorySelectionState();
-        renderDialogHistoryList();
-        renderDialogHistoryViewer();
-        return;
-    }
-
-    dialogHistorySelectedId = normalizedDialogId;
-    dialogHistorySelectedRecord = dialogHistoryScopeRecords.find((record) => record.id === normalizedDialogId) || null;
-    dialogHistorySelectedPayload = null;
-    dialogHistoryViewerLoading = true;
-    renderDialogHistoryList();
-    renderDialogHistoryViewer();
-
-    try {
-        const normalizedScopeLogin = normalizeLogin(dialogHistoryScopeLogin || '');
-        let payload = null;
-        if (isDialogHistoryScopeOwned(normalizedScopeLogin) && normalizedDialogId === currentDialogHistoryId) {
-            const liveSnapshot = buildCurrentDialogHistorySnapshot();
-            if (liveSnapshot?.messagesPayload) {
-                payload = liveSnapshot.messagesPayload;
-                dialogHistorySelectedRecord = liveSnapshot.indexRecord;
-                upsertDialogHistoryScopeRecord(liveSnapshot.indexRecord);
-            }
-        }
-        if (!payload) {
-            payload = await fetchDialogHistoryPayload(normalizedScopeLogin, normalizedDialogId);
-        }
-        if (dialogHistorySelectedId !== normalizedDialogId) return;
-        dialogHistorySelectedPayload = payload;
-        dialogHistorySelectedRecord = dialogHistoryScopeRecords.find((record) => record.id === normalizedDialogId) || dialogHistorySelectedRecord;
-        if (normalizedDialogId === currentDialogHistoryId && isDialogHistoryScopeOwned(normalizedScopeLogin)) {
-            currentDialogHistoryPinnedAt = dialogHistorySelectedRecord?.pinnedAt || null;
-        }
-    } finally {
-        if (dialogHistorySelectedId === normalizedDialogId) {
-            dialogHistoryViewerLoading = false;
-            renderDialogHistoryViewer();
-            renderDialogHistoryList();
-        }
-    }
+    return dialogHistoryLoader.loadDialogHistorySelection(dialogId);
 }
 
 async function loadDialogHistoryScope(login = '', options = {}) {
-    const normalizedLogin = normalizeLogin(login || currentUser?.login || '');
-    if (!normalizedLogin) {
-        dialogHistoryScopeLogin = '';
-        dialogHistoryScopeRecords = [];
-        clearDialogHistorySelectionState();
-        renderDialogHistoryScopeMeta();
-        renderDialogHistoryList();
-        renderDialogHistoryViewer();
-        return;
-    }
-
-    dialogHistoryScopeLogin = normalizedLogin;
-    if (options.resetVisibleCount !== false) {
-        dialogHistoryVisibleCount = DIALOG_HISTORY_PAGE_SIZE;
-    }
-
-    const records = await fetchDialogHistoryScopeRecords(normalizedLogin);
-    dialogHistoryScopeRecords = sortDialogHistoryRecords(records);
-
-    if (isDialogHistoryScopeOwned(normalizedLogin)) {
-        const liveSnapshot = buildCurrentDialogHistorySnapshot();
-        if (liveSnapshot?.indexRecord) {
-            upsertDialogHistoryScopeRecord(liveSnapshot.indexRecord);
-        }
-    }
-
-    renderDialogHistoryScopeMeta();
-    renderDialogHistoryList();
-
-    const preferredDialogId = String(options.preferredDialogId || '').trim();
-    const currentLiveDialogId = isDialogHistoryScopeOwned(normalizedLogin) ? currentDialogHistoryId : '';
-    const shouldAutoSelectFirst = options.autoSelectFirst === true;
-    let nextSelectedId = '';
-
-    if (preferredDialogId && dialogHistoryScopeRecords.some((record) => record.id === preferredDialogId)) {
-        nextSelectedId = preferredDialogId;
-    } else if (
-        options.selectCurrentDialog !== false
-        && currentLiveDialogId
-        && dialogHistoryScopeRecords.some((record) => record.id === currentLiveDialogId)
-    ) {
-        nextSelectedId = currentLiveDialogId;
-    } else if (
-        dialogHistorySelectedId
-        && dialogHistoryScopeRecords.some((record) => record.id === dialogHistorySelectedId)
-    ) {
-        nextSelectedId = dialogHistorySelectedId;
-    } else if (shouldAutoSelectFirst && dialogHistoryScopeRecords.length > 0) {
-        nextSelectedId = dialogHistoryScopeRecords[0].id;
-    }
-
-    if (!nextSelectedId) {
-        clearDialogHistorySelectionState();
-        renderDialogHistoryViewer();
-        return;
-    }
-
-    await loadDialogHistorySelection(nextSelectedId);
+    return dialogHistoryLoader.loadDialogHistoryScope(login, options);
 }
 
 function revealDialogHistoryAccordion(options = {}) {
@@ -10624,6 +10765,8 @@ function revealDialogHistoryAccordion(options = {}) {
 }
 
 async function openDialogHistoryScope(login = '', options = {}) {
+    return dialogHistoryLoader.openDialogHistoryScope(login, options);
+    /*
     const normalizedLogin = normalizeLogin(login || currentUser?.login || '');
     if (!normalizedLogin) {
         throw new Error('Не удалось определить пользователя для истории');
@@ -10653,6 +10796,7 @@ async function openDialogHistoryScope(login = '', options = {}) {
         preferredDialogId: options.preferredDialogId || '',
         resetVisibleCount: options.resetVisibleCount !== false
     });
+    */
 }
 
 async function commitDialogHistoryTitleRename(sourceInput = null) {
@@ -10662,6 +10806,8 @@ async function commitDialogHistoryTitleRename(sourceInput = null) {
 }
 
 async function toggleSelectedDialogHistoryPinned() {
+    return dialogHistoryMutations.toggleSelectedDialogHistoryPinned();
+    /*
     if (!dialogHistorySelectedRecord || !canDeleteSelectedDialogHistory()) return false;
     const record = dialogHistorySelectedRecord;
     const nextPinnedAt = record.pinnedAt ? null : new Date().toISOString();
@@ -10697,6 +10843,7 @@ async function toggleSelectedDialogHistoryPinned() {
     upsertDialogHistoryScopeRecord(updatedRecord);
     renderDialogHistoryViewer();
     return true;
+    */
 }
 
 async function deleteSelectedDialogHistory() {
@@ -13716,133 +13863,31 @@ function getLocalPromptsStorageKey() {
 }
 
 function normalizePromptVariationEntry(rawVariation = {}, fallbackId = '') {
-    if (!rawVariation || typeof rawVariation !== 'object') {
-        return null;
-    }
-
-    const rawId = String(
-        rawVariation.id || rawVariation.variationId || rawVariation.key || rawVariation.uid || ''
-    ).trim();
-    const fallback = String(fallbackId || '').trim();
-    const variationId = rawId || fallback;
-    if (!variationId) {
-        return null;
-    }
-
-    return {
-        id: variationId,
-        name: String(rawVariation.name || 'Основной').trim() || 'Основной',
-        content: String(rawVariation.content || rawVariation.prompt || rawVariation.text || ''),
-        isLocal: false
-    };
+    return promptStateCore.normalizePromptVariationEntry(rawVariation, fallbackId);
 }
 
 function normalizePromptSnapshotVariations(rawVariations = []) {
-    const normalized = [];
-    const seenIds = new Set();
-    const rawList = Array.isArray(rawVariations)
-        ? rawVariations
-        : rawVariations && typeof rawVariations === 'object'
-            ? Object.entries(rawVariations).map(([key, value]) => {
-                if (!value || typeof value !== 'object') {
-                    return null;
-                }
-                return { ...value, id: value?.id || key };
-            })
-            : [];
-
-    rawList.forEach((rawVariation, index) => {
-        const fallbackId = typeof index === 'number' ? `legacy-${index + 1}` : '';
-        const normalizedVariation = normalizePromptVariationEntry(rawVariation, fallbackId);
-        if (!normalizedVariation) {
-            return;
-        }
-
-        let variationId = normalizedVariation.id;
-        while (seenIds.has(variationId)) {
-            variationId = generateId();
-        }
-        seenIds.add(variationId);
-        normalizedVariation.id = variationId;
-        normalized.push(normalizedVariation);
-    });
-
-    return normalized;
+    return promptStateCore.normalizePromptSnapshotVariations(rawVariations);
 }
 
 function normalizePromptSnapshotForCache(rawSnapshot = {}) {
-    const source = rawSnapshot && typeof rawSnapshot === 'object' ? rawSnapshot : {};
-
-    const normalized = {};
-    PROMPT_ROLES.forEach((role) => {
-        const legacyPrompt = String(source[role + '_prompt'] || '').trim();
-        const variations = normalizePromptSnapshotVariations(source[role + '_variations']);
-
-        if (legacyPrompt) {
-            normalized[role + '_prompt'] = legacyPrompt;
-        }
-        if (variations.length) {
-            normalized[role + '_variations'] = variations;
-        }
-        const activeId = typeof source[role + '_activeId'] === 'string'
-            ? String(source[role + '_activeId']).trim()
-            : '';
-        if (activeId) {
-            normalized[role + '_activeId'] = activeId;
-        }
-    });
-
-    return normalized;
+    return promptStateCore.normalizePromptSnapshotForCache(rawSnapshot);
 }
 
 function buildNormalizedPromptSnapshotState(rawSnapshot = {}) {
-    const normalized = normalizePromptSnapshotForCache(rawSnapshot);
-    return {
-        normalized,
-        hash: JSON.stringify(normalized),
-        hasMeaningfulContent: firebasePromptSnapshotHasMeaningfulContent(normalized)
-    };
+    return promptStateCore.buildNormalizedPromptSnapshotState(rawSnapshot);
 }
 
 function getPublicPromptRoleSnapshotFromNormalizedData(source = {}, role = '') {
-    if (!PROMPT_ROLES.includes(role)) {
-        return { prompt: '', variations: [], activeId: null };
-    }
-    const safeSource = source && typeof source === 'object' ? source : {};
-    const activeId = typeof safeSource[role + '_activeId'] === 'string'
-        ? String(safeSource[role + '_activeId']).trim() || null
-        : null;
-    return {
-        prompt: String(safeSource[role + '_prompt'] || ''),
-        variations: Array.isArray(safeSource[role + '_variations']) ? safeSource[role + '_variations'] : [],
-        activeId
-    };
+    return promptStateCore.getPublicPromptRoleSnapshotFromNormalizedData(source, role);
 }
 
 function getPromptSnapshotRoleHashes(snapshotState = null) {
-    if (!snapshotState || typeof snapshotState !== 'object') {
-        return {};
-    }
-    if (!snapshotState.roleHashes || typeof snapshotState.roleHashes !== 'object') {
-        const normalizedSnapshot = snapshotState.normalized && typeof snapshotState.normalized === 'object'
-            ? snapshotState.normalized
-            : normalizePromptSnapshotForCache(snapshotState.rawSnapshot || {});
-        snapshotState.normalized = normalizedSnapshot;
-        snapshotState.roleHashes = Object.fromEntries(
-            PROMPT_ROLES.map((role) => [role, JSON.stringify(getPublicPromptRoleSnapshotFromNormalizedData(normalizedSnapshot, role))])
-        );
-    }
-    return snapshotState.roleHashes;
+    return promptStateCore.getPromptSnapshotRoleHashes(snapshotState);
 }
 
 function getPromptSnapshotRoleHash(snapshotState = null, role = '') {
-    if (!PROMPT_ROLES.includes(role)) {
-        return JSON.stringify({ prompt: '', variations: [], activeId: null });
-    }
-    const roleHashes = getPromptSnapshotRoleHashes(snapshotState);
-    return typeof roleHashes[role] === 'string'
-        ? roleHashes[role]
-        : JSON.stringify(getPublicPromptRoleSnapshotFromNormalizedData(snapshotState?.normalized || {}, role));
+    return promptStateCore.getPromptSnapshotRoleHash(snapshotState, role);
 }
 
 function persistPublicPromptsSnapshot(snapshot = {}, options = {}) {
@@ -14015,54 +14060,19 @@ function readPromptOverridesStoreStateByKey(storageKey) {
 }
 
 function getPromptOverridesRoleDataFromStore(store = {}, role) {
-    const normalized = normalizePromptOverridesStore(store);
-    return {
-        variations: Array.isArray(normalized[role + '_variations']) ? normalized[role + '_variations'] : [],
-        activeId: typeof normalized[role + '_activeId'] === 'string' ? normalized[role + '_activeId'] : null
-    };
+    return promptStateCore.getPromptOverridesRoleDataFromStore(store, role);
 }
 
 function promptOverridesRoleDataHasData(roleData = null) {
-    return !!(
-        roleData
-        && (Array.isArray(roleData.variations) && roleData.variations.length > 0 || roleData.activeId)
-    );
+    return promptStateCore.promptOverridesRoleDataHasData(roleData);
 }
 
 function buildPromptOverridesRoleDataMap(store = {}) {
-    const normalizedStore = store && typeof store === 'object' ? store : {};
-    return Object.fromEntries(
-        PROMPT_ROLES.map((role) => [role, getPromptOverridesRoleSnapshotFromNormalizedStore(normalizedStore, role)])
-    );
+    return promptStateCore.buildPromptOverridesRoleDataMap(store);
 }
 
 function mergeLegacyPromptOverridesStores(entries = []) {
-    const merged = {};
-
-    PROMPT_ROLES.forEach((role) => {
-        const seenIds = new Set();
-        const mergedVariations = [];
-        let mergedActiveId = null;
-
-        entries.forEach((entry) => {
-            const roleData = entry?.roleDataMap?.[role] || { variations: [], activeId: null };
-            if (!mergedActiveId && typeof roleData.activeId === 'string' && roleData.activeId.trim()) {
-                mergedActiveId = roleData.activeId.trim();
-            }
-            (roleData.variations || []).forEach((variation) => {
-                if (!variation || typeof variation.id !== 'string' || seenIds.has(variation.id)) return;
-                seenIds.add(variation.id);
-                mergedVariations.push(variation);
-            });
-        });
-
-        merged[role + '_variations'] = mergedVariations;
-        merged[role + '_activeId'] = mergedVariations.some((variation) => variation.id === mergedActiveId)
-            ? mergedActiveId
-            : null;
-    });
-
-    return normalizePromptOverridesStore(merged);
+    return promptStateCore.mergeLegacyPromptOverridesStores(entries);
 }
 
 function clearLegacyLocalPromptsStorageKeys() {
@@ -14122,55 +14132,15 @@ function loadLocalPromptsStore() {
 }
 
 function normalizePromptOverrideVariation(raw) {
-    if (!raw || typeof raw !== 'object') return null;
-    const id = String(raw.id || '').trim();
-    if (!id) return null;
-    const baseVariationId = String(raw.baseVariationId || '').trim();
-    return {
-        id,
-        name: String(raw.name || 'Локальный').trim() || 'Локальный',
-        content: unescapeMarkdown(raw.content || ''),
-        isLocal: true,
-        baseVariationId: baseVariationId || null
-    };
+    return promptStateCore.normalizePromptOverrideVariation(raw);
 }
 
 function normalizePromptOverridesStore(rawStore = {}) {
-    const source = rawStore && typeof rawStore === 'object' ? rawStore : {};
-    const normalized = {};
-
-    PROMPT_ROLES.forEach((role) => {
-        const rawVariations = Array.isArray(source[role + '_variations'])
-            ? source[role + '_variations']
-            : [];
-        const seenIds = new Set();
-        const variations = rawVariations
-            .map((item) => normalizePromptOverrideVariation(item))
-            .filter((item) => {
-                if (!item || seenIds.has(item.id)) return false;
-                seenIds.add(item.id);
-                return true;
-            });
-        const requestedActiveId = typeof source[role + '_activeId'] === 'string'
-            ? String(source[role + '_activeId']).trim()
-            : '';
-
-        normalized[role + '_variations'] = variations;
-        normalized[role + '_activeId'] = variations.some((item) => item.id === requestedActiveId)
-            ? requestedActiveId
-            : null;
-    });
-
-    return normalized;
+    return promptStateCore.normalizePromptOverridesStore(rawStore);
 }
 
 function promptOverridesStoreHasData(store = {}) {
-    const normalized = normalizePromptOverridesStore(store);
-    return PROMPT_ROLES.some((role) => {
-        const variations = normalized[role + '_variations'] || [];
-        const activeId = normalized[role + '_activeId'] || null;
-        return variations.length > 0 || !!activeId;
-    });
+    return promptStateCore.promptOverridesStoreHasData(store);
 }
 
 function getPromptOverridesStore() {
@@ -14230,114 +14200,51 @@ function buildPromptOverridesPayload() {
 }
 
 function buildNormalizedPromptOverridesStoreState(rawStore = {}) {
-    const normalized = normalizePromptOverridesStore(rawStore);
-    return {
-        normalized,
-        hash: JSON.stringify(normalized),
-        hasData: promptOverridesStoreHasData(normalized)
-    };
+    return promptStateCore.buildNormalizedPromptOverridesStoreState(rawStore);
 }
 
 function getPromptOverridesRoleSnapshotFromNormalizedStore(store = {}, role = '') {
-    if (!PROMPT_ROLES.includes(role)) {
-        return { variations: [], activeId: null };
-    }
-    const normalizedStore = store && typeof store === 'object' ? store : {};
-    return {
-        variations: Array.isArray(normalizedStore[role + '_variations']) ? normalizedStore[role + '_variations'] : [],
-        activeId: normalizedStore[role + '_activeId'] || null
-    };
+    return promptStateCore.getPromptOverridesRoleSnapshotFromNormalizedStore(store, role);
 }
 
 function getPromptOverridesStoreRoleHashes(storeState = null) {
-    if (!storeState || typeof storeState !== 'object') {
-        return {};
-    }
-    if (!storeState.roleHashes || typeof storeState.roleHashes !== 'object') {
-        const normalizedStore = storeState.normalized && typeof storeState.normalized === 'object'
-            ? storeState.normalized
-            : normalizePromptOverridesStore(storeState.rawStore || {});
-        storeState.normalized = normalizedStore;
-        storeState.roleHashes = Object.fromEntries(
-            PROMPT_ROLES.map((role) => [role, JSON.stringify(getPromptOverridesRoleSnapshotFromNormalizedStore(normalizedStore, role))])
-        );
-    }
-    return storeState.roleHashes;
+    return promptStateCore.getPromptOverridesStoreRoleHashes(storeState);
 }
 
 function getPromptOverridesStoreRoleHash(storeState = null, role = '') {
-    if (!PROMPT_ROLES.includes(role)) {
-        return JSON.stringify({ variations: [], activeId: null });
-    }
-    const roleHashes = getPromptOverridesStoreRoleHashes(storeState);
-    return typeof roleHashes[role] === 'string'
-        ? roleHashes[role]
-        : JSON.stringify(getPromptOverridesRoleSnapshotFromNormalizedStore(storeState?.normalized || {}, role));
+    return promptStateCore.getPromptOverridesStoreRoleHash(storeState, role);
 }
 
 function getPromptOverridesRoleSnapshot(store, role) {
-    return getPromptOverridesRoleSnapshotFromNormalizedStore(normalizePromptOverridesStore(store || {}), role);
+    return promptStateCore.getPromptOverridesRoleSnapshot(store, role);
 }
 
 function recordDirtyPromptOverrideRoles(baseStore, nextStore) {
-    const baseStoreState = buildNormalizedPromptOverridesStoreState(baseStore || {});
-    const nextStoreState = buildNormalizedPromptOverridesStoreState(nextStore || {});
-
-    PROMPT_ROLES.forEach((role) => {
-        const before = getPromptOverridesStoreRoleHash(baseStoreState, role);
-        const after = getPromptOverridesStoreRoleHash(nextStoreState, role);
-        if (before !== after) {
-            dirtyPromptOverrideRoles.add(role);
-        }
-    });
+    return promptSyncCore.recordDirtyPromptOverrideRoles(baseStore, nextStore);
 }
 
 function getPublicPromptRoleSnapshotFromFirebaseData(source = {}, role = '') {
-    if (!PROMPT_ROLES.includes(role)) {
-        return { prompt: '', variations: [], activeId: null };
-    }
-    const safeSource = source && typeof source === 'object' ? source : {};
-    const normalizedRoleSource = {
-        [role + '_prompt']: String(safeSource[role + '_prompt'] || ''),
-        [role + '_variations']: normalizePromptSnapshotVariations(safeSource[role + '_variations']),
-        [role + '_activeId']: typeof safeSource[role + '_activeId'] === 'string'
-            ? String(safeSource[role + '_activeId']).trim() || null
-            : null
-    };
-    return getPublicPromptRoleSnapshotFromNormalizedData(normalizedRoleSource, role);
+    return promptSyncCore.getPublicPromptRoleSnapshotFromFirebaseData(source, role);
 }
 
 function getCurrentPublicPromptRoleSnapshot(role = '') {
-    if (!PROMPT_ROLES.includes(role)) {
-        return { prompt: '', variations: [], activeId: null };
-    }
-    const rolePayload = buildPromptsSyncPayload([role]);
-    return getPublicPromptRoleSnapshotFromFirebaseData(rolePayload, role);
+    return promptSyncCore.getCurrentPublicPromptRoleSnapshot(role);
 }
 
 function getPublicPromptRoleSnapshotHash(source, role = '') {
-    return JSON.stringify(getPublicPromptRoleSnapshotFromFirebaseData(source, role));
+    return promptSyncCore.getPublicPromptRoleSnapshotHash(source, role);
 }
 
 function rememberPromptEditBaseline(role = '') {
-    if (!PROMPT_ROLES.includes(role)) return;
-    if (dirtyPublicPromptRoles.has(role) && promptEditRemoteBaselineHashes[role]) return;
-    promptEditRemoteBaselineHashes[role] = getPromptSnapshotRoleHash(lastPromptsFirebaseSnapshotState, role);
+    return promptSyncCore.rememberPromptEditBaseline(role);
 }
 
 function clearPromptEditBaseline(role = '') {
-    if (!PROMPT_ROLES.includes(role)) return;
-    delete promptEditRemoteBaselineHashes[role];
+    return promptSyncCore.clearPromptEditBaseline(role);
 }
 
 function setPromptSyncConflictMessage(role = '', message = '') {
-    if (!PROMPT_ROLES.includes(role)) return;
-    const normalizedMessage = String(message || '').trim();
-    if (normalizedMessage) {
-        promptSyncConflictMessages[role] = normalizedMessage;
-    } else {
-        delete promptSyncConflictMessages[role];
-    }
+    return promptSyncCore.setPromptSyncConflictMessage(role, message);
 }
 
 function renderPromptSyncConflictNotice(role = getActiveRole()) {
@@ -14373,6 +14280,8 @@ function renderPromptSyncConflictNotice(role = getActiveRole()) {
 }
 
 function preservePromptConflictAsLocalDraft(role = '') {
+    return promptSyncCore.preservePromptConflictAsLocalDraft(role);
+    /*
     if (!PROMPT_ROLES.includes(role)) return false;
     const roleState = promptsData[role];
     if (!roleState || !Array.isArray(roleState.variations)) return false;
@@ -14405,9 +14314,12 @@ function preservePromptConflictAsLocalDraft(role = '') {
         'Публичный промпт был изменён в другом окне или другим админом. Ваши правки сохранены как локальный скрытый draft; сравните и опубликуйте его вручную, если нужно.'
     );
     return true;
+    */
 }
 
 function resolvePromptSyncConflicts(remoteSnapshot = {}) {
+    return promptSyncCore.resolvePromptSyncConflicts(remoteSnapshot);
+    /*
     const remoteSnapshotState = pendingPromptsFirebaseSnapshotState
         && pendingPromptsFirebaseSnapshot === remoteSnapshot
         ? pendingPromptsFirebaseSnapshotState
@@ -14428,9 +14340,12 @@ function resolvePromptSyncConflicts(remoteSnapshot = {}) {
     });
 
     return conflictRoles;
+    */
 }
 
 function buildMergedPromptsSnapshot(firebaseData = {}) {
+    return promptSyncCore.buildMergedPromptsSnapshot(firebaseData);
+    /*
     const mergedSnapshot = { ...(firebaseData || {}) };
     if (!dirtyPublicPromptRoles.size) {
         return mergedSnapshot;
@@ -14445,9 +14360,12 @@ function buildMergedPromptsSnapshot(firebaseData = {}) {
     });
 
     return mergedSnapshot;
+    */
 }
 
 function buildMergedPromptOverridesStore(remoteStore = {}) {
+    return promptSyncCore.buildMergedPromptOverridesStore(remoteStore);
+    /*
     const mergedStore = normalizePromptOverridesStore(remoteStore || {});
     if (!dirtyPromptOverrideRoles.size) {
         return mergedStore;
@@ -14461,9 +14379,12 @@ function buildMergedPromptOverridesStore(remoteStore = {}) {
     });
 
     return normalizePromptOverridesStore(mergedStore);
+    */
 }
 
 function applyDeferredPromptRemoteState() {
+    return promptOverridesRuntime.applyDeferredPromptRemoteState();
+    /*
     if (isUserEditing) return false;
 
     let didApply = false;
@@ -14504,6 +14425,7 @@ function applyDeferredPromptRemoteState() {
         queuePromptOverridesSave();
     }
     return true;
+    */
 }
 
 function beginPromptEditing(role = '') {
@@ -14535,12 +14457,17 @@ function schedulePromptEditingEnd(role = '', delayMs = 2000) {
 }
 
 function clearPromptOverridesSyncRetry() {
+    return promptOverridesRuntime.clearPromptOverridesSyncRetry();
+    /*
     if (!promptOverridesSyncRetryTimerId) return;
     clearTimeout(promptOverridesSyncRetryTimerId);
     promptOverridesSyncRetryTimerId = null;
+    */
 }
 
 function schedulePromptOverridesSyncRetry(payload = null) {
+    return promptOverridesRuntime.schedulePromptOverridesSyncRetry(payload);
+    /*
     const payloadState = payload
         ? buildNormalizedPromptOverridesStoreState(payload)
         : (queuedPromptOverridesPayloadState || buildNormalizedPromptOverridesStoreState(queuedPromptOverridesPayload || buildPromptOverridesPayload()));
@@ -14554,9 +14481,12 @@ function schedulePromptOverridesSyncRetry(payload = null) {
         void savePromptOverridesToFirebaseNow();
     }, PROMPT_REMOTE_SYNC_RETRY_DELAY_MS);
     return true;
+    */
 }
 
 function queuePromptOverridesSave(payload = null) {
+    return promptOverridesRuntime.queuePromptOverridesSave(payload);
+    /*
     if (!canSyncPromptOverrides()) return false;
     const payloadState = buildNormalizedPromptOverridesStoreState(payload || buildPromptOverridesPayload());
     const normalizedPayload = payloadState.normalized;
@@ -14580,9 +14510,15 @@ function queuePromptOverridesSave(payload = null) {
         void savePromptOverridesToFirebaseNow();
     }, 800);
     return true;
+    */
 }
 
 async function savePromptOverridesToFirebaseNow(payload = null, options = {}) {
+    return promptOverridesRuntime.savePromptOverridesToFirebaseNow(payload, options).catch((error) => {
+        console.error('Failed to sync prompt overrides:', error);
+        return false;
+    });
+    /*
     if (currentUserPromptOverridesSaveTimer) {
         clearTimeout(currentUserPromptOverridesSaveTimer);
         currentUserPromptOverridesSaveTimer = null;
@@ -14646,9 +14582,12 @@ async function savePromptOverridesToFirebaseNow(payload = null, options = {}) {
     } finally {
         promptOverridesSyncInFlight = false;
     }
+    */
 }
 
 function stopCurrentUserPromptOverridesSubscription() {
+    return promptOverridesSubscription.stopCurrentUserPromptOverridesSubscription();
+    /*
     clearCurrentUserPromptOverridesRecovery();
     clearPromptOverridesSyncRetry();
     promptOverridesSyncInFlight = false;
@@ -14671,21 +14610,30 @@ function stopCurrentUserPromptOverridesSubscription() {
         clearTimeout(currentUserPromptOverridesSaveTimer);
         currentUserPromptOverridesSaveTimer = null;
     }
+    */
 }
 
 function clearCurrentUserPromptOverridesRecovery() {
+    return promptOverridesSubscription.clearCurrentUserPromptOverridesRecovery();
+    /*
     if (currentUserPromptOverridesRecoveryTimerId) {
         clearTimeout(currentUserPromptOverridesRecoveryTimerId);
         currentUserPromptOverridesRecoveryTimerId = null;
     }
     resetRealtimeRecoveryBackoff('prompt-overrides');
+    */
 }
 
 function hasHealthyCurrentUserPromptOverridesSubscription() {
+    return promptOverridesSubscription.hasHealthyCurrentUserPromptOverridesSubscription();
+    /*
     return typeof currentUserPromptOverridesUnsubscribe === 'function' && currentUserPromptOverridesSubscriptionHealthy;
+    */
 }
 
 function stopCurrentUserPromptOverridesListenerTransport() {
+    return promptOverridesSubscription.stopCurrentUserPromptOverridesListenerTransport();
+    /*
     clearCurrentUserPromptOverridesRecovery();
     currentUserPromptOverridesSubscriptionHealthy = false;
     if (typeof currentUserPromptOverridesUnsubscribe === 'function') {
@@ -14697,9 +14645,12 @@ function stopCurrentUserPromptOverridesListenerTransport() {
     }
     currentUserPromptOverridesUnsubscribe = null;
     currentUserPromptOverridesListenerLogin = '';
+    */
 }
 
 function scheduleCurrentUserPromptOverridesRecovery(login = currentUserPromptOverridesListenerLogin || currentUser?.login || '', reason = '', delayMs = PROTECTED_REALTIME_RECOVERY_DELAY_MS) {
+    return promptOverridesSubscription.scheduleCurrentUserPromptOverridesRecovery(login, reason, delayMs);
+    /*
     const normalizedLogin = normalizeLogin(login);
     if (!normalizedLogin || currentUserPromptOverridesRecoveryTimerId) {
         return false;
@@ -14714,9 +14665,12 @@ function scheduleCurrentUserPromptOverridesRecovery(login = currentUserPromptOve
         startCurrentUserPromptOverridesSubscription(normalizedLogin);
     }, effectiveDelayMs);
     return true;
+    */
 }
 
 function startCurrentUserPromptOverridesSubscription(login = currentUser?.login || '') {
+    return promptOverridesSubscription.startCurrentUserPromptOverridesSubscription(login);
+    /*
     const normalizedLogin = normalizeLogin(login);
     const syncCandidateUser = currentUser
         ? { ...currentUser, login: normalizedLogin }
@@ -14793,6 +14747,7 @@ function startCurrentUserPromptOverridesSubscription(login = currentUser?.login 
         }
     );
     return true;
+    */
 }
 
 function getLocalPromptsRoleData(role) {
@@ -14909,122 +14864,35 @@ function getActiveVariation(role = getActiveRole()) {
 }
 
 function updatePromptVisibilityButton() {
-    if (!promptVisibilityBtn) return;
-
-    if (!isAdmin()) {
-        promptVisibilityBtn.style.display = 'none';
-        return;
-    }
-
-    const activeVariation = getActiveVariation();
-    if (!activeVariation) {
-        promptVisibilityBtn.style.display = 'none';
-        return;
-    }
-
-    promptVisibilityBtn.style.display = '';
-    const isLocal = !!activeVariation.isLocal;
-    promptVisibilityBtn.innerHTML = isLocal ? EYE_OPEN_ICON : EYE_OFF_ICON;
-    promptVisibilityBtn.classList.toggle('state-hidden', isLocal);
-    const tooltipText = isLocal
-        ? 'Показать промпт пользователям'
-        : 'Скрыть промпт от пользователей';
-    setCustomTooltip(promptVisibilityBtn, tooltipText);
+    return promptUiDisplay.updatePromptVisibilityButton();
 }
 
 function updatePromptHistoryButton() {
-    if (!promptHistoryBtn) return;
-
-    if (!isAdmin()) {
-        promptHistoryBtn.style.display = 'none';
-        return;
-    }
-
-    const activeVariation = getActiveVariation();
-    promptHistoryBtn.style.display = activeVariation ? '' : 'none';
+    return promptCompareControls.updatePromptHistoryButton();
 }
 
 function getPromptCompareContext(role = getActiveRole()) {
-    if (!PROMPT_ROLES.includes(role)) return null;
-    const activeVariation = getActiveVariation(role);
-    if (!activeVariation) return null;
-
-    if (activeVariation.isLocal) {
-        const publicVariation = findBasePublicVariationForLocal(role, activeVariation);
-        if (!publicVariation) return null;
-        return {
-            role,
-            publicVariation,
-            draftVariation: activeVariation,
-            activeVariation
-        };
-    }
-
-    const draftVariation = findLocalOverrideForPublicVariation(role, activeVariation);
-    if (!draftVariation) return null;
-
-    return {
-        role,
-        publicVariation: activeVariation,
-        draftVariation,
-        activeVariation
-    };
+    return promptCompareCore.getPromptCompareContext(role);
 }
 
 function getPromptHistoryVariation(role = getActiveRole(), activeVariation = getActiveVariation(role)) {
-    if (!PROMPT_ROLES.includes(role) || !activeVariation) return null;
-    if (activeVariation.isLocal) {
-        return findBasePublicVariationForLocal(role, activeVariation);
-    }
-    return activeVariation;
+    return promptCompareCore.getPromptHistoryVariation(role, activeVariation);
 }
 
 function getPromptRollbackEntry(role = getActiveRole(), historyVariation = getPromptHistoryVariation(role)) {
-    if (!historyVariation || historyVariation.isLocal) return null;
-    const currentContent = String(historyVariation.content || '');
-    return getPromptHistoryEntries(role, historyVariation.id)
-        .find((entry) => String(entry.content || '') !== currentContent) || null;
+    return promptCompareCore.getPromptRollbackEntry(role, historyVariation);
 }
 
 function updatePromptWorkflowButtons(role = getActiveRole()) {
-    const isAdminUser = isAdmin();
-    const compareContext = isAdminUser ? getPromptCompareContext(role) : null;
-    const historyVariation = isAdminUser ? getPromptHistoryVariation(role) : null;
-    const rollbackEntry = isAdminUser ? getPromptRollbackEntry(role, historyVariation) : null;
-
-    if (promptCompareBtn) {
-        promptCompareBtn.style.display = compareContext ? '' : 'none';
-        if (compareContext) {
-            const compareLabel = compareContext.activeVariation?.isLocal
-                ? 'Сравнить текущий draft с public'
-                : 'Сравнить hidden draft с public';
-            setCustomTooltip(promptCompareBtn, compareLabel);
-        }
-    }
-
+    return promptCompareControls.updatePromptWorkflowButtons(role);
 }
 
 function updatePromptLengthInfo(role = getActiveRole()) {
-    if (!promptLengthInfo) return;
-    if (role !== 'manager_call') {
-        promptLengthInfo.style.display = 'none';
-        promptLengthInfo.textContent = '';
-        promptLengthInfo.classList.remove('is-over');
-        return;
-    }
-
-    promptLengthInfo.style.display = '';
-    const currentLength = String(getActiveContent(role) || '').length;
-    promptLengthInfo.textContent = `${currentLength.toLocaleString('ru-RU')} символов из ${MANAGER_CALL_PROMPT_MAX_CHARS.toLocaleString('ru-RU')}`;
-    promptLengthInfo.classList.toggle('is-over', currentLength > MANAGER_CALL_PROMPT_MAX_CHARS);
+    return promptUiDisplay.updatePromptLengthInfo(role);
 }
 
 function getPromptVariationDisplayName(variation) {
-    const rawName = String(variation?.name || '').trim();
-    if (!variation?.isLocal) {
-        return rawName;
-    }
-    return rawName.replace(/\s*\(локальный\)$/i, '').trim() || rawName;
+    return promptUiDisplay.getPromptVariationDisplayName(variation);
 }
 
 function hasMeaningfulPromptContent(content = '') {
@@ -16173,71 +16041,31 @@ function getRoleLabel(role) {
 }
 
 function getPromptHistoryKey(role, variationId) {
-    return `${role}:${variationId}`;
+    return promptHistoryCore.getPromptHistoryKey(role, variationId);
 }
 
 function getPromptHistoryEntries(role, variationId) {
-    if (!role || !variationId) return [];
-    const key = getPromptHistoryKey(role, variationId);
-    return promptHistory.filter(item => getPromptHistoryKey(item.role, item.variationId) === key);
+    return promptHistoryCore.getPromptHistoryEntries(promptHistory, role, variationId);
 }
 
 function clonePromptHistoryEntry(entry = {}) {
-    if (!entry || typeof entry !== 'object') return null;
-    const id = String(entry.id || '').trim();
-    if (!id) return null;
-    return {
-        id,
-        ts: Number(entry.ts) || Date.now(),
-        role: String(entry.role || ''),
-        variationId: String(entry.variationId || ''),
-        variationName: String(entry.variationName || ''),
-        content: String(entry.content || ''),
-        kind: String(entry.kind || 'edit'),
-        note: String(entry.note || '')
-    };
+    return promptHistoryCore.clonePromptHistoryEntry(entry);
 }
 
 function buildPromptHistoryEntryHash(entry = null) {
-    if (!entry || typeof entry !== 'object') return '';
-    return [
-        String(entry.id || ''),
-        String(entry.ts || ''),
-        String(entry.role || ''),
-        String(entry.variationId || ''),
-        String(entry.kind || '')
-    ].join('|');
+    return promptHistoryCore.buildPromptHistoryEntryHash(entry);
 }
 
 function buildPromptHistorySnapshotHash(entries = []) {
-    if (!Array.isArray(entries) || !entries.length) return '';
-    return entries.map((entry) => buildPromptHistoryEntryHash(entry)).join('||');
+    return promptHistoryCore.buildPromptHistorySnapshotHash(entries);
 }
 
 function normalizePromptHistoryEntries(rawHistory = []) {
-    const entries = Array.isArray(rawHistory)
-        ? rawHistory
-        : (rawHistory && typeof rawHistory === 'object' ? Object.values(rawHistory) : []);
-
-    const normalized = entries
-        .map((entry) => clonePromptHistoryEntry(entry))
-        .filter(Boolean)
-        .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
-
-    const perPromptCount = new Map();
-    const trimmedHistory = [];
-    normalized.forEach((entry) => {
-        const key = getPromptHistoryKey(entry.role, entry.variationId);
-        const used = perPromptCount.get(key) || 0;
-        if (used >= HISTORY_LIMIT) return;
-        perPromptCount.set(key, used + 1);
-        trimmedHistory.push(entry);
-    });
-
-    return trimmedHistory;
+    return promptHistoryCore.normalizePromptHistoryEntries(rawHistory);
 }
 
 function clearPromptHistoryRemoteSyncState() {
+    return promptHistoryRuntime.clearPromptHistoryRemoteSyncState();
     if (promptHistoryRemoteSyncTimer) {
         clearTimeout(promptHistoryRemoteSyncTimer);
         promptHistoryRemoteSyncTimer = null;
@@ -16248,6 +16076,7 @@ function clearPromptHistoryRemoteSyncState() {
 }
 
 function queuePromptHistoryRemoteSync(entries = []) {
+    return promptHistoryRuntime.queuePromptHistoryRemoteSync(entries);
     if (!db || !isAdmin()) return false;
     const normalizedEntries = (Array.isArray(entries) ? entries : [entries])
         .map((entry) => clonePromptHistoryEntry(entry))
@@ -16280,6 +16109,7 @@ function queuePromptHistoryRemoteSync(entries = []) {
 }
 
 async function flushPromptHistoryRemoteSync() {
+    return promptHistoryRuntime.flushPromptHistoryRemoteSync();
     if (promptHistoryRemoteSyncTimer) {
         clearTimeout(promptHistoryRemoteSyncTimer);
         promptHistoryRemoteSyncTimer = null;
@@ -16338,38 +16168,11 @@ async function flushPromptHistoryRemoteSync() {
 }
 
 function ensurePromptHistoryBaseline(role, variation) {
-    if (!isAdmin() || !role || !variation || variation.isLocal) return false;
-    if (getPromptHistoryEntries(role, variation.id).length) return false;
-
-    const entry = {
-        id: generateId(),
-        ts: Date.now(),
-        role,
-        variationId: variation.id,
-        variationName: variation.name,
-        content: variation.content || '',
-        kind: 'baseline',
-        note: 'Базовая public-версия'
-    };
-    promptHistory.push(entry);
-    savePromptHistory({ syncEntries: [entry] });
-    if (promptHistoryModal?.classList.contains('active')) {
-        renderPromptHistory();
-    }
-    return true;
+    return promptHistoryRuntime.ensurePromptHistoryBaseline(role, variation);
 }
 
 function getPromptHistoryKindLabel(kind = 'edit') {
-    switch (String(kind || 'edit')) {
-    case 'baseline':
-        return 'База';
-    case 'publish':
-        return 'Публикация';
-    case 'restore':
-        return 'Откат';
-    default:
-        return 'Изменение';
-    }
+    return promptHistoryCore.getPromptHistoryKindLabel(kind);
 }
 
 function buildPromptHistoryEntryDiffHtml(previousContent = '', currentContent = '') {
@@ -16377,212 +16180,31 @@ function buildPromptHistoryEntryDiffHtml(previousContent = '', currentContent = 
 }
 
 function showPromptHistoryItem(entry = {}, previousContent = '', role = getActiveRole(), variationId) {
-    if (!promptHistoryItemModal || !promptHistoryItemTitle || !promptHistoryItemMeta || !promptHistoryItemDiffView) return;
-
-    const safeRole = entry.role || role;
-    const safeVariationId = entry.variationId || variationId;
-    const normalizedEntry = {
-        ...entry,
-        id: entry.id,
-        role: safeRole,
-        variationId: safeVariationId,
-        kind: entry.kind || 'edit',
-        ts: entry.ts || Date.now(),
-        variationName: entry.variationName || 'Без названия',
-        note: entry.note || ''
-    };
-
-    const title = `${getRoleLabel(normalizedEntry.role)} · ${normalizedEntry.variationName || 'Без названия'}`;
-    const time = formatHistoryTime(normalizedEntry.ts);
-    const kindLabel = getPromptHistoryKindLabel(normalizedEntry.kind);
-    const noteLabel = normalizedEntry.note ? `<br><strong>Примечание:</strong> ${escapeHtml(normalizedEntry.note)}` : '';
-    promptHistoryItemTitle.textContent = `Версия: ${title}`;
-    promptHistoryItemMeta.innerHTML = `<strong>${kindLabel}</strong> · ${escapeHtml(time)}${noteLabel}`;
-    promptHistoryItemDiffView.innerHTML = buildPromptHistoryEntryDiffHtml(previousContent, String(entry?.content || ''));
-
-    promptHistoryItemModal.classList.add('active');
+    return promptHistoryWorkflow.showPromptHistoryItem(entry, previousContent, role, variationId);
 }
 
 function hidePromptHistoryItemModal() {
-    if (!promptHistoryItemModal) return;
-    promptHistoryItemModal.classList.remove('active');
+    return promptHistoryWorkflow.hidePromptHistoryItemModal();
 }
 
 function renderPromptHistory() {
-    if (!promptHistoryList || !promptHistoryTitle) return;
-    if (!isAdmin()) {
-        promptHistoryList.innerHTML = '';
-        hidePromptHistoryItemModal();
-        return;
-    }
-
-    const role = getActiveRole();
-    const activeVariation = getActiveVariation(role);
-    if (!activeVariation) {
-        promptHistoryTitle.textContent = 'История промпта';
-        promptHistoryList.innerHTML = '<div class="changes-empty">Выберите промпт.</div>';
-        return;
-    }
-
-    const historyVariation = getPromptHistoryVariation(role, activeVariation);
-    if (!historyVariation) {
-        promptHistoryTitle.textContent = `История: ${getRoleLabel(role)} · ${activeVariation.name || 'Без названия'}`;
-        promptHistoryList.innerHTML = '<div class="changes-empty">У этого draft пока нет public-истории.</div>';
-        return;
-    }
-
-    const isDraftView = !!activeVariation.isLocal;
-    promptHistoryTitle.textContent = isDraftView
-        ? `Журнал public: ${getRoleLabel(role)} · ${historyVariation.name || 'Без названия'}`
-        : `История: ${getRoleLabel(role)} · ${historyVariation.name || 'Без названия'}`;
-
-    const items = getPromptHistoryEntries(role, historyVariation.id).slice(0, HISTORY_LIMIT);
-    promptHistoryList.innerHTML = '';
-    hidePromptHistoryItemModal();
-    if (!items.length) {
-        promptHistoryList.innerHTML = '<div class="changes-empty">Пока нет изменений у этого промпта.</div>';
-        return;
-    }
-
-    items.forEach((entry, index) => {
-        const item = document.createElement('div');
-        item.className = 'change-item';
-        item.dataset.entryId = entry.id;
-        const title = `${getRoleLabel(entry.role)} · ${entry.variationName || 'Без названия'}`;
-        const time = formatHistoryTime(entry.ts);
-        const previousEntry = items[index + 1] || null;
-        const previousContent = previousEntry ? String(previousEntry.content || '') : '';
-
-        const changeMeta = document.createElement('div');
-        changeMeta.className = 'change-meta';
-
-        const changeTitle = document.createElement('div');
-        changeTitle.className = 'change-title';
-        changeTitle.textContent = title;
-        changeTitle.title = title;
-
-        const changeTime = document.createElement('div');
-        changeTime.className = 'change-time';
-        changeTime.textContent = `${getPromptHistoryKindLabel(entry.kind)} · ${time}`;
-
-        const changeNote = document.createElement('div');
-        changeNote.className = 'change-note';
-        changeNote.textContent = entry.note || '';
-        changeNote.hidden = !entry.note;
-
-        const restoreButton = document.createElement('button');
-        restoreButton.className = 'btn-restore';
-        restoreButton.dataset.id = entry.id;
-        restoreButton.textContent = 'Восстановить';
-
-        changeMeta.append(changeTitle, changeTime, changeNote);
-        item.append(changeMeta, restoreButton);
-        restoreButton.addEventListener('click', (e) => {
-            e.stopPropagation();
-            restorePromptVersion(entry.id, role, historyVariation.id, {
-                keepCurrentSelection: !!activeVariation.isLocal
-            });
-        });
-        item.addEventListener('click', () => {
-            showPromptHistoryItem(entry, previousContent, role, historyVariation.id);
-        });
-        promptHistoryList.appendChild(item);
-    });
+    return promptHistoryWorkflow.renderPromptHistory();
 }
 
 function savePromptHistory(options = {}) {
-    if (!promptHistory) return;
-
-    promptHistory = normalizePromptHistoryEntries(promptHistory);
-    lastPromptHistorySnapshotHash = buildPromptHistorySnapshotHash(promptHistory);
-
-    if (!promptHistory.length) {
-        clearCachedLocalStorageJson(LOCAL_PROMPTS_HISTORY_STORAGE_KEY, []);
-    } else {
-        setCachedLocalStorageJson(LOCAL_PROMPTS_HISTORY_STORAGE_KEY, promptHistory);
-    }
-
-    queuePromptHistoryRemoteSync(options.syncEntries || []);
+    return promptHistoryRuntime.savePromptHistory(options);
 }
 
 function checkpointPromptHistory(role, variationId = promptsData[role]?.activeId, options = {}) {
-    if (!role || !variationId) return;
-    const variation = (promptsData[role]?.variations || []).find(v => v.id === variationId);
-    if (!variation || variation.isLocal) return;
-    recordPromptHistory(role, variation, options);
+    return promptHistoryRuntime.checkpointPromptHistory(role, variationId, options);
 }
 
 function recordPromptHistory(role, variation, options = {}) {
-    if (!isAdmin()) return;
-    if (!variation) return;
-    const content = variation.content || '';
-    const lastContent = lastHistoryContent[role]?.[variation.id] ?? '';
-    if (content === lastContent) return;
-
-    const normalizedOptions = typeof options === 'string'
-        ? { kind: options }
-        : (options && typeof options === 'object' ? options : {});
-
-    const entry = {
-        id: generateId(),
-        ts: Date.now(),
-        role,
-        variationId: variation.id,
-        variationName: variation.name,
-        content,
-        kind: normalizedOptions.kind || 'edit',
-        note: String(normalizedOptions.note || '')
-    };
-
-    promptHistory.unshift(entry);
-    lastHistoryContent[role][variation.id] = content;
-    savePromptHistory({ syncEntries: [entry] });
-    if (promptHistoryModal?.classList.contains('active')) {
-        renderPromptHistory();
-    }
+    return promptHistoryRuntime.recordPromptHistory(role, variation, options);
 }
 
 function restorePromptVersion(entryId, role = getActiveRole(), variationId = getActiveVariation(role)?.id, options = {}) {
-    if (!isAdmin()) return;
-    const entry = promptHistory.find(item =>
-        item.id === entryId &&
-        (!role || item.role === role) &&
-        (!variationId || item.variationId === variationId)
-    );
-    if (!entry) return;
-
-    role = entry.role;
-    const variations = promptsData[role]?.variations || [];
-    const previousActiveId = promptsData[role]?.activeId || null;
-    let targetVar = variations.find(v => v.id === entry.variationId);
-    if (!targetVar) {
-        targetVar = {
-            id: entry.variationId,
-            name: entry.variationName || 'Восстановленный',
-            content: entry.content
-        };
-        variations.push(targetVar);
-    } else {
-        targetVar.content = entry.content;
-    }
-
-    const keepCurrentSelection = !!options.keepCurrentSelection &&
-        !!previousActiveId &&
-        variations.some(v => v.id === previousActiveId);
-    promptsData[role].activeId = keepCurrentSelection ? previousActiveId : targetVar.id;
-    renderVariations();
-    updateEditorContent(role);
-    checkpointPromptHistory(role, targetVar.id, {
-        kind: 'restore',
-        note: `Из версии ${formatHistoryTime(entry.ts)}`
-    });
-    savePromptsToFirebaseNow({ roles: [role] });
-    if (promptHistoryModal?.classList.contains('active')) {
-        renderPromptHistory();
-    }
-    if (promptCompareModal?.classList.contains('active')) {
-        renderPromptCompareModalContent(role);
-    }
+    return promptHistoryWorkflow.restorePromptVersion(entryId, role, variationId, options);
 }
 
 function addVariation(role) {
@@ -18118,20 +17740,7 @@ function setSharedGeminiTokenEndpoint(value) {
 }
 
 function renderPromptContextBar(role = getActiveRole()) {
-    if (promptContextRoleName) {
-        promptContextRoleName.textContent = getRoleLabel(role);
-    }
-    if (promptContextVariationBadge) {
-        const activeVariation = getActiveVariation(role);
-        const badgeText = isLocalMinimalUiEnabled()
-            ? (activeVariation
-                ? getPromptVariationDisplayName(activeVariation)
-                : 'Сценарий не выбран')
-            : (activeVariation
-                ? `Вариант: ${getPromptVariationDisplayName(activeVariation)}`
-                : 'Вариант не выбран');
-        promptContextVariationBadge.textContent = badgeText;
-    }
+    return promptUiDisplay.renderPromptContextBar(role);
 }
 
 function normalizeClientConversationActionPrompt(value) {
@@ -19013,6 +18622,7 @@ async function clearVoiceModeConfig() {
 
 async function getFirebaseAuthIdToken() {
     if (!auth?.currentUser || typeof auth.currentUser.getIdToken !== 'function') return '';
+    const cachedLogin = normalizeLogin(auth.currentUser?.email || '');
     try {
         const token = await withPromiseTimeout(
             auth.currentUser.getIdToken(true),
@@ -19023,6 +18633,7 @@ async function getFirebaseAuthIdToken() {
         if (normalized) {
             voiceAuthCachedIdToken = normalized;
             voiceAuthCachedIdTokenAt = Date.now();
+            voiceAuthCachedIdTokenLogin = cachedLogin;
         }
         return normalized;
     } catch (error) {
@@ -19040,6 +18651,7 @@ async function getFirebaseAuthIdToken() {
                 if (normalized) {
                     voiceAuthCachedIdToken = normalized;
                     voiceAuthCachedIdTokenAt = Date.now();
+                    voiceAuthCachedIdTokenLogin = cachedLogin;
                 }
                 return normalized;
             } catch (retryError) {
@@ -19073,7 +18685,11 @@ async function getFirebaseAppCheckToken() {
 async function warmVoiceAuthTokens(reason = '') {
     if (!auth?.currentUser) return false;
     const now = Date.now();
-    const hasFreshIdToken = !!voiceAuthCachedIdToken && (now - voiceAuthCachedIdTokenAt) < VOICE_AUTH_TOKEN_TTL_MS;
+    const currentVoiceAuthLogin = normalizeLogin(auth.currentUser?.email || '');
+    const hasFreshIdToken = !!currentVoiceAuthLogin
+        && !!voiceAuthCachedIdToken
+        && voiceAuthCachedIdTokenLogin === currentVoiceAuthLogin
+        && (now - voiceAuthCachedIdTokenAt) < VOICE_AUTH_TOKEN_TTL_MS;
     const hasFreshAppCheck = !!voiceAuthCachedAppCheckToken && (now - voiceAuthCachedAppCheckTokenAt) < VOICE_APP_CHECK_TTL_MS;
     if (hasFreshIdToken && hasFreshAppCheck) return true;
     recordVoiceDebugEvent('voice_auth_warmup_started', {
@@ -19223,7 +18839,12 @@ async function buildGeminiVoiceServerRequestHeaders(tokenEndpoint = '') {
     const now = Date.now();
     let idToken = '';
     const canUseLocalFallback = canUseLocalhostDevVoiceTokenFallback(tokenEndpoint);
-    if (voiceAuthCachedIdToken && (now - voiceAuthCachedIdTokenAt) < VOICE_AUTH_TOKEN_TTL_MS) {
+    const currentVoiceAuthLogin = normalizeLogin(auth?.currentUser?.email || '');
+    const hasFreshCachedIdToken = !!currentVoiceAuthLogin
+        && !!voiceAuthCachedIdToken
+        && voiceAuthCachedIdTokenLogin === currentVoiceAuthLogin
+        && (now - voiceAuthCachedIdTokenAt) < VOICE_AUTH_TOKEN_TTL_MS;
+    if (hasFreshCachedIdToken) {
         idToken = voiceAuthCachedIdToken;
     } else {
         try {
@@ -22324,120 +21945,35 @@ function hideVoiceModeModal() {
 }
 
 function buildPromptCompareDiffHtml(publicContent = '', draftContent = '') {
-    const safePublicContent = String(publicContent || '');
-    const safeDraftContent = String(draftContent || '');
-    const diffApi = globalThis.Diff;
-    if (!diffApi?.diffWordsWithSpace) {
-        const fallbackHtml = escapeHtml(safeDraftContent).replace(/\n/g, '<br>');
-        return `<div class="prompt-compare-richdiff">${fallbackHtml}</div>`;
-    }
-
-    const parts = diffApi.diffWordsWithSpace(safePublicContent, safeDraftContent);
-    const html = parts.map((part) => {
-        const safeValue = escapeHtml(part.value || '').replace(/\n/g, '<br>');
-        if (!safeValue) return '';
-        if (part.added) {
-            return `<span class="diff-added-inline">${safeValue}</span>`;
-        }
-        if (part.removed) {
-            return `<span class="diff-removed-inline">${safeValue}</span>`;
-        }
-        return safeValue;
-    }).join('');
-
-    return `<div class="prompt-compare-richdiff">${html || '<span class="changes-empty">Без различий.</span>'}</div>`;
+    return promptCompareCore.buildPromptCompareDiffHtml(publicContent, draftContent);
 }
 
 function renderPromptCompareModalContent(role = getActiveRole()) {
-    if (!promptCompareTitle || !promptCompareSummary || !promptCompareDiffView) return;
-    const context = getPromptCompareContext(role);
-    activePromptCompareContext = context;
-    if (!context) {
-        if (promptCompareModal?.classList.contains('active')) {
-            hidePromptCompareModal();
-        }
-        return;
-    }
-
-    const { publicVariation, draftVariation } = context;
-    const rollbackEntry = getPromptRollbackEntry(role, publicVariation);
-    promptCompareTitle.textContent = `Сравнение: ${getRoleLabel(role)} · ${getPromptVariationDisplayName(publicVariation) || 'Без названия'}`;
-    promptCompareSummary.innerHTML = `
-        <strong>Public:</strong> ${escapeHtml(getPromptVariationDisplayName(publicVariation) || 'Без названия')}
-        <br>
-        <strong>Draft:</strong> ${escapeHtml(getPromptVariationDisplayName(draftVariation) || 'Без названия')}
-    `;
-    promptCompareDiffView.innerHTML = buildPromptCompareDiffHtml(publicVariation.content || '', draftVariation.content || '');
+    return promptCompareWorkflow.renderPromptCompareModalContent(role);
 }
 
 function showPromptHistoryModal() {
-    hideTooltip(true);
-    if (!promptHistoryModal) return;
-    renderPromptHistory();
-    hidePromptHistoryItemModal();
-    promptHistoryModal.classList.add('active');
+    return promptHistoryWorkflow.showPromptHistoryModal();
 }
 
 function hidePromptHistoryModal() {
-    if (!promptHistoryModal) return;
-    promptHistoryModal.classList.remove('active');
+    return promptHistoryWorkflow.hidePromptHistoryModal();
 }
 
 function showPromptCompareModal() {
-    hideTooltip(true);
-    if (!promptCompareModal) return;
-    syncCurrentEditorNow();
-    if (!getPromptCompareContext()) {
-        showCopyNotification('У этого промпта пока нет draft для сравнения.');
-        return;
-    }
-    renderPromptCompareModalContent();
-    promptCompareModal.classList.add('active');
+    return promptCompareWorkflow.showPromptCompareModal(getActiveRole());
 }
 
 function hidePromptCompareModal() {
-    if (!promptCompareModal) return;
-    promptCompareModal.classList.remove('active');
-    activePromptCompareContext = null;
+    return promptCompareWorkflow.hidePromptCompareModal();
 }
 
 function publishComparedDraft() {
-    hideTooltip(true);
-    const context = getPromptCompareContext();
-    if (!context) {
-        showCopyNotification('Draft для публикации не найден.');
-        hidePromptCompareModal();
-        return;
-    }
-
-    syncCurrentEditorNow();
-    promptsData[context.role].activeId = context.draftVariation.id;
-    if (!publishActiveLocalPrompt(context.role)) {
-        showCopyNotification('Не удалось опубликовать draft.');
-        return;
-    }
-
-    renderVariations();
-    updateEditorContent(context.role);
-    hidePromptCompareModal();
-    showCopyNotification('Draft опубликован в public.');
+    return promptCompareWorkflow.publishComparedDraft(getActiveRole());
 }
 
 function rollbackPublicPrompt(role = getActiveRole()) {
-    hideTooltip(true);
-    const historyVariation = getPromptHistoryVariation(role);
-    const rollbackEntry = getPromptRollbackEntry(role, historyVariation);
-    if (!historyVariation || !rollbackEntry) {
-        showCopyNotification('Нет предыдущей public-версии для отката.');
-        return false;
-    }
-
-    syncCurrentEditorNow();
-    restorePromptVersion(rollbackEntry.id, role, historyVariation.id, {
-        keepCurrentSelection: !!getActiveVariation(role)?.isLocal
-    });
-    showCopyNotification('Public-версия откатена к прошлой ревизии.');
-    return true;
+    return promptCompareWorkflow.rollbackPublicPrompt(role);
 }
 
 // ============ SETTINGS MODAL FUNCTIONS ============
@@ -24088,7 +23624,7 @@ async function sendMessage() {
 
         response = await fetchWithTimeout(webhookUrl, {
             method: 'POST',
-            headers: buildJsonRequestHeaders(requestId, 'chat', 'chat'),
+            headers: await buildAuthenticatedJsonRequestHeaders(requestId, 'chat', 'chat'),
             signal: requestGuard.signal,
             body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('chat', {
                 userMessage,
@@ -24204,7 +23740,7 @@ async function startConversationHandler() {
         });
         response = await fetchWithTimeout(webhookUrl, {
             method: 'POST',
-            headers: buildJsonRequestHeaders(requestId, 'chat_start', 'chat_start'),
+            headers: await buildAuthenticatedJsonRequestHeaders(requestId, 'chat_start', 'chat_start'),
             signal: requestGuard.signal,
             body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('chat_start', {
                 userMessage: '/start',
@@ -24562,7 +24098,7 @@ async function sendAttestationJobWithRetry(job, maxAttempts = ATTESTATION_SEND_A
             });
             response = await fetchWithTimeout(webhookUrl, {
                 method: 'POST',
-                headers: buildJsonRequestHeaders(job.requestId, 'attestation'),
+                headers: await buildAuthenticatedJsonRequestHeaders(job.requestId, 'attestation'),
                 body: JSON.stringify({
                     dialog: job.dialog,
                     rating: job.rating,
@@ -24697,7 +24233,7 @@ async function requestRatingWithRetry(dialogText, raterPrompt, maxAttempts = RAT
             });
             response = await fetchWithTimeout(webhookUrl, {
                 method: 'POST',
-                headers: buildJsonRequestHeaders(requestId, 'rating', 'rating'),
+                headers: await buildAuthenticatedJsonRequestHeaders(requestId, 'rating', 'rating'),
                 signal,
                 body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('rating', {
                     dialog: dialogText,
@@ -25089,7 +24625,7 @@ async function generateAIResponse() {
         });
         response = await fetchWithTimeout(webhookUrl, {
             method: 'POST',
-            headers: buildJsonRequestHeaders(requestId, 'manager_assist', 'manager_assist'),
+            headers: await buildAuthenticatedJsonRequestHeaders(requestId, 'manager_assist', 'manager_assist'),
             signal: requestGuard.signal,
             body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('manager_assist', {
                 systemPrompt: fullPrompt,
