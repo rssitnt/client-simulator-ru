@@ -1,0 +1,34 @@
+name: Public Surface
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Verify static publish surface
+        run: |
+          set -euo pipefail
+          forbidden=()
+          while IFS= read -r path; do
+            case "$path" in
+              .gitattributes|.gitignore|CNAME|index.html|style.css|script.js|early-local-ui.js|firebase-config.js|1.png|bin.svg|prompt-icon-fluent-24-regular.svg) ;;
+              favicon/*) ;;
+              dialog-history-*.js|prompt-*.js) ;;
+              .github/workflows/public-surface.yml) ;;
+              *) forbidden+=("$path") ;;
+            esac
+          done < <(git ls-files)
+
+          if [ "${#forbidden[@]}" -gt 0 ]; then
+            printf 'Forbidden public files:\n'
+            printf '%s\n' "${forbidden[@]}"
+            exit 1
+          fi

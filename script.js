@@ -10,7 +10,6 @@ import {
     createUserWithEmailAndPassword,
     signOut
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { initializeAppCheck, ReCaptchaV3Provider, getToken as getAppCheckToken } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js";
 import { createDialogHistoryHelpers } from "./dialog-history-core.js";
 import { createDialogHistoryControllerHelpers } from "./dialog-history-controller.js";
 import { createDialogHistoryLoaderHelpers } from "./dialog-history-loader.js";
@@ -44,23 +43,17 @@ let db = null;
 let firebaseApp = null;
 let auth = null;
 let appCheck = null;
+let firebaseAppCheckModulePromise = null;
+let firebaseAppCheckInitPromise = null;
+let firebaseAppCheckGetToken = null;
 try {
     if (firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("EXAMPLE")) {
         firebaseApp = initializeApp(firebaseConfig);
         db = getDatabase(firebaseApp);
         auth = getAuth(firebaseApp);
         const appCheckSiteKey = String(firebaseConfig?.appCheckSiteKey || '').trim();
-        const shouldEnableAppCheck = !!appCheckSiteKey && !isLocalhostAdminPreviewHost();
-        if (shouldEnableAppCheck) {
-            try {
-                appCheck = initializeAppCheck(firebaseApp, {
-                    provider: new ReCaptchaV3Provider(appCheckSiteKey),
-                    isTokenAutoRefreshEnabled: true
-                });
-                console.log("Firebase App Check initialized");
-            } catch (error) {
-                console.warn("Firebase App Check initialization failed:", error);
-            }
+        if (appCheckSiteKey && !isLocalhostAdminPreviewHost()) {
+            console.info("Firebase App Check deferred until a protected request");
         } else if (appCheckSiteKey && isLocalhostAdminPreviewHost()) {
             console.info("Firebase App Check skipped on localhost preview host");
         }
@@ -18662,11 +18655,44 @@ async function getFirebaseAuthIdToken() {
     }
 }
 
+async function loadFirebaseAppCheckModule() {
+    if (!firebaseAppCheckModulePromise) {
+        firebaseAppCheckModulePromise = import("https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js");
+    }
+    return firebaseAppCheckModulePromise;
+}
+
+async function ensureFirebaseAppCheckInitialized() {
+    if (appCheck) return appCheck;
+    if (!firebaseApp) return null;
+    const appCheckSiteKey = String(firebaseConfig?.appCheckSiteKey || '').trim();
+    if (!appCheckSiteKey || isLocalhostAdminPreviewHost()) return null;
+    if (!firebaseAppCheckInitPromise) {
+        firebaseAppCheckInitPromise = loadFirebaseAppCheckModule()
+            .then(({ initializeAppCheck, ReCaptchaV3Provider, getToken }) => {
+                firebaseAppCheckGetToken = getToken;
+                appCheck = initializeAppCheck(firebaseApp, {
+                    provider: new ReCaptchaV3Provider(appCheckSiteKey),
+                    isTokenAutoRefreshEnabled: true
+                });
+                console.log("Firebase App Check initialized");
+                return appCheck;
+            })
+            .catch((error) => {
+                firebaseAppCheckInitPromise = null;
+                console.warn("Firebase App Check initialization failed:", error);
+                return null;
+            });
+    }
+    return firebaseAppCheckInitPromise;
+}
+
 async function getFirebaseAppCheckToken() {
-    if (!appCheck || typeof getAppCheckToken !== 'function') return '';
+    const appCheckInstance = await ensureFirebaseAppCheckInitialized();
+    if (!appCheckInstance || typeof firebaseAppCheckGetToken !== 'function') return '';
     try {
         const tokenResult = await withPromiseTimeout(
-            getAppCheckToken(appCheck, false),
+            firebaseAppCheckGetToken(appCheckInstance, false),
             4000,
             'Таймаут App Check.'
         );
