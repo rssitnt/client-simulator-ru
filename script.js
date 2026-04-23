@@ -4460,7 +4460,7 @@ async function sendMagicLinkToEmailWithServerFallback(email, purpose = 'verify')
     const serverResult = await sendMagicLinkToEmailViaServer(normalizedEmail, purpose);
     if (!serverResult.sent) {
         const fallbackAllowed = serverResult.fallbackAllowed !== false;
-        if (!fallbackAllowed) {
+        if (!fallbackAllowed || !canUseClientAuthEmailFallback()) {
             throw serverResult.error || new Error(serverResult.readableError || 'Не удалось отправить письмо подтверждения.');
         }
 
@@ -4493,7 +4493,7 @@ async function sendPasswordResetLinkToEmail(email) {
     const serverResult = await sendPasswordResetLinkToEmailViaServer(normalizedEmail);
     if (!serverResult.sent) {
         const fallbackAllowed = serverResult.fallbackAllowed !== false;
-        if (!fallbackAllowed) {
+        if (!fallbackAllowed || !canUseClientAuthEmailFallback()) {
             throw serverResult.error || new Error(serverResult.readableError || 'Не удалось отправить письмо для сброса.');
         }
         if (!auth) {
@@ -6713,6 +6713,14 @@ function buildSiblingGeminiServerEndpointUrl(targetPath = '', source = 'Gemini s
     }
 }
 
+function buildStableAuthServerEndpointUrl(targetPath = '', source = 'Auth mail endpoint') {
+    const normalizedTargetPath = normalizeGeminiTokenEndpoint(targetPath).replace(/\/+$/, '') || '/';
+    if (typeof window !== 'undefined' && PRODUCTION_HOSTNAMES.has(String(window.location.hostname || '').trim().toLowerCase())) {
+        return `${GEMINI_LIVE_STABLE_REMOTE_ORIGIN}${normalizedTargetPath}`;
+    }
+    return buildSiblingGeminiServerEndpointUrl(normalizedTargetPath, source);
+}
+
 function buildPartnerInviteEmailEndpointUrl() {
     return buildSiblingGeminiServerEndpointUrl(
         PARTNER_INVITE_EMAIL_ENDPOINT_PATH,
@@ -6721,14 +6729,14 @@ function buildPartnerInviteEmailEndpointUrl() {
 }
 
 function buildAuthMagicLinkEmailEndpointUrl() {
-    return buildSiblingGeminiServerEndpointUrl(
+    return buildStableAuthServerEndpointUrl(
         AUTH_MAGIC_LINK_EMAIL_ENDPOINT_PATH,
         'Auth email endpoint'
     );
 }
 
 function buildAuthPasswordResetEmailEndpointUrl() {
-    return buildSiblingGeminiServerEndpointUrl(
+    return buildStableAuthServerEndpointUrl(
         AUTH_PASSWORD_RESET_EMAIL_ENDPOINT_PATH,
         'Auth password reset email endpoint'
     );
@@ -6825,6 +6833,10 @@ function canFallbackToClientPasswordResetFromServerResponse(statusCode = 0, code
         || normalizedCode === 'missing_config'
         || normalizedCode === 'server_error'
         || normalizedCode === 'missing_id_token';
+}
+
+function canUseClientAuthEmailFallback() {
+    return !isProductionHost();
 }
 
 async function sendMagicLinkToEmailViaServer(email, purpose = 'verify') {

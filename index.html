@@ -34,10 +34,10 @@
         <div class="modal-content auth-modal-content">
             <div id="nameModalStep1">
                 <form id="authForm" class="auth-form" autocomplete="on" novalidate>
-                <input type="text" id="modalNameInput" name="name" placeholder="ФИО (например: Иванов Иван Иванович)" maxlength="120" autocomplete="name" autocorrect="off" autocapitalize="words" spellcheck="false" autofocus>
-                <input type="email" id="modalLoginInput" name="email" placeholder="Рабочий email компании или партнер по инвайту" maxlength="120" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false">
+                <input type="text" id="modalNameInput" name="name" placeholder="ФИО (например: Иванов Иван Иванович)" maxlength="120" autocomplete="name" autocorrect="off" autocapitalize="words" spellcheck="false" aria-label="ФИО" autofocus>
+                <input type="email" id="modalLoginInput" name="email" placeholder="Рабочий email компании или партнер по инвайту" maxlength="120" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false" aria-label="Рабочий email">
                 <div class="auth-password-wrap">
-                    <input type="password" id="modalPasswordInput" name="password" placeholder="Пароль (минимум 6 символов)" maxlength="80" minlength="6" autocomplete="current-password">
+                    <input type="password" id="modalPasswordInput" name="password" placeholder="Пароль (минимум 6 символов)" maxlength="80" minlength="6" autocomplete="current-password" aria-label="Пароль">
                     <button type="button" id="togglePasswordVisibility" class="auth-password-toggle" aria-label="Показать пароль">
                         <span class="icon-eye" aria-hidden="true">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -68,7 +68,7 @@
                 </div>
                 <details id="authMailHelp" class="auth-mail-help" hidden open>
                     <summary>Где искать письмо</summary>
-                    <img id="authMailHelpImage" src="1.png" alt="Пример письма подтверждения с выделенной ссылкой входа" loading="lazy">
+                    <img id="authMailHelpImage" src="1.png" alt="Пример письма подтверждения с выделенной ссылкой входа" width="1664" height="640" loading="lazy">
                     <p class="auth-mail-help-caption">После нажатия «Войти» откройте письмо и нажмите ссылку для входа. Если письма нет, проверьте папку «Спам».</p>
                 </details>
                 </form>
@@ -84,7 +84,7 @@
             
             <div id="aiImproveStep1">
                 <p id="aiImproveModalDescription">Опишите, как бы вы хотели улучшить инструкцию?</p>
-                <textarea id="aiImproveInput" placeholder="Например: Сделай инструкцию более структурированной, добавь примеры диалогов..." rows="4"></textarea>
+                <textarea id="aiImproveInput" placeholder="Например: Сделай инструкцию более структурированной, добавь примеры диалогов..." rows="4" aria-label="Пожелания к улучшению инструкции"></textarea>
                 <div class="ai-improve-actions">
                     <button id="aiImproveCancel" class="btn-modal-cancel">Отмена</button>
                     <button id="aiImproveSubmit" class="btn-modal-submit">
@@ -156,7 +156,7 @@
             <div class="theme-color-section">
                 <div class="theme-color-row">
                     <label class="toggle-switch" translate="no">
-                        <input type="checkbox" id="themeToggle">
+                        <input type="checkbox" id="themeToggle" aria-label="Включить светлую тему">
                         <span class="toggle-slider">
                             <span class="slider-icon moon">
                                 <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
@@ -197,7 +197,7 @@
                             <button id="settingsLogoutBtn" type="button" class="btn-change btn-logout">Выйти из аккаунта</button>
                         </div>
                     </div>
-                    <input type="text" id="settingsNameInput" class="name-input" placeholder="ФИО" maxlength="120">
+                <input type="text" id="settingsNameInput" class="name-input" placeholder="ФИО" maxlength="120" autocomplete="name" aria-label="ФИО в настройках">
                 </div>
             </div>
 
@@ -212,7 +212,7 @@
 
             <!-- Пароль для смены роли -->
             <div id="roleChangePassword" class="password-section" style="display: none;">
-                <input type="password" id="roleChangePasswordInput" class="password-input" placeholder="Пароль" maxlength="20">
+                <input type="password" id="roleChangePasswordInput" class="password-input" placeholder="Пароль" maxlength="20" autocomplete="current-password" aria-label="Пароль для смены роли">
                 <p id="roleChangeError" class="error-text" style="display: none;">Неверный пароль</p>
                 <div class="password-buttons">
                     <button id="roleChangeCancelBtn" class="btn-cancel">Отмена</button>
@@ -338,7 +338,7 @@
                         <span class="admin-panel-title">Выдача доступа</span>
                     </div>
                     <div class="admin-invite-form">
-                        <input type="email" id="partnerInviteEmailInput" class="admin-invite-input" placeholder="email@example.com" maxlength="120">
+                            <input type="email" id="partnerInviteEmailInput" class="admin-invite-input" placeholder="email@example.com" maxlength="120" autocomplete="off" inputmode="email" spellcheck="false" aria-label="Email партнёра">
                         <div class="admin-invite-days-wrap" title="Срок доступа в днях">
                             <input type="number" id="partnerInviteDaysInput" class="admin-invite-days" min="1" max="365" value="30" aria-label="Срок доступа в днях">
                             <span class="admin-invite-days-unit">дней</span>
@@ -496,7 +496,7 @@
     </div>
 
     <!-- Кнопка настроек (плавающая справа сверху) -->
-    <button id="settingsBtn" class="btn-icon btn-settings-floating" title="Настройки">
+            <button id="settingsBtn" class="btn-icon btn-settings-floating" title="Настройки" aria-label="Открыть настройки">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="4" y1="21" x2="4" y2="14"></line>
             <line x1="4" y1="10" x2="4" y2="3"></line>
@@ -632,14 +632,14 @@
                         </svg>
                     </button>
                     <div style="position: relative;">
-                        <button id="exportChat" class="btn-icon btn-export" title="Экспорт диалога">
+                    <button id="exportChat" class="btn-icon btn-export" title="Экспорт диалога" aria-label="Экспорт диалога">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                                 <path d="M.5 9.9a.5.5 0 01.5.5v2.5a1 1 0 001 1h12a1 1 0 001-1v-2.5a.5.5 0 011 0v2.5a2 2 0 01-2 2H2a2 2 0 01-2-2v-2.5a.5.5 0 01.5-.5z"/>
                                 <path d="M7.646 1.146a.5.5 0 01.708 0l3 3a.5.5 0 01-.708.708L8.5 2.707V10.5a.5.5 0 01-1 0V2.707L5.354 4.854a.5.5 0 11-.708-.708l3-3z"/>
                             </svg>
                         </button>
                         <div id="exportMenu" class="dropdown-menu">
-                            <button class="dropdown-item dropdown-item-icon" data-format="clipboard" title="Копировать в буфер">
+                            <button class="dropdown-item dropdown-item-icon" data-format="clipboard" title="Копировать в буфер" aria-label="Копировать диалог в буфер">
                                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                                     <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
                                     <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
@@ -700,6 +700,7 @@
                                     maxlength="140"
                                     placeholder="Название диалога"
                                     autocomplete="off"
+                                    aria-label="Название диалога"
                                     rows="1"
                                 ></textarea>
                                 <div id="mainDialogHistoryViewerMeta" class="dialog-history-viewer-meta dialog-history-viewer-meta-main"></div>
@@ -723,7 +724,7 @@
             </div>
             <div class="chat-input-container">
                 <div class="input-wrapper">
-                    <textarea id="userInput" placeholder="" rows="1"></textarea>
+                        <textarea id="userInput" placeholder="" rows="1" aria-label="Сообщение менеджера"></textarea>
                     <div class="input-actions">
                         <button id="rateChat" class="btn-input-action" title="Оценить диалог">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -833,14 +834,14 @@
                         </svg>
                     </button>
                     <div style="position: relative;">
-                        <button id="exportCurrentPrompt" class="btn-icon btn-export" title="Экспорт инструкции">
+                    <button id="exportCurrentPrompt" class="btn-icon btn-export" title="Экспорт инструкции" aria-label="Экспорт инструкции">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                                 <path d="M.5 9.9a.5.5 0 01.5.5v2.5a1 1 0 001 1h12a1 1 0 001-1v-2.5a.5.5 0 011 0v2.5a2 2 0 01-2 2H2a2 2 0 01-2-2v-2.5a.5.5 0 01.5-.5z"/>
                                 <path d="M7.646 1.146a.5.5 0 01.708 0l3 3a.5.5 0 01-.708.708L8.5 2.707V10.5a.5.5 0 01-1 0V2.707L5.354 4.854a.5.5 0 11-.708-.708l3-3z"/>
                             </svg>
                         </button>
                         <div id="exportPromptMenu" class="dropdown-menu">
-                            <button class="dropdown-item dropdown-item-icon" data-prompt-format="clipboard" title="Копировать в буфер">
+                            <button class="dropdown-item dropdown-item-icon" data-prompt-format="clipboard" title="Копировать в буфер" aria-label="Копировать инструкцию в буфер">
                                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                                     <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
                                     <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
@@ -893,36 +894,36 @@
                         </svg>
                     </button>
                     <span class="toolbar-divider"></span>
-                    <button class="toolbar-btn" data-action="h1" title="Заголовок 1">H1</button>
-                    <button class="toolbar-btn" data-action="h2" title="Заголовок 2">H2</button>
-                    <button class="toolbar-btn" data-action="h3" title="Заголовок 3">H3</button>
+                    <button class="toolbar-btn" data-action="h1" title="Заголовок 1" aria-label="Заголовок 1">H1</button>
+                    <button class="toolbar-btn" data-action="h2" title="Заголовок 2" aria-label="Заголовок 2">H2</button>
+                    <button class="toolbar-btn" data-action="h3" title="Заголовок 3" aria-label="Заголовок 3">H3</button>
                     <span class="toolbar-divider"></span>
-                    <button class="toolbar-btn" data-action="bold" title="Жирный (Ctrl+B)"><strong>B</strong></button>
-                    <button class="toolbar-btn" data-action="italic" title="Курсив (Ctrl+I)"><em>I</em></button>
-                    <button class="toolbar-btn" data-action="strike" title="Зачёркнутый"><s>S</s></button>
+                    <button class="toolbar-btn" data-action="bold" title="Жирный (Ctrl+B)" aria-label="Жирный"><strong>B</strong></button>
+                    <button class="toolbar-btn" data-action="italic" title="Курсив (Ctrl+I)" aria-label="Курсив"><em>I</em></button>
+                    <button class="toolbar-btn" data-action="strike" title="Зачёркнутый" aria-label="Зачёркнутый"><s>S</s></button>
                     <span class="toolbar-divider"></span>
-                    <button class="toolbar-btn" data-action="ul" title="Маркированный список">•</button>
-                    <button class="toolbar-btn" data-action="ol" title="Нумерованный список">1.</button>
-                    <button class="toolbar-btn" data-action="quote" title="Цитата">"</button>
-                    <button class="toolbar-btn" data-action="code" title="Код">&lt;/&gt;</button>
-                    <button class="toolbar-btn" data-action="hr" title="Горизонтальная линия">—</button>
+                    <button class="toolbar-btn" data-action="ul" title="Маркированный список" aria-label="Маркированный список">•</button>
+                    <button class="toolbar-btn" data-action="ol" title="Нумерованный список" aria-label="Нумерованный список">1.</button>
+                    <button class="toolbar-btn" data-action="quote" title="Цитата" aria-label="Цитата">"</button>
+                    <button class="toolbar-btn" data-action="code" title="Код" aria-label="Код">&lt;/&gt;</button>
+                    <button class="toolbar-btn" data-action="hr" title="Горизонтальная линия" aria-label="Горизонтальная линия">—</button>
                 </div>
                 <div id="promptLengthInfo" class="prompt-length-info" aria-live="polite"></div>
 
                 <div class="prompt-wrapper instruction-editor active preview-mode" data-instruction="client">
-                    <textarea id="systemPrompt" class="prompt-editor" placeholder="Введите инструкцию для симулятора клиента..."></textarea>
+                    <textarea id="systemPrompt" class="prompt-editor" placeholder="Введите инструкцию для симулятора клиента..." aria-label="Инструкция для симулятора клиента"></textarea>
                     <div id="systemPromptPreview" class="prompt-preview"></div>
                 </div>
                 <div class="prompt-wrapper instruction-editor preview-mode" data-instruction="manager">
-                    <textarea id="managerPrompt" class="prompt-editor" placeholder="Введите инструкцию для ИИ-ассистента менеджера..."></textarea>
+                    <textarea id="managerPrompt" class="prompt-editor" placeholder="Введите инструкцию для ИИ-ассистента менеджера..." aria-label="Инструкция для ИИ-ассистента менеджера"></textarea>
                     <div id="managerPromptPreview" class="prompt-preview"></div>
                 </div>
                 <div class="prompt-wrapper instruction-editor preview-mode" data-instruction="manager_call">
-                    <textarea id="managerCallPrompt" class="prompt-editor" placeholder="Введите инструкцию для клиента в звонке..."></textarea>
+                    <textarea id="managerCallPrompt" class="prompt-editor" placeholder="Введите инструкцию для клиента в звонке..." aria-label="Инструкция для клиента в звонке"></textarea>
                     <div id="managerCallPromptPreview" class="prompt-preview"></div>
                 </div>
                 <div class="prompt-wrapper instruction-editor preview-mode" data-instruction="rater">
-                    <textarea id="raterPrompt" class="prompt-editor" placeholder="Введите инструкцию для оценщика диалогов..."></textarea>
+                    <textarea id="raterPrompt" class="prompt-editor" placeholder="Введите инструкцию для оценщика диалогов..." aria-label="Инструкция для оценщика диалогов"></textarea>
                     <div id="raterPromptPreview" class="prompt-preview"></div>
                 </div>
             </div>
@@ -938,7 +939,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js" integrity="sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3" crossorigin="anonymous" defer></script>
     <!-- Turndown for HTML to Markdown conversion (WYSIWYG editing) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js" integrity="sha384-m6AyXEhyWRg2s2wrkDV64LGkaManYgMSAjn2U+zymzSJ42WthRSjCu1AqZJhoQV0" crossorigin="anonymous" defer></script>
-<script type="module" src="script.js?v=20260423-143000"></script>
+<script type="module" src="script.js?v=20260423-154000"></script>
     <!-- Last deployment trigger: 2026-03-24 15:00 -->
 </body>
 </html>
