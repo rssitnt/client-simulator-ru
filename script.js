@@ -78,6 +78,210 @@ const GEMINI_LIVE_STABLE_REMOTE_ORIGIN = 'https://api.client-simulator.ru';
 const GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY = 'geminiLiveTokenEndpoint';
 const GEMINI_LIVE_VOICE_NAME_STORAGE_KEY = 'geminiLiveVoiceName';
 const GEMINI_LIVE_AUDIO_INPUT_DEVICE_STORAGE_KEY = 'geminiLiveAudioInputDeviceId';
+
+const LAZY_THIRD_PARTY_ASSETS = {
+    marked: {
+        url: 'https://cdnjs.cloudflare.com/ajax/libs/marked/11.1.1/marked.min.js',
+        integrity: 'sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te',
+        globalName: 'marked'
+    },
+    diff: {
+        url: 'https://cdnjs.cloudflare.com/ajax/libs/jsdiff/5.1.0/diff.min.js',
+        integrity: 'sha384-kfJm1UHujU89hXr0VHT0u0t4lqavqaoomP6wix8D9fhzTeFvC9DYyaT36//Qd144',
+        globalName: 'Diff'
+    },
+    highlight: {
+        url: 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js',
+        integrity: 'sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp',
+        globalName: 'hljs'
+    },
+    highlightCss: {
+        url: 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css',
+        integrity: 'sha384-oaMLBGEzBOJx3UHwac0cVndtX5fxGQIfnAeFZ35RTgqPcYlbprH9o9PUV/F8Le07'
+    },
+    dompurify: {
+        url: 'https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js',
+        integrity: 'sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3',
+        globalName: 'DOMPurify'
+    },
+    turndown: {
+        url: 'https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js',
+        integrity: 'sha384-m6AyXEhyWRg2s2wrkDV64LGkaManYgMSAjn2U+zymzSJ42WthRSjCu1AqZJhoQV0',
+        globalName: 'TurndownService'
+    }
+};
+const lazyThirdPartyPromises = new Map();
+const markdownRenderCache = new Map();
+let markedLibraryConfigured = false;
+let turndownService = null;
+
+function isLazyThirdPartyAssetReady(asset = {}) {
+    return asset.globalName && typeof globalThis[asset.globalName] !== 'undefined';
+}
+
+function loadLazyScriptAsset(assetKey) {
+    const asset = LAZY_THIRD_PARTY_ASSETS[assetKey];
+    if (!asset) return Promise.resolve(false);
+    if (isLazyThirdPartyAssetReady(asset)) return Promise.resolve(true);
+    if (lazyThirdPartyPromises.has(assetKey)) return lazyThirdPartyPromises.get(assetKey);
+
+    const promise = new Promise((resolve, reject) => {
+        const existingScript = document.querySelector(`script[data-lazy-lib="${assetKey}"]`);
+        if (existingScript) {
+            existingScript.addEventListener('load', () => resolve(true), { once: true });
+            existingScript.addEventListener('error', () => reject(new Error(`Failed to load ${assetKey}`)), { once: true });
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.src = asset.url;
+        script.async = true;
+        script.crossOrigin = 'anonymous';
+        script.dataset.lazyLib = assetKey;
+        if (asset.integrity) {
+            script.integrity = asset.integrity;
+        }
+        script.onload = () => resolve(true);
+        script.onerror = () => reject(new Error(`Failed to load ${assetKey}`));
+        document.head.appendChild(script);
+    }).catch((error) => {
+        console.warn(`Lazy library load failed: ${assetKey}`, error);
+        lazyThirdPartyPromises.delete(assetKey);
+        return false;
+    });
+
+    lazyThirdPartyPromises.set(assetKey, promise);
+    return promise;
+}
+
+function loadLazyStylesheetAsset(assetKey) {
+    const asset = LAZY_THIRD_PARTY_ASSETS[assetKey];
+    if (!asset) return Promise.resolve(false);
+    if (document.querySelector(`link[data-lazy-lib="${assetKey}"]`)) return Promise.resolve(true);
+    if (lazyThirdPartyPromises.has(assetKey)) return lazyThirdPartyPromises.get(assetKey);
+
+    const promise = new Promise((resolve, reject) => {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = asset.url;
+        link.crossOrigin = 'anonymous';
+        link.dataset.lazyLib = assetKey;
+        if (asset.integrity) {
+            link.integrity = asset.integrity;
+        }
+        link.onload = () => resolve(true);
+        link.onerror = () => reject(new Error(`Failed to load ${assetKey}`));
+        document.head.appendChild(link);
+    }).catch((error) => {
+        console.warn(`Lazy stylesheet load failed: ${assetKey}`, error);
+        lazyThirdPartyPromises.delete(assetKey);
+        return false;
+    });
+
+    lazyThirdPartyPromises.set(assetKey, promise);
+    return promise;
+}
+
+function configureMarkedLibrary() {
+    const markedLib = globalThis.marked;
+    if (!markedLib || markedLibraryConfigured) return false;
+    markedLib.setOptions({
+        breaks: true,
+        gfm: true,
+        highlight(code, lang) {
+            const highlighter = globalThis.hljs;
+            if (highlighter && lang && highlighter.getLanguage(lang)) {
+                try {
+                    return highlighter.highlight(code, { language: lang }).value;
+                } catch (e) {}
+            }
+            return code;
+        }
+    });
+    markedLibraryConfigured = true;
+    markdownRenderCache?.clear?.();
+    return true;
+}
+
+function configureTurndownLibrary() {
+    if (turndownService) return turndownService;
+    const Turndown = globalThis.TurndownService;
+    if (!Turndown) return null;
+
+    turndownService = new Turndown({
+        headingStyle: 'atx',
+        hr: '---',
+        bulletListMarker: '-',
+        codeBlockStyle: 'fenced',
+        emDelimiter: '*',
+        strongDelimiter: '**'
+    });
+    turndownService.escape = function(string) { return string; };
+    turndownService.addRule('strong', {
+        filter: ['strong', 'b'],
+        replacement(content) {
+            if (!content.trim()) return '';
+            return '**' + content + '**';
+        }
+    });
+    turndownService.addRule('emphasis', {
+        filter: ['em', 'i'],
+        replacement(content) {
+            if (!content.trim()) return '';
+            return '*' + content + '*';
+        }
+    });
+    turndownService.addRule('strikethrough', {
+        filter: ['del', 's', 'strike'],
+        replacement(content) {
+            return '~~' + content + '~~';
+        }
+    });
+    return turndownService;
+}
+
+async function ensureMarkdownRenderLibrariesLoaded(options = {}) {
+    const withHighlight = !!options.withHighlight;
+    const loads = [
+        loadLazyScriptAsset('marked'),
+        loadLazyScriptAsset('dompurify')
+    ];
+    if (withHighlight) {
+        loads.push(loadLazyStylesheetAsset('highlightCss'));
+        loads.push(loadLazyScriptAsset('highlight'));
+    }
+    await Promise.all(loads);
+    configureMarkedLibrary();
+    return !!globalThis.marked;
+}
+
+async function ensureDiffLibraryLoaded() {
+    await loadLazyScriptAsset('diff');
+    return !!globalThis.Diff?.diffWordsWithSpace;
+}
+
+async function ensureTurndownServiceLoaded() {
+    await loadLazyScriptAsset('turndown');
+    return configureTurndownLibrary();
+}
+
+async function ensurePromptEditorLibrariesLoaded() {
+    await Promise.all([
+        ensureMarkdownRenderLibrariesLoaded({ withHighlight: true }),
+        ensureDiffLibraryLoaded(),
+        ensureTurndownServiceLoaded()
+    ]);
+    configureMarkedLibrary();
+    configureTurndownLibrary();
+    updateAllPreviews();
+    updateEditorContent(getActiveRole());
+}
+
+function requestPromptEditorLibraries() {
+    void ensurePromptEditorLibrariesLoaded().catch((error) => {
+        console.warn('Prompt editor lazy libraries failed to initialize:', error);
+    });
+}
 const LEGACY_GEMINI_LIVE_API_KEY_STORAGE_KEY = 'geminiLiveApiKey';
 const GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT = '/api/gemini-live-token';
 const GEMINI_LIVE_TRANSCRIBE_ENDPOINT_PATH = '/api/gemini-live-transcribe';
@@ -3043,6 +3247,9 @@ function setLocalPromptDrawerOpen(nextOpen) {
     }
     document.body?.classList.toggle('local-prompt-open', shouldOpen);
     updateLocalPromptDrawerUi();
+    if (shouldOpen) {
+        requestPromptEditorLibraries();
+    }
 }
 
 syncLocalMinimalUiClass();
@@ -11954,58 +12161,8 @@ function applyRoleRestrictions() {
     }
 }
 
-// Configure marked.js
-if (typeof marked !== 'undefined') {
-    marked.setOptions({
-        breaks: true,
-        gfm: true,
-        highlight: function(code, lang) {
-            if (typeof hljs !== 'undefined' && lang && hljs.getLanguage(lang)) {
-                try {
-                    return hljs.highlight(code, { language: lang }).value;
-                } catch (e) {}
-            }
-            return code;
-        }
-    });
-}
-
-// Configure Turndown
-let turndownService = null;
-if (typeof TurndownService !== 'undefined') {
-    turndownService = new TurndownService({
-        headingStyle: 'atx',
-        hr: '---',
-        bulletListMarker: '-',
-        codeBlockStyle: 'fenced',
-        emDelimiter: '*',
-        strongDelimiter: '**'
-    });
-    // Disable escaping completely
-    turndownService.escape = function(string) { return string; };
-    
-    // Better handling of bold text
-    turndownService.addRule('strong', {
-        filter: ['strong', 'b'],
-        replacement: function(content) {
-            if (!content.trim()) return '';
-            return '**' + content + '**';
-        }
-    });
-    
-    turndownService.addRule('emphasis', {
-        filter: ['em', 'i'],
-        replacement: function(content) {
-            if (!content.trim()) return '';
-            return '*' + content + '*';
-        }
-    });
-    
-    turndownService.addRule('strikethrough', {
-        filter: ['del', 's', 'strike'],
-        replacement: function (content) { return '~~' + content + '~~'; }
-    });
-}
+// Markdown, diff and WYSIWYG helpers are lazy-loaded on first editor/markdown use,
+// so a cold login does not wait for admin-only libraries.
 
 // Utility functions
 function extractApiResponse(data) {
@@ -16186,7 +16343,15 @@ function buildPromptHistoryEntryDiffHtml(previousContent = '', currentContent = 
 }
 
 function showPromptHistoryItem(entry = {}, previousContent = '', role = getActiveRole(), variationId) {
-    return promptHistoryWorkflow.showPromptHistoryItem(entry, previousContent, role, variationId);
+    const shown = promptHistoryWorkflow.showPromptHistoryItem(entry, previousContent, role, variationId);
+    if (shown) {
+        void ensureDiffLibraryLoaded().then(() => {
+            if (promptHistoryItemModal?.classList.contains('active')) {
+                promptHistoryWorkflow.showPromptHistoryItem(entry, previousContent, role, variationId);
+            }
+        });
+    }
+    return shown;
 }
 
 function hidePromptHistoryItemModal() {
@@ -16306,12 +16471,7 @@ function updateEditorContent(role) {
         if (previewNeedsUpdate) {
             preview.innerHTML = renderedHtml;
             preview.dataset.renderedMarkdown = content;
-            if (typeof hljs !== 'undefined') {
-                const codeBlocks = preview.querySelectorAll('pre code');
-                if (codeBlocks.length > 0) {
-                    codeBlocks.forEach(block => hljs.highlightElement(block));
-                }
-            }
+            highlightRenderedCodeBlocks(preview);
         }
     }
 
@@ -21992,7 +22152,16 @@ function renderPromptCompareModalContent(role = getActiveRole()) {
 }
 
 function showPromptHistoryModal() {
-    return promptHistoryWorkflow.showPromptHistoryModal();
+    requestPromptEditorLibraries();
+    const shown = promptHistoryWorkflow.showPromptHistoryModal();
+    if (shown) {
+        void ensureDiffLibraryLoaded().then(() => {
+            if (promptHistoryModal?.classList.contains('active')) {
+                promptHistoryWorkflow.renderPromptHistory();
+            }
+        });
+    }
+    return shown;
 }
 
 function hidePromptHistoryModal() {
@@ -22000,7 +22169,17 @@ function hidePromptHistoryModal() {
 }
 
 function showPromptCompareModal() {
-    return promptCompareWorkflow.showPromptCompareModal(getActiveRole());
+    requestPromptEditorLibraries();
+    const role = getActiveRole();
+    const shown = promptCompareWorkflow.showPromptCompareModal(role);
+    if (shown) {
+        void ensureDiffLibraryLoaded().then(() => {
+            if (promptCompareModal?.classList.contains('active')) {
+                renderPromptCompareModalContent(role);
+            }
+        });
+    }
+    return shown;
 }
 
 function hidePromptCompareModal() {
@@ -22328,9 +22507,7 @@ function showSemanticDiff(textWithMarkers) {
             return `<span class="diff-added">${c}</span>`;
         });
         
-    let html = renderMarkdown(processedText);
-    
-    aiDiffView.innerHTML = html;
+    renderMarkdownIntoElement(aiDiffView, processedText);
     
     // Switch view
     aiImproveStep1.style.display = 'none';
@@ -23144,7 +23321,7 @@ function addMessage(content, role, isMarkdown = false) {
     if (role === 'loading') {
         contentDiv.innerHTML = `<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>`;
     } else if (isMarkdown) {
-        contentDiv.innerHTML = renderMarkdown(content);
+        renderMarkdownIntoElement(contentDiv, content);
     } else {
         contentDiv.textContent = content;
     }
@@ -23597,8 +23774,9 @@ function sanitizeRenderedHtml(html) {
     const sourceHtml = String(html || '');
     if (!sourceHtml) return '';
 
-    if (typeof DOMPurify !== 'undefined' && typeof DOMPurify.sanitize === 'function') {
-        const sanitized = DOMPurify.sanitize(sourceHtml, {
+    const purifier = globalThis.DOMPurify;
+    if (purifier && typeof purifier.sanitize === 'function') {
+        const sanitized = purifier.sanitize(sourceHtml, {
             ALLOWED_TAGS: SANITIZED_HTML_TAGS,
             ALLOWED_ATTR: SANITIZED_HTML_ATTRIBUTES,
             ALLOW_DATA_ATTR: false,
@@ -25150,8 +25328,6 @@ async function copyPromptToClipboard(text, label) {
     
 // ============ MARKDOWN RENDERING ============
 
-const markdownRenderCache = new Map();
-
 function getCachedMarkdown(key) {
     if (!markdownRenderCache.has(key)) return null;
     const cached = markdownRenderCache.get(key);
@@ -25177,14 +25353,17 @@ function renderMarkdown(text) {
     let cleanText = unescapeMarkdown(text);
 
     const canCache = cleanText.length <= MARKDOWN_CACHE_TEXT_LIMIT;
+    const cacheKey = `${globalThis.marked ? 'marked' : 'fallback'}:${globalThis.DOMPurify ? 'purify' : 'legacy'}:${cleanText}`;
     if (canCache) {
-        const cached = getCachedMarkdown(cleanText);
+        const cached = getCachedMarkdown(cacheKey);
         if (cached !== null) return cached;
     }
 
     let html;
-    if (typeof marked !== 'undefined') {
-        html = marked.parse(cleanText);
+    const markedLib = globalThis.marked;
+    if (markedLib) {
+        configureMarkedLibrary();
+        html = markedLib.parse(cleanText);
     } else {
         // Simple fallback
         html = '<p>' + cleanText
@@ -25199,9 +25378,59 @@ function renderMarkdown(text) {
 
     const safeHtml = sanitizeRenderedHtml(html);
     if (canCache) {
-        setCachedMarkdown(cleanText, safeHtml);
+        setCachedMarkdown(cacheKey, safeHtml);
     }
     return safeHtml;
+}
+
+function isLikelyRichMarkdown(text = '') {
+    const value = String(text || '');
+    return /```|^\s{0,3}#{1,6}\s|^\s*[-*+]\s|\[[^\]]+\]\([^)]+\)|^\s*\|.+\|/m.test(value);
+}
+
+function highlightRenderedCodeBlocks(container) {
+    if (!container?.querySelectorAll) return;
+    const codeBlocks = Array.from(container.querySelectorAll('pre code'));
+    if (!codeBlocks.length) return;
+
+    const highlighter = globalThis.hljs;
+    if (!highlighter?.highlightElement) {
+        void Promise.all([
+            loadLazyStylesheetAsset('highlightCss'),
+            loadLazyScriptAsset('highlight')
+        ]).then(() => {
+            if (container.isConnected) {
+                highlightRenderedCodeBlocks(container);
+            }
+        });
+        return;
+    }
+
+    codeBlocks.forEach((block) => {
+        try {
+            highlighter.highlightElement(block);
+        } catch (error) {
+            console.warn('Code highlight failed:', error);
+        }
+    });
+}
+
+function renderMarkdownIntoElement(element, content, options = {}) {
+    if (!element) return;
+    const text = String(content || '');
+    element.innerHTML = renderMarkdown(text);
+    highlightRenderedCodeBlocks(element);
+
+    if (globalThis.marked || !isLikelyRichMarkdown(text)) return;
+    void ensureMarkdownRenderLibrariesLoaded({ withHighlight: options.withHighlight !== false })
+        .then((loaded) => {
+            if (!loaded || !element.isConnected) return;
+            element.innerHTML = renderMarkdown(text);
+            highlightRenderedCodeBlocks(element);
+        })
+        .catch((error) => {
+            console.warn('Markdown lazy render failed:', error);
+        });
 }
 
 function updatePreview() {
@@ -25217,12 +25446,39 @@ function updateAllPreviews() {
 
 let editingTimeout = null;
 
+function convertPreviewHtmlToPlainMarkdown(previewElement) {
+    if (!previewElement) return '';
+    const clone = previewElement.cloneNode(true);
+    clone.querySelectorAll('br').forEach((node) => node.replaceWith('\n'));
+    clone.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6, li, blockquote').forEach((node) => {
+        node.appendChild(document.createTextNode('\n'));
+    });
+    return (clone.textContent || '')
+        .replace(/\u00a0/g, ' ')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
+function syncPreviewElementToTextarea(previewElement, textarea, callback, options = {}) {
+    const service = configureTurndownLibrary();
+    if (!previewElement || !textarea) return false;
+
+    const markdown = service
+        ? service.turndown(previewElement.innerHTML)
+        : (options.allowPlainTextFallback ? convertPreviewHtmlToPlainMarkdown(previewElement) : '');
+    if (!markdown && !service) return false;
+    textarea.value = markdown;
+    if (callback) callback(markdown);
+    return true;
+}
+
 const syncWYSIWYGDebounced = debounce(function(previewElement, textarea, callback) {
-    if (turndownService && previewElement) {
-        const markdown = turndownService.turndown(previewElement.innerHTML);
-        textarea.value = markdown;
-        if (callback) callback(markdown);
-        }
+    if (!syncPreviewElementToTextarea(previewElement, textarea, callback)) {
+        void ensureTurndownServiceLoaded().then(() => {
+            syncPreviewElementToTextarea(previewElement, textarea, callback);
+        });
+    }
 
     const wrapper = previewElement?.closest('.prompt-wrapper');
     const role = wrapper?.dataset?.instruction || '';
@@ -25234,8 +25490,12 @@ function syncCurrentEditorNow(role = getActiveRole()) {
     const preview = promptPreviewByRole[role];
     const textarea = promptInputsByRole[role];
     
-    if (turndownService && preview && textarea) {
-        const markdown = turndownService.turndown(preview.innerHTML);
+    if (preview && textarea) {
+        const service = configureTurndownLibrary();
+        const markdown = service
+            ? service.turndown(preview.innerHTML)
+            : convertPreviewHtmlToPlainMarkdown(preview);
+        if (!markdown && !service) return;
         
         // Critical Fix: Don't sync if Turndown failed but content exists
         if (markdown.trim() === '' && (preview.innerText || '').trim() !== '') {
@@ -25261,6 +25521,7 @@ function setupWYSIWYG(role, previewElement, textarea, callback) {
 
     previewElement.addEventListener('focus', () => {
         beginPromptEditing(role);
+        requestPromptEditorLibraries();
 });
 
     previewElement.addEventListener('blur', () => {
