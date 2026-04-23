@@ -19,7 +19,7 @@ jobs:
           forbidden=()
           while IFS= read -r path; do
             case "$path" in
-              .gitattributes|.gitignore|CNAME|index.html|style.css|script.js|early-local-ui.js|firebase-config.js|1.png|bin.svg|prompt-icon-fluent-24-regular.svg) ;;
+              .gitattributes|.gitignore|CNAME|index.html|style.css|style.min.css|script.js|script.min.js|early-local-ui.js|firebase-config.js|1.png|bin.svg|prompt-icon-fluent-24-regular.svg) ;;
               favicon/*) ;;
               dialog-history-*.js|prompt-*.js) ;;
               .github/workflows/public-surface.yml) ;;
