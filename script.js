@@ -1011,7 +1011,7 @@ function getAuthDebugSessionSnapshot(expectedLogin = '') {
 }
 
 async function runAuthStep(label, promiseFactory, timeoutMs = AUTH_FLOW_STEP_TIMEOUT_MS, timeoutMessage = '', options = {}) {
-    setAuthSubmitState(true, label);
+    setAuthSubmitState(true, AUTH_SUBMIT_LOADING_LABEL);
     setAuthStatus(label, 'pending');
     const stage = String(options?.stage || '').trim();
     const debugContext = String(options?.debugContext || 'login').trim() || 'login';
@@ -1924,6 +1924,7 @@ const promptSyncConflictNoticeText = document.getElementById('promptSyncConflict
 const promptSyncConflictActionBtn = document.getElementById('promptSyncConflictActionBtn');
 const promptLengthInfo = document.getElementById('promptLengthInfo');
 const AUTH_SUBMIT_DEFAULT_LABEL = String(modalNameSubmit?.textContent || 'Войти').trim() || 'Войти';
+const AUTH_SUBMIT_LOADING_LABEL = 'Подождите...';
 const AUTH_RESET_PASSWORD_DEFAULT_LABEL = String(authResetPasswordBtn?.textContent || 'Сбросить пароль').trim() || 'Сбросить пароль';
 let isAuthSubmitLoading = false;
 let isAuthResetLoading = false;
@@ -11213,7 +11214,7 @@ async function handleAuthSubmit() {
     }
 
     setAuthError('');
-    setAuthSubmitState(true, 'Проверяем данные...');
+    setAuthSubmitState(true, AUTH_SUBMIT_LOADING_LABEL);
     setAuthStatus('Проверяем данные...', 'pending');
     recordAuthDebugEvent('submit_started', {
         status: 'pending',
