@@ -11,6 +11,8 @@ api/
 automations/
 output/
 scripts/
+!.github/scripts/
+!.github/scripts/verify-live-surface.mjs
 server/
 .vscode/
 

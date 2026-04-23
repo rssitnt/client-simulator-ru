@@ -22,7 +22,7 @@ jobs:
               .gitattributes|.gitignore|CNAME|index.html|style.css|style.min.css|script.js|script.min.js|script.bundle.min.js|early-local-ui.js|firebase-config.js|1.png|bin.svg|prompt-icon-fluent-24-regular.svg) ;;
               favicon/*) ;;
               dialog-history-*.js|prompt-*.js) ;;
-              .github/workflows/public-surface.yml) ;;
+              .github/workflows/public-surface.yml|.github/workflows/live-surface.yml|.github/scripts/verify-live-surface.mjs) ;;
               *) forbidden+=("$path") ;;
             esac
           done < <(git ls-files)
