@@ -1,15 +1,3 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getDatabase, ref, onValue, onDisconnect, set, get, update, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
-import {
-    getAuth,
-    sendSignInLinkToEmail,
-    sendPasswordResetEmail,
-    isSignInWithEmailLink,
-    signInWithEmailLink,
-    signInWithEmailAndPassword,
-    createUserWithEmailAndPassword,
-    signOut
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { createDialogHistoryHelpers } from "./dialog-history-core.js";
 import { createDialogHistoryControllerHelpers } from "./dialog-history-controller.js";
 import { createDialogHistoryLoaderHelpers } from "./dialog-history-loader.js";
@@ -38,16 +26,88 @@ const dialogHistoryCore = createDialogHistoryHelpers({
     resolveNormalizedLogin
 });
 
-// Initialize Firebase
+const FIREBASE_APP_MODULE_URL = "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+const FIREBASE_DATABASE_MODULE_URL = "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+const FIREBASE_AUTH_MODULE_URL = "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+let initializeApp = null;
+let getDatabase = null;
+let ref = null;
+let onValue = null;
+let onDisconnect = null;
+let set = null;
+let get = null;
+let update = null;
+let serverTimestamp = null;
+let getAuth = null;
+let sendSignInLinkToEmail = null;
+let sendPasswordResetEmail = null;
+let isSignInWithEmailLink = null;
+let signInWithEmailLink = null;
+let signInWithEmailAndPassword = null;
+let createUserWithEmailAndPassword = null;
+let signOut = null;
+
 let db = null;
 let firebaseApp = null;
 let auth = null;
 let appCheck = null;
+let firebaseSdkModulePromise = null;
+let firebaseRuntimeInitPromise = null;
 let firebaseAppCheckModulePromise = null;
 let firebaseAppCheckInitPromise = null;
 let firebaseAppCheckGetToken = null;
-try {
-    if (firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("EXAMPLE")) {
+
+async function loadFirebaseSdkModules() {
+    if (initializeApp && getDatabase && getAuth) return true;
+    if (!firebaseSdkModulePromise) {
+        firebaseSdkModulePromise = Promise.all([
+            import(FIREBASE_APP_MODULE_URL),
+            import(FIREBASE_DATABASE_MODULE_URL),
+            import(FIREBASE_AUTH_MODULE_URL)
+        ]).then(([appModule, databaseModule, authModule]) => {
+            initializeApp = appModule.initializeApp;
+            getDatabase = databaseModule.getDatabase;
+            ref = databaseModule.ref;
+            onValue = databaseModule.onValue;
+            onDisconnect = databaseModule.onDisconnect;
+            set = databaseModule.set;
+            get = databaseModule.get;
+            update = databaseModule.update;
+            serverTimestamp = databaseModule.serverTimestamp;
+            getAuth = authModule.getAuth;
+            sendSignInLinkToEmail = authModule.sendSignInLinkToEmail;
+            sendPasswordResetEmail = authModule.sendPasswordResetEmail;
+            isSignInWithEmailLink = authModule.isSignInWithEmailLink;
+            signInWithEmailLink = authModule.signInWithEmailLink;
+            signInWithEmailAndPassword = authModule.signInWithEmailAndPassword;
+            createUserWithEmailAndPassword = authModule.createUserWithEmailAndPassword;
+            signOut = authModule.signOut;
+            return true;
+        }).catch((error) => {
+            firebaseSdkModulePromise = null;
+            console.error("Firebase SDK load failed:", error);
+            return false;
+        });
+    }
+    return firebaseSdkModulePromise;
+}
+
+async function ensureFirebaseRuntimeInitialized() {
+    if (firebaseApp && db && auth) return true;
+    if (!firebaseRuntimeInitPromise) {
+        firebaseRuntimeInitPromise = initializeFirebaseRuntime();
+    }
+    return firebaseRuntimeInitPromise;
+}
+
+async function initializeFirebaseRuntime() {
+    try {
+        if (firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("EXAMPLE")) {
+        const sdkLoaded = await loadFirebaseSdkModules();
+        if (!sdkLoaded || !initializeApp || !getDatabase || !getAuth) {
+            return false;
+        }
         firebaseApp = initializeApp(firebaseConfig);
         db = getDatabase(firebaseApp);
         auth = getAuth(firebaseApp);
@@ -58,11 +118,29 @@ try {
             console.info("Firebase App Check skipped on localhost preview host");
         }
         console.log("Firebase initialized");
-    } else {
+        return true;
+        } else {
         console.warn("Firebase config is using placeholders.");
+        return false;
+        }
+    } catch (e) {
+        firebaseRuntimeInitPromise = null;
+        console.error("Firebase initialization failed:", e);
+        return false;
     }
-} catch (e) {
-    console.error("Firebase initialization failed:", e);
+}
+
+function prewarmFirebaseRuntime() {
+    const start = () => {
+        void ensureFirebaseRuntimeInitialized().catch((error) => {
+            console.error("Firebase initialization failed:", error);
+        });
+    };
+    if (typeof requestIdleCallback === 'function') {
+        requestIdleCallback(start, { timeout: 1500 });
+        return;
+    }
+    setTimeout(start, 0);
 }
 
 // n8n Webhook Configuration
@@ -11423,6 +11501,7 @@ async function handleAuthSubmit() {
     setAuthError('');
     setAuthSubmitState(true, AUTH_SUBMIT_LOADING_LABEL);
     setAuthStatus('Проверяем данные...', 'pending');
+    await ensureFirebaseRuntimeInitialized();
     recordAuthDebugEvent('submit_started', {
         status: 'pending',
         login,
@@ -11791,6 +11870,7 @@ async function handleAuthPasswordReset() {
     setAuthError('');
     setAuthResetPasswordState(true, 'Отправляем...');
     setAuthStatus('Отправляем письмо для сброса…', 'pending');
+    await ensureFirebaseRuntimeInitialized();
     recordAuthDebugEvent('reset_started', {
         status: 'pending',
         login,
@@ -16923,6 +17003,8 @@ async function loadPrompts() {
     lastPromptHistorySnapshotHash = buildPromptHistorySnapshotHash(promptHistory);
     clearPromptHistoryRemoteSyncState();
     renderPromptHistory();
+
+    await ensureFirebaseRuntimeInitialized();
 
     if (db) {
         await waitForFirebaseAuthReady();
@@ -26457,6 +26539,7 @@ setChatLoadingState(true);
 installLocalhostTestHooks();
 loadAttestationQueue();
 syncChatPanelHeadingMode();
+prewarmFirebaseRuntime();
 loadPrompts()
     .catch((error) => {
         console.error('Initialization auth/prompts error:', error);
