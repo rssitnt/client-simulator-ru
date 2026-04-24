@@ -10244,24 +10244,14 @@ function openHistorySidebarAndFocusSearch() {
 
 function renderDialogHistoryScopeMeta() {
     const scopeLogin = normalizeLogin(dialogHistoryScopeLogin || '');
-    const recordsCount = Array.isArray(dialogHistoryScopeRecords) ? dialogHistoryScopeRecords.length : 0;
-    const filteredCount = getFilteredDialogHistoryRecords().length;
     if (mainDialogHistorySearchInput && mainDialogHistorySearchInput.value !== dialogHistorySearchQuery) {
         mainDialogHistorySearchInput.value = dialogHistorySearchQuery;
     }
     const text = !scopeLogin
         ? ''
-        : isLocalMinimalUiEnabled()
-            ? (dialogHistorySearchQuery
-                ? `Найдено ${filteredCount}`
-                : (filteredCount > 0 ? formatDialogHistoryDialogsCount(filteredCount) : ''))
-            : isDialogHistoryScopeOwned(scopeLogin)
-                ? (dialogHistorySearchQuery
-                    ? `Найдено ${filteredCount} из ${formatDialogHistoryDialogsCount(recordsCount)}`
-                    : formatDialogHistoryDialogsCount(filteredCount))
-                : `${scopeLogin} · ${dialogHistorySearchQuery
-                    ? `Найдено ${filteredCount} из ${formatDialogHistoryDialogsCount(recordsCount)}`
-                    : formatDialogHistoryDialogsCount(filteredCount)}`;
+        : isDialogHistoryScopeOwned(scopeLogin)
+            ? ''
+            : scopeLogin;
     dialogHistoryUiSets.forEach((ui) => {
         if (ui.scopeMeta) {
             ui.scopeMeta.textContent = text;
@@ -25417,19 +25407,22 @@ function setupWYSIWYG(role, previewElement, textarea, callback) {
     
     previewElement.addEventListener('input', () => {
         beginPromptEditing(role);
+        updateMobilePromptToolbarDocking();
         syncWYSIWYGDebounced(previewElement, textarea, callback);
 });
 
     previewElement.addEventListener('focus', () => {
         beginPromptEditing(role);
         requestPromptEditorLibraries();
-});
+        updateMobilePromptToolbarDocking();
+    });
 
     previewElement.addEventListener('blur', () => {
         // Delay resetting the flag to allow sync to complete
         setTimeout(() => {
             syncCurrentEditorNow(role);
             endPromptEditing(role);
+            updateMobilePromptToolbarDocking();
         }, 500);
     });
     
@@ -25817,6 +25810,8 @@ if (instructionDropdown) {
 // Check if tabs need compact mode
 let compactTabsState = null;
 let compactToolbarState = null;
+let mobilePromptToolbarDocked = false;
+let mobilePromptEditorDocked = false;
 function checkTabsCompactMode() {
     if (!instructionsPanelElement) return;
     
@@ -25836,6 +25831,42 @@ function checkTabsCompactMode() {
     }
 }
 
+function isMobilePromptToolbarDockingEligible() {
+    return window.innerWidth <= 1024
+        && !!instructionsPanelElement
+        && document.body?.classList.contains('local-minimal-ui')
+        && instructionsPanelElement.classList.contains('active');
+}
+
+function getMobilePromptToolbarBottomInset() {
+    const visualViewport = window.visualViewport;
+    if (!visualViewport) return 0;
+    return Math.max(0, window.innerHeight - (visualViewport.height + visualViewport.offsetTop));
+}
+
+function updateMobilePromptToolbarDocking() {
+    const activeElement = document.activeElement;
+    const isPromptEditingSurface = activeElement instanceof HTMLElement
+        && !!activeElement.closest('.prompt-wrapper')
+        && activeElement.matches('.prompt-editor, .prompt-preview, .prompt-preview *');
+    const hasPromptEditingState = !!(isUserEditing && (currentEditingPromptRole || getActiveRole()));
+    const shouldDock = isMobilePromptToolbarDockingEligible()
+        && (isPromptEditingSurface || hasPromptEditingState);
+    if (mobilePromptToolbarDocked !== shouldDock) {
+        mobilePromptToolbarDocked = shouldDock;
+        document.body.classList.toggle('mobile-prompt-toolbar-docked', shouldDock);
+    }
+    if (mobilePromptEditorDocked !== shouldDock) {
+        mobilePromptEditorDocked = shouldDock;
+        document.body.classList.toggle('mobile-prompt-editor-docked', shouldDock);
+    }
+    if (shouldDock) {
+        document.documentElement.style.setProperty('--local-mobile-prompt-toolbar-bottom', `${getMobilePromptToolbarBottomInset()}px`);
+        return;
+    }
+    document.documentElement.style.setProperty('--local-mobile-prompt-toolbar-bottom', '0px');
+}
+
 // Also check on panel resize via ResizeObserver
 if (typeof ResizeObserver !== 'undefined' && instructionsPanelElement) {
     const resizeObserver = new ResizeObserver(() => {
@@ -25846,7 +25877,12 @@ if (typeof ResizeObserver !== 'undefined' && instructionsPanelElement) {
 
 // Run on load and resize
 checkTabsCompactMode();
-window.addEventListener('resize', debounce(checkTabsCompactMode, 100));
+window.addEventListener('resize', debounce(() => {
+    checkTabsCompactMode();
+    updateMobilePromptToolbarDocking();
+}, 100));
+window.visualViewport?.addEventListener('resize', updateMobilePromptToolbarDocking);
+window.visualViewport?.addEventListener('scroll', updateMobilePromptToolbarDocking);
 
 // Textarea input listeners for sync
 [systemPromptInput, managerPromptInput, managerCallPromptInput, raterPromptInput].forEach(input => {
@@ -25864,6 +25900,7 @@ window.addEventListener('resize', debounce(checkTabsCompactMode, 100));
     input.addEventListener('focus', () => {
         const role = input.closest('.prompt-wrapper')?.dataset.instruction || '';
         beginPromptEditing(role);
+        updateMobilePromptToolbarDocking();
     });
     
     input.addEventListener('blur', () => {
@@ -25874,9 +25911,12 @@ window.addEventListener('resize', debounce(checkTabsCompactMode, 100));
                 checkpointPromptHistory(role);
             }
             endPromptEditing(role);
+            updateMobilePromptToolbarDocking();
         }, 500);
     });
 });
+document.addEventListener('visibilitychange', updateMobilePromptToolbarDocking);
+updateMobilePromptToolbarDocking();
 
 // Resize panels
 const resizeHandle1 = document.getElementById('resizeHandle1');
@@ -26327,6 +26367,25 @@ function installLocalhostTestHooks() {
         forceBeginPromptEditing(role = '') {
             beginPromptEditing(role || getActiveRole());
             return true;
+        },
+        syncMobilePromptToolbarDockingForTest() {
+            updateMobilePromptToolbarDocking();
+            return {
+                toolbarDocked: document.body.classList.contains('mobile-prompt-toolbar-docked'),
+                editorDocked: document.body.classList.contains('mobile-prompt-editor-docked'),
+                bottomInset: String(document.documentElement.style.getPropertyValue('--local-mobile-prompt-toolbar-bottom') || '')
+            };
+        },
+        forceMobilePromptDockingForTest(enabled = true, bottomInsetPx = 0) {
+            const nextEnabled = !!enabled;
+            document.body.classList.toggle('mobile-prompt-toolbar-docked', nextEnabled);
+            document.body.classList.toggle('mobile-prompt-editor-docked', nextEnabled);
+            document.documentElement.style.setProperty('--local-mobile-prompt-toolbar-bottom', nextEnabled ? `${Math.max(0, Number(bottomInsetPx) || 0)}px` : '0px');
+            return {
+                toolbarDocked: document.body.classList.contains('mobile-prompt-toolbar-docked'),
+                editorDocked: document.body.classList.contains('mobile-prompt-editor-docked'),
+                bottomInset: String(document.documentElement.style.getPropertyValue('--local-mobile-prompt-toolbar-bottom') || '')
+            };
         },
         getPromptUiState(role = getActiveRole()) {
             const activeVariation = getActiveVariation(role);

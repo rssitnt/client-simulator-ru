@@ -5318,6 +5318,10 @@ body.local-minimal-ui .btn-settings-floating {
         min-height: 100dvh;
     }
 
+    body.local-minimal-ui {
+        --local-mobile-composer-pad-bottom: max(16px, env(safe-area-inset-bottom, 0px) + 10px);
+    }
+
     body.local-minimal-ui .mobile-tabs {
         display: flex;
         position: sticky;
@@ -5383,8 +5387,18 @@ body.local-minimal-ui .btn-settings-floating {
     }
 
     body.local-minimal-ui .chat-input-container {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 44;
         padding:
-            12px 14px max(16px, env(safe-area-inset-bottom, 0px) + 10px);
+            12px 14px var(--local-mobile-composer-pad-bottom);
+    }
+
+    body.local-minimal-ui .chat-panel,
+    body.local-minimal-ui #chatPanel.panel.active {
+        padding-bottom: calc(92px + var(--local-mobile-composer-pad-bottom));
     }
 
     body.local-minimal-ui .btn-clear-floating,
@@ -18405,12 +18419,16 @@ body.local-minimal-ui.light-theme .dialog-history-item-main {
         top: 0 !important;
         margin-top: 0 !important;
         padding-top: 0 !important;
+        padding-left: max(env(safe-area-inset-left, 0px), 0px) !important;
+        padding-right: max(env(safe-area-inset-right, 0px), 0px) !important;
         padding-bottom: 12px !important;
         overflow: visible !important;
     }
 
     body.local-minimal-ui #historyPanel.panel.active .history-panel-body {
         padding-top: 0 !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
     }
 
     body.local-minimal-ui #historyPanel.panel.active .history-thread-layout {
@@ -18419,7 +18437,19 @@ body.local-minimal-ui.light-theme .dialog-history-item-main {
 
     body.local-minimal-ui #historyPanel.panel.active .dialog-history-list-wrap {
         padding-top: 0 !important;
+        padding-left: var(--local-mobile-shell-pad) !important;
+        padding-right: var(--local-mobile-shell-pad-right) !important;
         margin-top: 0 !important;
+    }
+
+    body.local-minimal-ui #historyPanel.panel.active .history-search,
+    body.local-minimal-ui #historyPanel.panel.active .history-panel-action {
+        border-radius: 0 !important;
+    }
+
+    body.local-minimal-ui #historyPanel.panel.active .history-search {
+        min-height: 52px !important;
+        margin: 0 !important;
     }
 }
 
@@ -18440,6 +18470,65 @@ body.local-minimal-ui.light-theme .dialog-history-item-main {
         top: var(--local-mobile-appbar-height) !important;
         z-index: 3 !important;
         background: var(--local-shell-bg-final) !important;
+    }
+}
+
+/* Mobile prompt edit docking:
+   while a prompt textarea is focused, keep the formatting tray attached to the keyboard edge. */
+@media (max-width: 1024px) {
+    body.local-minimal-ui.mobile-prompt-editor-docked #instructionsPanel.panel.active,
+    body.local-minimal-ui.mobile-prompt-editor-docked #instructionsPanel.panel.active .instruction-content {
+        overflow: hidden !important;
+        overscroll-behavior: none !important;
+    }
+
+    body.local-minimal-ui.mobile-prompt-toolbar-docked #instructionsPanel.panel.active .instruction-content {
+        padding-bottom: calc(var(--local-mobile-prompt-toolbar-bottom, 0px) + var(--local-mobile-tabbar-height) + 156px) !important;
+    }
+
+    body.local-minimal-ui.mobile-prompt-editor-docked #instructionsPanel.panel.active .prompt-wrapper.instruction-editor.active {
+        position: fixed !important;
+        top: calc(var(--local-mobile-appbar-height) + 10px) !important;
+        right: var(--local-mobile-shell-pad-right) !important;
+        bottom: calc(var(--local-mobile-prompt-toolbar-bottom, 0px) + 108px) !important;
+        left: var(--local-mobile-shell-pad) !important;
+        z-index: 90 !important;
+        display: flex !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        border-radius: 22px !important;
+        background: var(--local-surface-final) !important;
+        border: 1px solid var(--local-border-final) !important;
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22) !important;
+    }
+
+    body.local-minimal-ui.mobile-prompt-editor-docked #instructionsPanel.panel.active .prompt-wrapper.instruction-editor.active .prompt-preview,
+    body.local-minimal-ui.mobile-prompt-editor-docked #instructionsPanel.panel.active .prompt-wrapper.instruction-editor.active .prompt-editor {
+        min-height: 100% !important;
+        height: 100% !important;
+        padding: 16px 16px 22px !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    body.local-minimal-ui.mobile-prompt-editor-docked.light-theme #instructionsPanel.panel.active .prompt-wrapper.instruction-editor.active {
+        box-shadow: 0 18px 36px rgba(140, 116, 84, 0.14) !important;
+    }
+
+    body.local-minimal-ui.mobile-prompt-toolbar-docked #instructionsPanel.panel.active .markdown-toolbar {
+        position: fixed !important;
+        top: auto !important;
+        right: var(--local-mobile-shell-pad-right) !important;
+        bottom: calc(var(--local-mobile-prompt-toolbar-bottom, 0px) + 10px) !important;
+        left: var(--local-mobile-shell-pad) !important;
+        z-index: 95 !important;
+        margin: 0 !important;
+    }
+
+    body.local-minimal-ui.mobile-prompt-toolbar-docked.light-theme #instructionsPanel.panel.active .markdown-toolbar {
+        box-shadow: 0 10px 28px rgba(140, 116, 84, 0.14) !important;
     }
 }
 
