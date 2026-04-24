@@ -134,7 +134,7 @@ async function initializeFirebaseRuntime() {
         auth = getAuth(firebaseApp);
         const appCheckSiteKey = String(firebaseConfig?.appCheckSiteKey || '').trim();
         if (appCheckSiteKey && !isLocalhostAdminPreviewHost()) {
-            console.info("Firebase App Check deferred until a protected request");
+            console.debug("Firebase App Check deferred until a protected request");
         } else if (appCheckSiteKey && isLocalhostAdminPreviewHost()) {
             console.info("Firebase App Check skipped on localhost preview host");
         }
@@ -3252,6 +3252,10 @@ function shouldAllowFirebaseRestFallback() {
     });
 }
 
+function shouldDeferOptionalFirebaseReadsUntilProtectedRequest() {
+    return isProductionHost() && !isLocalhostAdminPreviewHost() && !appCheck;
+}
+
 function normalizeDebugPositiveInt(value, fallback, min = 1, max = Number.MAX_SAFE_INTEGER) {
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return fallback;
@@ -4050,6 +4054,9 @@ async function listAccessRevocations() {
             .filter((item) => item && item.status === 'revoked')
     );
     const localRecords = buildAccessRevocationRecords(localStore);
+    if (shouldDeferOptionalFirebaseReadsUntilProtectedRequest()) {
+        return localRecords;
+    }
     if (db) {
         try {
             const snapshot = await firebaseGetWithTimeout(ACCESS_REVOKE_DB_PATH);
@@ -4062,7 +4069,7 @@ async function listAccessRevocations() {
             }
             return localRecords;
         } catch (error) {
-            console.error('Failed to load access revocations from Firebase:', error);
+            console.debug('Access revocations fallback to local cache:', error);
             return localRecords;
         }
     }
