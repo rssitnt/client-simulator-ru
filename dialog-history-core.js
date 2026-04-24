@@ -1,4 +1,9 @@
 export function createDialogHistoryHelpers(deps = {}) {
+    const MAX_DIALOG_HISTORY_TITLE_LENGTH = 140;
+    const MAX_DIALOG_HISTORY_PREVIEW_LENGTH = 160;
+    const MAX_DIALOG_HISTORY_MESSAGES = 120;
+    const MAX_DIALOG_HISTORY_MESSAGE_LENGTH = 3000;
+    const MAX_DIALOG_HISTORY_RATING_LENGTH = 12000;
     const parseIsoMs = typeof deps.parseIsoMs === 'function'
         ? deps.parseIsoMs
         : (() => 0);
@@ -25,11 +30,19 @@ export function createDialogHistoryHelpers(deps = {}) {
             .trim();
     }
 
+    function clampDialogHistoryMessageContent(value = '') {
+        return normalizeDialogHistoryText(value).slice(0, MAX_DIALOG_HISTORY_MESSAGE_LENGTH);
+    }
+
+    function clampDialogHistoryRatingText(value = '') {
+        return normalizeDialogHistoryText(value).slice(0, MAX_DIALOG_HISTORY_RATING_LENGTH);
+    }
+
     function clampDialogHistoryTitle(value = '', fallback = '') {
         const normalized = normalizeDialogHistoryText(value || fallback)
             .replace(/\s+/g, ' ')
             .trim();
-        return normalized.slice(0, 140);
+        return normalized.slice(0, MAX_DIALOG_HISTORY_TITLE_LENGTH);
     }
 
     function summarizeDialogHistoryTitleCandidate(value = '') {
@@ -301,7 +314,7 @@ export function createDialogHistoryHelpers(deps = {}) {
         const id = String(raw.id || dialogId || '').trim();
         if (!id) return null;
         const createdAt = String(raw.createdAt || '').trim() || new Date().toISOString();
-        const preview = normalizeDialogHistoryText(raw.preview || '').slice(0, 160);
+        const preview = normalizeDialogHistoryText(raw.preview || '').slice(0, MAX_DIALOG_HISTORY_PREVIEW_LENGTH);
         let autoTitle = clampDialogHistoryTitle(raw.autoTitle, formatDialogHistoryFallbackTitle(createdAt));
         const titleEdited = !!raw.titleEdited;
         let title = clampDialogHistoryTitle(raw.title, autoTitle);
@@ -329,7 +342,7 @@ export function createDialogHistoryHelpers(deps = {}) {
             autoTitle,
             titleEdited,
             preview,
-            messageCount: Math.max(0, Number(raw.messageCount) || 0),
+            messageCount: Math.min(MAX_DIALOG_HISTORY_MESSAGES, Math.max(0, Number(raw.messageCount) || 0)),
             hasRating: !!raw.hasRating,
             pinnedAt: String(raw.pinnedAt || '').trim() || null,
             createdAt,
@@ -349,7 +362,7 @@ export function createDialogHistoryHelpers(deps = {}) {
         const messagesRaw = raw.messages && typeof raw.messages === 'object' ? raw.messages : {};
         const messages = Object.entries(messagesRaw)
             .map(([messageId, item], index) => {
-                const content = normalizeDialogHistoryText(item?.content || '');
+                const content = clampDialogHistoryMessageContent(item?.content || '');
                 if (!content) return null;
                 return {
                     id: String(item?.id || messageId || '').trim() || `m_${String(index + 1).padStart(4, '0')}`,
@@ -362,8 +375,9 @@ export function createDialogHistoryHelpers(deps = {}) {
             .sort((a, b) => {
                 if (a.seq !== b.seq) return a.seq - b.seq;
                 return a.id.localeCompare(b.id);
-            });
-        const ratingText = normalizeDialogHistoryText(raw?.rating?.text || '');
+            })
+            .slice(-MAX_DIALOG_HISTORY_MESSAGES);
+        const ratingText = clampDialogHistoryRatingText(raw?.rating?.text || '');
         const createdAt = String(raw.createdAt || '').trim() || new Date().toISOString();
         return {
             id,

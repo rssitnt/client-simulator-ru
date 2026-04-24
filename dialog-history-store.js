@@ -1,4 +1,6 @@
 export function createDialogHistoryStoreHelpers(deps = {}) {
+    const MAX_DIALOG_HISTORY_MESSAGE_PAYLOAD_CHARS = 400000;
+    const MAX_SHARED_DIALOG_PAYLOAD_CHARS = 400000;
     const normalizeLogin = typeof deps.normalizeLogin === 'function'
         ? deps.normalizeLogin
         : ((value = '') => String(value || '').trim().toLowerCase());
@@ -39,6 +41,14 @@ export function createDialogHistoryStoreHelpers(deps = {}) {
         ? deps.sortDialogHistoryRecords
         : ((records = []) => Array.isArray(records) ? [...records] : []);
 
+    function assertSerializedPayloadWithinLimit(payload, maxChars = 0, label = 'payload') {
+        const safeMaxChars = Math.max(1, Number(maxChars) || 0);
+        const serialized = JSON.stringify(payload || null);
+        if (serialized.length > safeMaxChars) {
+            throw new Error(`${label} exceeds limit (${safeMaxChars} chars)`);
+        }
+    }
+
     async function readProtectedValue(path = '') {
         if (!path) return null;
         try {
@@ -68,6 +78,7 @@ export function createDialogHistoryStoreHelpers(deps = {}) {
         const indexPath = getDialogHistoryIndexPath(ownerLogin, dialogId);
         const messagesPath = getDialogHistoryMessagesPath(ownerLogin, dialogId);
         if (!indexPath || !messagesPath) return false;
+        assertSerializedPayloadWithinLimit(snapshot.messagesPayload, MAX_DIALOG_HISTORY_MESSAGE_PAYLOAD_CHARS, 'dialog history payload');
 
         await Promise.all([
             writePath(indexPath, snapshot.indexRecord, 'PUT'),
@@ -104,6 +115,7 @@ export function createDialogHistoryStoreHelpers(deps = {}) {
     async function saveSharedDialogPayload(shareId = '', payload = null) {
         const dbPath = getSharedDialogPath(shareId);
         if (!dbPath || !payload) return false;
+        assertSerializedPayloadWithinLimit(payload, MAX_SHARED_DIALOG_PAYLOAD_CHARS, 'shared dialog payload');
         await writePath(dbPath, payload, 'PUT');
         return true;
     }

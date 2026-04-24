@@ -1,3 +1,4 @@
+import { shouldAllowFirebaseRestFallbackCore } from "./firebase-runtime-core.js";
 import { createDialogHistoryHelpers } from "./dialog-history-core.js";
 import { createDialogHistoryControllerHelpers } from "./dialog-history-controller.js";
 import { createDialogHistoryLoaderHelpers } from "./dialog-history-loader.js";
@@ -15,6 +16,26 @@ import { createPromptOverridesRuntimeHelpers } from "./prompt-overrides-runtime.
 import { createPromptOverridesSubscriptionHelpers } from "./prompt-overrides-subscription.js";
 import { createPromptStateHelpers } from "./prompt-state-core.js";
 import { createPromptSyncHelpers } from "./prompt-sync-core.js";
+import { createLazyAssetRuntime } from "./lazy-asset-runtime.js";
+import {
+    getAdminPreviewModeLabelText,
+    getAdminPreviewModeTitleText,
+    getChatPanelModeEyebrowText,
+    getUserRoleIcon,
+    getUserRoleLabel
+} from "./user-role-display.js";
+import {
+    getAuthDebugStageLabelText,
+    getDebugStatusLabelText,
+    getGeminiVoiceMicLevelLabelText,
+    getVoiceDebugStageLabelText,
+    getWebhookDebugStatusLabelText,
+    getWebhookDebugTypeLabelText
+} from "./debug-label-display.js";
+import {
+    getRatingOutcomeLabelText,
+    getRatingOutcomeReasonLabelText
+} from "./rating-display.js";
 import { firebaseConfig } from "./firebase-config.js";
 
 const dialogHistoryCore = createDialogHistoryHelpers({
@@ -145,8 +166,8 @@ function prewarmFirebaseRuntime() {
 
 // n8n Webhook Configuration
 // Unified simulator flows must use the production webhook; `webhook-test` only works while the workflow is armed in n8n.
-const UNIFIED_SIMULATOR_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/client-simulator';
-const ATTESTATION_WEBHOOK_URL = 'https://n8n-api.tradicia-k.ru/webhook/certification';
+const UNIFIED_SIMULATOR_WEBHOOK_URL = 'https://10.0.11.18/webhook/client-simulator';
+const ATTESTATION_WEBHOOK_URL = 'https://10.0.11.18/webhook/client-simulator';
 const SIMULATOR_WEBHOOK_PROXY_ENDPOINT_PATH = '/api/simulator-webhook';
 const CERTIFICATION_WEBHOOK_PROXY_ENDPOINT_PATH = '/api/certification-webhook';
 const GEMINI_SDK_CDN_URL = 'https://cdn.jsdelivr.net/npm/@google/genai@1.40.0/+esm';
@@ -188,160 +209,24 @@ const LAZY_THIRD_PARTY_ASSETS = {
         globalName: 'TurndownService'
     }
 };
-const lazyThirdPartyPromises = new Map();
 const markdownRenderCache = new Map();
-let markedLibraryConfigured = false;
-let turndownService = null;
+let markdownRenderSequence = 0;
 
-function isLazyThirdPartyAssetReady(asset = {}) {
-    return asset.globalName && typeof globalThis[asset.globalName] !== 'undefined';
-}
-
-function loadLazyScriptAsset(assetKey) {
-    const asset = LAZY_THIRD_PARTY_ASSETS[assetKey];
-    if (!asset) return Promise.resolve(false);
-    if (isLazyThirdPartyAssetReady(asset)) return Promise.resolve(true);
-    if (lazyThirdPartyPromises.has(assetKey)) return lazyThirdPartyPromises.get(assetKey);
-
-    const promise = new Promise((resolve, reject) => {
-        const existingScript = document.querySelector(`script[data-lazy-lib="${assetKey}"]`);
-        if (existingScript) {
-            existingScript.addEventListener('load', () => resolve(true), { once: true });
-            existingScript.addEventListener('error', () => reject(new Error(`Failed to load ${assetKey}`)), { once: true });
-            return;
-        }
-
-        const script = document.createElement('script');
-        script.src = asset.url;
-        script.async = true;
-        script.crossOrigin = 'anonymous';
-        script.dataset.lazyLib = assetKey;
-        if (asset.integrity) {
-            script.integrity = asset.integrity;
-        }
-        script.onload = () => resolve(true);
-        script.onerror = () => reject(new Error(`Failed to load ${assetKey}`));
-        document.head.appendChild(script);
-    }).catch((error) => {
-        console.warn(`Lazy library load failed: ${assetKey}`, error);
-        lazyThirdPartyPromises.delete(assetKey);
-        return false;
-    });
-
-    lazyThirdPartyPromises.set(assetKey, promise);
-    return promise;
-}
-
-function loadLazyStylesheetAsset(assetKey) {
-    const asset = LAZY_THIRD_PARTY_ASSETS[assetKey];
-    if (!asset) return Promise.resolve(false);
-    if (document.querySelector(`link[data-lazy-lib="${assetKey}"]`)) return Promise.resolve(true);
-    if (lazyThirdPartyPromises.has(assetKey)) return lazyThirdPartyPromises.get(assetKey);
-
-    const promise = new Promise((resolve, reject) => {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = asset.url;
-        link.crossOrigin = 'anonymous';
-        link.dataset.lazyLib = assetKey;
-        if (asset.integrity) {
-            link.integrity = asset.integrity;
-        }
-        link.onload = () => resolve(true);
-        link.onerror = () => reject(new Error(`Failed to load ${assetKey}`));
-        document.head.appendChild(link);
-    }).catch((error) => {
-        console.warn(`Lazy stylesheet load failed: ${assetKey}`, error);
-        lazyThirdPartyPromises.delete(assetKey);
-        return false;
-    });
-
-    lazyThirdPartyPromises.set(assetKey, promise);
-    return promise;
-}
-
-function configureMarkedLibrary() {
-    const markedLib = globalThis.marked;
-    if (!markedLib || markedLibraryConfigured) return false;
-    markedLib.setOptions({
-        breaks: true,
-        gfm: true,
-        highlight(code, lang) {
-            const highlighter = globalThis.hljs;
-            if (highlighter && lang && highlighter.getLanguage(lang)) {
-                try {
-                    return highlighter.highlight(code, { language: lang }).value;
-                } catch (e) {}
-            }
-            return code;
-        }
-    });
-    markedLibraryConfigured = true;
-    markdownRenderCache?.clear?.();
-    return true;
-}
-
-function configureTurndownLibrary() {
-    if (turndownService) return turndownService;
-    const Turndown = globalThis.TurndownService;
-    if (!Turndown) return null;
-
-    turndownService = new Turndown({
-        headingStyle: 'atx',
-        hr: '---',
-        bulletListMarker: '-',
-        codeBlockStyle: 'fenced',
-        emDelimiter: '*',
-        strongDelimiter: '**'
-    });
-    turndownService.escape = function(string) { return string; };
-    turndownService.addRule('strong', {
-        filter: ['strong', 'b'],
-        replacement(content) {
-            if (!content.trim()) return '';
-            return '**' + content + '**';
-        }
-    });
-    turndownService.addRule('emphasis', {
-        filter: ['em', 'i'],
-        replacement(content) {
-            if (!content.trim()) return '';
-            return '*' + content + '*';
-        }
-    });
-    turndownService.addRule('strikethrough', {
-        filter: ['del', 's', 'strike'],
-        replacement(content) {
-            return '~~' + content + '~~';
-        }
-    });
-    return turndownService;
-}
-
-async function ensureMarkdownRenderLibrariesLoaded(options = {}) {
-    const withHighlight = !!options.withHighlight;
-    const loads = [
-        loadLazyScriptAsset('marked'),
-        loadLazyScriptAsset('dompurify')
-    ];
-    if (withHighlight) {
-        loads.push(loadLazyStylesheetAsset('highlightCss'));
-        loads.push(loadLazyScriptAsset('highlight'));
+const lazyAssetRuntime = createLazyAssetRuntime({
+    assets: LAZY_THIRD_PARTY_ASSETS,
+    onMarkedConfigured() {
+        markdownRenderCache?.clear?.();
     }
-    await Promise.all(loads);
-    configureMarkedLibrary();
-    return !!globalThis.marked;
-}
-
-async function ensureDiffLibraryLoaded() {
-    await loadLazyScriptAsset('diff');
-    return !!globalThis.Diff?.diffWordsWithSpace;
-}
-
-async function ensureTurndownServiceLoaded() {
-    await loadLazyScriptAsset('turndown');
-    return configureTurndownLibrary();
-}
+});
+const {
+    configureMarkedLibrary,
+    configureTurndownLibrary,
+    ensureDiffLibraryLoaded,
+    ensureMarkdownRenderLibrariesLoaded,
+    ensureTurndownServiceLoaded,
+    loadLazyScriptAsset,
+    loadLazyStylesheetAsset
+} = lazyAssetRuntime;
 
 async function ensurePromptEditorLibrariesLoaded() {
     await Promise.all([
@@ -2577,6 +2462,7 @@ let geminiVoiceStartTimestamp = 0;
 let geminiVoiceStartAttemptId = 0;
 let geminiVoiceStartAbortController = null;
 let geminiVoiceEarlyReconnectAttempts = 0;
+let geminiVoiceAutoReconnectPending = false;
 let geminiVoiceDialogLines = [];
 let geminiVoiceDialogSyncedCount = 0;
 let geminiVoiceUserDraft = '';
@@ -2830,16 +2716,29 @@ const promptUiDisplay = createPromptUiDisplayHelpers({
         promptContextRoleName,
         promptContextVariationBadge,
         promptLengthInfo,
+        promptSyncConflictActionBtn,
+        promptSyncConflictNotice,
+        promptSyncConflictNoticeText,
         promptVisibilityBtn
     },
     eyeOffIcon: EYE_OFF_ICON,
     eyeOpenIcon: EYE_OPEN_ICON,
     getActiveContent,
     getActiveVariation,
+    getPromptCompareContext,
+    getPromptSyncConflictMessage: (role = '') => promptSyncConflictMessages[role] || '',
     getRoleLabel,
     isAdmin,
     isLocalMinimalUiEnabled,
+    isValidRole: (role = '') => PROMPT_ROLES.includes(role),
     managerCallPromptMaxChars: MANAGER_CALL_PROMPT_MAX_CHARS,
+    openPromptEditorPanel() {
+        if (shouldUseLocalPromptDrawer()) {
+            setLocalPromptDrawerOpen(true);
+            return;
+        }
+        activateShellPanel('instructions');
+    },
     setCustomTooltip
 });
 const promptHistoryCore = createPromptHistoryHelpers({
@@ -3170,16 +3069,6 @@ async function syncAuthClaimsForCurrentUser(options = {}) {
     return true;
 }
 
-function getRoleLabelUi(role) {
-    if (role === 'admin') return 'Админ';
-    return 'Юзер';
-}
-
-function getRoleIcon(role) {
-    if (role === 'admin') return '🔑';
-    return '👤';
-}
-
 function hasAdminAccount(user = currentUser) {
     if (hasAdminClaim()) return true;
     if (isLocalhostAdminPreviewHost()) {
@@ -3219,15 +3108,29 @@ function getLocalMinimalStartDescriptionDefault() {
     return '';
 }
 
+let localMinimalStartDescriptionMessage = '';
+let localMinimalStartDescriptionTone = 'default';
+
+function clearLocalMinimalStartDescription() {
+    localMinimalStartDescriptionMessage = '';
+    localMinimalStartDescriptionTone = 'default';
+    updateLocalMinimalStartDescription();
+}
+
 function updateLocalMinimalStartDescription(message = '', tone = 'default') {
     if (!isLocalMinimalUiEnabled()) return;
     const description = document.getElementById('localStartConversationDescription')
         || document.querySelector('#startConversation .start-conversation-description');
     if (!description) return;
-    const nextText = String(message || '').trim() || getLocalMinimalStartDescriptionDefault();
+    const normalizedMessage = String(message || '').trim();
+    if (normalizedMessage) {
+        localMinimalStartDescriptionMessage = normalizedMessage;
+        localMinimalStartDescriptionTone = tone === 'warning' ? 'warning' : 'default';
+    }
+    const nextText = normalizedMessage || localMinimalStartDescriptionMessage || getLocalMinimalStartDescriptionDefault();
     description.textContent = nextText;
     description.hidden = !nextText;
-    description.classList.toggle('is-warning', tone === 'warning');
+    description.classList.toggle('is-warning', (normalizedMessage ? tone : localMinimalStartDescriptionTone) === 'warning');
 }
 
 function syncLocalMinimalChatHeader() {
@@ -3251,7 +3154,7 @@ function syncLocalMinimalChatHeader() {
 function syncChatPanelHeadingMode() {
     const eyebrow = document.querySelector('#chatPanel .panel-heading-chat .panel-eyebrow');
     if (!eyebrow) return;
-    eyebrow.textContent = isAttestationMode ? 'Аттестация' : 'Чат';
+    eyebrow.textContent = getChatPanelModeEyebrowText(isAttestationMode);
 }
 
 function revealLocalMinimalPromptSetup(role = 'client', message = 'Сначала выберите роль и сценарий справа.') {
@@ -3340,10 +3243,13 @@ function isProductionHost() {
 }
 
 function shouldAllowFirebaseRestFallback() {
-    if (!DISABLE_FIREBASE_REST_FALLBACK_IN_PROD) return true;
-    if (isLocalhostAdminPreviewHost()) return !!appCheck;
-    if (!isProductionHost()) return true;
-    return false;
+    return shouldAllowFirebaseRestFallbackCore({
+        disableInProd: DISABLE_FIREBASE_REST_FALLBACK_IN_PROD,
+        isLocalhostPreview: isLocalhostAdminPreviewHost(),
+        isProductionHost: isProductionHost(),
+        hasAuthenticatedUser: !!auth?.currentUser,
+        hasAppCheck: !!appCheck
+    });
 }
 
 function normalizeDebugPositiveInt(value, fallback, min = 1, max = Number.MAX_SAFE_INTEGER) {
@@ -3388,7 +3294,7 @@ function syncSelectedRole(nextRole = selectedRole) {
     setCachedStorageValue(USER_ROLE_KEY, effectiveRole);
 
     if (currentRoleDisplay) {
-        currentRoleDisplay.textContent = getRoleLabelUi(effectiveRole);
+        currentRoleDisplay.textContent = getUserRoleLabel(effectiveRole);
     }
     syncAdminPreviewToggle(effectiveRole);
 
@@ -7059,10 +6965,27 @@ async function buildAuthMagicLinkEmailRequestHeaders() {
 
 async function buildAuthenticatedJsonRequestHeaders(requestId, scope = 'request', requestType = '') {
     const headers = buildJsonRequestHeaders(requestId, scope, requestType);
-    const idToken = await getFirebaseAuthIdToken().catch(() => '');
-    if (idToken) {
-        headers.Authorization = `Bearer ${idToken}`;
+    await waitForFirebaseAuthReady();
+    if (!auth?.currentUser) {
+        if (isLocalhostDevBypassSession()) {
+            return headers;
+        }
+        const error = new Error('Firebase ID token is required');
+        error.code = 'missing_id_token';
+        error.httpStatus = 401;
+        throw error;
     }
+    const idToken = await getFirebaseAuthIdToken().catch(() => '');
+    if (!idToken) {
+        if (isLocalhostDevBypassSession()) {
+            return headers;
+        }
+        const error = new Error('Firebase ID token is required');
+        error.code = 'missing_id_token';
+        error.httpStatus = 401;
+        throw error;
+    }
+    headers.Authorization = `Bearer ${idToken}`;
     const appCheckToken = await getFirebaseAppCheckToken().catch(() => '');
     if (appCheckToken) {
         headers['X-Firebase-AppCheck'] = appCheckToken;
@@ -9087,7 +9010,7 @@ function closeAdminRolePickers(exceptRoot = null) {
 function syncAdminRolePickerState(picker, role, disabled = false) {
     if (!picker?.root || !picker?.trigger || !picker?.label || !picker?.optionButtons) return;
     const normalizedRole = normalizeRole(role);
-    picker.label.textContent = getRoleLabelUi(normalizedRole);
+    picker.label.textContent = getUserRoleLabel(normalizedRole);
     picker.trigger.disabled = !!disabled;
     picker.optionButtons.forEach((button, value) => {
         const isActive = value === normalizedRole;
@@ -9152,7 +9075,7 @@ function updateAdminUsersTableRow(row, rowData) {
                 optionButton.className = 'admin-role-picker-option';
                 optionButton.dataset.value = roleValue;
                 optionButton.setAttribute('role', 'option');
-                optionButton.textContent = getRoleLabelUi(roleValue);
+                optionButton.textContent = getUserRoleLabel(roleValue);
                 optionButton.addEventListener('click', async (event) => {
                     event.preventDefault();
                     event.stopPropagation();
@@ -9835,14 +9758,36 @@ function ensureCurrentDialogHistoryIdentity(modeOverride = '') {
 function buildCurrentDialogHistorySnapshot(options = {}) {
     const ownerLogin = getDialogHistoryOwnerLogin();
     if (!ownerLogin) return null;
-    const messages = buildConversationEntriesForHistoryPersistence();
-    const ratingText = getPersistedDialogRatingText();
-    if (!messages.length && !ratingText) return null;
-
+    const rawMessages = buildConversationEntriesForHistoryPersistence();
+    const rawRatingText = getPersistedDialogRatingText();
     const nowIso = String(options.nowIso || '').trim() || new Date().toISOString();
     const dialogId = ensureCurrentDialogHistoryIdentity(options.mode || '');
     if (!dialogId) return null;
     const createdAt = currentDialogHistoryCreatedAt || nowIso;
+    const messagesPayload = normalizeDialogHistoryMessagesPayload({
+        id: dialogId,
+        login: ownerLogin,
+        uid: currentUser?.uid || null,
+        mode: currentDialogHistoryMode === 'voice' ? 'voice' : 'text',
+        createdAt,
+        updatedAt: nowIso,
+        closedAt: options.forceClosed
+            ? (currentDialogHistoryClosedAt || nowIso)
+            : (currentDialogHistoryClosedAt || null),
+        ratedAt: rawRatingText
+            ? (currentDialogHistoryRatedAt || nowIso)
+            : null,
+        messages: buildDialogHistoryMessagesMap(rawMessages),
+        rating: rawRatingText
+            ? {
+                text: rawRatingText,
+                createdAt: currentDialogHistoryRatedAt || nowIso
+            }
+            : null
+    }, ownerLogin, dialogId);
+    const messages = Array.isArray(messagesPayload?.messages) ? messagesPayload.messages : [];
+    const ratingText = String(messagesPayload?.rating?.text || '').trim();
+    if (!messages.length && !ratingText) return null;
     const autoTitle = deriveDialogHistoryAutoTitle(messages, createdAt);
     currentDialogHistoryAutoTitle = autoTitle;
     if (!currentDialogHistoryTitleEdited || !clampDialogHistoryTitle(currentDialogHistoryTitle)) {
@@ -9874,23 +9819,9 @@ function buildCurrentDialogHistorySnapshot(options = {}) {
         closedAt,
         ratedAt
     }, dialogId, ownerLogin);
-    const messagesPayload = normalizeDialogHistoryMessagesPayload({
-        id: dialogId,
-        login: ownerLogin,
-        uid: currentUser?.uid || null,
-        mode: currentDialogHistoryMode === 'voice' ? 'voice' : 'text',
-        createdAt,
-        updatedAt: nowIso,
-        closedAt,
-        ratedAt,
-        messages: buildDialogHistoryMessagesMap(messages),
-        rating: ratingText
-            ? {
-                text: ratingText,
-                createdAt: ratedAt
-            }
-            : null
-    }, ownerLogin, dialogId);
+    if (messagesPayload?.rating) {
+        messagesPayload.rating.createdAt = ratedAt;
+    }
     return {
         id: dialogId,
         login: ownerLogin,
@@ -12081,13 +12012,11 @@ function isAdmin() {
 }
 
 function getAdminPreviewModeLabel(role = selectedRole) {
-    return normalizeRole(role) === 'admin' ? 'Вид: админ' : 'Вид: клиент';
+    return getAdminPreviewModeLabelText(role);
 }
 
 function getAdminPreviewModeTitle(role = selectedRole) {
-    return normalizeRole(role) === 'admin'
-        ? 'Переключить на клиентский вид'
-        : 'Вернуться в админский вид';
+    return getAdminPreviewModeTitleText(role);
 }
 
 function syncAdminPreviewToggle(roleOverride = null) {
@@ -12663,39 +12592,6 @@ function tryParseRatingStructuredPayload(value, depth = 0) {
     return null;
 }
 
-function getRatingOutcomeLabel(outcome) {
-    if (outcome === CONVERSATION_ACTION_TYPE.GO_SILENT) {
-        return 'Клиент ушёл молча';
-    }
-    if (outcome === CONVERSATION_ACTION_TYPE.END) {
-        return 'Диалог завершен';
-    }
-    if (outcome === 'continue') {
-        return 'Диалог можно было продолжать';
-    }
-    if (outcome === 'unknown') {
-        return 'Исход не определён';
-    }
-    return '';
-}
-
-function getRatingOutcomeReasonLabel(reason) {
-    const normalized = String(reason || '').trim().toLowerCase();
-    if (!normalized) return '';
-    const map = {
-        lost_interest: 'пропал интерес',
-        price_rejection: 'не устроила цена',
-        manager_failed: 'менеджер не убедил',
-        lost_trust: 'пропало доверие',
-        resolved: 'вопрос закрыт',
-        next_step_agreed: 'согласован следующий шаг',
-        hard_refusal: 'жёсткий отказ',
-        soft_refusal: 'мягкий отказ',
-        timeout: 'клиент перестал отвечать'
-    };
-    return map[normalized] || normalized.replace(/[_-]+/g, ' ');
-}
-
 function buildRatingResultExportText(result) {
     if (!result || typeof result !== 'object') return '';
 
@@ -12705,8 +12601,8 @@ function buildRatingResultExportText(result) {
     }
 
     const outcomeParts = [];
-    const outcomeLabel = getRatingOutcomeLabel(result.outcome);
-    const outcomeReasonLabel = getRatingOutcomeReasonLabel(result.outcomeReason);
+    const outcomeLabel = getRatingOutcomeLabelText(result.outcome);
+    const outcomeReasonLabel = getRatingOutcomeReasonLabelText(result.outcomeReason);
     if (outcomeLabel) outcomeParts.push(outcomeLabel);
     if (outcomeReasonLabel) outcomeParts.push(outcomeReasonLabel);
     if (outcomeParts.length) {
@@ -12855,36 +12751,6 @@ function saveWebhookDebugEntries() {
     }
 }
 
-function getWebhookDebugTypeLabel(type) {
-    switch (String(type || '').trim()) {
-    case 'chat':
-        return 'Чат';
-    case 'chat_start':
-        return 'Старт';
-    case 'rating':
-        return 'Оценка';
-    case 'manager_assist':
-        return 'Подсказка';
-    case 'improve':
-        return 'Улучшение';
-    case 'attestation':
-        return 'Аттестация';
-    default:
-        return 'Webhook';
-    }
-}
-
-function getWebhookDebugStatusLabel(status) {
-    switch (String(status || '').trim()) {
-    case 'ok':
-        return 'OK';
-    case 'error':
-        return 'Ошибка';
-    default:
-        return 'В работе';
-    }
-}
-
 function normalizeWebhookDebugEndpoint(endpoint) {
     const raw = String(endpoint || '').trim();
     if (!raw) return '-';
@@ -12975,8 +12841,8 @@ function renderWebhookDebugPanel() {
             <div class="admin-webhook-debug-item is-${status}">
                 <div class="admin-webhook-debug-head">
                     <div class="admin-webhook-debug-title">
-                        <span>${escapeHtml(getWebhookDebugTypeLabel(entry.type))}</span>
-                        <span class="admin-webhook-debug-status is-${status}">${escapeHtml(getWebhookDebugStatusLabel(status))}</span>
+                        <span>${escapeHtml(getWebhookDebugTypeLabelText(entry.type))}</span>
+                        <span class="admin-webhook-debug-status is-${status}">${escapeHtml(getWebhookDebugStatusLabelText(status))}</span>
                     </div>
                     <div class="admin-webhook-debug-time">${escapeHtml(timingText)}</div>
                 </div>
@@ -13106,43 +12972,6 @@ function saveAuthDebugEntries() {
     }
 }
 
-function getAuthDebugStageLabel(stage = '') {
-    switch (String(stage || '').trim()) {
-        case 'submit_started': return 'Начат вход';
-        case 'email_link_check': return 'Проверка ссылки из письма';
-        case 'account_lookup': return 'Поиск аккаунта';
-        case 'access_policy': return 'Проверка доступа';
-        case 'failed_attempt_save': return 'Фиксация неверной попытки';
-        case 'firebase_session_open': return 'Открытие входа';
-        case 'user_save': return 'Сохранение аккаунта';
-        case 'invite_update': return 'Обновление приглашения';
-        case 'verify_email_send': return 'Отправка письма подтверждения';
-        case 'verify_email_mark': return 'Фиксация отправки письма';
-        case 'protected_refresh': return 'Загрузка данных после входа';
-        case 'access_mirror_sync': return 'Проверка и сохранение прав';
-        case 'login_blocked': return 'Вход отклонён';
-        case 'login_complete': return 'Вход завершён';
-        case 'login_failed': return 'Вход завершился ошибкой';
-        case 'reset_started': return 'Запрошен сброс пароля';
-        case 'reset_sent': return 'Письмо для сброса отправлено';
-        case 'reset_failed': return 'Сброс пароля завершился ошибкой';
-        case 'restore_started': return 'Старт восстановления сессии';
-        case 'restore_wait_firebase': return 'Ожидание восстановления входа';
-        case 'restore_profile_lookup': return 'Поиск профиля при восстановлении';
-        case 'restore_complete': return 'Сессия восстановлена';
-        case 'restore_failed': return 'Восстановление сессии сорвалось';
-        default: return stage || 'Событие входа';
-    }
-}
-
-function getAuthDebugStatusLabel(status = '') {
-    switch (String(status || '').trim()) {
-        case 'ok': return 'OK';
-        case 'error': return 'Ошибка';
-        default: return 'Лог';
-    }
-}
-
 function buildAuthDebugEntry(stage = '', details = {}) {
     const nowMs = Date.now();
     const expectedLogin = normalizeLogin(details.expectedLogin || details.login || '');
@@ -13215,8 +13044,8 @@ function renderAuthDebugPanel() {
             <div class="admin-webhook-debug-item is-${badgeStatus}">
                 <div class="admin-webhook-debug-head">
                     <div class="admin-webhook-debug-title">
-                        <span>${escapeHtml(getAuthDebugStageLabel(entry.stage))}</span>
-                        <span class="admin-webhook-debug-status is-${badgeStatus}">${escapeHtml(getAuthDebugStatusLabel(status))}</span>
+                        <span>${escapeHtml(getAuthDebugStageLabelText(entry.stage))}</span>
+                        <span class="admin-webhook-debug-status is-${badgeStatus}">${escapeHtml(getDebugStatusLabelText(status))}</span>
                     </div>
                     <div class="admin-webhook-debug-time">${escapeHtml(startedAtText)}</div>
                 </div>
@@ -13248,7 +13077,7 @@ function buildAuthDebugClipboardText() {
         .reverse()
         .map((entry) => {
             const parts = [
-                `[${formatWebhookDebugTime(entry.startedAt)}] ${getAuthDebugStageLabel(entry.stage)}`
+                `[${formatWebhookDebugTime(entry.startedAt)}] ${getAuthDebugStageLabelText(entry.stage)}`
             ];
             if (entry.status === 'error') parts.push('status=error');
             else if (entry.status === 'ok') parts.push('status=ok');
@@ -13290,44 +13119,6 @@ function saveVoiceDebugEntries() {
         );
     } catch (error) {
         console.warn('Failed to save voice debug log:', error);
-    }
-}
-
-function getVoiceDebugStageLabel(stage = '') {
-    switch (String(stage || '').trim()) {
-        case 'start_requested': return 'Старт звонка';
-        case 'sdk_loaded': return 'SDK загружен';
-        case 'token_request_started': return 'Запрос ключа подключения';
-        case 'token_request_succeeded': return 'Ключ подключения получен';
-        case 'token_request_failed': return 'Ключ подключения не получен';
-        case 'live_connect_started': return 'Открытие Gemini Live';
-        case 'live_open': return 'Соединение установлено';
-        case 'capture_fallback_default': return 'Микрофон переключён';
-        case 'capture_ready': return 'Микрофон готов';
-        case 'capture_failed': return 'Микрофон не инициализирован';
-        case 'audio_output_primed': return 'Аудиовыход прогрет';
-        case 'call_active': return 'Звонок активирован';
-        case 'setup_complete': return 'Gemini готов';
-        case 'first_user_audio': return 'Пошёл первый звук менеджера';
-        case 'first_assistant_text': return 'Пришёл первый текст клиента';
-        case 'first_audio_chunk': return 'Пришёл первый фрагмент аудио клиента';
-        case 'first_audio_playback': return 'Стартовало первое воспроизведение';
-        case 'transport_error': return 'Ошибка транспорта';
-        case 'transport_close': return 'Соединение закрыто';
-        case 'transport_failure': return 'Сбой голосового канала';
-        case 'reconnect_scheduled': return 'Автопереподключение';
-        case 'stop_requested': return 'Остановка звонка';
-        case 'stopped': return 'Звонок остановлен';
-        case 'start_failed': return 'Старт провалился';
-        default: return stage || 'Событие';
-    }
-}
-
-function getVoiceDebugStatusLabel(status = '') {
-    switch (String(status || '').trim()) {
-        case 'ok': return 'OK';
-        case 'error': return 'Ошибка';
-        default: return 'Лог';
     }
 }
 
@@ -13443,8 +13234,8 @@ function renderVoiceDebugPanel() {
             <div class="admin-webhook-debug-item is-${badgeStatus}">
                 <div class="admin-webhook-debug-head">
                     <div class="admin-webhook-debug-title">
-                        <span>${escapeHtml(getVoiceDebugStageLabel(entry.stage))}</span>
-                        <span class="admin-webhook-debug-status is-${badgeStatus}">${escapeHtml(getVoiceDebugStatusLabel(status))}</span>
+                        <span>${escapeHtml(getVoiceDebugStageLabelText(entry.stage))}</span>
+                        <span class="admin-webhook-debug-status is-${badgeStatus}">${escapeHtml(getDebugStatusLabelText(status))}</span>
                     </div>
                     <div class="admin-webhook-debug-time">${escapeHtml(startedAtText)}</div>
                 </div>
@@ -13476,7 +13267,7 @@ function buildVoiceDebugClipboardText() {
         .reverse()
         .map((entry) => {
             const parts = [
-                `[${formatWebhookDebugTime(entry.startedAt)}] ${getVoiceDebugStageLabel(entry.stage)}`
+                `[${formatWebhookDebugTime(entry.startedAt)}] ${getVoiceDebugStageLabelText(entry.stage)}`
             ];
             if (entry.status === 'error') parts.push('status=error');
             else if (entry.status === 'ok') parts.push('status=ok');
@@ -14202,20 +13993,27 @@ function loadCachedPublicPromptsEmergencySnapshot() {
     return snapshotState.normalized;
 }
 
-function buildLocalhostDefaultPromptSnapshot() {
+function buildEmbeddedDefaultPromptSnapshot() {
     return normalizePromptSnapshotForCache(LOCALHOST_DEFAULT_PROMPT_SNAPSHOT);
 }
 
-function applyLocalhostDefaultPrompts(reason = '') {
-    if (!isLocalhostAdminPreviewHost() || promptsStateHasMeaningfulContent()) {
+function shouldUseEmbeddedDefaultPrompts() {
+    return isLocalhostAdminPreviewHost() || isProductionHost();
+}
+
+function applyEmbeddedDefaultPrompts(reason = '') {
+    if (!shouldUseEmbeddedDefaultPrompts() || promptsStateHasMeaningfulContent()) {
         return false;
     }
-    const normalized = buildLocalhostDefaultPromptSnapshot();
+    const normalized = buildEmbeddedDefaultPromptSnapshot();
     const snapshotState = buildNormalizedPromptSnapshotState(normalized);
     if (!snapshotState.hasMeaningfulContent) {
         return false;
     }
-    debugLog('Applying localhost default prompts', { reason });
+    debugLog('Applying embedded default prompts', {
+        reason,
+        hostMode: isLocalhostAdminPreviewHost() ? 'localhost-preview' : 'production-host'
+    });
     const didApply = initPromptsData(snapshotState.normalized, { forceApplyEmpty: true });
     if (!didApply) {
         return false;
@@ -14491,35 +14289,7 @@ function setPromptSyncConflictMessage(role = '', message = '') {
 }
 
 function renderPromptSyncConflictNotice(role = getActiveRole()) {
-    if (!promptSyncConflictNotice) return;
-    const message = PROMPT_ROLES.includes(role) ? String(promptSyncConflictMessages[role] || '').trim() : '';
-    promptSyncConflictNotice.hidden = !message;
-    if (promptSyncConflictNoticeText) {
-        promptSyncConflictNoticeText.textContent = message;
-    } else {
-        promptSyncConflictNotice.textContent = message;
-    }
-    if (message && isAdmin()) {
-        const shouldOpenDrawer = shouldUseLocalPromptDrawer();
-        if (shouldOpenDrawer) {
-            setLocalPromptDrawerOpen(true);
-        } else {
-            activateShellPanel('instructions');
-        }
-    }
-    if (promptSyncConflictActionBtn) {
-        const compareContext = message && isAdmin() ? getPromptCompareContext(role) : null;
-        const compareLabel = compareContext?.activeVariation?.isLocal
-            ? 'Сравнить draft'
-            : 'Сравнить hidden draft';
-        promptSyncConflictActionBtn.hidden = !compareContext;
-        if (compareContext) {
-            promptSyncConflictActionBtn.textContent = compareLabel;
-            setCustomTooltip(promptSyncConflictActionBtn, compareLabel);
-        } else {
-            setCustomTooltip(promptSyncConflictActionBtn, '');
-        }
-    }
+    return promptUiDisplay.renderPromptSyncConflictNotice(role);
 }
 
 function preservePromptConflictAsLocalDraft(role = '') {
@@ -15573,12 +15343,6 @@ function getGeminiVoiceMicLevelState(level = 0) {
     return 'low';
 }
 
-function getGeminiVoiceMicLevelLabel(state = 'low') {
-    if (state === 'good') return 'Микрофон: хорошо';
-    if (state === 'medium') return 'Микрофон: достаточно';
-    return 'Микрофон: недостаточно';
-}
-
 function resetGeminiVoiceMicMeter() {
     geminiVoiceMicLevelNormalized = 0;
     geminiVoiceMicMeterReady = false;
@@ -15586,7 +15350,7 @@ function resetGeminiVoiceMicMeter() {
         voiceConnectMeterFill.style.width = '0%';
     }
     if (voiceConnectMeterLabel) {
-        voiceConnectMeterLabel.textContent = getGeminiVoiceMicLevelLabel('low');
+        voiceConnectMeterLabel.textContent = getGeminiVoiceMicLevelLabelText('low');
     }
     if (voiceConnectMeter) {
         voiceConnectMeter.hidden = true;
@@ -15612,7 +15376,7 @@ function updateVoiceConnectMeterUi() {
         voiceConnectMeterFill.style.width = `${widthPercent}%`;
     }
     if (voiceConnectMeterLabel) {
-        voiceConnectMeterLabel.textContent = getGeminiVoiceMicLevelLabel(state);
+        voiceConnectMeterLabel.textContent = getGeminiVoiceMicLevelLabelText(state);
     }
 }
 
@@ -16171,10 +15935,9 @@ function renderVariations() {
     const visibleVariations = getVisibleVariations(role, isAdminUser);
     const activeId = getActiveVariation(role)?.id || null;
     if (promptVariationsLabel) {
-        promptVariationsLabel.hidden = visibleVariations.length <= 1;
-        promptVariationsLabel.textContent = visibleVariations.length <= 1
-            ? 'Варианты промпта'
-            : `Варианты ${getRoleLabel(role).toLowerCase()}`;
+        const labelState = promptUiDisplay.getPromptVariationsLabelState(role, visibleVariations.length);
+        promptVariationsLabel.hidden = labelState.hidden;
+        promptVariationsLabel.textContent = labelState.text;
     }
     
     const fragment = document.createDocumentFragment();
@@ -16276,11 +16039,7 @@ function formatHistoryTime(ts) {
 }
 
 function getRoleLabel(role) {
-    if (role === 'client') return 'Клиент';
-    if (role === 'manager') return 'Менеджер';
-    if (role === 'manager_call') return 'Клиент звонок';
-    if (role === 'rater') return 'Оценщик';
-    return role;
+    return promptUiDisplay.getPromptRoleLabel(role);
 }
 
 function getPromptHistoryKey(role, variationId) {
@@ -16551,6 +16310,8 @@ function updateEditorContent(role) {
         if (previewNeedsUpdate) {
             preview.innerHTML = renderedHtml;
             preview.dataset.renderedMarkdown = content;
+            preview.__lastRenderedMarkdown = content;
+            preview.__lastRenderedHtml = renderedHtml;
             highlightRenderedCodeBlocks(preview);
         }
     }
@@ -16842,7 +16603,7 @@ function setupPromptsAndConfigListeners() {
             }
             const didApplyPrompts = initPromptsData(data);
             if (!didApplyPrompts) {
-                applyLocalhostDefaultPrompts('firebase-empty-prompts-snapshot');
+                applyEmbeddedDefaultPrompts('firebase-empty-prompts-snapshot');
                 debugLog('Skipping Firebase prompts sync because payload had no meaningful content and local data is already populated');
                 return;
             }
@@ -16872,7 +16633,7 @@ function setupPromptsAndConfigListeners() {
                 lastFirebaseData = fallbackSnapshotState.hash;
                 initPromptsData(fallbackSnapshotState.normalized);
             } else {
-                applyLocalhostDefaultPrompts('prompts-read-error');
+                applyEmbeddedDefaultPrompts('prompts-read-error');
             }
             if (auth?.currentUser && !promptsStateHasMeaningfulContent('client')) {
                 void bootstrapPromptsViaRestFallback();
@@ -16933,7 +16694,7 @@ function setupPromptsAndConfigListeners() {
             lastFirebaseData = fallbackSnapshotState.hash;
             initPromptsData(fallbackSnapshotState.normalized);
         } else {
-            applyLocalhostDefaultPrompts('setup-protected-listeners-failed');
+            applyEmbeddedDefaultPrompts('setup-protected-listeners-failed');
         }
         scheduleProtectedRealtimeListenersRecovery('setup-protected-listeners-failed');
     }
@@ -16996,7 +16757,7 @@ async function loadPrompts() {
             debugLog('Loaded prompts from emergency backup snapshot');
         } else {
             debugLog('No local prompt snapshots available before Firebase bootstrap');
-            applyLocalhostDefaultPrompts('initial-bootstrap-no-snapshot');
+            applyEmbeddedDefaultPrompts('initial-bootstrap-no-snapshot');
         }
     }
     promptHistory = normalizePromptHistoryEntries(getCachedLocalStorageJson(LOCAL_PROMPTS_HISTORY_STORAGE_KEY));
@@ -17023,7 +16784,7 @@ async function loadPrompts() {
         setSharedRaterHiddenPrompt('');
         if (!cachedPublicPromptsSnapshot) {
             debugLog('Firebase unavailable and no cached prompt snapshot');
-            applyLocalhostDefaultPrompts('firebase-unavailable-no-snapshot');
+            applyEmbeddedDefaultPrompts('firebase-unavailable-no-snapshot');
         }
         promptHistory = normalizePromptHistoryEntries(getCachedLocalStorageJson(LOCAL_PROMPTS_HISTORY_STORAGE_KEY));
         lastPromptHistorySnapshotHash = buildPromptHistorySnapshotHash(promptHistory);
@@ -20969,8 +20730,11 @@ function handleGeminiVoiceTransportFailure(message = 'Соединение го�
                 if (!isVoiceModeScreenActive) {
                     return;
                 }
+                geminiVoiceAutoReconnectPending = true;
                 startGeminiVoiceMode().catch((error) => {
                     console.error('Gemini Live auto-reconnect failed:', error);
+                }).finally(() => {
+                    geminiVoiceAutoReconnectPending = false;
                 });
             }, GEMINI_VOICE_EARLY_RECONNECT_DELAY_MS);
         });
@@ -21734,7 +21498,7 @@ async function startGeminiVoiceMode() {
     geminiVoiceConversationFinished = false;
     geminiVoiceSetupComplete = false;
     geminiVoiceAudioReady = false;
-    if (!geminiVoiceCloseExpected) {
+    if (!geminiVoiceCloseExpected && !geminiVoiceAutoReconnectPending) {
         geminiVoiceEarlyReconnectAttempts = 0;
     }
     setGeminiVoiceMicInputEnabled(false);
@@ -22385,7 +22149,7 @@ function updateUserNameDisplay() {
     const role = canUseAdminPreviewControls()
         ? normalizeRole(selectedRole || getCachedStorageValue(USER_ROLE_KEY, 'user') || 'user')
         : 'user';
-    const roleIcon = getRoleIcon(role);
+    const roleIcon = getUserRoleIcon(role);
     currentUserName.textContent = `${roleIcon} ${name}`;
 }
 
@@ -23186,7 +22950,7 @@ function switchRole(newRole) {
     const effectiveRole = syncSelectedRole(role);
     applyRoleRestrictions();
     updateUserNameDisplay();
-    showCopyNotification(`Включен ${getRoleLabelUi(effectiveRole).toLowerCase()} режим`);
+    showCopyNotification(`Включен ${getUserRoleLabel(effectiveRole).toLowerCase()} режим`);
 }
 
 function toggleAdminPreviewMode() {
@@ -23501,7 +23265,7 @@ function addRatingMessage(ratingResult) {
     const headerMeta = document.createElement('div');
     headerMeta.className = 'rating-card-meta';
 
-    const outcomeLabel = getRatingOutcomeLabel(structured.outcome);
+    const outcomeLabel = getRatingOutcomeLabelText(structured.outcome);
     if (outcomeLabel) {
         const outcomeBadge = document.createElement('div');
         outcomeBadge.className = `rating-outcome-badge${structured.outcome ? ` is-${structured.outcome}` : ''}`;
@@ -23509,7 +23273,7 @@ function addRatingMessage(ratingResult) {
         headerMeta.appendChild(outcomeBadge);
     }
 
-    const outcomeReason = getRatingOutcomeReasonLabel(structured.outcomeReason);
+    const outcomeReason = getRatingOutcomeReasonLabelText(structured.outcomeReason);
     if (outcomeReason) {
         const outcomeReasonEl = document.createElement('div');
         outcomeReasonEl.className = 'rating-outcome-reason';
@@ -23995,6 +23759,34 @@ async function sendMessage() {
     }
 }
 
+function isChatStartNetworkFailure(error) {
+    const message = String(error?.message || '').toLowerCase();
+    return error?.name === 'AbortError'
+        || message.includes('failed to fetch')
+        || message.includes('networkerror')
+        || message.includes('load failed')
+        || message.includes('network request failed')
+        || message.includes('timeout')
+        || message.includes('таймаут');
+}
+
+function getStartConversationFailureMessage(error = null) {
+    if (isChatStartNetworkFailure(error)) {
+        return 'Не удалось подключиться к серверу диалога. Проверьте соединение и попробуйте ещё раз.';
+    }
+    return 'Не удалось начать диалог. Попробуйте ещё раз или обратитесь к администратору.';
+}
+
+function showStartConversationFailure(error = null) {
+    const message = getStartConversationFailureMessage(error);
+    restoreStartConversationBlock();
+    updateLocalMinimalStartDescription(message, 'warning');
+    showCopyNotification(message);
+    if (!isLocalMinimalUiEnabled()) {
+        addMessage(`Ошибка: ${message}`, 'error', false);
+    }
+}
+
 async function startConversationHandler() {
     if (!isChatReady) return;
     if (isProcessing) return;
@@ -24018,6 +23810,7 @@ async function startConversationHandler() {
     isProcessing = true;
     toggleInputState(false);
     setStartButtonsEnabled(false);
+    clearLocalMinimalStartDescription();
     const requestGuard = beginChatUiRequestGuard();
     
     const startDiv = document.getElementById('startConversation');
@@ -24061,8 +23854,7 @@ async function startConversationHandler() {
             failWebhookDebugRequest(debugEntryId, new Error('Пустой ответ сервера'), response.status);
             console.warn('Empty webhook response for /start.');
             loadingMsg.remove();
-            restoreStartConversationBlock();
-            addMessage('Ошибка: что-то сломалось. Обратитесь к администратору сайта.', 'error', false);
+            showStartConversationFailure();
             return;
         }
         finishWebhookDebugRequest(debugEntryId, {
@@ -24092,8 +23884,7 @@ async function startConversationHandler() {
         }
         console.error('Error:', error);
         loadingMsg.remove();
-        restoreStartConversationBlock();
-        addMessage(`Ошибка: ${error.message}`, 'error', false);
+        showStartConversationFailure(error);
     } finally {
         const shouldRestoreUi = requestGuard.version === chatUiSessionVersion
             && requestGuard.sessionId === baseSessionId
@@ -25500,6 +25291,8 @@ function highlightRenderedCodeBlocks(container) {
 function renderMarkdownIntoElement(element, content, options = {}) {
     if (!element) return;
     const text = String(content || '');
+    const renderToken = ++markdownRenderSequence;
+    element.dataset.markdownRenderToken = String(renderToken);
     element.innerHTML = renderMarkdown(text);
     highlightRenderedCodeBlocks(element);
 
@@ -25507,6 +25300,7 @@ function renderMarkdownIntoElement(element, content, options = {}) {
     void ensureMarkdownRenderLibrariesLoaded({ withHighlight: options.withHighlight !== false })
         .then((loaded) => {
             if (!loaded || !element.isConnected) return;
+            if (element.dataset.markdownRenderToken !== String(renderToken)) return;
             element.innerHTML = renderMarkdown(text);
             highlightRenderedCodeBlocks(element);
         })
@@ -25573,6 +25367,13 @@ function syncCurrentEditorNow(role = getActiveRole()) {
     const textarea = promptInputsByRole[role];
     
     if (preview && textarea) {
+        if (
+            preview.__lastRenderedMarkdown === textarea.value
+            && preview.__lastRenderedHtml === preview.innerHTML
+        ) {
+            return;
+        }
+
         const service = configureTurndownLibrary();
         const markdown = service
             ? service.turndown(preview.innerHTML)

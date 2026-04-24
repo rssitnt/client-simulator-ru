@@ -1,4 +1,7 @@
 export function createDialogHistorySharingHelpers(deps = {}) {
+    const MAX_SHARED_DIALOG_MESSAGES = 120;
+    const MAX_SHARED_DIALOG_MESSAGE_LENGTH = 3000;
+    const MAX_SHARED_DIALOG_RATING_LENGTH = 12000;
     const normalizeLogin = typeof deps.normalizeLogin === 'function'
         ? deps.normalizeLogin
         : ((value = '') => String(value || '').trim().toLowerCase());
@@ -70,17 +73,17 @@ export function createDialogHistorySharingHelpers(deps = {}) {
         if (!record || !payload || !normalizedShareId) return null;
         const messages = Array.isArray(payload.messages) ? payload.messages : [];
         const normalizedMessages = messages.map((message, index) => {
-            const content = normalizeDialogHistoryText(message?.content || '');
+            const content = normalizeDialogHistoryText(message?.content || '').slice(0, MAX_SHARED_DIALOG_MESSAGE_LENGTH);
             if (!content) return null;
             return {
-                id: String(message?.id || `m_${String(index + 1).padStart(4, '0')}`).trim(),
+                id: String(message?.id || `m_${String(index + 1).padStart(4, '0')}`).trim().slice(0, 80),
                 seq: Math.max(0, Number(message?.seq) || index + 1),
                 role: message?.role === 'assistant' ? 'assistant' : 'user',
                 content
             };
-        }).filter(Boolean);
+        }).filter(Boolean).slice(-MAX_SHARED_DIALOG_MESSAGES);
         if (!normalizedMessages.length) return null;
-        const ratingText = normalizeDialogHistoryText(payload?.rating?.text || '');
+        const ratingText = normalizeDialogHistoryText(payload?.rating?.text || '').slice(0, MAX_SHARED_DIALOG_RATING_LENGTH);
         return {
             id: normalizedShareId,
             title: clampDialogHistoryTitle(getDialogHistoryRecordEffectiveTitle(record)),
@@ -103,23 +106,29 @@ export function createDialogHistorySharingHelpers(deps = {}) {
         if (!normalizedShareId) return null;
         const messages = Array.isArray(raw.messages) ? raw.messages : [];
         const normalizedMessages = messages.map((message, index) => {
-            const content = normalizeDialogHistoryText(message?.content || '');
+            const content = normalizeDialogHistoryText(message?.content || '').slice(0, MAX_SHARED_DIALOG_MESSAGE_LENGTH);
             if (!content) return null;
             return {
-                id: String(message?.id || `m_${String(index + 1).padStart(4, '0')}`).trim(),
+                id: String(message?.id || `m_${String(index + 1).padStart(4, '0')}`).trim().slice(0, 80),
                 seq: Math.max(0, Number(message?.seq) || index + 1),
                 role: message?.role === 'assistant' ? 'assistant' : 'user',
                 content
             };
         }).filter(Boolean);
-        if (!normalizedMessages.length) return null;
-        const ratingText = normalizeDialogHistoryText(raw?.rating?.text || raw?.ratingText || '');
+        const limitedMessages = normalizedMessages
+            .sort((left, right) => {
+                if (left.seq !== right.seq) return left.seq - right.seq;
+                return left.id.localeCompare(right.id);
+            })
+            .slice(-MAX_SHARED_DIALOG_MESSAGES);
+        if (!limitedMessages.length) return null;
+        const ratingText = normalizeDialogHistoryText(raw?.rating?.text || raw?.ratingText || '').slice(0, MAX_SHARED_DIALOG_RATING_LENGTH);
         return {
             id: normalizedShareId,
             title: clampDialogHistoryTitle(raw.title || ''),
             mode: raw.mode === 'voice' ? 'voice' : 'text',
             createdAt: String(raw.createdAt || '').trim() || new Date().toISOString(),
-            messages: normalizedMessages,
+            messages: limitedMessages,
             rating: ratingText ? { text: ratingText } : null
         };
     }

@@ -17,15 +17,27 @@ export function createPromptUiDisplayHelpers(deps = {}) {
     const getRoleLabel = typeof deps.getRoleLabel === 'function'
         ? deps.getRoleLabel
         : ((role = '') => String(role || ''));
+    const getPromptCompareContext = typeof deps.getPromptCompareContext === 'function'
+        ? deps.getPromptCompareContext
+        : (() => null);
+    const getPromptSyncConflictMessage = typeof deps.getPromptSyncConflictMessage === 'function'
+        ? deps.getPromptSyncConflictMessage
+        : (() => '');
     const isAdmin = typeof deps.isAdmin === 'function'
         ? deps.isAdmin
         : (() => false);
     const isLocalMinimalUiEnabled = typeof deps.isLocalMinimalUiEnabled === 'function'
         ? deps.isLocalMinimalUiEnabled
         : (() => false);
+    const isValidRole = typeof deps.isValidRole === 'function'
+        ? deps.isValidRole
+        : ((role = '') => !!role);
     const managerCallPromptMaxChars = Number.isFinite(deps.managerCallPromptMaxChars)
         ? Number(deps.managerCallPromptMaxChars)
         : 0;
+    const openPromptEditorPanel = typeof deps.openPromptEditorPanel === 'function'
+        ? deps.openPromptEditorPanel
+        : (() => {});
     const setCustomTooltip = typeof deps.setCustomTooltip === 'function'
         ? deps.setCustomTooltip
         : (() => {});
@@ -36,6 +48,14 @@ export function createPromptUiDisplayHelpers(deps = {}) {
             return rawName;
         }
         return rawName.replace(/\s*\(локальный\)$/i, '').trim() || rawName;
+    }
+
+    function getPromptRoleLabel(role = '') {
+        if (role === 'client') return 'Клиент';
+        if (role === 'manager') return 'Менеджер';
+        if (role === 'manager_call') return 'Клиент звонок';
+        if (role === 'rater') return 'Оценщик';
+        return String(role || '');
     }
 
     function updatePromptVisibilityButton() {
@@ -101,9 +121,58 @@ export function createPromptUiDisplayHelpers(deps = {}) {
         return true;
     }
 
+    function getPromptVariationsLabelState(role = '', visibleCount = 0) {
+        const count = Math.max(0, Number(visibleCount) || 0);
+        return {
+            hidden: count <= 1,
+            text: count <= 1
+                ? 'Варианты промпта'
+                : `Варианты ${getRoleLabel(role).toLowerCase()}`
+        };
+    }
+
+    function renderPromptSyncConflictNotice(role = '') {
+        const promptSyncConflictNotice = elements.promptSyncConflictNotice;
+        const promptSyncConflictNoticeText = elements.promptSyncConflictNoticeText;
+        const promptSyncConflictActionBtn = elements.promptSyncConflictActionBtn;
+        if (!promptSyncConflictNotice) return false;
+
+        const message = isValidRole(role)
+            ? String(getPromptSyncConflictMessage(role) || '').trim()
+            : '';
+        promptSyncConflictNotice.hidden = !message;
+        if (promptSyncConflictNoticeText) {
+            promptSyncConflictNoticeText.textContent = message;
+        } else {
+            promptSyncConflictNotice.textContent = message;
+        }
+
+        if (message && isAdmin()) {
+            openPromptEditorPanel();
+        }
+
+        if (promptSyncConflictActionBtn) {
+            const compareContext = message && isAdmin() ? getPromptCompareContext(role) : null;
+            const compareLabel = compareContext?.activeVariation?.isLocal
+                ? 'Сравнить draft'
+                : 'Сравнить hidden draft';
+            promptSyncConflictActionBtn.hidden = !compareContext;
+            if (compareContext) {
+                promptSyncConflictActionBtn.textContent = compareLabel;
+                setCustomTooltip(promptSyncConflictActionBtn, compareLabel);
+            } else {
+                setCustomTooltip(promptSyncConflictActionBtn, '');
+            }
+        }
+        return !!message;
+    }
+
     return {
+        getPromptRoleLabel,
         getPromptVariationDisplayName,
+        getPromptVariationsLabelState,
         renderPromptContextBar,
+        renderPromptSyncConflictNotice,
         updatePromptLengthInfo,
         updatePromptVisibilityButton
     };

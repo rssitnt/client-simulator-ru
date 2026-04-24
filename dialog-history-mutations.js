@@ -96,6 +96,20 @@ export function createDialogHistoryMutationHelpers(deps = {}) {
         ? deps.shareNavigator
         : (async () => false);
 
+    function buildSecureSharedDialogId() {
+        const bytes = new Uint8Array(16);
+        const cryptoApi = globalThis?.crypto;
+        if (cryptoApi && typeof cryptoApi.getRandomValues === 'function') {
+            cryptoApi.getRandomValues(bytes);
+        } else {
+            for (let i = 0; i < bytes.length; i += 1) {
+                bytes[i] = Math.floor(Math.random() * 256);
+            }
+        }
+        const token = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+        return normalizeSharedDialogId(`sh_${Date.now().toString(36)}_${token}`);
+    }
+
     async function getDialogHistoryPayloadForRecord(record = null) {
         if (!record) throw new Error('Диалог не найден');
         const state = getState();
@@ -115,7 +129,7 @@ export function createDialogHistoryMutationHelpers(deps = {}) {
     async function shareDialogHistoryRecord(record = null) {
         if (!record) return false;
         const payload = await getDialogHistoryPayloadForRecord(record);
-        const shareId = normalizeSharedDialogId(`sh_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`);
+        const shareId = buildSecureSharedDialogId();
         const sharedPayload = buildSharedDialogPayload(record, payload, shareId);
         if (!sharedPayload) {
             throw new Error('В диалоге пока нет текста для отправки');
