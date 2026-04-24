@@ -18628,7 +18628,7 @@ async function clearVoiceModeConfig() {
     showCopyNotification('Данные голосового режима удалены на этом устройстве');
 }
 
-async function getFirebaseAuthIdToken() {
+async function getFirebaseAuthIdToken(forceRefresh = false) {
     if (!auth?.currentUser || typeof auth.currentUser.getIdToken !== 'function') return '';
     const cachedLogin = normalizeLogin(auth.currentUser?.email || '');
     const rememberToken = (token) => {
@@ -18642,7 +18642,7 @@ async function getFirebaseAuthIdToken() {
     };
     try {
         const token = await withPromiseTimeout(
-            auth.currentUser.getIdToken(true),
+            auth.currentUser.getIdToken(!!forceRefresh),
             5000,
             'Таймаут запроса Firebase ID token.'
         );
@@ -18652,10 +18652,20 @@ async function getFirebaseAuthIdToken() {
             voiceAuthCachedIdTokenAt = Date.now();
             voiceAuthCachedIdTokenLogin = cachedLogin;
         }
+        if (!normalized && !forceRefresh) {
+            return await getFirebaseAuthIdToken(true);
+        }
         return normalized;
     } catch (error) {
         const code = String(error?.code || '').trim();
         console.warn('Failed to get Firebase ID token for voice endpoint:', error);
+        if (!forceRefresh) {
+            try {
+                return await getFirebaseAuthIdToken(true);
+            } catch (refreshError) {
+                console.warn('Firebase ID token forced refresh failed:', refreshError);
+            }
+        }
         if (code === 'auth/network-request-failed') {
             await waitForDelay(800);
             try {
