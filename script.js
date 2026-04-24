@@ -25854,6 +25854,10 @@ function getMobilePromptToolbarBottomInset() {
     return Math.max(0, window.innerHeight - (visualViewport.height + visualViewport.offsetTop));
 }
 
+function isMobilePromptKeyboardStillOpen() {
+    return getMobilePromptToolbarBottomInset() >= 120;
+}
+
 function shouldLockMobileChatViewport() {
     return window.innerWidth <= 1024
         && !!document.body?.classList.contains('local-minimal-ui')
@@ -25911,8 +25915,10 @@ function updateMobilePromptToolbarDocking() {
         && !!activeElement.closest('.prompt-wrapper')
         && activeElement.matches('.prompt-editor, .prompt-preview, .prompt-preview *');
     const hasPromptEditingState = !!(isUserEditing && (currentEditingPromptRole || getActiveRole()));
+    const hasActivePromptEditor = !!document.querySelector('#instructionsPanel.panel.active .prompt-wrapper.instruction-editor.active');
+    const keyboardStillOpen = isMobilePromptKeyboardStillOpen();
     const shouldDock = isMobilePromptToolbarDockingEligible()
-        && (isPromptEditingSurface || hasPromptEditingState);
+        && (isPromptEditingSurface || hasPromptEditingState || (keyboardStillOpen && hasActivePromptEditor));
     if (mobilePromptToolbarDocked !== shouldDock) {
         mobilePromptToolbarDocked = shouldDock;
         document.body.classList.toggle('mobile-prompt-toolbar-docked', shouldDock);
