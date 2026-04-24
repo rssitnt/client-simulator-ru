@@ -6966,8 +6966,13 @@ async function buildAuthMagicLinkEmailRequestHeaders() {
 async function buildAuthenticatedJsonRequestHeaders(requestId, scope = 'request', requestType = '') {
     const headers = buildJsonRequestHeaders(requestId, scope, requestType);
     await waitForFirebaseAuthReady();
+    const allowLocalBypass = isLocalhostDevBypassSession();
+    const expectedLogin = normalizeLogin(getAuthSession()?.login || '');
+    if (!allowLocalBypass && !auth?.currentUser && expectedLogin) {
+        await waitForFirebaseAuthSessionForLogin(expectedLogin, Math.min(AUTH_FLOW_STEP_TIMEOUT_MS, 6000));
+    }
     if (!auth?.currentUser) {
-        if (isLocalhostDevBypassSession()) {
+        if (allowLocalBypass) {
             return headers;
         }
         const error = new Error('Firebase ID token is required');
@@ -6975,9 +6980,13 @@ async function buildAuthenticatedJsonRequestHeaders(requestId, scope = 'request'
         error.httpStatus = 401;
         throw error;
     }
-    const idToken = await getFirebaseAuthIdToken().catch(() => '');
+    let idToken = await getFirebaseAuthIdToken().catch(() => '');
+    if (!allowLocalBypass && !idToken && expectedLogin) {
+        await waitForFirebaseAuthSessionForLogin(expectedLogin, Math.min(AUTH_FLOW_STEP_TIMEOUT_MS, 4000));
+        idToken = await getFirebaseAuthIdToken().catch(() => '');
+    }
     if (!idToken) {
-        if (isLocalhostDevBypassSession()) {
+        if (allowLocalBypass) {
             return headers;
         }
         const error = new Error('Firebase ID token is required');
