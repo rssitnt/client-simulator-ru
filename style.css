@@ -18692,6 +18692,20 @@ body.local-minimal-ui.light-theme #settingsModal .settings-panel .admin-invite-d
     background: var(--local-surface-elevated-final) !important;
     border-color: var(--local-border-strong-final) !important;
 }
+
+/* Final mobile/tablet settings header width fix:
+   the fullscreen sheet stays edge-to-edge, and the sticky top row must do the same
+   instead of collapsing into an extra centered mini-column above full-width settings rows. */
+@media (max-width: 1024px) {
+    body.local-minimal-ui #settingsModal .theme-color-section {
+        width: 100% !important;
+        max-width: none !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        padding-left: max(18px, env(safe-area-inset-left, 0px) + 12px) !important;
+        padding-right: max(18px, env(safe-area-inset-right, 0px) + 12px) !important;
+    }
+}
 /* Admin invite UX */
 .admin-latest-invite {
     display: grid;
