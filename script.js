@@ -18641,6 +18641,15 @@ async function clearVoiceModeConfig() {
 async function getFirebaseAuthIdToken() {
     if (!auth?.currentUser || typeof auth.currentUser.getIdToken !== 'function') return '';
     const cachedLogin = normalizeLogin(auth.currentUser?.email || '');
+    const rememberToken = (token) => {
+        const normalized = String(token || '').trim();
+        if (normalized) {
+            voiceAuthCachedIdToken = normalized;
+            voiceAuthCachedIdTokenAt = Date.now();
+            voiceAuthCachedIdTokenLogin = cachedLogin;
+        }
+        return normalized;
+    };
     try {
         const token = await withPromiseTimeout(
             auth.currentUser.getIdToken(true),
