@@ -15272,7 +15272,7 @@ function updateChatReadyState() {
     isChatReady = ready;
     setChatLoadingState(!ready);
     if (ready && document.activeElement === document.body) {
-        userInput.focus();
+        focusUserInputWithoutScroll();
     }
 }
 
@@ -23761,7 +23761,7 @@ async function sendMessage() {
                 lockDialogInput();
             } else {
                 toggleInputState(true);
-                userInput.focus();
+    focusUserInputWithoutScroll();
             }
         }
     }
@@ -23906,7 +23906,7 @@ async function startConversationHandler() {
                     lockDialogInput();
                 } else {
                     toggleInputState(true);
-                    userInput.focus();
+    focusUserInputWithoutScroll();
                 }
             }
         }
@@ -24489,7 +24489,7 @@ async function rateChat(options = {}) {
                     lockDialogInput();
                 } else {
                     toggleInputState(true);
-                    userInput.focus();
+    focusUserInputWithoutScroll();
                 }
             } else {
                 updateRateChatButtonState();
@@ -24757,7 +24757,7 @@ async function generateAIResponse() {
         userInput.value = cleanedMessage;
         autoResizeTextarea(userInput);
         updateSendBtnState(); // Активируем кнопку отправки
-        userInput.focus();
+    focusUserInputWithoutScroll();
         
     } catch (error) {
         failWebhookDebugRequest(debugEntryId, error, response?.status);
@@ -25631,9 +25631,11 @@ bindEvent(userInput, 'input', () => {
     updateSendBtnState();
 });
 bindEvent(userInput, 'focus', () => {
+    startMobileChatKeyboardTransitionLock();
     syncMobileChatViewportLock();
 });
 bindEvent(userInput, 'blur', () => {
+    mobileChatKeyboardTransitionUntil = 0;
     setTimeout(() => {
         syncMobileChatViewportLock();
     }, 0);
@@ -25822,6 +25824,8 @@ let mobilePromptToolbarDocked = false;
 let mobilePromptEditorDocked = false;
 let mobileChatViewportLocked = false;
 let mobileChatViewportLockY = 0;
+let mobileChatKeyboardTransitionUntil = 0;
+let mobileChatKeyboardScrollTop = 0;
 function checkTabsCompactMode() {
     if (!instructionsPanelElement) return;
     
@@ -25865,6 +25869,30 @@ function shouldLockMobileChatViewport() {
         && !userInput?.disabled;
 }
 
+function focusUserInputWithoutScroll() {
+    if (!userInput || userInput.disabled) return;
+    try {
+        userInput.focus({ preventScroll: true });
+    } catch (error) {
+        userInput.focus();
+    }
+}
+
+function isMobileChatKeyboardTransitionActive() {
+    return shouldLockMobileChatViewport() && Date.now() < mobileChatKeyboardTransitionUntil;
+}
+
+function startMobileChatKeyboardTransitionLock() {
+    if (!chatMessages) return;
+    mobileChatKeyboardScrollTop = chatMessages.scrollTop;
+    mobileChatKeyboardTransitionUntil = Date.now() + 900;
+}
+
+function syncMobileChatKeyboardTransitionLock() {
+    if (!isMobileChatKeyboardTransitionActive() || !chatMessages) return;
+    chatMessages.scrollTop = mobileChatKeyboardScrollTop;
+}
+
 function applyMobileChatViewportLock(enabled) {
     const shouldLock = !!enabled;
     if (shouldLock === mobileChatViewportLocked) {
@@ -25897,6 +25925,7 @@ function syncMobileChatViewportLock() {
     if (mobileChatViewportLocked) {
         window.scrollTo(0, mobileChatViewportLockY);
     }
+    syncMobileChatKeyboardTransitionLock();
 }
 
 function shouldPreventMobileChatViewportTouchMove(event) {
