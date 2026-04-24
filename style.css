@@ -17498,12 +17498,13 @@ body * {
         min-height: calc(env(safe-area-inset-top, 0px) + 76px) !important;
         background: rgba(19, 18, 16, 0.96) !important;
         backdrop-filter: blur(18px) !important;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+        border-top: none !important;
+        border-bottom: none !important;
+        box-shadow: none !important;
     }
 
     body.local-minimal-ui.light-theme .mobile-tabs {
         background: rgba(244, 236, 222, 0.96) !important;
-        border-bottom-color: rgba(126, 107, 83, 0.14) !important;
     }
 
     body.local-minimal-ui .mobile-tab {
@@ -18423,6 +18424,9 @@ body.local-minimal-ui.light-theme .dialog-history-item-main {
         padding-right: max(env(safe-area-inset-right, 0px), 0px) !important;
         padding-bottom: 12px !important;
         overflow: visible !important;
+        border-top: none !important;
+        border-bottom: none !important;
+        box-shadow: none !important;
     }
 
     body.local-minimal-ui #historyPanel.panel.active .history-panel-body {
