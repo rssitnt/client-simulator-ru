@@ -25629,7 +25629,15 @@ bindEvent(userInput, 'keydown', (e) => {
 bindEvent(userInput, 'input', () => {
     autoResizeTextarea(userInput);
     updateSendBtnState();
-    });
+});
+bindEvent(userInput, 'focus', () => {
+    syncMobileChatViewportLock();
+});
+bindEvent(userInput, 'blur', () => {
+    setTimeout(() => {
+        syncMobileChatViewportLock();
+    }, 0);
+});
 bindEvent(clearChatBtn, 'click', () => { if (confirm('Очистить чат?')) clearChat(); });
 bindEvent(historySidebarToggleBtn, 'click', () => {
     applyHistorySidebarCollapsed(!historySidebarCollapsed);
@@ -25812,6 +25820,8 @@ let compactTabsState = null;
 let compactToolbarState = null;
 let mobilePromptToolbarDocked = false;
 let mobilePromptEditorDocked = false;
+let mobileChatViewportLocked = false;
+let mobileChatViewportLockY = 0;
 function checkTabsCompactMode() {
     if (!instructionsPanelElement) return;
     
@@ -25842,6 +25852,57 @@ function getMobilePromptToolbarBottomInset() {
     const visualViewport = window.visualViewport;
     if (!visualViewport) return 0;
     return Math.max(0, window.innerHeight - (visualViewport.height + visualViewport.offsetTop));
+}
+
+function shouldLockMobileChatViewport() {
+    return window.innerWidth <= 1024
+        && !!document.body?.classList.contains('local-minimal-ui')
+        && document.activeElement === userInput
+        && !userInput?.disabled;
+}
+
+function applyMobileChatViewportLock(enabled) {
+    const shouldLock = !!enabled;
+    if (shouldLock === mobileChatViewportLocked) {
+        if (shouldLock) {
+            document.documentElement.style.setProperty('--local-mobile-chat-lock-top', `${mobileChatViewportLockY}px`);
+        }
+        return;
+    }
+
+    mobileChatViewportLocked = shouldLock;
+    if (shouldLock) {
+        mobileChatViewportLockY = Math.max(
+            window.scrollY || 0,
+            document.documentElement?.scrollTop || 0,
+            document.body?.scrollTop || 0
+        );
+        document.documentElement.style.setProperty('--local-mobile-chat-lock-top', `${mobileChatViewportLockY}px`);
+        document.body.classList.add('mobile-chat-viewport-locked');
+        window.scrollTo(0, mobileChatViewportLockY);
+        return;
+    }
+
+    document.body.classList.remove('mobile-chat-viewport-locked');
+    document.documentElement.style.setProperty('--local-mobile-chat-lock-top', '0px');
+    window.scrollTo(0, mobileChatViewportLockY);
+}
+
+function syncMobileChatViewportLock() {
+    applyMobileChatViewportLock(shouldLockMobileChatViewport());
+    if (mobileChatViewportLocked) {
+        window.scrollTo(0, mobileChatViewportLockY);
+    }
+}
+
+function shouldPreventMobileChatViewportTouchMove(event) {
+    if (!mobileChatViewportLocked) return false;
+    const target = event?.target;
+    if (!(target instanceof Element)) return true;
+    if (target.closest('#chatMessages')) return false;
+    if (target.closest('.chat-input-container')) return false;
+    if (target.closest('.input-wrapper')) return false;
+    return true;
 }
 
 function updateMobilePromptToolbarDocking() {
@@ -25880,9 +25941,16 @@ checkTabsCompactMode();
 window.addEventListener('resize', debounce(() => {
     checkTabsCompactMode();
     updateMobilePromptToolbarDocking();
+    syncMobileChatViewportLock();
 }, 100));
-window.visualViewport?.addEventListener('resize', updateMobilePromptToolbarDocking);
-window.visualViewport?.addEventListener('scroll', updateMobilePromptToolbarDocking);
+window.visualViewport?.addEventListener('resize', () => {
+    updateMobilePromptToolbarDocking();
+    syncMobileChatViewportLock();
+});
+window.visualViewport?.addEventListener('scroll', () => {
+    updateMobilePromptToolbarDocking();
+    syncMobileChatViewportLock();
+});
 
 // Textarea input listeners for sync
 [systemPromptInput, managerPromptInput, managerCallPromptInput, raterPromptInput].forEach(input => {
@@ -25916,7 +25984,19 @@ window.visualViewport?.addEventListener('scroll', updateMobilePromptToolbarDocki
     });
 });
 document.addEventListener('visibilitychange', updateMobilePromptToolbarDocking);
+document.addEventListener('focusin', syncMobileChatViewportLock);
+document.addEventListener('focusout', () => {
+    setTimeout(() => {
+        syncMobileChatViewportLock();
+    }, 0);
+});
+document.addEventListener('touchmove', (event) => {
+    if (shouldPreventMobileChatViewportTouchMove(event)) {
+        event.preventDefault();
+    }
+}, { passive: false });
 updateMobilePromptToolbarDocking();
+syncMobileChatViewportLock();
 
 // Resize panels
 const resizeHandle1 = document.getElementById('resizeHandle1');

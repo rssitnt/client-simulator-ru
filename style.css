@@ -18476,6 +18476,30 @@ body.local-minimal-ui.light-theme .dialog-history-item-main {
 /* Mobile prompt edit docking:
    while a prompt textarea is focused, keep the formatting tray attached to the keyboard edge. */
 @media (max-width: 1024px) {
+    body.local-minimal-ui.mobile-chat-viewport-locked {
+        position: fixed !important;
+        top: calc(var(--local-mobile-chat-lock-top, 0px) * -1) !important;
+        right: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        overflow: hidden !important;
+    }
+
+    body.local-minimal-ui.mobile-chat-viewport-locked .panels-container,
+    body.local-minimal-ui.mobile-chat-viewport-locked #chatPanel.panel.active {
+        overflow: hidden !important;
+        min-height: 100dvh !important;
+        max-height: 100dvh !important;
+    }
+
+    body.local-minimal-ui.mobile-chat-viewport-locked #chatPanel.panel.active .chat-messages {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
     body.local-minimal-ui.mobile-prompt-editor-docked #instructionsPanel.panel.active,
     body.local-minimal-ui.mobile-prompt-editor-docked #instructionsPanel.panel.active .instruction-content {
         overflow: hidden !important;
