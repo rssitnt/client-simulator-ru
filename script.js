@@ -21710,6 +21710,15 @@ async function startGeminiVoiceMode() {
     void warmupGeminiVoiceTokenEndpoint();
 
     try {
+        throwIfGeminiVoiceStartAttemptStale(startAttempt.id);
+        setVoiceModeStatus(getVoiceModeStatusCopy('preparingMic'), 'waiting');
+        const preparedMic = await ensureGeminiVoiceInputStreamReady();
+        recordVoiceDebugEvent('capture_prepared', {
+            status: 'ok',
+            micDeviceId: String(preparedMic?.track?.getSettings?.()?.deviceId || preparedMic?.selectedAudioInputDeviceId || '').trim(),
+            micLabel: normalizeGeminiAudioInputLabel(preparedMic?.track?.label || '')
+        });
+        throwIfGeminiVoiceStartAttemptStale(startAttempt.id);
         const sdk = await loadGeminiSdkModule();
         recordVoiceDebugEvent('sdk_loaded', {
             status: 'ok'
@@ -21728,9 +21737,6 @@ async function startGeminiVoiceMode() {
         const clientSecret = await resolveGeminiLiveApiKey(sessionConfig, {
             signal: startAttempt.signal
         });
-        throwIfGeminiVoiceStartAttemptStale(startAttempt.id);
-        setVoiceModeStatus(getVoiceModeStatusCopy('preparingMic'), 'waiting');
-        await ensureGeminiVoiceInputStreamReady();
         throwIfGeminiVoiceStartAttemptStale(startAttempt.id);
         setVoiceModeStatus(getVoiceModeStatusCopy('dialing', 'Звоним клиенту…'), 'waiting');
         startGeminiDialTone();
