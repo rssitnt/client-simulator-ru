@@ -15705,7 +15705,7 @@ function scheduleGeminiPendingAssistantFinalizeAfterUserTurn(reason = 'assistant
 
 function updateVoiceConnectingUi() {
     const startDiv = document.getElementById('startConversation');
-    const shouldHideStart = isGeminiVoiceConnecting || isGeminiVoiceActive;
+    const shouldHideStart = isGeminiVoiceConnecting || isGeminiVoiceActive || isVoiceModeScreenActive;
     if (startDiv) {
         if (shouldHideStart) {
             startDiv.style.display = 'none';
@@ -21327,6 +21327,70 @@ function buildGeminiVoiceAudioInputConstraints(options = {}) {
     };
 }
 
+function isRecoverableGeminiVoiceCaptureError(error) {
+    return ['OverconstrainedError', 'NotFoundError', 'DevicesNotFoundError'].includes(String(error?.name || ''));
+}
+
+async function tryGeminiVoiceEnumeratedAudioInputFallback(baseAudioConstraints = {}, options = {}) {
+    const mediaDevices = navigator.mediaDevices;
+    if (!mediaDevices?.enumerateDevices || !mediaDevices?.getUserMedia) return null;
+    const excludedDeviceIds = new Set(
+        Array.from(options?.excludedDeviceIds || [])
+            .map((deviceId) => String(deviceId || '').trim())
+            .filter(Boolean)
+    );
+    let normalizedDevices = [];
+    try {
+        normalizedDevices = normalizeGeminiAudioInputDevices(await mediaDevices.enumerateDevices());
+    } catch (error) {
+        recordVoiceDebugEvent('capture_enumerated_fallback_list_failed', {
+            status: 'warning',
+            message: error?.message || 'enumerateDevices failed'
+        });
+        return null;
+    }
+    const candidates = normalizedDevices.filter((device) => {
+        const deviceId = String(device?.deviceId || '').trim();
+        return deviceId && !excludedDeviceIds.has(deviceId);
+    });
+    if (!candidates.length) return null;
+
+    for (const device of candidates) {
+        const deviceId = String(device?.deviceId || '').trim();
+        try {
+            const stream = await mediaDevices.getUserMedia({
+                audio: {
+                    ...baseAudioConstraints,
+                    deviceId: { exact: deviceId }
+                }
+            });
+            recordVoiceDebugEvent('capture_fallback_enumerated', {
+                status: 'ok',
+                micDeviceId: deviceId,
+                micLabel: normalizeGeminiAudioInputLabel(device?.label || '')
+            });
+            setGeminiAudioInputOptions(normalizedDevices);
+            if (geminiAudioInputDeviceInput) {
+                geminiAudioInputDeviceInput.value = deviceId;
+                syncGeminiAudioInputPickerFromSelect();
+            }
+            setCachedStorageValue(GEMINI_LIVE_AUDIO_INPUT_DEVICE_STORAGE_KEY, deviceId);
+            return { stream, deviceId };
+        } catch (error) {
+            recordVoiceDebugEvent('capture_fallback_enumerated_failed', {
+                status: 'warning',
+                micDeviceId: deviceId,
+                micLabel: normalizeGeminiAudioInputLabel(device?.label || ''),
+                message: error?.message || 'getUserMedia exact enumerated device failed'
+            });
+            if (!isRecoverableGeminiVoiceCaptureError(error)) {
+                throw error;
+            }
+        }
+    }
+    return null;
+}
+
 async function ensureGeminiVoiceInputStreamReady() {
     const existingTrack = geminiVoiceInputStream?.getAudioTracks?.()[0]
         || geminiVoiceInputStream?.getTracks?.().find((track) => !track?.kind || track.kind === 'audio')
@@ -21350,7 +21414,7 @@ async function ensureGeminiVoiceInputStreamReady() {
         requestedAudioConstraints
     } = buildGeminiVoiceAudioInputConstraints();
     let didFallbackToDefaultInput = false;
-    const recoverableCaptureErrorNames = ['OverconstrainedError', 'NotFoundError', 'DevicesNotFoundError'];
+    let resolvedAudioInputDeviceId = selectedAudioInputDeviceId;
 
     try {
         geminiVoiceInputStream = await mediaDevices.getUserMedia({
@@ -21358,9 +21422,9 @@ async function ensureGeminiVoiceInputStreamReady() {
         });
     } catch (error) {
         const shouldFallbackToDefaultInput = !!selectedAudioInputDeviceId
-            && recoverableCaptureErrorNames.includes(String(error?.name || ''));
+            && isRecoverableGeminiVoiceCaptureError(error);
         if (!shouldFallbackToDefaultInput) {
-            if (recoverableCaptureErrorNames.includes(String(error?.name || ''))) {
+            if (isRecoverableGeminiVoiceCaptureError(error)) {
                 try {
                     recordVoiceDebugEvent('capture_fallback_basic_constraints', {
                         status: 'warning',
@@ -21375,7 +21439,15 @@ async function ensureGeminiVoiceInputStreamReady() {
                         status: 'error',
                         message: basicError?.message || error?.message || 'getUserMedia failed'
                     });
-                    throw basicError;
+                    const enumeratedFallback = await tryGeminiVoiceEnumeratedAudioInputFallback(baseAudioConstraints, {
+                        excludedDeviceIds: [selectedAudioInputDeviceId]
+                    });
+                    if (!enumeratedFallback) {
+                        throw basicError;
+                    }
+                    geminiVoiceInputStream = enumeratedFallback.stream;
+                    resolvedAudioInputDeviceId = enumeratedFallback.deviceId;
+                    didFallbackToDefaultInput = true;
                 }
             } else {
                 recordVoiceDebugEvent('capture_failed', {
@@ -21398,16 +21470,27 @@ async function ensureGeminiVoiceInputStreamReady() {
                     audio: baseAudioConstraints
                 });
             } catch (defaultInputError) {
-                if (!recoverableCaptureErrorNames.includes(String(defaultInputError?.name || ''))) {
+                if (!isRecoverableGeminiVoiceCaptureError(defaultInputError)) {
                     throw defaultInputError;
                 }
                 recordVoiceDebugEvent('capture_fallback_basic_constraints', {
                     status: 'warning',
                     message: defaultInputError?.message || 'default getUserMedia constraints failed'
                 });
-                geminiVoiceInputStream = await mediaDevices.getUserMedia({
-                    audio: true
-                });
+                try {
+                    geminiVoiceInputStream = await mediaDevices.getUserMedia({
+                        audio: true
+                    });
+                } catch (basicError) {
+                    const enumeratedFallback = await tryGeminiVoiceEnumeratedAudioInputFallback(baseAudioConstraints, {
+                        excludedDeviceIds: [selectedAudioInputDeviceId]
+                    });
+                    if (!enumeratedFallback) {
+                        throw basicError;
+                    }
+                    geminiVoiceInputStream = enumeratedFallback.stream;
+                    resolvedAudioInputDeviceId = enumeratedFallback.deviceId;
+                }
             }
         }
     }
@@ -21420,7 +21503,7 @@ async function ensureGeminiVoiceInputStreamReady() {
     }
     return {
         track: activeAudioTrack,
-        selectedAudioInputDeviceId,
+        selectedAudioInputDeviceId: resolvedAudioInputDeviceId,
         didFallbackToDefaultInput
     };
 }
