@@ -18377,12 +18377,15 @@ async function refreshGeminiAudioInputOptions(options = {}) {
 function getSelectedGeminiAudioInputDeviceId() {
     const selectedOption = geminiAudioInputDeviceInput?.selectedOptions?.[0] || null;
     if (selectedOption && !selectedOption.disabled && selectedOption.dataset?.unverified !== 'true') {
-        return String(geminiAudioInputDeviceInput.value || '').trim();
+        const selectedValue = String(geminiAudioInputDeviceInput.value || '').trim();
+        const isEnumeratedDevice = !!selectedValue && geminiAudioInputDevices.some((device) => {
+            return String(device?.deviceId || '').trim() === selectedValue && !device.unverified;
+        });
+        if (isEnumeratedDevice) {
+            return selectedValue;
+        }
     }
-    if (geminiAudioInputDeviceInput) {
-        return '';
-    }
-    return getConfiguredGeminiAudioInputDeviceId();
+    return '';
 }
 
 function findGeminiAudioInputDeviceForTrack(track = null, devices = []) {
@@ -21347,6 +21350,7 @@ async function ensureGeminiVoiceInputStreamReady() {
         requestedAudioConstraints
     } = buildGeminiVoiceAudioInputConstraints();
     let didFallbackToDefaultInput = false;
+    const recoverableCaptureErrorNames = ['OverconstrainedError', 'NotFoundError', 'DevicesNotFoundError'];
 
     try {
         geminiVoiceInputStream = await mediaDevices.getUserMedia({
@@ -21354,25 +21358,58 @@ async function ensureGeminiVoiceInputStreamReady() {
         });
     } catch (error) {
         const shouldFallbackToDefaultInput = !!selectedAudioInputDeviceId
-            && ['OverconstrainedError', 'NotFoundError', 'DevicesNotFoundError'].includes(String(error?.name || ''));
+            && recoverableCaptureErrorNames.includes(String(error?.name || ''));
         if (!shouldFallbackToDefaultInput) {
-            recordVoiceDebugEvent('capture_failed', {
+            if (recoverableCaptureErrorNames.includes(String(error?.name || ''))) {
+                try {
+                    recordVoiceDebugEvent('capture_fallback_basic_constraints', {
+                        status: 'warning',
+                        message: error?.message || 'getUserMedia constraints failed'
+                    });
+                    geminiVoiceInputStream = await mediaDevices.getUserMedia({
+                        audio: true
+                    });
+                    didFallbackToDefaultInput = true;
+                } catch (basicError) {
+                    recordVoiceDebugEvent('capture_failed', {
+                        status: 'error',
+                        message: basicError?.message || error?.message || 'getUserMedia failed'
+                    });
+                    throw basicError;
+                }
+            } else {
+                recordVoiceDebugEvent('capture_failed', {
+                    status: 'error',
+                    message: error?.message || 'getUserMedia failed'
+                });
+                throw error;
+            }
+        } else {
+            console.warn('Selected microphone is unavailable, falling back to the current real input:', error);
+            didFallbackToDefaultInput = true;
+            removeCachedStorageValue(GEMINI_LIVE_AUDIO_INPUT_DEVICE_STORAGE_KEY);
+            showCopyNotification('Выбранный микрофон недоступен. Переключил звонок на доступный вход.');
+            recordVoiceDebugEvent('capture_fallback_default', {
                 status: 'error',
-                message: error?.message || 'getUserMedia failed'
+                message: error?.message || 'Saved microphone unavailable'
             });
-            throw error;
+            try {
+                geminiVoiceInputStream = await mediaDevices.getUserMedia({
+                    audio: baseAudioConstraints
+                });
+            } catch (defaultInputError) {
+                if (!recoverableCaptureErrorNames.includes(String(defaultInputError?.name || ''))) {
+                    throw defaultInputError;
+                }
+                recordVoiceDebugEvent('capture_fallback_basic_constraints', {
+                    status: 'warning',
+                    message: defaultInputError?.message || 'default getUserMedia constraints failed'
+                });
+                geminiVoiceInputStream = await mediaDevices.getUserMedia({
+                    audio: true
+                });
+            }
         }
-        console.warn('Selected microphone is unavailable, falling back to the current real input:', error);
-        didFallbackToDefaultInput = true;
-        removeCachedStorageValue(GEMINI_LIVE_AUDIO_INPUT_DEVICE_STORAGE_KEY);
-        showCopyNotification('Выбранный микрофон недоступен. Переключил звонок на доступный вход.');
-        recordVoiceDebugEvent('capture_fallback_default', {
-            status: 'error',
-            message: error?.message || 'Saved microphone unavailable'
-        });
-        geminiVoiceInputStream = await mediaDevices.getUserMedia({
-            audio: baseAudioConstraints
-        });
     }
 
     const activeAudioTrack = geminiVoiceInputStream?.getAudioTracks?.()[0]
