@@ -18233,6 +18233,9 @@ function setGeminiAudioInputOptions(devices = [], options = {}) {
             option.value = device.deviceId;
             option.textContent = device.label;
             option.dataset.pickerName = device.label;
+            if (device.unverified) {
+                option.dataset.unverified = 'true';
+            }
             fragment.appendChild(option);
         });
         const configured = getConfiguredGeminiAudioInputDeviceId();
@@ -18373,8 +18376,11 @@ async function refreshGeminiAudioInputOptions(options = {}) {
 
 function getSelectedGeminiAudioInputDeviceId() {
     const selectedOption = geminiAudioInputDeviceInput?.selectedOptions?.[0] || null;
-    if (selectedOption && !selectedOption.disabled) {
+    if (selectedOption && !selectedOption.disabled && selectedOption.dataset?.unverified !== 'true') {
         return String(geminiAudioInputDeviceInput.value || '').trim();
+    }
+    if (geminiAudioInputDeviceInput) {
+        return '';
     }
     return getConfiguredGeminiAudioInputDeviceId();
 }
@@ -18503,7 +18509,7 @@ function populateVoiceConfigFields() {
     if (geminiAudioInputDeviceInput) {
         const configuredDeviceId = getConfiguredGeminiAudioInputDeviceId();
         if (configuredDeviceId) {
-            setGeminiAudioInputOptions([{ deviceId: configuredDeviceId, label: 'Сохранённый микрофон' }]);
+            setGeminiAudioInputOptions([{ deviceId: configuredDeviceId, label: 'Сохранённый микрофон', unverified: true }]);
             if (geminiAudioInputDeviceInput.options?.[0]) {
                 geminiAudioInputDeviceInput.options[0].dataset.pickerDescription = 'Сейчас перепроверю, доступен ли он';
             }
@@ -19131,8 +19137,7 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
 
     geminiVoiceResolvedServerEndpoint = '';
     const headers = await buildGeminiVoiceServerRequestHeaders(tokenEndpoint);
-    const publicBackendEndpoints = await loadPublicBackendVoiceTokenEndpointCandidates();
-    const endpointCandidates = getGeminiVoiceTokenEndpointCandidates(tokenEndpoint, publicBackendEndpoints);
+    const endpointCandidates = getGeminiVoiceTokenEndpointCandidates(tokenEndpoint);
     const retryableHttpStatuses = new Set([404, 408, 502, 503, 504]);
     let lastError = null;
     let sawTimeoutLikeFailure = false;
