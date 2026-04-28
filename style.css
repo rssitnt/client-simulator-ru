@@ -18990,10 +18990,10 @@ body.local-minimal-ui.light-theme .prompt-variation-chip.active {
     body.local-minimal-ui #instructionsPanel.panel.active .markdown-toolbar {
         position: fixed !important;
         top: calc(var(--local-mobile-appbar-height) + 34px) !important;
-        right: max(16px, env(safe-area-inset-right, 0px)) !important;
+        right: auto !important;
         left: max(16px, env(safe-area-inset-left, 0px)) !important;
-        width: auto !important;
-        max-width: none !important;
+        width: calc(100vw - 32px) !important;
+        max-width: calc(100vw - 32px) !important;
         box-sizing: border-box !important;
         z-index: 4 !important;
         display: grid !important;
@@ -19029,6 +19029,7 @@ body.local-minimal-ui.light-theme .prompt-variation-chip.active {
         justify-content: center !important;
         width: 100% !important;
         min-width: 0 !important;
+        max-width: 100% !important;
         min-height: 58px !important;
         height: 58px !important;
         padding: 7px 8px !important;
@@ -19086,11 +19087,11 @@ body.local-minimal-ui.light-theme .prompt-variation-chip.active {
     body.local-minimal-ui.mobile-prompt-toolbar-docked #instructionsPanel.panel.active .markdown-toolbar {
         position: fixed !important;
         top: calc(var(--local-mobile-appbar-height) + 34px) !important;
-        right: max(16px, env(safe-area-inset-right, 0px)) !important;
+        right: auto !important;
         bottom: auto !important;
         left: max(16px, env(safe-area-inset-left, 0px)) !important;
-        width: auto !important;
-        max-width: none !important;
+        width: calc(100vw - 32px) !important;
+        max-width: calc(100vw - 32px) !important;
         box-sizing: border-box !important;
     }
 
@@ -19372,11 +19373,11 @@ body.local-minimal-ui .message.loading .typing-dot:nth-child(3) {
     body.local-minimal-ui.mobile-prompt-toolbar-docked #instructionsPanel.panel.active .markdown-toolbar {
         position: fixed !important;
         top: calc(var(--local-mobile-appbar-height) + 34px) !important;
-        right: max(16px, env(safe-area-inset-right, 0px)) !important;
+        right: auto !important;
         bottom: auto !important;
         left: max(16px, env(safe-area-inset-left, 0px)) !important;
-        width: auto !important;
-        max-width: none !important;
+        width: calc(100vw - 32px) !important;
+        max-width: calc(100vw - 32px) !important;
         box-sizing: border-box !important;
     }
 }
