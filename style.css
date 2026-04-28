@@ -438,6 +438,20 @@ body.local-minimal-ui.light-theme {
     --local-border-strong: transparent;
 }
 
+html.local-minimal-ui,
+body.local-minimal-ui.app-booting {
+    background: #0f0f0f;
+}
+
+body.local-minimal-ui.app-booting .container,
+body.local-minimal-ui.app-booting .mobile-tabs,
+body.local-minimal-ui.app-booting .modal-overlay,
+body.local-minimal-ui.app-booting .custom-tooltip-layer {
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
 body.local-minimal-ui .history-panel,
 body.local-minimal-ui .history-panel-header {
     background: color-mix(

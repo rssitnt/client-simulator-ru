@@ -15304,6 +15304,15 @@ function updateChatReadyState() {
     }
 }
 
+function revealBootUi() {
+    if (typeof window.__clientSimulatorRevealBootUi === 'function') {
+        window.__clientSimulatorRevealBootUi();
+        return;
+    }
+    document.body?.classList.remove('app-booting');
+    document.documentElement?.classList.add('app-booted');
+}
+
 function syncWindowReadyState() {
     const nextReady = document.readyState !== 'loading';
     if (nextReady === isWindowLoaded) return;
@@ -26718,6 +26727,7 @@ setChatLoadingState(true);
 installLocalhostTestHooks();
 loadAttestationQueue();
 syncChatPanelHeadingMode();
+revealBootUi();
 prewarmFirebaseRuntime();
 loadPrompts()
     .catch((error) => {
