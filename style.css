@@ -18992,6 +18992,9 @@ body.local-minimal-ui.light-theme .prompt-variation-chip.active {
         top: calc(var(--local-mobile-appbar-height) + 34px) !important;
         right: max(16px, env(safe-area-inset-right, 0px)) !important;
         left: max(16px, env(safe-area-inset-left, 0px)) !important;
+        width: auto !important;
+        max-width: none !important;
+        box-sizing: border-box !important;
         z-index: 4 !important;
         display: grid !important;
         grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
@@ -19086,6 +19089,9 @@ body.local-minimal-ui.light-theme .prompt-variation-chip.active {
         right: max(16px, env(safe-area-inset-right, 0px)) !important;
         bottom: auto !important;
         left: max(16px, env(safe-area-inset-left, 0px)) !important;
+        width: auto !important;
+        max-width: none !important;
+        box-sizing: border-box !important;
     }
 
     body.local-minimal-ui #promptHistoryModal.modal-overlay,
@@ -19369,6 +19375,9 @@ body.local-minimal-ui .message.loading .typing-dot:nth-child(3) {
         right: max(16px, env(safe-area-inset-right, 0px)) !important;
         bottom: auto !important;
         left: max(16px, env(safe-area-inset-left, 0px)) !important;
+        width: auto !important;
+        max-width: none !important;
+        box-sizing: border-box !important;
     }
 }
 
