@@ -18982,7 +18982,7 @@ body.local-minimal-ui.light-theme .prompt-variation-chip.active {
 }
 
 @media (max-width: 1024px) {
-    body.local-minimal-ui #instructionsPanel.panel.active .prompt-wrapper.instruction-editor,
+    body.local-minimal-ui.user-mode #instructionsPanel.panel.active .prompt-wrapper.instruction-editor,
     body.local-minimal-ui #instructionsPanel.panel.active .prompt-length-info {
         display: none !important;
     }
@@ -19323,12 +19323,38 @@ body.local-minimal-ui .message.loading .typing-dot:nth-child(3) {
 /* Last mobile prompt page lock:
    keep the phone role screen action-only even if older keyboard-docking classes remain. */
 @media (max-width: 1024px) {
-    body.local-minimal-ui #instructionsPanel.panel.active .prompt-wrapper.instruction-editor,
-    body.local-minimal-ui #instructionsPanel.panel.active .prompt-wrapper.instruction-editor.active,
-    body.local-minimal-ui.mobile-prompt-editor-docked #instructionsPanel.panel.active .prompt-wrapper.instruction-editor,
-    body.local-minimal-ui.mobile-prompt-editor-docked #instructionsPanel.panel.active .prompt-wrapper.instruction-editor.active {
+    body.local-minimal-ui.user-mode #instructionsPanel.panel.active .prompt-wrapper.instruction-editor,
+    body.local-minimal-ui.user-mode #instructionsPanel.panel.active .prompt-wrapper.instruction-editor.active,
+    body.local-minimal-ui.user-mode.mobile-prompt-editor-docked #instructionsPanel.panel.active .prompt-wrapper.instruction-editor,
+    body.local-minimal-ui.user-mode.mobile-prompt-editor-docked #instructionsPanel.panel.active .prompt-wrapper.instruction-editor.active {
         display: none !important;
         position: static !important;
+    }
+
+    body.local-minimal-ui:not(.user-mode) #instructionsPanel.panel.active .prompt-wrapper.instruction-editor.active,
+    body.local-minimal-ui:not(.user-mode).mobile-prompt-editor-docked #instructionsPanel.panel.active .prompt-wrapper.instruction-editor.active {
+        display: flex !important;
+        position: relative !important;
+        top: auto !important;
+        right: auto !important;
+        bottom: auto !important;
+        left: auto !important;
+        z-index: auto !important;
+        min-height: 260px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        border-radius: 20px !important;
+        background: var(--local-surface-final) !important;
+        border: 1px solid var(--local-border-final) !important;
+        box-shadow: none !important;
+    }
+
+    body.local-minimal-ui:not(.user-mode) #instructionsPanel.panel.active .prompt-wrapper.instruction-editor.active .prompt-preview {
+        min-height: 260px !important;
+        padding: 16px !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
     }
 
     body.local-minimal-ui.mobile-prompt-toolbar-docked #instructionsPanel.panel.active .markdown-toolbar {
