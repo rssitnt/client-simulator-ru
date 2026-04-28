@@ -86,9 +86,12 @@ async function main() {
 
   requireMatch(
     liveHtml,
-    /<div id="nameModal" class="modal-overlay active">/,
-    'Live HTML does not expose the active auth modal in raw markup'
+    /<div id="nameModal" class="modal-overlay">/,
+    'Live HTML must keep the auth modal hidden in raw markup'
   );
+  if (liveHtml.includes('id="nameModal" class="modal-overlay active"')) {
+    throw new Error('Live HTML must not expose the active auth modal in raw markup');
+  }
   requireMatch(
     liveHtml,
     /<script type="module" src="script\.bundle\.min\.js\?v=[0-9-]+"><\/script>/,
@@ -112,6 +115,18 @@ async function main() {
   }
   if (styleBuffer.byteLength < 30000) {
     throw new Error(`Live stylesheet is unexpectedly small: ${styleBuffer.byteLength} bytes`);
+  }
+
+  const scriptText = scriptBuffer.toString('utf8');
+  const styleText = styleBuffer.toString('utf8');
+  if (!scriptText.includes('settings-shell-panel')) {
+    throw new Error('Live script bundle must keep the settings shell-panel activation path');
+  }
+  if (!styleText.includes('body.local-minimal-ui #settingsModal.settings-shell-panel{position:fixed!important;top:0!important;right:0!important;bottom:0!important;left:auto!important')) {
+    throw new Error('Live stylesheet must keep desktop settings as a right-docked shell panel');
+  }
+  if (!styleText.includes('@media (max-width:1024px){body.local-minimal-ui .mobile-tabs{grid-template-columns:repeat(4,minmax(0,1fr))!important}body.local-minimal-ui #settingsModal.settings-shell-panel{position:relative!important')) {
+    throw new Error('Live stylesheet must keep mobile settings as the fourth in-flow shell tab page');
   }
 
   console.log(JSON.stringify({

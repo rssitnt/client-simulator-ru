@@ -18896,6 +18896,394 @@ body.local-minimal-ui.light-theme .admin-invite-journal-meta {
     color: #7a6a58;
 }
 
+/* Final settings shell mode:
+   settings are a shell panel now, not a full-site overlay. */
+body.local-minimal-ui #settingsModal.settings-shell-panel {
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: auto !important;
+    display: flex;
+    align-items: stretch;
+    justify-content: stretch;
+    width: min(520px, 42vw);
+    min-width: 420px;
+    max-width: calc(100vw - 276px);
+    height: 100dvh;
+    min-height: 100dvh;
+    padding: 0 !important;
+    border: none;
+    border-left: 1px solid var(--local-border-final);
+    border-radius: 0;
+    background: var(--local-surface-final) !important;
+    box-shadow: -24px 0 60px rgba(0, 0, 0, 0.30);
+    opacity: 1;
+    visibility: visible;
+    pointer-events: none;
+    transform: translateX(100%) !important;
+    transition: transform 0.22s ease;
+    z-index: 43;
+    backdrop-filter: none !important;
+}
+
+body.local-minimal-ui #settingsModal.settings-shell-panel.active {
+    pointer-events: auto;
+    transform: translateX(0) !important;
+}
+
+body.local-minimal-ui #settingsModal.settings-shell-panel .settings-panel {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    min-height: 100%;
+    max-height: 100dvh;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    background: var(--local-surface-final) !important;
+    box-shadow: none;
+}
+
+body.local-minimal-ui.light-theme #settingsModal.settings-shell-panel,
+body.local-minimal-ui.light-theme #settingsModal.settings-shell-panel .settings-panel {
+    background: #f8f1e7 !important;
+}
+
+/* Final mobile prompt controls:
+   phone role page is selection + actions only, without the text editor tray. */
+body.local-minimal-ui .prompt-variation-chip.active {
+    border: 3px solid color-mix(in srgb, var(--local-text-final) 76%, transparent) !important;
+    box-shadow:
+        0 0 0 3px color-mix(in srgb, var(--local-text-final) 14%, transparent),
+        0 10px 24px rgba(0, 0, 0, 0.18) !important;
+}
+
+body.local-minimal-ui.light-theme .prompt-variation-chip.active {
+    border-color: #4a4035 !important;
+    box-shadow:
+        0 0 0 3px rgba(74, 64, 53, 0.14),
+        0 10px 22px rgba(140, 116, 84, 0.12) !important;
+}
+
+@media (max-width: 1024px) {
+    body.local-minimal-ui #instructionsPanel.panel.active .prompt-wrapper.instruction-editor,
+    body.local-minimal-ui #instructionsPanel.panel.active .prompt-length-info {
+        display: none !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .markdown-toolbar {
+        position: sticky !important;
+        top: var(--local-mobile-appbar-height) !important;
+        z-index: 4 !important;
+        display: grid !important;
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        grid-auto-rows: 58px !important;
+        gap: 10px !important;
+        margin: 2px 0 18px !important;
+        padding: 10px !important;
+        border: 1px solid var(--local-border-final) !important;
+        border-radius: 20px !important;
+        background: var(--local-shell-bg-final) !important;
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.20) !important;
+        overflow: visible !important;
+    }
+
+    body.local-minimal-ui.light-theme #instructionsPanel.panel.active .markdown-toolbar {
+        background: #f4ecde !important;
+        box-shadow: 0 12px 28px rgba(140, 116, 84, 0.10) !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .markdown-toolbar .toolbar-divider,
+    body.local-minimal-ui #instructionsPanel.panel.active .markdown-toolbar .toolbar-btn[data-action] {
+        display: none !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .toolbar-btn-eye,
+    body.local-minimal-ui #instructionsPanel.panel.active .toolbar-btn-ai,
+    body.local-minimal-ui #instructionsPanel.panel.active .toolbar-btn-history {
+        display: inline-flex !important;
+        flex-direction: column !important;
+        gap: 4px !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        min-height: 58px !important;
+        height: 58px !important;
+        padding: 7px 8px !important;
+        border: 1px solid var(--local-border-final) !important;
+        border-radius: 16px !important;
+        background: color-mix(in srgb, var(--local-surface-final) 92%, transparent) !important;
+        color: var(--local-text-soft-final) !important;
+        font-size: 18px !important;
+        line-height: 1 !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .toolbar-btn-eye::after,
+    body.local-minimal-ui #instructionsPanel.panel.active .toolbar-btn-ai::after,
+    body.local-minimal-ui #instructionsPanel.panel.active .toolbar-btn-history::after {
+        display: block;
+        color: var(--local-text-final);
+        font-size: 13px;
+        font-weight: 650;
+        line-height: 1;
+        letter-spacing: 0;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .toolbar-btn-eye::after {
+        content: "Скрыть";
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .toolbar-btn-ai::after {
+        content: "ИИ";
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .toolbar-btn-history::after {
+        content: "История";
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .toolbar-btn-eye svg,
+    body.local-minimal-ui #instructionsPanel.panel.active .toolbar-btn-history svg {
+        width: 21px !important;
+        height: 21px !important;
+    }
+
+    body.local-minimal-ui #instructionsPanel.panel.active .toolbar-btn-ai {
+        font-size: 23px !important;
+    }
+
+    body.local-minimal-ui.mobile-prompt-editor-docked #instructionsPanel.panel.active,
+    body.local-minimal-ui.mobile-prompt-editor-docked #instructionsPanel.panel.active .instruction-content,
+    body.local-minimal-ui.mobile-prompt-toolbar-docked #instructionsPanel.panel.active .instruction-content {
+        overflow: visible !important;
+    }
+
+    body.local-minimal-ui.mobile-prompt-toolbar-docked #instructionsPanel.panel.active .markdown-toolbar {
+        position: sticky !important;
+        top: var(--local-mobile-appbar-height) !important;
+        right: auto !important;
+        bottom: auto !important;
+        left: auto !important;
+    }
+
+    body.local-minimal-ui #promptHistoryModal.modal-overlay,
+    body.local-minimal-ui #promptHistoryItemModal.modal-overlay {
+        position: fixed !important;
+        inset: 0 !important;
+        z-index: 520 !important;
+        align-items: stretch !important;
+        justify-content: stretch !important;
+        padding: 0 !important;
+        background: var(--local-shell-bg-final) !important;
+    }
+
+    body.local-minimal-ui #promptHistoryModal .prompt-history-modal,
+    body.local-minimal-ui #promptHistoryItemModal .prompt-history-entry-modal {
+        width: 100vw !important;
+        max-width: none !important;
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+        box-sizing: border-box !important;
+        margin: 0 !important;
+        padding:
+            calc(env(safe-area-inset-top, 0px) + 22px)
+            var(--local-mobile-shell-pad-right)
+            calc(env(safe-area-inset-bottom, 0px) + 24px)
+            var(--local-mobile-shell-pad) !important;
+        border: none !important;
+        border-radius: 0 !important;
+        background: var(--local-shell-bg-final) !important;
+        box-shadow: none !important;
+        transform: none !important;
+        transition: none !important;
+        overflow: hidden !important;
+    }
+
+    body.local-minimal-ui.light-theme #promptHistoryModal .prompt-history-modal,
+    body.local-minimal-ui.light-theme #promptHistoryItemModal .prompt-history-entry-modal {
+        background: #f8f1e7 !important;
+    }
+
+    body.local-minimal-ui #promptHistoryModal .prompt-history-modal h3,
+    body.local-minimal-ui #promptHistoryItemModal .prompt-history-entry-modal h3 {
+        margin: 0 52px 18px 0 !important;
+        font-size: 24px !important;
+        line-height: 1.15 !important;
+    }
+
+    body.local-minimal-ui #promptHistoryModal .modal-close,
+    body.local-minimal-ui #promptHistoryItemModal .modal-close {
+        top: calc(env(safe-area-inset-top, 0px) + 14px) !important;
+        right: var(--local-mobile-shell-pad-right) !important;
+        width: 48px !important;
+        height: 48px !important;
+        border: 1px solid var(--local-border-final) !important;
+        background: color-mix(in srgb, var(--local-surface-final) 92%, transparent) !important;
+        color: var(--local-text-final) !important;
+        font-size: 28px !important;
+    }
+
+    body.local-minimal-ui #promptHistoryModal .prompt-history-list {
+        gap: 12px !important;
+        max-height: none !important;
+        height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 92px) !important;
+        padding: 0 0 18px !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    body.local-minimal-ui #promptHistoryModal .change-item {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: 12px !important;
+        padding: 16px !important;
+        border: 1px solid var(--local-border-final) !important;
+        border-radius: 18px !important;
+        background: var(--local-surface-final) !important;
+        font-size: 15px !important;
+    }
+
+    body.local-minimal-ui #promptHistoryModal .change-title {
+        max-width: none !important;
+        font-size: 17px !important;
+        line-height: 1.25 !important;
+        white-space: normal !important;
+        color: var(--local-text-final) !important;
+    }
+
+    body.local-minimal-ui #promptHistoryModal .change-time,
+    body.local-minimal-ui #promptHistoryModal .change-note,
+    body.local-minimal-ui #promptHistoryItemModal .prompt-history-entry-meta {
+        font-size: 14px !important;
+        line-height: 1.45 !important;
+        color: var(--local-text-soft-final) !important;
+    }
+
+    body.local-minimal-ui #promptHistoryModal .btn-restore,
+    body.local-minimal-ui #promptHistoryItemModal .btn-modal-cancel {
+        width: 100% !important;
+        min-height: 48px !important;
+        border-radius: 14px !important;
+        font-size: 15px !important;
+    }
+
+    body.local-minimal-ui #promptHistoryItemModal .prompt-compare-diff {
+        max-height: none !important;
+        height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 190px) !important;
+        overflow-y: auto !important;
+        font-size: 15px !important;
+        line-height: 1.55 !important;
+    }
+}
+
+@media (max-width: 1024px) {
+    body.local-minimal-ui .mobile-tabs {
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    }
+
+    body.local-minimal-ui #settingsModal.settings-shell-panel {
+        position: relative !important;
+        inset: auto !important;
+        display: none !important;
+        width: 100%;
+        max-width: none;
+        min-width: 0;
+        height: 100%;
+        min-height: 0;
+        border-left: none;
+        box-shadow: none;
+        transform: none !important;
+        z-index: auto;
+    }
+
+    body.local-minimal-ui #settingsModal.settings-shell-panel.panel.active {
+        display: flex !important;
+        flex-direction: column;
+    }
+
+    body.local-minimal-ui #settingsModal.settings-shell-panel .settings-panel {
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: none;
+        height: 100%;
+    }
+}
+
+/* Final history actions overlay:
+   an open dialog menu must cover the row ellipsis controls behind it. */
+body.local-minimal-ui .dialog-history-item.is-menu-open {
+    z-index: 40;
+}
+
+body.local-minimal-ui .dialog-history-item.is-menu-open .dialog-history-item-actions {
+    z-index: 1700;
+}
+
+body.local-minimal-ui .dialog-history-item.is-menu-open .dialog-history-item-menu-toggle {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+body.local-minimal-ui .dialog-history-list:has(.dialog-history-item.is-menu-open) .dialog-history-item:not(.is-menu-open) .dialog-history-item-menu-toggle,
+body.local-minimal-ui .history-thread-list:has(.dialog-history-item.is-menu-open) .dialog-history-item:not(.is-menu-open) .dialog-history-item-menu-toggle {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+body.local-minimal-ui .dialog-history-item.is-menu-open .dialog-history-item-menu {
+    z-index: 1800;
+    background: #1c1916;
+}
+
+body.local-minimal-ui.light-theme .dialog-history-item.is-menu-open .dialog-history-item-menu {
+    background: #fbf7f0 !important;
+}
+
+@media (max-width: 1024px) {
+    body.local-minimal-ui #historyPanel .dialog-history-item-menu {
+        min-width: 216px;
+        gap: 5px;
+        padding: 8px;
+        border-radius: 16px;
+    }
+
+    body.local-minimal-ui #historyPanel .dialog-history-item-menu-meta {
+        margin: 3px 5px 7px;
+        padding: 7px 10px 9px;
+        font-size: 14px;
+    }
+
+    body.local-minimal-ui #historyPanel .dialog-history-item-menu-action {
+        min-height: 43px;
+        padding: 0 14px;
+        border-radius: 11px;
+        font-size: 16px;
+    }
+}
+
+/* Last mobile prompt page lock:
+   keep the phone role screen action-only even if older keyboard-docking classes remain. */
+@media (max-width: 1024px) {
+    body.local-minimal-ui #instructionsPanel.panel.active .prompt-wrapper.instruction-editor,
+    body.local-minimal-ui #instructionsPanel.panel.active .prompt-wrapper.instruction-editor.active,
+    body.local-minimal-ui.mobile-prompt-editor-docked #instructionsPanel.panel.active .prompt-wrapper.instruction-editor,
+    body.local-minimal-ui.mobile-prompt-editor-docked #instructionsPanel.panel.active .prompt-wrapper.instruction-editor.active {
+        display: none !important;
+        position: static !important;
+    }
+
+    body.local-minimal-ui.mobile-prompt-toolbar-docked #instructionsPanel.panel.active .markdown-toolbar {
+        position: sticky !important;
+        top: var(--local-mobile-appbar-height) !important;
+        right: auto !important;
+        bottom: auto !important;
+        left: auto !important;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

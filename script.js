@@ -2278,6 +2278,7 @@ const adminInviteJournalFilters = document.getElementById('adminInviteJournalFil
 const adminInviteJournalList = document.getElementById('adminInviteJournalList');
 const instructionSelectEl = document.getElementById('instructionSelect');
 const panelsContainer = document.querySelector('.panels-container');
+let settingsReturnPanelName = 'chat';
 const instructionsPanelElement = document.getElementById('instructionsPanel');
 const instructionTabs = Array.from(document.querySelectorAll('.instruction-tab'));
 const instructionEditors = Array.from(document.querySelectorAll('.instruction-editor'));
@@ -2288,6 +2289,17 @@ const selectedInstructionText = document.getElementById('selectedInstructionText
 const promptContextRoleName = document.getElementById('promptContextRoleName');
 const promptContextVariationBadge = document.getElementById('promptContextVariationBadge');
 const activeScenarioStrip = document.getElementById('activeScenarioStrip');
+
+function configureSettingsPanelSurface() {
+    if (!settingsModal) return;
+    settingsModal.dataset.panel = 'settings';
+    settingsModal.classList.add('panel', 'settings-shell-panel');
+    if (panelsContainer && settingsModal.parentElement !== panelsContainer) {
+        panelsContainer.appendChild(settingsModal);
+    }
+}
+
+configureSettingsPanelSurface();
 const activeScenarioTitle = document.getElementById('activeScenarioTitle');
 const activeScenarioSummary = document.getElementById('activeScenarioSummary');
 const activeScenarioPrefillBtn = document.getElementById('activeScenarioPrefillBtn');
@@ -10025,6 +10037,11 @@ function activateShellPanel(panelName = 'chat') {
     document.querySelectorAll('.panel').forEach((panel) => {
         panel.classList.toggle('active', panel.dataset.panel === target);
     });
+}
+
+function getActiveShellPanelName() {
+    const activePanel = document.querySelector('.panel.active[data-panel]');
+    return activePanel?.dataset?.panel || 'chat';
 }
 
 function isSelectedDialogCurrentLiveConversation() {
@@ -22024,6 +22041,12 @@ function renderPromptCompareModalContent(role = getActiveRole()) {
 
 function showPromptHistoryModal() {
     requestPromptEditorLibraries();
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement) {
+        activeElement.blur();
+    }
+    document.body?.classList.remove('mobile-prompt-toolbar-docked', 'mobile-prompt-editor-docked');
+    document.documentElement?.style?.setProperty('--local-mobile-prompt-toolbar-bottom', '0px');
     const shown = promptHistoryWorkflow.showPromptHistoryModal();
     if (shown) {
         void ensureDiffLibraryLoaded().then(() => {
@@ -22069,6 +22092,12 @@ function rollbackPublicPrompt(role = getActiveRole()) {
 
 function showSettingsModal(options = {}) {
     hideTooltip(true);
+    configureSettingsPanelSurface();
+    const isLocalShell = isLocalMinimalUiEnabled();
+    const currentPanelName = getActiveShellPanelName();
+    if (isLocalShell && currentPanelName && currentPanelName !== 'settings') {
+        settingsReturnPanelName = currentPanelName;
+    }
     if (document?.body) {
         document.body.classList.add('settings-modal-open');
     }
@@ -22101,6 +22130,9 @@ function showSettingsModal(options = {}) {
     populateHiddenRaterPromptField();
     syncAdminUsersAccessLayoutMode();
     settingsModal.classList.add('active');
+    if (isLocalShell) {
+        activateShellPanel('settings');
+    }
     [adminHiddenClientPromptAccordion, adminHiddenRaterPromptAccordion, adminUsersAccessAccordion, adminVoiceDebugAccordion, adminAuthDebugAccordion]
         .forEach((accordion) => {
             accordion?.removeAttribute('open');
@@ -22149,12 +22181,15 @@ function autoResizeNameInput() {
     settingsNameInput.style.width = '100%';
 }
 
-function hideSettingsModal() {
+function hideSettingsModal(options = {}) {
     stopAdminRealtimeSync();
     if (document?.body) {
         document.body.classList.remove('settings-modal-open');
     }
     settingsModal.classList.remove('active');
+    if (options.activateFallback !== false && isLocalMinimalUiEnabled() && getActiveShellPanelName() === 'settings') {
+        activateShellPanel(options.returnPanel || settingsReturnPanelName || 'chat');
+    }
 }
 
 function isSettingsModalOpen() {
@@ -22522,6 +22557,7 @@ bindEvent(settingsModalCloseBtn, 'click', (e) => {
 
 // Close settings modal on overlay click
 bindEvent(settingsModal, 'click', (e) => {
+    if (isLocalMinimalUiEnabled()) return;
     if (e.target === settingsModal) {
         hideSettingsModal();
     }
@@ -26152,10 +26188,17 @@ voiceBtn.addEventListener('click', () => {
 const mobileTabs = document.querySelectorAll('.mobile-tab');
 const panels = document.querySelectorAll('.panel');
 const mobileSettingsTabBtn = document.getElementById('mobileSettingsTabBtn');
-const mobilePanelOrder = ['history', 'chat', 'instructions'];
+const mobilePanelOrder = ['history', 'chat', 'instructions', 'settings'];
 
 function setMobilePanel(panelName) {
     if (!panelName) return;
+    if (panelName === 'settings') {
+        showSettingsModal();
+        return;
+    }
+    if (isSettingsModalOpen()) {
+        hideSettingsModal({ activateFallback: false });
+    }
     mobileTabs.forEach(t => t.classList.remove('active'));
     panels.forEach(p => p.classList.remove('active'));
     document.querySelector(`.mobile-tab[data-panel="${panelName}"]`)?.classList.add('active');
@@ -26226,6 +26269,7 @@ if (panelsContainer) {
 }
 
 bindEvent(mobileSettingsTabBtn, 'click', (e) => {
+    if (mobileSettingsTabBtn?.dataset?.panel === 'settings') return;
     e?.preventDefault?.();
     e?.stopPropagation?.();
     toggleSettingsModal();
@@ -26303,11 +26347,12 @@ function toggleHeadingFormat(preview, level) {
 // Toolbar
 document.querySelectorAll('.toolbar-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
-        e.preventDefault();
         const action = btn.dataset.action;
+        if (!action) return;
+        e.preventDefault();
         const preview = document.querySelector('.instruction-editor.active .prompt-preview');
-    if (!preview) return;
-    preview.focus();
+        if (!preview) return;
+        preview.focus();
     
         if (action === 'bold') document.execCommand('bold', false, null);
         else if (action === 'italic') document.execCommand('italic', false, null);
@@ -26404,6 +26449,14 @@ function installLocalhostTestHooks() {
             await saveDialogHistoryRecordTitle(record, nextTitle);
             return true;
         },
+        seedDialogHistoryRecordsForLayoutTest(records = []) {
+            dialogHistoryScopeRecords = Array.isArray(records) ? records : [];
+            dialogHistoryVisibleCount = Math.max(DIALOG_HISTORY_PAGE_SIZE, dialogHistoryScopeRecords.length);
+            dialogHistorySearchQuery = '';
+            dialogHistoryMenuOpenId = '';
+            renderDialogHistoryList();
+            return dialogHistoryScopeRecords.length;
+        },
         getLocalLayoutMetricsForTest() {
             const historyPanel = document.getElementById('historyPanel');
             const historyPanelStyle = historyPanel ? getComputedStyle(historyPanel) : null;
@@ -26413,6 +26466,8 @@ function installLocalhostTestHooks() {
             const adminTableWrapStyle = adminTableWrap ? getComputedStyle(adminTableWrap) : null;
             const adminFirstRow = document.querySelector('.admin-users-table tbody tr');
             const adminFirstRowStyle = adminFirstRow ? getComputedStyle(adminFirstRow) : null;
+            const settingsStyle = settingsModal ? getComputedStyle(settingsModal) : null;
+            const settingsRect = settingsModal?.getBoundingClientRect?.();
             const inviteForm = document.querySelector('.admin-invite-form');
             const roleTrigger = document.querySelector('.admin-role-picker-trigger');
             const accessBody = document.querySelector('.admin-users-access-body');
@@ -26426,6 +26481,15 @@ function installLocalhostTestHooks() {
                 },
                 admin: {
                     settingsOpen: isSettingsModalOpen(),
+                    settingsParentInShell: !!(settingsModal && panelsContainer?.contains(settingsModal)),
+                    settingsActivePanel: getActiveShellPanelName(),
+                    settingsPosition: settingsStyle?.position || '',
+                    settingsBackdropFilter: settingsStyle?.backdropFilter || settingsStyle?.webkitBackdropFilter || '',
+                    settingsPointerEvents: settingsStyle?.pointerEvents || '',
+                    settingsLeft: settingsRect?.left || 0,
+                    settingsRight: settingsRect?.right || 0,
+                    settingsWidth: settingsRect?.width || 0,
+                    viewportWidth: window.innerWidth || 0,
                     panelVisible: (adminPanelAccordion?.style?.display || '') !== 'none',
                     accessOpen: !!adminUsersAccessAccordion?.open,
                     layout: accessBody?.dataset?.adminLayout || adminTableWrap?.dataset?.adminLayout || adminTable?.dataset?.adminLayout || '',
