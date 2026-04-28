@@ -249,6 +249,7 @@ const LEGACY_GEMINI_LIVE_API_KEY_STORAGE_KEY = 'geminiLiveApiKey';
 const GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT = '/api/gemini-live-token';
 const GEMINI_LIVE_TRANSCRIBE_ENDPOINT_PATH = '/api/gemini-live-transcribe';
 const GEMINI_LIVE_ALLOWED_TOKEN_ENDPOINT_PATH = '/api/gemini-live-token';
+const PUBLIC_BACKEND_CONFIG_PATH = '/api/public-backend.json';
 const LEGACY_PRODUCTION_VOICE_TOKEN_ENDPOINT_ORIGINS = new Set([
     'https://ti-client-simulator-studio.vercel.app',
     'https://client-simulator-gemini-token.onrender.com'
@@ -263,6 +264,8 @@ const TRUSTED_VOICE_TOKEN_ENDPOINT_ORIGINS = new Set([
     'https://ti-client-simulator-studio.vercel.app',
     'https://client-simulator-gemini-token.onrender.com'
 ]);
+let publicBackendVoiceConfigPromise = null;
+let publicBackendVoiceTokenEndpointCandidates = [];
 const GEMINI_VOICE_FIRST_AUDIO_DELAY_MS = 200;
 const GEMINI_VOICE_LATE_TRANSCRIPT_GRACE_MS = 650;
 const GEMINI_VOICE_FALLBACK_TRANSCRIBE_HOLD_MS = 1600;
@@ -2492,6 +2495,7 @@ let geminiVoiceAutoStopRequested = false;
 let geminiVoiceConversationFinished = false;
 let geminiVoiceSessionConfig = null;
 let geminiVoiceDebugSessionId = '';
+let geminiVoiceResolvedServerEndpoint = '';
 let geminiVoiceFirstUserAudioLogged = false;
 let geminiVoiceFirstAssistantTextLogged = false;
 let geminiVoiceFirstAudioChunkLogged = false;
@@ -17668,6 +17672,13 @@ function getTrustedVoiceTokenEndpointOrigins() {
     if (/^https?:\/\//i.test(currentOrigin)) {
         origins.add(currentOrigin);
     }
+    if (Array.isArray(publicBackendVoiceTokenEndpointCandidates)) {
+        publicBackendVoiceTokenEndpointCandidates.forEach((endpoint) => {
+            try {
+                origins.add(new URL(endpoint, currentOrigin || window.location.origin).origin);
+            } catch (error) {}
+        });
+    }
 
     const configuredOrigins = typeof window !== 'undefined'
         ? (window.ALLOWED_VOICE_TOKEN_ENDPOINT_ORIGINS || window.OPENAI_REALTIME_ALLOWED_ORIGINS || [])
@@ -17854,6 +17865,47 @@ function getDefaultGeminiTokenEndpoint() {
     return String(GEMINI_LIVE_REMOTE_TOKEN_ENDPOINT || GEMINI_LIVE_DEFAULT_TOKEN_ENDPOINT || '').trim();
 }
 
+function normalizePublicBackendBaseUrl(value = '') {
+    const raw = String(value || '').trim();
+    if (!raw || typeof window === 'undefined') return '';
+    try {
+        const parsed = new URL(raw, window.location.origin);
+        if (parsed.protocol !== 'https:') return '';
+        if (parsed.username || parsed.password || parsed.search || parsed.hash) return '';
+        if (!/\.trycloudflare\.com$/i.test(parsed.hostname || '')) return '';
+        return parsed.origin;
+    } catch (error) {
+        return '';
+    }
+}
+
+async function loadPublicBackendVoiceTokenEndpointCandidates() {
+    if (typeof window === 'undefined' || !isProductionHost()) return [];
+    if (!publicBackendVoiceConfigPromise) {
+        publicBackendVoiceConfigPromise = fetchWithTimeout(PUBLIC_BACKEND_CONFIG_PATH, {
+            method: 'GET',
+            credentials: 'omit',
+            cache: 'no-store'
+        }, 2500)
+            .then(async (response) => {
+                if (!response.ok) return [];
+                const payload = await response.json().catch(() => null);
+                const publicBaseUrl = normalizePublicBackendBaseUrl(payload?.publicBaseUrl || '');
+                if (!publicBaseUrl) return [];
+                return [`${publicBaseUrl}${GEMINI_LIVE_ALLOWED_TOKEN_ENDPOINT_PATH}`];
+            })
+            .catch((error) => {
+                console.warn('Public voice backend config unavailable:', error);
+                return [];
+            })
+            .then((candidates) => {
+                publicBackendVoiceTokenEndpointCandidates = Array.isArray(candidates) ? candidates : [];
+                return publicBackendVoiceTokenEndpointCandidates;
+            });
+    }
+    return publicBackendVoiceConfigPromise;
+}
+
 function isSameOriginGeminiTokenEndpoint(endpoint = '') {
     const normalizedEndpoint = String(endpoint || '').trim();
     if (!normalizedEndpoint || typeof window === 'undefined') return false;
@@ -17926,7 +17978,7 @@ function getConfiguredGeminiTokenEndpoint() {
 }
 
 function getConfiguredGeminiTranscribeEndpoint() {
-    const tokenEndpoint = sanitizeGeminiTokenEndpointOrThrow(getConfiguredGeminiTokenEndpoint(), {
+    const tokenEndpoint = sanitizeGeminiTokenEndpointOrThrow(geminiVoiceResolvedServerEndpoint || getConfiguredGeminiTokenEndpoint(), {
         source: 'Voice token endpoint'
     });
     if (!tokenEndpoint) return '';
@@ -18980,7 +19032,7 @@ function isGeminiVoiceTokenPayloadRetryableError(error) {
         || message.includes('invalid json');
 }
 
-function getGeminiVoiceTokenEndpointCandidates(preferredEndpoint = '') {
+function getGeminiVoiceTokenEndpointCandidates(preferredEndpoint = '', extraEndpoints = []) {
     const candidates = [];
     const seen = new Set();
     const isProdHost = isProductionHost();
@@ -19009,6 +19061,10 @@ function getGeminiVoiceTokenEndpointCandidates(preferredEndpoint = '') {
     } catch (error) {}
 
     const preferRemoteBeforeSameOrigin = preferredIsSameOriginEndpoint && isProdHost;
+
+    if (isProdHost && Array.isArray(extraEndpoints)) {
+        extraEndpoints.forEach(addCandidate);
+    }
 
     if (preferRemoteBeforeSameOrigin) {
         addCandidate(GEMINI_LIVE_REMOTE_TOKEN_ENDPOINT);
@@ -19064,8 +19120,10 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
         throw new Error('Голосовой режим пока не настроен. Обратитесь к администратору.');
     }
 
+    geminiVoiceResolvedServerEndpoint = '';
     const headers = await buildGeminiVoiceServerRequestHeaders(tokenEndpoint);
-    const endpointCandidates = getGeminiVoiceTokenEndpointCandidates(tokenEndpoint);
+    const publicBackendEndpoints = await loadPublicBackendVoiceTokenEndpointCandidates();
+    const endpointCandidates = getGeminiVoiceTokenEndpointCandidates(tokenEndpoint, publicBackendEndpoints);
     const retryableHttpStatuses = new Set([404, 408, 502, 503, 504]);
     let lastError = null;
     let sawTimeoutLikeFailure = false;
@@ -19195,6 +19253,7 @@ async function resolveGeminiLiveApiKey(sessionConfig = {}, options = {}) {
                     attempt: attemptNumber,
                     totalAttempts: endpointCandidates.length
                 });
+                geminiVoiceResolvedServerEndpoint = endpoint;
                 return token;
             }
             throw new Error('Сервер голосового режима вернул пустой ответ');
@@ -19447,7 +19506,7 @@ async function requestGeminiAssistantFallbackTranscriptForCurrentTurn(reason = '
         ? new AbortController()
         : null;
 
-    const headers = await buildGeminiVoiceServerRequestHeaders(getConfiguredGeminiTokenEndpoint());
+    const headers = await buildGeminiVoiceServerRequestHeaders(geminiVoiceResolvedServerEndpoint || getConfiguredGeminiTokenEndpoint());
     recordVoiceDebugEvent('fallback_transcript_started', {
         status: 'info',
         message: reason,
