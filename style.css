@@ -18988,16 +18988,18 @@ body.local-minimal-ui.light-theme .prompt-variation-chip.active {
     }
 
     body.local-minimal-ui #instructionsPanel.panel.active .markdown-toolbar {
-        position: sticky !important;
+        position: fixed !important;
         top: var(--local-mobile-appbar-height) !important;
+        right: max(16px, env(safe-area-inset-right, 0px)) !important;
+        left: max(16px, env(safe-area-inset-left, 0px)) !important;
         z-index: 4 !important;
         display: grid !important;
         grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
         grid-auto-rows: 58px !important;
         gap: 10px !important;
-        margin: 2px 0 18px !important;
+        margin: 0 !important;
         padding: 10px !important;
-        border: 1px solid var(--local-border-final) !important;
+        border: 0 !important;
         border-radius: 20px !important;
         background: var(--local-shell-bg-final) !important;
         box-shadow: 0 12px 28px rgba(0, 0, 0, 0.20) !important;
@@ -19075,11 +19077,11 @@ body.local-minimal-ui.light-theme .prompt-variation-chip.active {
     }
 
     body.local-minimal-ui.mobile-prompt-toolbar-docked #instructionsPanel.panel.active .markdown-toolbar {
-        position: sticky !important;
+        position: fixed !important;
         top: var(--local-mobile-appbar-height) !important;
-        right: auto !important;
+        right: max(16px, env(safe-area-inset-right, 0px)) !important;
         bottom: auto !important;
-        left: auto !important;
+        left: max(16px, env(safe-area-inset-left, 0px)) !important;
     }
 
     body.local-minimal-ui #promptHistoryModal.modal-overlay,
@@ -19358,11 +19360,11 @@ body.local-minimal-ui .message.loading .typing-dot:nth-child(3) {
     }
 
     body.local-minimal-ui.mobile-prompt-toolbar-docked #instructionsPanel.panel.active .markdown-toolbar {
-        position: sticky !important;
+        position: fixed !important;
         top: var(--local-mobile-appbar-height) !important;
-        right: auto !important;
+        right: max(16px, env(safe-area-inset-right, 0px)) !important;
         bottom: auto !important;
-        left: auto !important;
+        left: max(16px, env(safe-area-inset-left, 0px)) !important;
     }
 }
 
