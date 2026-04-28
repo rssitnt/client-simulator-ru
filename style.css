@@ -5141,30 +5141,31 @@ body.local-minimal-ui .btn-send:disabled {
 }
 
 body.local-minimal-ui .btn-send.voice-stop {
-    width: 72px;
-    height: 72px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background:
-        radial-gradient(circle at center, rgba(255, 255, 255, 0.94) 0%, rgba(244, 240, 237, 0.96) 62%, rgba(227, 221, 214, 0.98) 100%);
-    color: #f48d8d;
+    width: 62px;
+    height: 56px;
+    min-width: 62px;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 132, 132, 0.34);
+    background: linear-gradient(180deg, rgba(78, 35, 35, 0.98), rgba(48, 25, 25, 0.98));
+    color: #ff9a9a;
     box-shadow:
-        0 14px 36px rgba(0, 0, 0, 0.34),
-        inset 0 1px 0 rgba(255, 255, 255, 0.45);
+        0 10px 22px rgba(0, 0, 0, 0.22),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 body.local-minimal-ui .btn-send.voice-stop:hover:not(:disabled) {
-    background:
-        radial-gradient(circle at center, rgba(255, 255, 255, 0.98) 0%, rgba(248, 243, 239, 0.98) 62%, rgba(233, 227, 220, 1) 100%);
-    border-color: rgba(255, 255, 255, 0.18);
-    color: #ef7d7d;
+    background: linear-gradient(180deg, rgba(92, 40, 40, 1), rgba(58, 28, 28, 1));
+    border-color: rgba(255, 154, 154, 0.52);
+    color: #ffb0b0;
 }
 
 body.local-minimal-ui .btn-send.voice-stop svg,
 body.local-minimal-ui .btn-send.voice-stop:hover svg {
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
     transform: none;
     color: currentColor;
+    stroke: currentColor;
 }
 
 body.local-minimal-ui .prompt-panel {

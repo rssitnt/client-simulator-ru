@@ -272,7 +272,7 @@ const GEMINI_VOICE_FALLBACK_TRANSCRIBE_HOLD_MS = 1600;
 const GEMINI_VOICE_CONNECT_STOP_GUARD_MS = 1200;
 const GEMINI_VOICE_EARLY_RECONNECT_WINDOW_MS = 45000;
 const GEMINI_VOICE_EARLY_RECONNECT_DELAY_MS = 1000;
-const GEMINI_VOICE_EARLY_RECONNECT_MAX_ATTEMPTS = 2;
+const GEMINI_VOICE_EARLY_RECONNECT_MAX_ATTEMPTS = 5;
 const GEMINI_LIVE_DEFAULT_VOICE = 'Enceladus';
 const GEMINI_LIVE_AUDIO_INPUT_LEVEL_LOW_THRESHOLD = 0.18;
 const GEMINI_LIVE_AUDIO_INPUT_LEVEL_GOOD_THRESHOLD = 0.45;
@@ -20792,11 +20792,12 @@ function handleGeminiVoiceTransportFailure(message = 'Соединение го�
         return false;
     }
     const elapsedMs = Date.now() - Number(geminiVoiceStartTimestamp || 0);
+    const hasStartedLiveTransport = geminiVoiceTransportOpened || !!geminiLiveSession || !!geminiLiveApiClient;
     const shouldRetryEarlyClose =
         geminiVoiceEarlyReconnectAttempts < GEMINI_VOICE_EARLY_RECONNECT_MAX_ATTEMPTS &&
         elapsedMs >= 0 &&
         elapsedMs < GEMINI_VOICE_EARLY_RECONNECT_WINDOW_MS &&
-        geminiVoiceTransportOpened &&
+        hasStartedLiveTransport &&
         !geminiVoiceHasAssistantReply &&
         !geminiVoiceHasAudioOutput &&
         !hasBufferedVoiceDialog();
@@ -20804,6 +20805,8 @@ function handleGeminiVoiceTransportFailure(message = 'Соединение го�
     recordVoiceDebugEvent('transport_failure', {
         status: shouldRetryEarlyClose ? 'info' : 'error',
         elapsedMs,
+        transportOpened: geminiVoiceTransportOpened,
+        liveSessionReady: !!geminiLiveSession,
         message
     });
     stopGeminiDialTone();
