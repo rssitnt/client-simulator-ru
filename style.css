@@ -19411,6 +19411,112 @@ body.local-minimal-ui #settingsModal .settings-modal-close {
     display: none !important;
 }
 
+/* Final mobile AI improve modal:
+   make the prompt-improvement workflow a full-screen page, not a centered card. */
+@media (max-width: 1024px) {
+    body.local-minimal-ui #aiImproveModal.modal-overlay {
+        align-items: stretch !important;
+        justify-content: stretch !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+    }
+
+    body.local-minimal-ui #aiImproveModal .ai-improve-modal {
+        width: 100dvw !important;
+        max-width: none !important;
+        height: 100dvh !important;
+        max-height: none !important;
+        margin: 0 !important;
+        padding:
+            calc(env(safe-area-inset-top, 0px) + 24px)
+            max(22px, env(safe-area-inset-right, 0px) + 18px)
+            calc(env(safe-area-inset-bottom, 0px) + 24px)
+            max(22px, env(safe-area-inset-left, 0px) + 18px) !important;
+        border-radius: 0 !important;
+        box-sizing: border-box !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: flex-start !important;
+        text-align: left !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain !important;
+        transform: none !important;
+    }
+
+    body.local-minimal-ui #aiImproveModal.modal-overlay.active .ai-improve-modal {
+        transform: none !important;
+    }
+
+    body.local-minimal-ui #aiImproveModal .modal-close {
+        top: calc(env(safe-area-inset-top, 0px) + 12px) !important;
+        right: max(14px, env(safe-area-inset-right, 0px) + 12px) !important;
+        width: 48px !important;
+        height: 48px !important;
+        color: var(--local-text-soft-final) !important;
+    }
+
+    body.local-minimal-ui #aiImproveModal .ai-improve-modal h3 {
+        margin: 0 56px 14px 0 !important;
+        padding: 0 !important;
+        font-size: 26px !important;
+        line-height: 1.15 !important;
+        text-align: left !important;
+    }
+
+    body.local-minimal-ui #aiImproveModal .ai-improve-modal p {
+        margin: 0 0 18px !important;
+        font-size: 17px !important;
+        line-height: 1.45 !important;
+        text-align: left !important;
+    }
+
+    body.local-minimal-ui #aiImproveModal #aiImproveStep1,
+    body.local-minimal-ui #aiImproveModal #aiImproveStep2 {
+        width: 100% !important;
+        min-height: 0 !important;
+        text-align: left !important;
+    }
+
+    body.local-minimal-ui #aiImproveModal #aiImproveStep1 {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+    }
+
+    body.local-minimal-ui #aiImproveModal .ai-improve-modal textarea {
+        width: 100% !important;
+        min-height: min(34dvh, 260px) !important;
+        max-height: none !important;
+        margin: 0 0 22px !important;
+        padding: 18px 20px !important;
+        border-radius: 18px !important;
+        font-size: 18px !important;
+        line-height: 1.45 !important;
+        text-align: left !important;
+    }
+
+    body.local-minimal-ui #aiImproveModal .ai-improve-actions {
+        justify-content: stretch !important;
+        gap: 12px !important;
+        margin-top: 0 !important;
+        text-align: left !important;
+    }
+
+    body.local-minimal-ui #aiImproveModal .ai-improve-actions .btn-modal-cancel,
+    body.local-minimal-ui #aiImproveModal .ai-improve-actions .btn-modal-submit {
+        flex: 1 1 100% !important;
+        min-height: 52px !important;
+        justify-content: center !important;
+        font-size: 16px !important;
+    }
+
+    body.local-minimal-ui #aiImproveModal .diff-view {
+        max-height: none !important;
+        min-height: min(38dvh, 320px) !important;
+        text-align: left !important;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
