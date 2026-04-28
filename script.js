@@ -6937,7 +6937,7 @@ function buildStableAuthServerEndpointUrl(targetPath = '', source = 'Auth mail e
 }
 
 function buildPartnerInviteEmailEndpointUrl() {
-    return buildSiblingGeminiServerEndpointUrl(
+    return buildStableAuthServerEndpointUrl(
         PARTNER_INVITE_EMAIL_ENDPOINT_PATH,
         'Partner invite email endpoint'
     );
@@ -6958,14 +6958,14 @@ function buildAuthPasswordResetEmailEndpointUrl() {
 }
 
 function buildUnifiedSimulatorWebhookEndpointUrl() {
-    return buildSiblingGeminiServerEndpointUrl(
+    return buildStableAuthServerEndpointUrl(
         SIMULATOR_WEBHOOK_PROXY_ENDPOINT_PATH,
         'Simulator webhook endpoint'
     ) || UNIFIED_SIMULATOR_WEBHOOK_URL;
 }
 
 function buildCertificationWebhookEndpointUrl() {
-    return buildSiblingGeminiServerEndpointUrl(
+    return buildStableAuthServerEndpointUrl(
         CERTIFICATION_WEBHOOK_PROXY_ENDPOINT_PATH,
         'Certification webhook endpoint'
     ) || ATTESTATION_WEBHOOK_URL;
