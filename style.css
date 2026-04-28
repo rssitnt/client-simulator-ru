@@ -18989,7 +18989,7 @@ body.local-minimal-ui.light-theme .prompt-variation-chip.active {
 
     body.local-minimal-ui #instructionsPanel.panel.active .markdown-toolbar {
         position: fixed !important;
-        top: var(--local-mobile-appbar-height) !important;
+        top: calc(var(--local-mobile-appbar-height) + 34px) !important;
         right: max(16px, env(safe-area-inset-right, 0px)) !important;
         left: max(16px, env(safe-area-inset-left, 0px)) !important;
         z-index: 4 !important;
@@ -19082,7 +19082,7 @@ body.local-minimal-ui.light-theme .prompt-variation-chip.active {
 
     body.local-minimal-ui.mobile-prompt-toolbar-docked #instructionsPanel.panel.active .markdown-toolbar {
         position: fixed !important;
-        top: var(--local-mobile-appbar-height) !important;
+        top: calc(var(--local-mobile-appbar-height) + 34px) !important;
         right: max(16px, env(safe-area-inset-right, 0px)) !important;
         bottom: auto !important;
         left: max(16px, env(safe-area-inset-left, 0px)) !important;
@@ -19365,7 +19365,7 @@ body.local-minimal-ui .message.loading .typing-dot:nth-child(3) {
 
     body.local-minimal-ui.mobile-prompt-toolbar-docked #instructionsPanel.panel.active .markdown-toolbar {
         position: fixed !important;
-        top: var(--local-mobile-appbar-height) !important;
+        top: calc(var(--local-mobile-appbar-height) + 34px) !important;
         right: max(16px, env(safe-area-inset-right, 0px)) !important;
         bottom: auto !important;
         left: max(16px, env(safe-area-inset-left, 0px)) !important;
@@ -19379,8 +19379,8 @@ body.local-minimal-ui.light-theme #settingsModal .theme-color-section {
     position: static !important;
     top: auto !important;
     z-index: auto !important;
-    min-height: 0 !important;
-    margin: 0 0 14px !important;
+    min-height: 44px !important;
+    margin: 14px 0 14px !important;
     padding: 0 !important;
     border: 0 !important;
     background: transparent !important;
