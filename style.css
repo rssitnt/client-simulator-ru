@@ -19084,6 +19084,10 @@ body.local-minimal-ui.light-theme .prompt-variation-chip.active {
         padding-top: 112px !important;
     }
 
+    body.local-minimal-ui #instructionsPanel.panel.active .personality-selector {
+        margin-top: 76px !important;
+    }
+
     body.local-minimal-ui.mobile-prompt-toolbar-docked #instructionsPanel.panel.active .markdown-toolbar {
         position: fixed !important;
         top: calc(var(--local-mobile-appbar-height) + 34px) !important;
