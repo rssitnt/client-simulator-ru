@@ -19347,7 +19347,7 @@ body.local-minimal-ui .message.loading .typing-dot:nth-child(3) {
         left: auto !important;
         z-index: auto !important;
         min-height: 260px !important;
-        margin: 0 !important;
+        margin: 112px 0 0 !important;
         padding: 0 !important;
         overflow: hidden !important;
         border-radius: 20px !important;
@@ -19370,6 +19370,31 @@ body.local-minimal-ui .message.loading .typing-dot:nth-child(3) {
         bottom: auto !important;
         left: max(16px, env(safe-area-inset-left, 0px)) !important;
     }
+}
+
+/* Final settings first-control normalization:
+   theme toggle starts settings content without a separate sticky header or close affordance. */
+body.local-minimal-ui #settingsModal .theme-color-section,
+body.local-minimal-ui.light-theme #settingsModal .theme-color-section {
+    position: static !important;
+    top: auto !important;
+    z-index: auto !important;
+    min-height: 0 !important;
+    margin: 0 0 14px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+}
+
+body.local-minimal-ui #settingsModal .theme-color-row {
+    min-height: 44px !important;
+    justify-content: flex-start !important;
+}
+
+body.local-minimal-ui #settingsModal .settings-modal-close {
+    display: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
