@@ -20797,7 +20797,6 @@ function handleGeminiVoiceTransportFailure(message = 'Соединение го�
         elapsedMs >= 0 &&
         elapsedMs < GEMINI_VOICE_EARLY_RECONNECT_WINDOW_MS &&
         geminiVoiceTransportOpened &&
-        !geminiVoiceSetupComplete &&
         !geminiVoiceHasAssistantReply &&
         !geminiVoiceHasAudioOutput &&
         !hasBufferedVoiceDialog();
@@ -21287,29 +21286,49 @@ async function handleGeminiLiveMessage(message) {
     }
 }
 
-async function initGeminiVoiceCapture() {
-    if (!geminiLiveSession || typeof geminiLiveSession.sendRealtimeInput !== 'function') {
-        throw new Error('Gemini Live session is not ready');
-    }
-    const mediaDevices = navigator.mediaDevices;
-    if (!mediaDevices?.getUserMedia) {
-        throw new Error('Браузер не поддерживает доступ к микрофону');
-    }
-
-    const selectedAudioInputDeviceId = getSelectedGeminiAudioInputDeviceId();
+function buildGeminiVoiceAudioInputConstraints(options = {}) {
+    const { includeSelectedDevice = true } = options;
     const baseAudioConstraints = {
         channelCount: 1,
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true
     };
-    const requestedAudioConstraints = selectedAudioInputDeviceId
-        ? {
-            ...baseAudioConstraints,
-            deviceId: { exact: selectedAudioInputDeviceId }
-        }
-        : baseAudioConstraints;
+    const selectedAudioInputDeviceId = includeSelectedDevice ? getSelectedGeminiAudioInputDeviceId() : '';
+    return {
+        selectedAudioInputDeviceId,
+        baseAudioConstraints,
+        requestedAudioConstraints: selectedAudioInputDeviceId
+            ? {
+                ...baseAudioConstraints,
+                deviceId: { exact: selectedAudioInputDeviceId }
+            }
+            : baseAudioConstraints
+    };
+}
 
+async function ensureGeminiVoiceInputStreamReady() {
+    const existingTrack = geminiVoiceInputStream?.getAudioTracks?.()[0]
+        || geminiVoiceInputStream?.getTracks?.().find((track) => !track?.kind || track.kind === 'audio')
+        || null;
+    if (existingTrack && existingTrack.readyState !== 'ended') {
+        return {
+            track: existingTrack,
+            selectedAudioInputDeviceId: getSelectedGeminiAudioInputDeviceId(),
+            didFallbackToDefaultInput: false
+        };
+    }
+
+    const mediaDevices = navigator.mediaDevices;
+    if (!mediaDevices?.getUserMedia) {
+        throw new Error('Браузер не поддерживает доступ к микрофону');
+    }
+
+    const {
+        selectedAudioInputDeviceId,
+        baseAudioConstraints,
+        requestedAudioConstraints
+    } = buildGeminiVoiceAudioInputConstraints();
     let didFallbackToDefaultInput = false;
 
     try {
@@ -21339,7 +21358,28 @@ async function initGeminiVoiceCapture() {
         });
     }
 
-    const activeAudioTrack = geminiVoiceInputStream?.getAudioTracks?.()[0] || null;
+    const activeAudioTrack = geminiVoiceInputStream?.getAudioTracks?.()[0]
+        || geminiVoiceInputStream?.getTracks?.().find((track) => !track?.kind || track.kind === 'audio')
+        || null;
+    if (!activeAudioTrack || activeAudioTrack.readyState === 'ended') {
+        throw new Error('Микрофон недоступен');
+    }
+    return {
+        track: activeAudioTrack,
+        selectedAudioInputDeviceId,
+        didFallbackToDefaultInput
+    };
+}
+
+async function initGeminiVoiceCapture() {
+    if (!geminiLiveSession || typeof geminiLiveSession.sendRealtimeInput !== 'function') {
+        throw new Error('Gemini Live session is not ready');
+    }
+    const {
+        track: activeAudioTrack,
+        selectedAudioInputDeviceId,
+        didFallbackToDefaultInput
+    } = await ensureGeminiVoiceInputStreamReady();
     const activeAudioInputDevice = await syncGeminiAudioInputSelectionFromTrack(activeAudioTrack, {
         refresh: didFallbackToDefaultInput,
         clearWhenUnmatched: didFallbackToDefaultInput
@@ -21634,6 +21674,9 @@ async function startGeminiVoiceMode() {
         const clientSecret = await resolveGeminiLiveApiKey(sessionConfig, {
             signal: startAttempt.signal
         });
+        throwIfGeminiVoiceStartAttemptStale(startAttempt.id);
+        setVoiceModeStatus(getVoiceModeStatusCopy('preparingMic'), 'waiting');
+        await ensureGeminiVoiceInputStreamReady();
         throwIfGeminiVoiceStartAttemptStale(startAttempt.id);
         setVoiceModeStatus(getVoiceModeStatusCopy('dialing', 'Звоним клиенту…'), 'waiting');
         startGeminiDialTone();
