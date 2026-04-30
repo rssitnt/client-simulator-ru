@@ -16491,11 +16491,24 @@ function getActivePublicClientVariation() {
     return findPublicClientVariationById(getPublicActiveId('client'));
 }
 
+function findPublicClientVariationWithFirstReplyFingerprint(fingerprint = '') {
+    const normalizedFingerprint = String(fingerprint || '').trim();
+    if (!normalizedFingerprint) return null;
+    return (promptsData.client?.variations || []).find((variation) => {
+        if (!variation || variation.isLocal) return false;
+        return !!getUsablePromptFirstReply(variation.firstReplyCache, normalizedFingerprint);
+    }) || null;
+}
+
 function getCachedClientFirstReply(systemPrompt = '', conversationActionState = null) {
     const fingerprint = getClientFirstReplyFingerprint(systemPrompt, conversationActionState);
     const activeVariationCache = getActivePublicClientVariation()?.firstReplyCache || null;
+    const matchingVariationCache = findPublicClientVariationWithFirstReplyFingerprint(fingerprint)?.firstReplyCache || null;
     return getUsablePromptFirstReply(
         activeVariationCache,
+        fingerprint
+    ) || getUsablePromptFirstReply(
+        matchingVariationCache,
         fingerprint
     ) || getUsablePromptFirstReply(
         clientFirstReplyCache,
@@ -16561,6 +16574,34 @@ async function persistClientFirstReplyCacheRecord(target, record) {
         [PROMPT_FIRST_REPLY_CACHE_FIELD]: normalizePromptFirstReplyCache(clientFirstReplyCache)
     });
     return true;
+}
+
+async function cacheLiveFirstReplyFromStart(systemPrompt = '', conversationActionState = null, message = '') {
+    if (!canSyncPublicPromptsToCloud()) return false;
+    const normalizedMessage = String(message || '').trim();
+    if (!normalizedMessage) return false;
+    const fingerprint = getClientFirstReplyFingerprint(systemPrompt, conversationActionState);
+    if (getCachedClientFirstReply(systemPrompt, conversationActionState)) return true;
+    const publicVariation = (promptsData.client?.variations || []).find((variation) => {
+        if (!variation || variation.isLocal || !String(variation.content || '').trim()) return false;
+        const variationSystemPrompt = buildClientSystemPromptForWebhook(String(variation.content || '').trim(), conversationActionState);
+        return getClientFirstReplyFingerprint(variationSystemPrompt, conversationActionState) === fingerprint;
+    });
+    if (!publicVariation) return false;
+    const record = buildPromptFirstReplyCacheRecord({
+        fingerprint,
+        message: normalizedMessage,
+        generatedAt: new Date().toISOString(),
+        role: 'client',
+        sourceVariationId: String(publicVariation.id || '').trim()
+    });
+    if (!record) return false;
+    return persistClientFirstReplyCacheRecord({
+        fingerprint,
+        systemPrompt,
+        conversationActionState,
+        sourceVariationId: record.sourceVariationId
+    }, record);
 }
 
 async function generatePromptFirstReplyBatchNow(targets = promptFirstReplyGenerationTarget) {
@@ -24243,6 +24284,8 @@ async function sendMessage() {
         if (assistantMessage) {
             addMessage(assistantMessage, 'assistant', true);
             appendConversationHistoryEntry({ role: 'assistant', content: assistantMessage });
+            void cacheLiveFirstReplyFromStart(systemPrompt, conversationActionState, assistantMessage)
+                .catch((error) => console.warn('Failed to cache live first reply:', error));
         }
         updatePromptLock();
         updateSendBtnState();
