@@ -16573,8 +16573,208 @@ function buildPromptFirstReplyCacheDiagnostics() {
     };
 }
 
+function buildDiagnosticFingerprintPrefix(value = '', salt = 'diagnostic') {
+    const normalized = String(value || '').trim();
+    if (!normalized) return '';
+    return buildPromptFirstReplyFingerprint({
+        role: String(salt || 'diagnostic').trim() || 'diagnostic',
+        systemPrompt: normalized,
+        conversationActionState: null
+    }).slice(0, 16);
+}
+
+function buildDiagnosticTextSummary(value = '', salt = 'diagnostic') {
+    const normalized = String(value || '').replace(/\r\n/g, '\n').trim();
+    return {
+        configured: !!normalized,
+        length: normalized.length,
+        fingerprint: buildDiagnosticFingerprintPrefix(normalized, salt)
+    };
+}
+
+function getAdminSettingsPromptSource(kind = 'client') {
+    if (kind === 'rater') {
+        if (getSharedRaterHiddenPrompt()) return 'shared';
+        if (normalizeRaterHiddenPrompt(getCachedStorageValue(RATER_HIDDEN_PROMPT_STORAGE_KEY) || '')) return 'local';
+        return 'empty';
+    }
+    if (getSharedClientConversationActionPrompt()) return 'shared';
+    if (normalizeClientConversationActionPrompt(getCachedStorageValue(CLIENT_CONVERSATION_ACTION_PROMPT_STORAGE_KEY) || '')) return 'local';
+    return 'default';
+}
+
+function summarizeDiagnosticEndpoint(value = '', options = {}) {
+    const {
+        allowedPath = GEMINI_LIVE_ALLOWED_TOKEN_ENDPOINT_PATH
+    } = options;
+    const raw = String(value || '').trim();
+    if (!raw) {
+        return {
+            configured: false,
+            valid: false,
+            origin: '',
+            path: '',
+            trusted: false,
+            sameOrigin: false,
+            loopback: false
+        };
+    }
+    try {
+        const parsed = new URL(raw, window.location.origin);
+        const normalizedPath = normalizeGeminiTokenEndpoint(parsed.pathname || '').replace(/\/+$/, '') || '/';
+        const allowedOrigins = getTrustedVoiceTokenEndpointOrigins();
+        const loopback = isLoopbackHostname(parsed.hostname || '');
+        return {
+            configured: true,
+            valid: /^https?:$/i.test(parsed.protocol) && normalizedPath === allowedPath,
+            origin: parsed.origin,
+            path: normalizedPath,
+            trusted: parsed.origin === window.location.origin || allowedOrigins.has(parsed.origin) || loopback,
+            sameOrigin: parsed.origin === window.location.origin,
+            loopback
+        };
+    } catch (error) {
+        return {
+            configured: true,
+            valid: false,
+            origin: '',
+            path: '',
+            trusted: false,
+            sameOrigin: false,
+            loopback: false
+        };
+    }
+}
+
+function getGeminiTokenEndpointSource() {
+    const localEndpoint = getTrustedGeminiTokenEndpointOrEmpty(
+        getCachedStorageValue(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY) || '',
+        { source: 'diagnostic local voice token endpoint' }
+    );
+    if (localEndpoint && !(isProductionHost() && isSameOriginGeminiTokenEndpoint(localEndpoint))) return 'local';
+    const sharedEndpoint = getSharedGeminiTokenEndpoint();
+    if (sharedEndpoint && !(isProductionHost() && isSameOriginGeminiTokenEndpoint(sharedEndpoint))) return 'shared';
+    return 'default';
+}
+
+function summarizeDiagnosticsLog(entries = [], options = {}) {
+    const list = Array.isArray(entries) ? entries : [];
+    const latest = list[0] || null;
+    const statusOf = (entry) => String(entry?.status || '').trim() || 'info';
+    const summary = {
+        count: list.length,
+        errorCount: list.filter((entry) => statusOf(entry) === 'error').length,
+        pendingCount: list.filter((entry) => statusOf(entry) === 'pending').length,
+        latest: latest
+            ? {
+                stage: String(latest.stage || latest.type || '').trim(),
+                status: statusOf(latest),
+                at: String(latest.startedAt || latest.finishedAt || '').trim(),
+                code: String(latest.code || '').trim(),
+                httpStatus: Number.isFinite(Number(latest.httpStatus)) ? Number(latest.httpStatus) : null
+            }
+            : null
+    };
+    if (options.includeVoice && latest) {
+        summary.latest = {
+            ...summary.latest,
+            model: String(latest.model || '').trim(),
+            voice: String(latest.voice || '').trim(),
+            closeCode: Number.isFinite(Number(latest.closeCode)) ? Number(latest.closeCode) : null
+        };
+    }
+    return summary;
+}
+
+function buildAdminSettingsDiagnostics() {
+    const configuredEndpoint = getConfiguredGeminiTokenEndpoint();
+    const defaultEndpoint = getTrustedGeminiTokenEndpointOrEmpty(getDefaultGeminiTokenEndpoint(), {
+        source: 'diagnostic default voice token endpoint'
+    });
+    const sharedEndpoint = getSharedGeminiTokenEndpoint();
+    const localEndpoint = getTrustedGeminiTokenEndpointOrEmpty(
+        getCachedStorageValue(GEMINI_LIVE_TOKEN_ENDPOINT_STORAGE_KEY) || '',
+        { source: 'diagnostic local voice token endpoint' }
+    );
+    const clientHiddenPrompt = getConfiguredClientConversationActionPrompt();
+    const raterHiddenPrompt = getConfiguredRaterHiddenPrompt();
+    const selectedAudioInputDeviceId = getConfiguredGeminiAudioInputDeviceId();
+    const realAudioInputDevices = Array.isArray(geminiAudioInputDevices)
+        ? geminiAudioInputDevices.filter((device) => device && device.deviceId)
+        : [];
+    const selectedAudioInputStillPresent = !!selectedAudioInputDeviceId
+        && realAudioInputDevices.some((device) => String(device.deviceId || '') === selectedAudioInputDeviceId);
+
+    const firstReplyCache = buildPromptFirstReplyCacheDiagnostics();
+    return {
+        generatedAt: new Date().toISOString(),
+        available: true,
+        excludedPanels: ['admin-users'],
+        shell: {
+            settingsOpen: isSettingsModalOpen(),
+            selectedRole,
+            adminView: isAdmin(),
+            localMinimalUi: isLocalMinimalUiEnabled(),
+            theme: document.body.classList.contains('light-theme') ? 'light' : 'dark',
+            productionHost: isProductionHost()
+        },
+        firebase: {
+            appInitialized: !!firebaseApp,
+            databaseReady: !!db,
+            authReady: !!auth,
+            hasCurrentUser: !!auth?.currentUser,
+            appCheckInitialized: !!appCheck,
+            restFallbackAllowed: shouldAllowFirebaseRestFallback(),
+            optionalReadsDeferred: shouldDeferOptionalFirebaseReadsUntilProtectedRequest(),
+            protectedRealtimeListeners: protectedRealtimeUnsubscribes.length,
+            adminRealtimeListeners: adminRealtimeUnsubscribes.length
+        },
+        voice: {
+            tokenEndpointSource: getGeminiTokenEndpointSource(),
+            tokenEndpoint: summarizeDiagnosticEndpoint(configuredEndpoint),
+            defaultTokenEndpoint: summarizeDiagnosticEndpoint(defaultEndpoint),
+            sharedTokenEndpointConfigured: !!sharedEndpoint,
+            localTokenEndpointConfigured: !!localEndpoint,
+            transcribeEndpoint: summarizeDiagnosticEndpoint(getConfiguredGeminiTranscribeEndpoint(), {
+                allowedPath: GEMINI_LIVE_TRANSCRIBE_ENDPOINT_PATH
+            }),
+            model: GEMINI_LIVE_MODEL,
+            voiceName: getConfiguredGeminiVoiceName(),
+            audioInputDeviceConfigured: !!selectedAudioInputDeviceId,
+            audioInputDeviceStillPresent: selectedAudioInputStillPresent,
+            audioInputDeviceCount: realAudioInputDevices.length,
+            active: !!isGeminiVoiceActive,
+            connecting: !!isGeminiVoiceConnecting,
+            screenActive: !!isVoiceModeScreenActive
+        },
+        hiddenPrompts: {
+            client: {
+                source: getAdminSettingsPromptSource('client'),
+                ...buildDiagnosticTextSummary(clientHiddenPrompt, 'hidden-client')
+            },
+            rater: {
+                source: getAdminSettingsPromptSource('rater'),
+                ...buildDiagnosticTextSummary(raterHiddenPrompt, 'hidden-rater')
+            }
+        },
+        debugLogs: {
+            localWebhookDebugEnabled: !!ENABLE_LOCAL_WEBHOOK_DEBUG,
+            webhook: summarizeDiagnosticsLog(webhookDebugEntries),
+            voice: summarizeDiagnosticsLog(voiceDebugEntries, { includeVoice: true }),
+            auth: summarizeDiagnosticsLog(authDebugEntries)
+        },
+        firstReplyCache: {
+            readyCount: firstReplyCache.readyCount,
+            missingCount: firstReplyCache.missingCount,
+            staleCount: firstReplyCache.staleCount,
+            refreshScheduled: !!promptFirstReplyGenerationTimerId
+        }
+    };
+}
+
 function installHiddenDiagnostics() {
     window.__CLIENT_SIMULATOR_DIAGNOSTICS__ = {
+        getAdminSettings: buildAdminSettingsDiagnostics,
         getFirstReplyCache: buildPromptFirstReplyCacheDiagnostics,
         refreshFirstReplyCache: () => schedulePromptFirstReplyGeneration('manual-diagnostics-refresh')
     };
@@ -27183,6 +27383,9 @@ function installLocalhostTestHooks() {
         },
         getFirstReplyCacheDiagnostics() {
             return buildPromptFirstReplyCacheDiagnostics();
+        },
+        getAdminSettingsDiagnostics() {
+            return buildAdminSettingsDiagnostics();
         }
     };
 }
