@@ -41,6 +41,9 @@ export function createPromptStateHelpers(deps = {}) {
             id: variationId,
             name: String(rawVariation.name || 'Основной').trim() || 'Основной',
             content: String(rawVariation.content || rawVariation.prompt || rawVariation.text || ''),
+            ...(normalizePromptFirstReplyCache(rawVariation.firstReplyCache)
+                ? { firstReplyCache: normalizePromptFirstReplyCache(rawVariation.firstReplyCache) }
+                : {}),
             isLocal: false
         };
     }

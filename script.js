@@ -14863,11 +14863,18 @@ function getPublicActiveId(role) {
 function getPublicVariations(role) {
     return (promptsData[role]?.variations || [])
         .filter(v => !v.isLocal)
-        .map(v => ({
-            id: v.id,
-            name: v.name,
-            content: v.content
-        }));
+        .map(v => {
+            const item = {
+                id: v.id,
+                name: v.name,
+                content: v.content
+            };
+            const firstReplyCache = normalizePromptFirstReplyCache(v.firstReplyCache);
+            if (firstReplyCache) {
+                item.firstReplyCache = firstReplyCache;
+            }
+            return item;
+        });
 }
 
 function getPublicActiveContent(role) {
@@ -15873,6 +15880,9 @@ function initPromptsData(firebaseData = {}, options = {}) {
                 id: v.id,
                 name: v.name || 'Основной',
                 content: unescapeMarkdown(v.content || ''),
+                ...(normalizePromptFirstReplyCache(v.firstReplyCache)
+                    ? { firstReplyCache: normalizePromptFirstReplyCache(v.firstReplyCache) }
+                    : {}),
                 isLocal: false
             }));
 
@@ -15899,6 +15909,9 @@ function initPromptsData(firebaseData = {}, options = {}) {
         const requestedPublicActiveId = normalizedData[role + '_activeId'];
         const activePublicVar =
             publicVariations.find(v => v.id === requestedPublicActiveId) || publicVariations[0] || null;
+        if (role === 'client' && activePublicVar && clientFirstReplyCache && !activePublicVar.firstReplyCache) {
+            activePublicVar.firstReplyCache = clientFirstReplyCache;
+        }
         publicActiveIds[role] = activePublicVar ? activePublicVar.id : null;
         appliedRolesCount += 1;
 
@@ -15973,6 +15986,9 @@ function initPromptsData(firebaseData = {}, options = {}) {
     updateAllPreviews();
     updatePromptVisibilityButton();
     updatePromptHistoryButton();
+    if (isAdmin()) {
+        schedulePromptFirstReplyGeneration('prompt-snapshot-loaded');
+    }
 
     return true;
 }
@@ -16463,10 +16479,27 @@ function getClientFirstReplyFingerprint(systemPrompt = '', conversationActionSta
     });
 }
 
+function findPublicClientVariationById(variationId = '') {
+    const normalizedId = String(variationId || '').trim();
+    if (!normalizedId) return null;
+    return (promptsData.client?.variations || []).find((variation) => {
+        return variation && !variation.isLocal && String(variation.id || '').trim() === normalizedId;
+    }) || null;
+}
+
+function getActivePublicClientVariation() {
+    return findPublicClientVariationById(getPublicActiveId('client'));
+}
+
 function getCachedClientFirstReply(systemPrompt = '', conversationActionState = null) {
+    const fingerprint = getClientFirstReplyFingerprint(systemPrompt, conversationActionState);
+    const activeVariationCache = getActivePublicClientVariation()?.firstReplyCache || null;
     return getUsablePromptFirstReply(
+        activeVariationCache,
+        fingerprint
+    ) || getUsablePromptFirstReply(
         clientFirstReplyCache,
-        getClientFirstReplyFingerprint(systemPrompt, conversationActionState)
+        fingerprint
     );
 }
 
@@ -16479,40 +16512,78 @@ function clearPromptFirstReplyGenerationTimer() {
     if (!promptFirstReplyGenerationTimerId) return;
     clearTimeout(promptFirstReplyGenerationTimerId);
     promptFirstReplyGenerationTimerId = null;
+    promptFirstReplyGenerationTarget = null;
 }
 
 function schedulePromptFirstReplyGeneration(reason = '') {
     if (!canSyncPublicPromptsToCloud()) return false;
-    const baseSystemPrompt = String(getPublicActiveContent('client') || '').trim();
-    if (!baseSystemPrompt) return false;
-    const conversationActionState = null;
-    const systemPrompt = buildClientSystemPromptForWebhook(baseSystemPrompt, conversationActionState);
-    const target = {
-        fingerprint: getClientFirstReplyFingerprint(systemPrompt, conversationActionState),
-        systemPrompt,
-        conversationActionState,
-        sourceVariationId: getClientFirstReplySourceVariationId(),
-        reason: String(reason || '').trim()
-    };
-    const existingMessage = getUsablePromptFirstReply(clientFirstReplyCache, target.fingerprint);
-    if (existingMessage) return false;
+    const targets = buildMissingPromptFirstReplyTargets();
+    if (!targets.length) return false;
     clearPromptFirstReplyGenerationTimer();
-    promptFirstReplyGenerationTarget = target;
+    promptFirstReplyGenerationTarget = targets;
     promptFirstReplyGenerationTimerId = setTimeout(() => {
         promptFirstReplyGenerationTimerId = null;
-        void generatePromptFirstReplyNow(target);
+        void generatePromptFirstReplyBatchNow(targets);
     }, PROMPT_FIRST_REPLY_GENERATION_DEBOUNCE_MS);
+    debugLog('Scheduled first reply cache refresh', { reason, targetCount: targets.length });
     return true;
 }
 
-async function generatePromptFirstReplyNow(target = promptFirstReplyGenerationTarget) {
+function buildMissingPromptFirstReplyTargets() {
+    const publicVariations = (promptsData.client?.variations || []).filter((variation) => {
+        return variation && !variation.isLocal && String(variation.content || '').trim();
+    });
+    return publicVariations.map((variation) => {
+        const conversationActionState = null;
+        const systemPrompt = buildClientSystemPromptForWebhook(String(variation.content || '').trim(), conversationActionState);
+        const fingerprint = getClientFirstReplyFingerprint(systemPrompt, conversationActionState);
+        if (getUsablePromptFirstReply(variation.firstReplyCache, fingerprint)) {
+            return null;
+        }
+        return {
+            fingerprint,
+            systemPrompt,
+            conversationActionState,
+            sourceVariationId: String(variation.id || '').trim()
+        };
+    }).filter(Boolean);
+}
+
+async function persistClientFirstReplyCacheRecord(target, record) {
+    const variation = findPublicClientVariationById(target.sourceVariationId);
+    if (!variation || !record) return false;
+    variation.firstReplyCache = record;
+    if (String(getPublicActiveId('client') || '') === String(target.sourceVariationId || '')) {
+        clientFirstReplyCache = record;
+    }
+    await update(ref(db, 'prompts'), {
+        client_variations: getPublicVariations('client'),
+        [PROMPT_FIRST_REPLY_CACHE_FIELD]: normalizePromptFirstReplyCache(clientFirstReplyCache)
+    });
+    return true;
+}
+
+async function generatePromptFirstReplyBatchNow(targets = promptFirstReplyGenerationTarget) {
+    const list = Array.isArray(targets) ? targets : targets ? [targets] : [];
+    let generatedCount = 0;
+    for (const target of list) {
+        if (await generatePromptFirstReplyNow(target)) {
+            generatedCount += 1;
+        }
+    }
+    promptFirstReplyGenerationTarget = null;
+    return generatedCount;
+}
+
+async function generatePromptFirstReplyNow(target = null) {
     if (promptFirstReplyGenerationInFlight || !target?.fingerprint || !target?.systemPrompt) return false;
     if (!canSyncPublicPromptsToCloud()) return false;
-    const currentPublicPrompt = String(getPublicActiveContent('client') || '').trim();
-    const currentSystemPrompt = buildClientSystemPromptForWebhook(currentPublicPrompt, null);
+    const variation = findPublicClientVariationById(target.sourceVariationId);
+    if (!variation) return false;
+    const currentSystemPrompt = buildClientSystemPromptForWebhook(String(variation.content || '').trim(), null);
     const currentFingerprint = getClientFirstReplyFingerprint(currentSystemPrompt, null);
     if (currentFingerprint !== target.fingerprint) return false;
-    const cachedMessage = getUsablePromptFirstReply(clientFirstReplyCache, target.fingerprint);
+    const cachedMessage = getUsablePromptFirstReply(variation.firstReplyCache, target.fingerprint);
     if (cachedMessage) return true;
 
     promptFirstReplyGenerationInFlight = true;
@@ -16558,10 +16629,7 @@ async function generatePromptFirstReplyNow(target = promptFirstReplyGenerationTa
             sourceVariationId: target.sourceVariationId
         });
         if (!record) return false;
-        clientFirstReplyCache = record;
-        await update(ref(db, 'prompts'), {
-            [PROMPT_FIRST_REPLY_CACHE_FIELD]: record
-        });
+        await persistClientFirstReplyCacheRecord(target, record);
         finishWebhookDebugRequest(debugEntryId, {
             httpStatus: response.status,
             resultMessage: `Cached first reply ${message.length} chars`
@@ -16828,6 +16896,9 @@ function setupPromptsAndConfigListeners() {
             setSharedGeminiTokenEndpoint(sharedEndpoint);
             setSharedClientConversationActionPrompt(sharedClientActionPrompt);
             setSharedRaterHiddenPrompt(sharedRaterHidden);
+            if (isAdmin()) {
+                schedulePromptFirstReplyGeneration('app-config-loaded');
+            }
             if (geminiTokenEndpointInput && settingsModal?.classList?.contains('active')) {
                 geminiTokenEndpointInput.value = getConfiguredGeminiTokenEndpoint();
             }
@@ -18714,6 +18785,7 @@ async function saveHiddenClientPromptFromInput() {
     } catch (error) {
         console.warn('Failed to save shared hidden client prompt:', error);
     }
+    schedulePromptFirstReplyGeneration('hidden-client-prompt-saved');
     populateHiddenClientPromptField();
     showCopyNotification(sharedSaved ? 'Скрытый prompt клиента сохранён' : 'Скрытый prompt клиента сохранён локально');
 }
@@ -18728,6 +18800,7 @@ async function resetHiddenClientPromptToDefault() {
             console.warn('Failed to reset shared hidden client prompt:', error);
         }
     }
+    schedulePromptFirstReplyGeneration('hidden-client-prompt-reset');
     populateHiddenClientPromptField();
     showCopyNotification('Скрытый prompt клиента сброшен к умолчанию');
 }
