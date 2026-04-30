@@ -24707,6 +24707,8 @@ async function startConversationHandler() {
         if (assistantMessage) {
             addMessage(assistantMessage, 'assistant', true);
             appendConversationHistoryEntry({ role: 'assistant', content: assistantMessage });
+            void cacheLiveFirstReplyFromStart(systemPrompt, conversationActionState, assistantMessage)
+                .catch((error) => console.warn('Failed to cache live first reply:', error));
         }
         updatePromptLock();
         updateSendBtnState();
