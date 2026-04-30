@@ -16516,6 +16516,70 @@ function getCachedClientFirstReply(systemPrompt = '', conversationActionState = 
     );
 }
 
+function buildPromptFirstReplyCacheDiagnostics() {
+    const publicVariations = (promptsData.client?.variations || [])
+        .filter((variation) => variation && !variation.isLocal);
+    const hiddenPrompt = getConfiguredClientConversationActionPrompt();
+    const variations = publicVariations.map((variation) => {
+        const content = String(variation.content || '').trim();
+        const systemPrompt = content ? buildClientSystemPromptForWebhook(content, null) : '';
+        const fingerprint = systemPrompt ? getClientFirstReplyFingerprint(systemPrompt, null) : '';
+        const cache = normalizePromptFirstReplyCache(variation.firstReplyCache);
+        const cachedMessage = getUsablePromptFirstReply(cache, fingerprint);
+        const status = !content
+            ? 'empty_prompt'
+            : cachedMessage
+                ? 'ready'
+                : cache
+                    ? 'stale'
+                    : 'missing';
+        return {
+            id: String(variation.id || '').trim(),
+            name: getPromptVariationDisplayName(variation),
+            isActivePublic: String(getPublicActiveId('client') || '') === String(variation.id || ''),
+            status,
+            fingerprint: fingerprint ? fingerprint.slice(0, 16) : '',
+            cachedFingerprint: cache?.fingerprint ? cache.fingerprint.slice(0, 16) : '',
+            generatedAt: cache?.generatedAt || '',
+            messageLength: cachedMessage ? cachedMessage.length : 0,
+            sourceVariationId: cache?.sourceVariationId || ''
+        };
+    });
+    const activeStartPrompt = String(systemPromptInput?.value || getActiveContent('client') || '').trim();
+    const activeStartSystemPrompt = activeStartPrompt ? buildClientSystemPromptForWebhook(activeStartPrompt, null) : '';
+    const activeStartFingerprint = activeStartSystemPrompt ? getClientFirstReplyFingerprint(activeStartSystemPrompt, null) : '';
+    const activeStartMatchingVariation = findPublicClientVariationWithFirstReplyFingerprint(activeStartFingerprint);
+    const missingTargets = canSyncPublicPromptsToCloud()
+        ? buildMissingPromptFirstReplyTargets()
+        : [];
+    return {
+        generatedAt: new Date().toISOString(),
+        available: true,
+        canRefresh: canSyncPublicPromptsToCloud(),
+        hiddenPromptLength: hiddenPrompt.length,
+        totalPublicClientVariations: variations.length,
+        readyCount: variations.filter((variation) => variation.status === 'ready').length,
+        staleCount: variations.filter((variation) => variation.status === 'stale').length,
+        missingCount: variations.filter((variation) => variation.status === 'missing').length,
+        emptyCount: variations.filter((variation) => variation.status === 'empty_prompt').length,
+        pendingRefreshCount: missingTargets.length,
+        refreshScheduled: !!promptFirstReplyGenerationTimerId,
+        activeStart: {
+            fingerprint: activeStartFingerprint ? activeStartFingerprint.slice(0, 16) : '',
+            willUseCache: !!getCachedClientFirstReply(activeStartSystemPrompt, null),
+            matchingVariationId: activeStartMatchingVariation?.id || ''
+        },
+        variations
+    };
+}
+
+function installHiddenDiagnostics() {
+    window.__CLIENT_SIMULATOR_DIAGNOSTICS__ = {
+        getFirstReplyCache: buildPromptFirstReplyCacheDiagnostics,
+        refreshFirstReplyCache: () => schedulePromptFirstReplyGeneration('manual-diagnostics-refresh')
+    };
+}
+
 function getClientFirstReplySourceVariationId() {
     const activeVariation = getActiveVariation('client');
     return String(activeVariation?.id || getPublicActiveId('client') || '').trim();
@@ -27116,6 +27180,9 @@ function installLocalhostTestHooks() {
                 conflictMessage: String(promptSyncConflictMessages[role] || ''),
                 hiddenClientPrompt: getConfiguredClientConversationActionPrompt()
             };
+        },
+        getFirstReplyCacheDiagnostics() {
+            return buildPromptFirstReplyCacheDiagnostics();
         }
     };
 }
@@ -27125,6 +27192,7 @@ function installLocalhostTestHooks() {
 storePendingSharedDialogIdFromUrl();
 setChatLoadingState(true);
 installLocalhostTestHooks();
+installHiddenDiagnostics();
 loadAttestationQueue();
 syncChatPanelHeadingMode();
 revealBootUi();
