@@ -24087,6 +24087,9 @@ function showStartConversationFailure(error = null) {
     const message = getStartConversationFailureMessage(error);
     restoreStartConversationBlock();
     updateLocalMinimalStartDescription(message, 'warning');
+    if (isLocalMinimalUiEnabled()) {
+        return;
+    }
     showCopyNotification(message);
     if (!isLocalMinimalUiEnabled()) {
         addMessage(`Ошибка: ${message}`, 'error', false);
