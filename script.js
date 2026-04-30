@@ -16,6 +16,12 @@ import { createPromptOverridesRuntimeHelpers } from "./prompt-overrides-runtime.
 import { createPromptOverridesSubscriptionHelpers } from "./prompt-overrides-subscription.js";
 import { createPromptStateHelpers } from "./prompt-state-core.js";
 import { createPromptSyncHelpers } from "./prompt-sync-core.js";
+import {
+    buildPromptFirstReplyCacheRecord,
+    buildPromptFirstReplyFingerprint,
+    getUsablePromptFirstReply,
+    normalizePromptFirstReplyCache
+} from "./prompt-first-reply-cache.js";
 import { createLazyAssetRuntime } from "./lazy-asset-runtime.js";
 import {
     getAdminPreviewModeLabelText,
@@ -328,6 +334,9 @@ const RATING_SEND_RETRY_BASE_MS = 700;
 const RATING_SEND_RETRY_MAX_MS = 5000;
 const MARKDOWN_CACHE_MAX_SIZE = 250;
 const MARKDOWN_CACHE_TEXT_LIMIT = 40000;
+const PROMPT_FIRST_REPLY_CACHE_FIELD = 'client_firstReplyCache';
+const PROMPT_FIRST_REPLY_GENERATION_DEBOUNCE_MS = 60 * 1000;
+const PROMPT_FIRST_REPLY_GENERATION_TIMEOUT_MS = 45000;
 const AUTH_USERS_DB_PATH = 'users';
 const AUTH_USERS_BY_UID_DB_PATH = 'users_by_uid';
 const PARTNER_INVITES_DB_PATH = 'partner_invites';
@@ -2677,6 +2686,10 @@ let promptsData = {
     manager_call: { variations: [], activeId: null },
     rater: { variations: [], activeId: null }
 };
+let clientFirstReplyCache = null;
+let promptFirstReplyGenerationTimerId = null;
+let promptFirstReplyGenerationTarget = null;
+let promptFirstReplyGenerationInFlight = false;
 const promptEditRemoteBaselineHashes = {};
 const promptSyncConflictMessages = {};
 const promptSyncCore = createPromptSyncHelpers({
@@ -15813,6 +15826,7 @@ function unlockDialogInput() {
 
 function initPromptsData(firebaseData = {}, options = {}) {
     const normalizedData = normalizePromptSnapshotForCache(firebaseData || {});
+    clientFirstReplyCache = normalizePromptFirstReplyCache(normalizedData[PROMPT_FIRST_REPLY_CACHE_FIELD]);
     const allowEmptyOverwrite = !!options.forceApplyEmpty;
     const isIncomingMeaningful = firebasePromptSnapshotHasMeaningfulContent(normalizedData);
     let appliedRolesCount = 0;
@@ -16434,8 +16448,132 @@ function buildPromptsSyncPayload(roles = PROMPT_ROLES) {
         payload[role + '_prompt'] = getPublicActiveContent(role);
         payload[role + '_variations'] = getPublicVariations(role);
         payload[role + '_activeId'] = getPublicActiveId(role);
+        if (role === 'client') {
+            payload[PROMPT_FIRST_REPLY_CACHE_FIELD] = normalizePromptFirstReplyCache(clientFirstReplyCache);
+        }
     });
     return payload;
+}
+
+function getClientFirstReplyFingerprint(systemPrompt = '', conversationActionState = null) {
+    return buildPromptFirstReplyFingerprint({
+        role: 'client',
+        systemPrompt,
+        conversationActionState
+    });
+}
+
+function getCachedClientFirstReply(systemPrompt = '', conversationActionState = null) {
+    return getUsablePromptFirstReply(
+        clientFirstReplyCache,
+        getClientFirstReplyFingerprint(systemPrompt, conversationActionState)
+    );
+}
+
+function getClientFirstReplySourceVariationId() {
+    const activeVariation = getActiveVariation('client');
+    return String(activeVariation?.id || getPublicActiveId('client') || '').trim();
+}
+
+function clearPromptFirstReplyGenerationTimer() {
+    if (!promptFirstReplyGenerationTimerId) return;
+    clearTimeout(promptFirstReplyGenerationTimerId);
+    promptFirstReplyGenerationTimerId = null;
+}
+
+function schedulePromptFirstReplyGeneration(reason = '') {
+    if (!canSyncPublicPromptsToCloud()) return false;
+    const baseSystemPrompt = String(getPublicActiveContent('client') || '').trim();
+    if (!baseSystemPrompt) return false;
+    const conversationActionState = null;
+    const systemPrompt = buildClientSystemPromptForWebhook(baseSystemPrompt, conversationActionState);
+    const target = {
+        fingerprint: getClientFirstReplyFingerprint(systemPrompt, conversationActionState),
+        systemPrompt,
+        conversationActionState,
+        sourceVariationId: getClientFirstReplySourceVariationId(),
+        reason: String(reason || '').trim()
+    };
+    const existingMessage = getUsablePromptFirstReply(clientFirstReplyCache, target.fingerprint);
+    if (existingMessage) return false;
+    clearPromptFirstReplyGenerationTimer();
+    promptFirstReplyGenerationTarget = target;
+    promptFirstReplyGenerationTimerId = setTimeout(() => {
+        promptFirstReplyGenerationTimerId = null;
+        void generatePromptFirstReplyNow(target);
+    }, PROMPT_FIRST_REPLY_GENERATION_DEBOUNCE_MS);
+    return true;
+}
+
+async function generatePromptFirstReplyNow(target = promptFirstReplyGenerationTarget) {
+    if (promptFirstReplyGenerationInFlight || !target?.fingerprint || !target?.systemPrompt) return false;
+    if (!canSyncPublicPromptsToCloud()) return false;
+    const currentPublicPrompt = String(getPublicActiveContent('client') || '').trim();
+    const currentSystemPrompt = buildClientSystemPromptForWebhook(currentPublicPrompt, null);
+    const currentFingerprint = getClientFirstReplyFingerprint(currentSystemPrompt, null);
+    if (currentFingerprint !== target.fingerprint) return false;
+    const cachedMessage = getUsablePromptFirstReply(clientFirstReplyCache, target.fingerprint);
+    if (cachedMessage) return true;
+
+    promptFirstReplyGenerationInFlight = true;
+    let debugEntryId = null;
+    let response = null;
+    try {
+        const requestId = buildRequestId('chat_start_cache');
+        const webhookUrl = buildUnifiedSimulatorWebhookEndpointUrl();
+        debugEntryId = startWebhookDebugRequest({
+            type: 'chat_start_cache',
+            endpoint: webhookUrl,
+            requestId,
+            timeoutMs: PROMPT_FIRST_REPLY_GENERATION_TIMEOUT_MS
+        });
+        response = await fetchWithTimeout(webhookUrl, {
+            method: 'POST',
+            headers: await buildAuthenticatedJsonRequestHeaders(requestId, 'chat_start_cache', 'chat_start'),
+            body: JSON.stringify(buildUnifiedSimulatorWebhookPayload('chat_start', {
+                userMessage: '/start',
+                systemPrompt: target.systemPrompt,
+                dialogHistory: '',
+                conversationActionState: target.conversationActionState,
+                sessionId: `first_reply_cache_${target.fingerprint}`,
+                requestId
+            }))
+        }, PROMPT_FIRST_REPLY_GENERATION_TIMEOUT_MS);
+
+        if (!response.ok) {
+            throw await createWebhookHttpError(response, PROMPT_FIRST_REPLY_GENERATION_TIMEOUT_MS);
+        }
+
+        const { message: assistantMessage } = await readWebhookEnvelope(response, PROMPT_FIRST_REPLY_GENERATION_TIMEOUT_MS);
+        const message = String(assistantMessage || '').trim();
+        if (!message) {
+            throw new Error('Empty first reply cache response');
+        }
+
+        const record = buildPromptFirstReplyCacheRecord({
+            fingerprint: target.fingerprint,
+            message,
+            generatedAt: new Date().toISOString(),
+            role: 'client',
+            sourceVariationId: target.sourceVariationId
+        });
+        if (!record) return false;
+        clientFirstReplyCache = record;
+        await update(ref(db, 'prompts'), {
+            [PROMPT_FIRST_REPLY_CACHE_FIELD]: record
+        });
+        finishWebhookDebugRequest(debugEntryId, {
+            httpStatus: response.status,
+            resultMessage: `Cached first reply ${message.length} chars`
+        });
+        return true;
+    } catch (error) {
+        failWebhookDebugRequest(debugEntryId, error, response?.status);
+        console.warn('Failed to refresh cached first reply:', error);
+        return false;
+    } finally {
+        promptFirstReplyGenerationInFlight = false;
+    }
 }
 
 function canSyncPublicPromptsToCloud(user = currentUser) {
@@ -16541,6 +16679,9 @@ function savePromptsToFirebaseNow(options = {}) {
                 clearPromptEditBaseline(role);
                 setPromptSyncConflictMessage(role, '');
             });
+            if (roles.includes('client')) {
+                schedulePromptFirstReplyGeneration('public-prompt-synced');
+            }
             debugLog('Prompts synced to Firebase');
             renderPromptSyncConflictNotice();
         })
@@ -24125,12 +24266,21 @@ async function startConversationHandler() {
     const startDiv = document.getElementById('startConversation');
     if (startDiv) startDiv.style.display = 'none';
     syncChatEmptyUiState();
-    
-    const loadingMsg = addMessage('', 'loading');
+
+    let loadingMsg = null;
     let debugEntryId = null;
     let response = null;
     
     try {
+        const cachedAssistantMessage = getCachedClientFirstReply(systemPrompt, conversationActionState);
+        if (cachedAssistantMessage) {
+            addMessage(cachedAssistantMessage, 'assistant', true);
+            appendConversationHistoryEntry({ role: 'assistant', content: cachedAssistantMessage });
+            updatePromptLock();
+            updateSendBtnState();
+            return;
+        }
+        loadingMsg = addMessage('', 'loading');
         const requestId = buildRequestId('chat_start');
         const webhookUrl = buildUnifiedSimulatorWebhookEndpointUrl();
         debugEntryId = startWebhookDebugRequest({
@@ -24162,7 +24312,7 @@ async function startConversationHandler() {
         if (!assistantMessage && !conversationAction) {
             failWebhookDebugRequest(debugEntryId, new Error('Пустой ответ сервера'), response.status);
             console.warn('Empty webhook response for /start.');
-            loadingMsg.remove();
+            loadingMsg?.remove();
             showStartConversationFailure();
             return;
         }
@@ -24192,7 +24342,7 @@ async function startConversationHandler() {
             return;
         }
         console.error('Error:', error);
-        loadingMsg.remove();
+        loadingMsg?.remove();
         showStartConversationFailure(error);
     } finally {
         const shouldRestoreUi = requestGuard.version === chatUiSessionVersion
@@ -24770,13 +24920,13 @@ async function rateChat(options = {}) {
         
     } catch (error) {
         if (isChatUiRequestCancelledError(error)) {
-            loadingMsg.remove();
+            loadingMsg?.remove();
             return;
         }
         console.error('Rating error details:', error);
         console.error('Error type:', error.name);
         console.error('Error message:', error.message);
-        loadingMsg.remove();
+        loadingMsg?.remove();
         addMessage(`Ошибка оценки: ${error.message}. Проверьте консоль (F12) для деталей.`, 'error', false);
     } finally {
         const shouldRestoreUi = requestGuard.version === chatUiSessionVersion

@@ -100,7 +100,26 @@ export function createPromptStateHelpers(deps = {}) {
             }
         });
 
+        const clientFirstReplyCache = normalizePromptFirstReplyCache(source.client_firstReplyCache);
+        if (clientFirstReplyCache) {
+            normalized.client_firstReplyCache = clientFirstReplyCache;
+        }
+
         return normalized;
+    }
+
+    function normalizePromptFirstReplyCache(rawCache = null) {
+        if (!rawCache || typeof rawCache !== 'object') return null;
+        const fingerprint = String(rawCache.fingerprint || rawCache.promptHash || '').trim();
+        const message = String(rawCache.message || rawCache.text || '').replace(/\r\n/g, '\n').trim();
+        if (!fingerprint || !message) return null;
+        return {
+            fingerprint,
+            message: message.slice(0, 2000),
+            generatedAt: String(rawCache.generatedAt || '').trim(),
+            sourceVariationId: String(rawCache.sourceVariationId || '').trim(),
+            role: String(rawCache.role || 'client').trim() || 'client'
+        };
     }
 
     function buildNormalizedPromptSnapshotState(rawSnapshot = {}) {
