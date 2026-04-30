@@ -19526,4 +19526,9 @@ body.local-minimal-ui #settingsModal .settings-modal-close {
         scroll-behavior: auto !important;
         transition-duration: 0.01ms !important;
     }
+
+    body.local-minimal-ui .message.loading .typing-dot {
+        animation-duration: 1.15s !important;
+        animation-iteration-count: infinite !important;
+    }
 }
